@@ -39,6 +39,8 @@
 |------|------|
 | 会话总览用 `claude agents --json` 而非解析内部文件 | 官方 CLI 出口,稳定;不依赖非公开格式 |
 | 读 jsonl/history 等内部格式必须隔离在 adapter 层 | 非公开格式,版本漂移风险 |
+| project-init 部分遵守:结构不变量全保留,Python 细节换 Node 等价物 | skill 写死 "Backend is always Python + uv",与 xuanji 的 Node/TS 栈冲突;骨架(code/ + wiki 四目录 + README + 原型关卡 + checklist)与栈无关照办;uv→pnpm、FastAPI→Hono、pytest→vitest、ruff/mypy→eslint+tsc、gitignore 换 Node 版,lock 文件同样提交 |
+| 项目 agent 规则文件用 CLAUDE.md 而非 skill 要求的 AGENTS.md | 全局 R3 优先 + 与既有项目一致;内容沿用 skill 的两段式模板(项目规则 + 经验教训) |
 
 ## 遇到的问题
 | 问题 | 解决方案 |
