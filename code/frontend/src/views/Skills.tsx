@@ -2,16 +2,32 @@ import { useState } from 'react';
 import { api } from '@/api/client';
 import type { Skill } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
-import { Drawer, Empty, Tag } from '@/components/shared';
+import { Drawer, Empty, Tag, toast } from '@/components/shared';
 import { Input } from '@/components/ui/input';
 
 type Filter = 'all' | 'on' | 'off' | 'plugin';
 
 export function Skills() {
-  const { data } = usePoll(api.skills, 60_000);
+  const { data, refresh } = usePoll(api.skills, 60_000);
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Skill | null>(null);
+
+  /** 铁律例外②:显式触发 + 二次确认的可逆管理操作 */
+  const toggle = async (s: Skill) => {
+    const action = s.enabled ? '禁用' : '启用';
+    const detail = s.enabled
+      ? `目录将移入 skills-disabled/,新会话不再加载它。`
+      : `目录将移回 skills/,新会话恢复加载。`;
+    if (!window.confirm(`确认${action}技能「${s.name}」?\n${detail}(操作可逆)`)) return;
+    try {
+      await api.toggleSkill(s.name, !s.enabled);
+      toast(`已${action} ${s.name}`);
+      refresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    }
+  };
 
   const skills = data?.skills ?? [];
   const rows = skills.filter((s) => {
@@ -41,7 +57,7 @@ export function Skills() {
       </div>
       <div className="notice">
         <span className="ok" />
-        M1 只读:启停开关将在 M2 开放(移动技能目录,显式写操作 + 二次确认)
+        关闭开关 = 把技能目录移入 <span className="mono">~/.claude/skills-disabled/</span>,新会话不再加载(可逆,二次确认后执行;插件技能不支持)
       </div>
       <div className="panel">
         <table className="table">
@@ -63,10 +79,14 @@ export function Skills() {
                     className={`switch ${s.enabled ? 'on' : ''}`}
                     role="switch"
                     aria-checked={s.enabled}
-                    aria-disabled="true"
-                    title="M1 只读,启停在 M2 开放"
-                    style={{ opacity: 0.55, cursor: 'not-allowed' }}
-                    onClick={(e) => e.stopPropagation()}
+                    aria-disabled={s.source === 'plugin'}
+                    title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
+                    style={s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (s.source === 'plugin') return;
+                      void toggle(s);
+                    }}
                   />
                 </td>
               </tr>

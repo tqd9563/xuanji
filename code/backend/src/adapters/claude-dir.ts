@@ -431,6 +431,32 @@ export async function readJobStates(claudeDir: string): Promise<Map<string, JobS
   return out;
 }
 
+// ---------- 技能启停(唯一的 ~/.claude 写操作之一) ----------
+
+/**
+ * 铁律 2 例外②(2026-07-08 用户批准):用户在界面显式触发、带二次确认的管理操作。
+ * 启停 = 在 skills/ 与 skills-disabled/ 间移动技能目录(rename,不改内容,可逆)。
+ */
+export async function moveSkill(
+  claudeDir: string,
+  name: string,
+  enable: boolean,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!/^[\w.-]+$/.test(name)) return { ok: false, error: 'invalid skill name' };
+  const from = path.join(claudeDir, enable ? 'skills-disabled' : 'skills', name);
+  const to = path.join(claudeDir, enable ? 'skills' : 'skills-disabled', name);
+  try {
+    const st = await fsp.lstat(from).catch(() => null);
+    if (!st) return { ok: false, error: `技能不在${enable ? '禁用' : '启用'}目录中` };
+    if (await fsp.lstat(to).catch(() => null)) return { ok: false, error: '目标位置已存在同名技能' };
+    await fsp.mkdir(path.dirname(to), { recursive: true });
+    await fsp.rename(from, to);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // ---------- 工具 ----------
 
 function splitFrontmatter(raw: string): { frontmatter: string; body: string } | null {

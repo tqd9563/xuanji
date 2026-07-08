@@ -44,6 +44,8 @@ export interface AgentSession {
   detail?: string;
   needs?: string;
   tokens?: number;
+  /** 来源标签:web = 璇玑派发(P2 自嵌套递归的显式标记) */
+  source?: 'web';
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */

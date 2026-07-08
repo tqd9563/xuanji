@@ -2,8 +2,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
+import { setDispatchIntent } from '@/lib/dispatch';
 import { clock } from '@/lib/utils';
 import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, toast } from '@/components/shared';
+
+/** 智能进入:可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
+function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
+  if (s.readonly) {
+    toast('终端存活的交互会话只读,已打开回放');
+    openReplay(s.sessionId, s);
+    return;
+  }
+  setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
+  location.hash = 'dispatch';
+}
 
 const COLS: { key: SessionState; label: string }[] = [
   { key: 'idle', label: '空闲' },
@@ -85,12 +97,9 @@ export function Sessions({
       } else if (e.key === 'ArrowDown') {
         pos.r = Math.min(cardsIn(pos.c).length - 1, pos.r + 1);
       } else {
-        // Space / Enter:M1 全部进入只读回放(派发续接是 M2)
+        // Space / Enter:智能进入(可续接 → 派发,只读 → 回放)
         const s = cardsIn(pos.c)[pos.r];
-        if (s) {
-          if (s.readonly) toast('终端存活的交互会话只读,已打开回放');
-          void openReplay(s.sessionId, s);
-        }
+        if (s) smartOpen(s, (id, sess) => void openReplay(id, sess));
         return;
       }
       setKbPos(pos);
@@ -148,6 +157,18 @@ export function Sessions({
                   {s.detail && <div className="detail">{s.detail}</div>}
                   {s.needs && <div className="needs">⏸ {s.needs}</div>}
                   <div className="foot">
+                    {s.state === 'blocked' && !s.readonly && (
+                      <button
+                        className="btn btn-sm btn-primary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          smartOpen(s, (id, sess) => void openReplay(id, sess));
+                        }}
+                      >
+                        去回复
+                      </button>
+                    )}
+                    {s.source === 'web' && <Tag>web</Tag>}
                     <span className="time">{clock(s.startedAt)} 开始</span>
                   </div>
                 </div>
@@ -175,11 +196,24 @@ export function Sessions({
           )
         }
         foot={
-          <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-            只读回放 · source of truth 在 ~/.claude
-            {replay && replay.skippedLines > 0 && ` · ${replay.skippedLines} 行无法解析已跳过`}
-            {' '}· 续接与回复在 M2 开放
-          </span>
+          <>
+            {replayFor && !replayFor.readonly && (
+              <button
+                className="btn btn-sm btn-primary"
+                onClick={() => {
+                  setDrawerOpen(false);
+                  smartOpen(replayFor, (id, sess) => void openReplay(id, sess));
+                }}
+              >
+                续接此会话(--resume)
+              </button>
+            )}
+            <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+              只读回放 · source of truth 在 ~/.claude
+              {replay && replay.skippedLines > 0 && ` · ${replay.skippedLines} 行无法解析已跳过`}
+              {replayFor?.readonly && ' · 终端存活会话不可接管'}
+            </span>
+          </>
         }
       >
         {!replay && <Empty><p>回放加载中…</p></Empty>}

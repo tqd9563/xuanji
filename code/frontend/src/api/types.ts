@@ -33,6 +33,7 @@ export interface AgentSession {
   detail?: string;
   needs?: string;
   tokens?: number;
+  source?: 'web';
 }
 
 export type ReplayEvent =

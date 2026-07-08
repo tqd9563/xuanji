@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import type { ProjectUsage, SessionUsage } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
+import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, fmtCost, fmtTokens, modelColor, projColor, timeAgo } from '@/lib/utils';
 import { Pill, Tag } from '@/components/shared';
 
@@ -69,8 +70,15 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
                   </div>
                   <div className="n">{s.needs ?? s.detail ?? '等待输入'}</div>
                 </div>
-                <button className="btn btn-sm btn-primary" onClick={() => onGoSession(s.sessionId)}>
-                  查看
+                <button
+                  className="btn btn-sm btn-primary"
+                  onClick={() => {
+                    if (s.readonly) return onGoSession(s.sessionId);
+                    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
+                    location.hash = 'dispatch';
+                  }}
+                >
+                  {s.readonly ? '查看' : '去回复'}
                 </button>
               </div>
             ))}

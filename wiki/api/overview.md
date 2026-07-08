@@ -1,4 +1,4 @@
-# API 总览(M1 只读)
+# API 总览(M1 只读 + M2 派发)
 
 ## Base URL
 
@@ -18,10 +18,31 @@
 | GET | /api/memories/search?q= | FTS5 全文搜索(trigram,支持中文) |
 | GET | /api/usage/today | 今日 Token 用量/成本,项目 → 会话两级(含口径说明) |
 | GET | /api/crons | 定时任务:M1 仅只读列出系统 crontab |
+| GET | /api/sessions/:sessionId/can-resume | resume 所有权预检(终端存活 interactive → 拒绝) |
+| POST | /api/skills/:name/toggle | 技能启停(铁律例外②:`{enable, confirm:true}` 双确认,目录移动可逆) |
+| PUT | /api/sessions/:sessionId/name | web 会话重命名(display-name 存自有 SQLite,终端存活会话 403) |
+| POST | /api/dispatch/handoff | 跨目录交接:`{sessionId}` → haiku 生成结构化摘要(结论/未完成/口径) |
 
 ## WebSocket
 
-`ws://127.0.0.1:7777/ws` — 服务端单向推送 `{type:"changed", scope:"history"|"skills"|"jobs"}`,前端据此重取对应资源。M2 扩展为对话双向流与审批通道。
+### /ws — 变更推送(单向)
+
+`{type:"changed", scope:"history"|"skills"|"jobs"}`,前端据此重取对应资源。
+
+### /ws/dispatch — 派发双向流(每个派发页一条连接)
+
+client → server:
+- `{op:'start', cwd, permissionMode, model?, resume?, name?, prompt}` 开始/续接会话(resume 先过所有权检查)
+- `{op:'send', text}` 后续轮次输入(SDK streaming-input)
+- `{op:'permission', requestId, decision:'allow'|'always'|'deny'}` 审批决定(allow 回传原始 input;always 附 SDK suggestions)
+- `{op:'interrupt'}` 打断当前回合
+- `{op:'bg', cwd, prompt}` 转后台(claude --bg,daemon 托管)
+- `{op:'attach', dispatchId}` 重连并回放事件
+
+server → client(DispatchEvent):
+`init`(sessionId/model) · `status`(working/awaiting-permission/idle/ended) · `delta`(打字机增量) · `assistant`(定稿文本) · `tool` / `tool-result` · `permission-request` / `permission-resolved` · `result`(costUsd/contextPct) · `rate-limit`(five_hour/seven_day 利用率,来自 SDK rate_limit_event) · `user-echo` · `bg-dispatched` · `error`
+
+派发会话完成/等待审批时,后端经 osascript 直发 macOS 横幅(仅璇玑派发的会话)。
 
 ## 响应约定
 

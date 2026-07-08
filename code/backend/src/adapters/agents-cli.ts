@@ -89,6 +89,31 @@ export async function cliVersion(): Promise<string | null> {
   }
 }
 
+/** 转后台派发:claude --bg,daemon 托管,立即返回(在 cwd 下执行) */
+export async function bgDispatch(cwd: string, prompt: string): Promise<{ ok: boolean; output: string }> {
+  try {
+    const { stdout, stderr } = await execFileP('claude', ['--bg', prompt], {
+      cwd,
+      timeout: 30_000,
+      maxBuffer: 1024 * 1024,
+    });
+    return { ok: true, output: (stdout + stderr).trim().slice(0, 500) };
+  } catch (e) {
+    return { ok: false, output: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+/** 交接摘要:headless 一发,低成本模型,无工具 */
+export async function summarizeForHandoff(transcript: string): Promise<string> {
+  const prompt = `以下是一段 AI 会话的记录节选。请生成一份简洁的交接摘要(中文,≤300字),分三部分:结论、未完成事项、关键口径/约束。只输出摘要本身。\n\n---\n${transcript.slice(0, 24000)}`;
+  const { stdout } = await execFileP(
+    'claude',
+    ['-p', prompt, '--model', 'claude-haiku-4-5-20251001', '--output-format', 'text'],
+    { timeout: 120_000, maxBuffer: 4 * 1024 * 1024 },
+  );
+  return stdout.trim();
+}
+
 /** 系统 crontab 只读列出(M1:展示不接管) */
 export async function readCrontab(): Promise<string[]> {
   try {
