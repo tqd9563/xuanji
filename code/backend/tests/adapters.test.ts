@@ -98,6 +98,30 @@ describe('scanSkills', () => {
   });
 });
 
+describe('moveSkill(铁律例外②)', () => {
+  it('启停 = 目录在 skills/ 与 skills-disabled/ 间往返,可逆且拒绝非法名', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-skill-'));
+    fs.mkdirSync(path.join(tmp, 'skills', 'toggle-me'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'skills', 'toggle-me', 'SKILL.md'), '---\nname: toggle-me\n---\n');
+    const { moveSkill } = await import('../src/adapters/claude-dir.js');
+
+    expect((await moveSkill(tmp, '../evil', false)).ok).toBe(false);
+    expect((await moveSkill(tmp, 'toggle-me', true)).ok).toBe(false); // 已在启用态,不能再启用
+
+    const off = await moveSkill(tmp, 'toggle-me', false);
+    expect(off.ok).toBe(true);
+    expect(fs.existsSync(path.join(tmp, 'skills-disabled', 'toggle-me', 'SKILL.md'))).toBe(true);
+    expect(fs.existsSync(path.join(tmp, 'skills', 'toggle-me'))).toBe(false);
+
+    const on = await moveSkill(tmp, 'toggle-me', true);
+    expect(on.ok).toBe(true);
+    expect(fs.existsSync(path.join(tmp, 'skills', 'toggle-me', 'SKILL.md'))).toBe(true);
+    fs.rmSync(tmp, { recursive: true, force: true });
+  });
+});
+
 describe('readJobStates', () => {
   it('读取 detail/needs/tokens', async () => {
     const jobs = await readJobStates(FIX);

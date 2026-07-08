@@ -97,7 +97,7 @@ export default function App() {
           <Sessions active={view === 'sessions'} registerHandle={(h) => (sessionsHandle.current = h)} />
         </section>
         <section className={`view ${view === 'dispatch' ? 'active' : ''}`}>
-          {view === 'dispatch' && <Dispatch />}
+          <Dispatch active={view === 'dispatch'} />
         </section>
         <section className={`view ${view === 'skills' ? 'active' : ''}`}>
           {view === 'skills' && <Skills />}

@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { listAgents } from '../adapters/agents-cli.js';
 import { findSessionFile, parseReplay, readJobStates } from '../adapters/claude-dir.js';
 import type { AgentSession, Replay, SessionState } from '../types.js';
+import type { Storage } from '../storage/db.js';
 
 export interface SessionsBoard {
   ok: boolean;
@@ -10,8 +11,10 @@ export interface SessionsBoard {
   refreshedAt: number;
 }
 
-export async function sessionsBoard(): Promise<SessionsBoard> {
+export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   const [agents, jobStates] = await Promise.all([listAgents(), readJobStates(config.claudeDir)]);
+  const names = storage?.sessionNames();
+  const webIds = storage?.webDispatchedIds();
   const columns: Record<SessionState, AgentSession[]> = {
     idle: [],
     running: [],
@@ -25,6 +28,9 @@ export async function sessionsBoard(): Promise<SessionsBoard> {
       s.needs = job.needs;
       s.tokens = job.tokens;
     }
+    const override = names?.get(s.sessionId);
+    if (override) s.name = override;
+    if (webIds?.has(s.sessionId)) s.source = 'web';
     columns[s.state].push(s);
   }
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);

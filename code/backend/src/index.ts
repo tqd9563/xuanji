@@ -25,4 +25,4 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   console.log(`[xuanji] listening on http://${config.host}:${info.port}  (claudeDir: ${config.claudeDir})`);
 });
 
-attachWs(server as Server);
+attachWs(server as Server, storage);

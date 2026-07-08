@@ -15,6 +15,17 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function mutate<T>(path: string, method: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json().catch(() => ({}))) as T & { error?: string };
+  if (!res.ok) throw new Error(json.error ?? `${path} → ${res.status}`);
+  return json;
+}
+
 export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
   projects: () => get<ProjectsResult>('/api/projects'),
@@ -26,6 +37,14 @@ export const api = {
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
   usage: () => get<UsageReport>('/api/usage/today'),
   crons: () => get<CronsResult>('/api/crons'),
+  // ---------- M2 ----------
+  canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),
+  toggleSkill: (name: string, enable: boolean) =>
+    mutate<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}/toggle`, 'POST', { enable, confirm: true }),
+  renameSession: (sessionId: string, name: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/name`, 'PUT', { name }),
+  handoff: (sessionId: string) =>
+    mutate<{ summary: string; from: string }>('/api/dispatch/handoff', 'POST', { sessionId }),
 };
 
 /** ws 变更订阅:scope 变化时回调,前端据此重取对应资源 */

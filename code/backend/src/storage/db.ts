@@ -7,13 +7,27 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { eq } from 'drizzle-orm';
 import type { Memory } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
   value: text('value').notNull(),
+});
+
+/** 璇玑派发的会话(自有数据):支撑所有权规则「web 只 resume 自己派发的」与来源标签 */
+export const dispatchesTable = sqliteTable('dispatches', {
+  sessionId: text('session_id').primaryKey(),
+  cwd: text('cwd').notNull(),
+  createdAt: integer('created_at').notNull(),
+});
+
+/** web 会话重命名的 display-name 覆盖(仅璇玑界面生效,不写 ~/.claude 元数据) */
+export const sessionNamesTable = sqliteTable('session_names', {
+  sessionId: text('session_id').primaryKey(),
+  name: text('name').notNull(),
+  updatedAt: integer('updated_at').notNull(),
 });
 
 export class Storage {
@@ -31,11 +45,52 @@ export class Storage {
   private migrate() {
     this.sqlite.exec(`
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS dispatches (
+        session_id TEXT PRIMARY KEY, cwd TEXT NOT NULL, created_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_names (
+        session_id TEXT PRIMARY KEY, name TEXT NOT NULL, updated_at INTEGER NOT NULL
+      );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
       );
     `);
+  }
+
+  recordDispatch(sessionId: string, cwd: string) {
+    this.orm
+      .insert(dispatchesTable)
+      .values({ sessionId, cwd, createdAt: Date.now() })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  isWebDispatched(sessionId: string): boolean {
+    return !!this.orm
+      .select()
+      .from(dispatchesTable)
+      .where(eq(dispatchesTable.sessionId, sessionId))
+      .get();
+  }
+
+  setSessionName(sessionId: string, name: string) {
+    this.orm
+      .insert(sessionNamesTable)
+      .values({ sessionId, name, updatedAt: Date.now() })
+      .onConflictDoUpdate({ target: sessionNamesTable.sessionId, set: { name, updatedAt: Date.now() } })
+      .run();
+  }
+
+  /** sessionId → display-name 覆盖表 */
+  sessionNames(): Map<string, string> {
+    const rows = this.orm.select().from(sessionNamesTable).all();
+    return new Map(rows.map((r) => [r.sessionId, r.name]));
+  }
+
+  webDispatchedIds(): Set<string> {
+    const rows = this.orm.select().from(dispatchesTable).all();
+    return new Set(rows.map((r) => r.sessionId));
   }
 
   getMeta(key: string): string | null {

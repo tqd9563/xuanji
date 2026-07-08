@@ -48,6 +48,22 @@ describe('usage 成本口径', () => {
   });
 });
 
+describe('Storage 派发记录与改名覆盖', () => {
+  it('recordDispatch/isWebDispatched/setSessionName 读写一致', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-m2-'));
+    const s = new Storage(dir);
+    expect(s.isWebDispatched('sid-1')).toBe(false);
+    s.recordDispatch('sid-1', '/p/demo');
+    expect(s.isWebDispatched('sid-1')).toBe(true);
+    expect(s.webDispatchedIds().has('sid-1')).toBe(true);
+    s.setSessionName('sid-1', '改名后的会话');
+    s.setSessionName('sid-1', '再改一次');
+    expect(s.sessionNames().get('sid-1')).toBe('再改一次');
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe('Storage FTS5', () => {
   it('中文 trigram 全文搜索命中 body', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-test-'));
