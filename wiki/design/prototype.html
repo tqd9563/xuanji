@@ -32,6 +32,7 @@
   /* 状态(保留色,不作装饰) */
   --amber: oklch(0.78 0.14 80);
   --blue:  oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
   --red:   oklch(0.68 0.19 25);
 
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
@@ -264,11 +265,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .tok-row .lbl { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
 .tok-row .chev { color: var(--faint); font-size: 0.6875rem; transition: transform 150ms var(--ease); flex: none; }
 .tok-proj.open > .tok-row .chev { transform: rotate(90deg); }
-.tok-row .track { height: 9px; border-radius: 4px; background: var(--tint-muted); overflow: hidden; display: flex; }
-.tok-row .track i { height: 100%; }
-.s-in    { background: var(--jade-dim); }
-.s-cache { background: color-mix(in oklab, var(--jade) 22%, var(--surface-2)); }
-.s-out   { background: var(--jade); }
+.tok-row .track { height: 9px; }
+.tok-row .bar { height: 100%; display: flex; border-radius: 4px; overflow: hidden; min-width: 3px; }
+.tok-row .bar i { height: 100%; }
 .tok-row .val { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-align: right; white-space: nowrap; }
 .tok-subs { display: none; padding: 2px 0 6px; }
 .tok-proj.open .tok-subs { display: block; }
@@ -349,7 +348,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .term-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 6px 0; font-size: 0.75rem; color: var(--muted); }
 .term-line .spacer { flex: 1; }
 .term-line .branch { color: var(--jade); font-size: 0.75rem; white-space: nowrap; }
-.term-line .branch .dirty { color: var(--amber); }
+.term-line .branch .gs-m, .term-line .branch .gs-u { color: var(--amber); }
+.term-line .branch .gs-a { color: var(--blue); }
+#cwd-sel { color: var(--blue); }
 .bare-sel {
   background: none; border: none; color: var(--ink); font-family: var(--mono); font-size: 0.75rem;
   padding: 2px 6px; margin: -2px 0; border-radius: var(--r-s); cursor: pointer;
@@ -357,7 +358,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .bare-sel:hover { background: var(--hover); }
 .bare-sel:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
-.bare-sel.model { color: var(--blue); }
+.bare-sel.model { color: var(--violet); }
 .bare-sel.dim { color: var(--muted); font-family: var(--sans); }
 .bare-sel option { background: var(--surface); color: var(--ink); }
 .u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
@@ -556,7 +557,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
       <div class="panel dash-strip">
         <span>今日派发 <b>4</b> 次</span>
-        <span>今日 token <b>96.7k</b> <span style="color:var(--faint)">+ cache read 792k</span></span>
+        <span>今日 token <b>96.7k</b> · 成本 <b>$7.31</b></span>
         <span>活跃项目 <b>3</b> 个</span>
         <span>定时任务 <b>2</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断</span>
       </div>
@@ -574,13 +575,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
       <div class="panel" style="margin-top:16px">
         <div class="panel-head">
-          <h2>Token 消耗</h2>
-          <span class="sub">今日 · 按项目聚合自 session jsonl 的 usage 字段(只读)· 点击展开会话明细</span>
+          <h2>Token 成本</h2>
+          <span class="sub">今日 · 按项目聚合,条长 = 实际成本(input + cache read×0.1 + output,按各模型牌价)· 点击展开会话明细</span>
           <span class="spacer"></span>
           <span class="tok-legend">
-            <span><i class="s-in"></i>input</span>
-            <span><i class="s-cache"></i>cache read</span>
-            <span><i class="s-out"></i>output</span>
+            <span><i style="background:var(--jade)"></i>fable</span>
+            <span><i style="background:var(--violet)"></i>opus</span>
+            <span><i style="background:var(--blue)"></i>sonnet</span>
           </span>
         </div>
         <div class="tok" id="dash-tokens"></div>
@@ -657,7 +658,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
             <option>~/baize</option>
             <option>~/project/cronjob</option>
           </select>
-          <span class="branch mono" id="cwd-branch" title="所选工作目录的当前 git 分支(● 为未提交变更数)"></span>
+          <span class="branch mono" id="cwd-branch" title="git 状态:! 已修改 · ? 未跟踪 · ↑ 领先远端未推送"></span>
           <span class="spacer"></span>
           <select class="bare-sel model" id="model-sel" title="派发会话所用模型,默认继承 settings.json">
             <option selected>claude-fable-5</option>
@@ -805,23 +806,29 @@ const SESSIONS = [
     detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
 ];
 
-/* 今日 token 消耗:项目 → 会话两级(单位 k;in 含 cache 写入,cache = cache read) */
+/* 今日 token 成本:项目 → 会话两级。cost(USD)= input×单价 + cache_read×0.1×单价 + output×单价,
+   按各模型 API 牌价从 usage 字段折算;堆叠分段 = 模型 */
+const MODEL_META = {
+  fable:  { label: 'fable',  color: 'var(--jade)' },
+  opus:   { label: 'opus',   color: 'var(--violet)' },
+  sonnet: { label: 'sonnet', color: 'var(--blue)' },
+};
 const TOKEN_PROJECTS = [
-  { name: 'baize', in_: 9.8, cache: 412.0, out: 38.4, sessions: [
-    { title: '白泽横截面诊断',   in_: 6.2, cache: 312.0, out: 30.1 },
-    { title: '收入异动归因',     in_: 2.1, cache: 64.0,  out: 5.9 },
-    { title: '每日舆情异动扫描', in_: 1.5, cache: 36.0,  out: 2.4 },
+  { name: 'baize', sessions: [
+    { title: '白泽横截面诊断',   cost: { fable: 2.84 } },
+    { title: '收入异动归因',     cost: { opus: 0.62 } },
+    { title: '每日舆情异动扫描', cost: { sonnet: 0.24 } },
   ] },
-  { name: 'xuanji', in_: 5.4, cache: 240.3, out: 17.5, sessions: [
-    { title: 'M0 原型构建',      in_: 4.1, cache: 198.5, out: 14.2 },
-    { title: 'CHANGELOG 整理',   in_: 1.3, cache: 41.8,  out: 3.3 },
+  { name: 'xuanji', sessions: [
+    { title: 'M0 原型构建',      cost: { fable: 1.95 } },
+    { title: 'CHANGELOG 整理',   cost: { sonnet: 0.18 } },
   ] },
-  { name: 'go-antifraud', in_: 4.2, cache: 96.1, out: 10.4, sessions: [
-    { title: '弱信号引擎评估',   in_: 2.8, cache: 71.3, out: 7.6 },
-    { title: 'ip-risk 批量扫描', in_: 1.4, cache: 24.8, out: 2.8 },
+  { name: 'go-antifraud', sessions: [
+    { title: '弱信号引擎评估',   cost: { opus: 0.74, sonnet: 0.11 } },
+    { title: 'ip-risk 批量扫描', cost: { sonnet: 0.21 } },
   ] },
-  { name: 'cronjob', in_: 3.1, cache: 44.0, out: 7.9, sessions: [
-    { title: '周报汇总草稿',     in_: 3.1, cache: 44.0, out: 7.9 },
+  { name: 'cronjob', sessions: [
+    { title: '周报汇总草稿',     cost: { sonnet: 0.42 } },
   ] },
 ];
 
@@ -1022,33 +1029,44 @@ function renderDashboard() {
   renderHeat();
 }
 
-/* token 消耗:项目级堆叠条(in/cache read/out 同色相三档明度),点击展开会话明细 */
+/* token 成本:条长 = 实际成本,堆叠分段 = 模型;点击展开会话明细 */
 const tokOpen = new Set();
-const tokSum = t => t.in_ + t.cache + t.out;
-const tokFmt = v => v >= 100 ? Math.round(v) + 'k' : v.toFixed(1) + 'k';
+const MODEL_ORDER = ['fable', 'opus', 'sonnet'];
+const costSum = c => Object.values(c).reduce((a, b) => a + b, 0);
+const costFmt = v => '$' + v.toFixed(2);
+function projCost(p) {
+  const agg = {};
+  p.sessions.forEach(s => Object.entries(s.cost).forEach(([m, v]) => agg[m] = (agg[m] || 0) + v));
+  return agg;
+}
 
-function tokBar(t, max) {
-  const w = v => (v / max * 100).toFixed(2) + '%';
-  return `<div class="track" title="input ${tokFmt(t.in_)} · cache read ${tokFmt(t.cache)} · output ${tokFmt(t.out)}">
-    <i class="s-in" style="width:${w(t.in_)}"></i><i class="s-cache" style="width:${w(t.cache)}"></i><i class="s-out" style="width:${w(t.out)}"></i>
+function costBar(cost, max) {
+  const total = costSum(cost);
+  const parts = MODEL_ORDER.filter(m => cost[m]);
+  const tip = parts.map(m => `${MODEL_META[m].label} ${costFmt(cost[m])}`).join(' · ');
+  return `<div class="track" title="${tip}">
+    <div class="bar" style="width:${(total / max * 100).toFixed(2)}%">
+      ${parts.map(m => `<i style="width:${(cost[m] / total * 100).toFixed(2)}%;background:${MODEL_META[m].color}"></i>`).join('')}
+    </div>
   </div>`;
 }
 
 function renderTokens() {
-  const max = Math.max(...TOKEN_PROJECTS.map(tokSum));
+  const projCosts = TOKEN_PROJECTS.map(projCost);
+  const max = Math.max(...projCosts.map(costSum));
   $('#dash-tokens').innerHTML = TOKEN_PROJECTS.map((p, i) => `
     <div class="tok-proj ${tokOpen.has(i) ? 'open' : ''}">
       <button class="tok-row" onclick="toggleTokProj(${i})" aria-expanded="${tokOpen.has(i)}">
         <span class="lbl"><span class="chev">▸</span>${esc(p.name)}</span>
-        ${tokBar(p, max)}
-        <span class="val">${tokFmt(tokSum(p))}</span>
+        ${costBar(projCosts[i], max)}
+        <span class="val">${costFmt(costSum(projCosts[i]))}</span>
       </button>
       <div class="tok-subs">
         ${p.sessions.map(s => `
         <div class="tok-row sub">
           <span class="lbl">${esc(s.title)}</span>
-          ${tokBar(s, max)}
-          <span class="val">${tokFmt(tokSum(s))}</span>
+          ${costBar(s.cost, max)}
+          <span class="val">${costFmt(costSum(s.cost))}</span>
         </div>`).join('')}
       </div>
     </div>`).join('');
@@ -1187,16 +1205,19 @@ function resumeSession(id) {
    ============================================================ */
 let chatResolved = false;
 
-/* 工作目录 → git 分支(实际实现读 adapter 的 git status) */
+/* 工作目录 → git 状态(实际实现:git status --porcelain 数 !修改 / ?未跟踪,rev-list @{u}..HEAD 数 ↑未推送) */
 const CWD_INFO = {
-  '~/go-antifraud':    { branch: 'main', dirty: 2 },
-  '~/xuanji':          { branch: 'feature/m0-prototype', dirty: 0 },
-  '~/baize':           { branch: 'feature/cross-section', dirty: 0 },
-  '~/project/cronjob': { branch: 'main', dirty: 0 },
+  '~/go-antifraud':    { branch: 'main',                 mod: 2, unt: 1, ahead: 0 },
+  '~/xuanji':          { branch: 'feature/m0-prototype', mod: 0, unt: 0, ahead: 5 },
+  '~/baize':           { branch: 'feature/cross-section',mod: 0, unt: 2, ahead: 1 },
+  '~/project/cronjob': { branch: 'main',                 mod: 0, unt: 0, ahead: 0 },
 };
 function syncCwdBranch() {
-  const info = CWD_INFO[$('#cwd-sel').value] || { branch: '—', dirty: 0 };
-  $('#cwd-branch').innerHTML = `⎇ ${esc(info.branch)}${info.dirty ? ` <span class="dirty">● ${info.dirty}</span>` : ''}`;
+  const info = CWD_INFO[$('#cwd-sel').value] || { branch: '—', mod: 0, unt: 0, ahead: 0 };
+  $('#cwd-branch').innerHTML = `⎇ ${esc(info.branch)}`
+    + (info.mod ? ` <span class="gs-m">!${info.mod}</span>` : '')
+    + (info.unt ? ` <span class="gs-u">?${info.unt}</span>` : '')
+    + (info.ahead ? ` <span class="gs-a">↑${info.ahead}</span>` : '');
 }
 
 /* agent 实时状态(实际实现映射 SDK 流事件:thinking / tool_use / text delta / 回合结束) */
