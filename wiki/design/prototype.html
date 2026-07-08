@@ -34,6 +34,10 @@
   --blue:  oklch(0.72 0.11 245);
   --violet: oklch(0.73 0.11 300);
   --red:   oklch(0.68 0.19 25);
+  /* 图表系列色:大面积填充专用,统一明度、降饱和,避免高亮块刺眼 */
+  --chart-1: oklch(0.68 0.075 115);
+  --chart-2: oklch(0.65 0.065 300);
+  --chart-3: oklch(0.65 0.065 245);
 
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
@@ -350,17 +354,39 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .term-line .branch { color: var(--jade); font-size: 0.75rem; white-space: nowrap; }
 .term-line .branch .gs-m, .term-line .branch .gs-u { color: var(--amber); }
 .term-line .branch .gs-a { color: var(--blue); }
-#cwd-sel { color: var(--blue); }
-.bare-sel {
-  background: none; border: none; color: var(--ink); font-family: var(--mono); font-size: 0.75rem;
-  padding: 2px 6px; margin: -2px 0; border-radius: var(--r-s); cursor: pointer;
+/* 自绘下拉(原生 select 弹层由 OS 绘制,无法主题化;实现层用 shadcn/ui Select):状态行内向上弹出 */
+.dd { position: relative; }
+.dd-btn {
+  display: flex; align-items: center; gap: 5px;
+  background: none; border: none; font-family: var(--mono); font-size: 0.75rem;
+  padding: 3px 7px; margin: -3px 0; border-radius: var(--r-s); cursor: pointer;
   transition: background 150ms var(--ease);
 }
-.bare-sel:hover { background: var(--hover); }
-.bare-sel:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
-.bare-sel.model { color: var(--violet); }
-.bare-sel.dim { color: var(--muted); font-family: var(--sans); }
-.bare-sel option { background: var(--surface); color: var(--ink); }
+.dd-btn:hover { background: var(--hover); }
+.dd-btn:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
+.dd-btn .caret { font-size: 0.5625rem; color: var(--faint); }
+#cwd-dd .dd-btn { color: var(--blue); }
+#model-dd .dd-btn { color: var(--violet); }
+.dd.dim .dd-btn { color: var(--muted); font-family: var(--sans); }
+.dd-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 200px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 4px; z-index: var(--z-dropdown); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  opacity: 0; transform: translateY(4px); pointer-events: none;
+  transition: opacity 150ms var(--ease), transform 150ms var(--ease);
+}
+.dd.open .dd-menu { opacity: 1; transform: none; pointer-events: auto; }
+.dd-item {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
+  background: none; border: none; text-align: left; cursor: pointer;
+  font-family: var(--mono); font-size: 0.75rem; color: var(--ink);
+  padding: 7px 10px; border-radius: var(--r-s); transition: background 150ms var(--ease);
+}
+.dd.dim .dd-item { font-family: var(--sans); }
+.dd-item:hover { background: var(--hover); }
+.dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
+.dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
+.dd-item.sel .tick { visibility: visible; }
 .u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
@@ -579,9 +605,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
           <span class="sub">今日 · 按项目聚合,条长 = 实际成本(input + cache read×0.1 + output,按各模型牌价)· 点击展开会话明细</span>
           <span class="spacer"></span>
           <span class="tok-legend">
-            <span><i style="background:var(--jade)"></i>fable</span>
-            <span><i style="background:var(--violet)"></i>opus</span>
-            <span><i style="background:var(--blue)"></i>sonnet</span>
+            <span><i style="background:var(--chart-1)"></i>fable</span>
+            <span><i style="background:var(--chart-2)"></i>opus</span>
+            <span><i style="background:var(--chart-3)"></i>sonnet</span>
           </span>
         </div>
         <div class="tok" id="dash-tokens"></div>
@@ -652,25 +678,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
           </div>
         </div>
         <div class="term-line">
-          <select class="bare-sel" id="cwd-sel" title="工作目录">
-            <option>~/go-antifraud</option>
-            <option>~/xuanji</option>
-            <option>~/baize</option>
-            <option>~/project/cronjob</option>
-          </select>
+          <div class="dd" id="cwd-dd" title="工作目录:决定下一个派发会话的 cwd 与加载的项目级 CLAUDE.md"></div>
           <span class="branch mono" id="cwd-branch" title="git 状态:! 已修改 · ? 未跟踪 · ↑ 领先远端未推送"></span>
           <span class="spacer"></span>
-          <select class="bare-sel model" id="model-sel" title="派发会话所用模型,默认继承 settings.json">
-            <option selected>claude-fable-5</option>
-            <option>claude-opus-4-8</option>
-            <option>claude-sonnet-5</option>
-            <option>claude-haiku-4.5</option>
-          </select>
-          <select class="bare-sel dim" title="权限模式">
-            <option selected>default(逐项审批)</option>
-            <option>acceptEdits</option>
-            <option>plan</option>
-          </select>
+          <div class="dd" id="model-dd" title="派发会话所用模型,默认继承 settings.json"></div>
+          <div class="dd dim" id="perm-dd" title="权限模式"></div>
           <span class="tag">settingSources: user</span>
         </div>
       </div>
@@ -809,9 +821,9 @@ const SESSIONS = [
 /* 今日 token 成本:项目 → 会话两级。cost(USD)= input×单价 + cache_read×0.1×单价 + output×单价,
    按各模型 API 牌价从 usage 字段折算;堆叠分段 = 模型 */
 const MODEL_META = {
-  fable:  { label: 'fable',  color: 'var(--jade)' },
-  opus:   { label: 'opus',   color: 'var(--violet)' },
-  sonnet: { label: 'sonnet', color: 'var(--blue)' },
+  fable:  { label: 'fable',  color: 'var(--chart-1)' },
+  opus:   { label: 'opus',   color: 'var(--chart-2)' },
+  sonnet: { label: 'sonnet', color: 'var(--chart-3)' },
 };
 const TOKEN_PROJECTS = [
   { name: 'baize', sessions: [
@@ -1212,8 +1224,46 @@ const CWD_INFO = {
   '~/baize':           { branch: 'feature/cross-section',mod: 0, unt: 2, ahead: 1 },
   '~/project/cronjob': { branch: 'main',                 mod: 0, unt: 0, ahead: 0 },
 };
+let currentCwd = '~/go-antifraud';
+
+/* 自绘下拉:点开/选中/外点关闭/Esc 关闭,向上弹出 */
+function makeDD(sel, items, opts) {
+  const root = $(sel);
+  root.innerHTML = `
+    <button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">${esc(opts.value)}</span><span class="caret">▾</span></button>
+    <div class="dd-menu" role="listbox">
+      ${items.map(it => `<button class="dd-item ${it === opts.value ? 'sel' : ''}" role="option" aria-selected="${it === opts.value}">${esc(it)}<span class="tick">✓</span></button>`).join('')}
+    </div>`;
+  const btn = root.querySelector('.dd-btn');
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !root.classList.contains('open');
+    closeDDs();
+    root.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open);
+  });
+  root.querySelectorAll('.dd-item').forEach(b => b.addEventListener('click', () => {
+    const v = b.childNodes[0].textContent;
+    btn.querySelector('.dd-val').textContent = v;
+    root.querySelectorAll('.dd-item').forEach(x => {
+      x.classList.toggle('sel', x === b);
+      x.setAttribute('aria-selected', x === b);
+    });
+    closeDDs();
+    if (opts.onChange) opts.onChange(v);
+  }));
+}
+function closeDDs() {
+  $$('.dd.open').forEach(d => {
+    d.classList.remove('open');
+    d.querySelector('.dd-btn').setAttribute('aria-expanded', 'false');
+  });
+}
+document.addEventListener('click', closeDDs);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDDs(); });
+
 function syncCwdBranch() {
-  const info = CWD_INFO[$('#cwd-sel').value] || { branch: '—', mod: 0, unt: 0, ahead: 0 };
+  const info = CWD_INFO[currentCwd] || { branch: '—', mod: 0, unt: 0, ahead: 0 };
   $('#cwd-branch').innerHTML = `⎇ ${esc(info.branch)}`
     + (info.mod ? ` <span class="gs-m">!${info.mod}</span>` : '')
     + (info.unt ? ` <span class="gs-u">?${info.unt}</span>` : '')
@@ -1530,8 +1580,10 @@ renderProjects();
 renderBoard();
 renderChat(chatDefault());
 setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
+makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); toast(`下一个派发会话将运行在 ${v}`); } });
+makeDD('#model-dd', ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4.5'], { value: 'claude-fable-5' });
+makeDD('#perm-dd', ['default(逐项审批)', 'acceptEdits', 'plan'], { value: 'default(逐项审批)' });
 syncCwdBranch();
-$('#cwd-sel').addEventListener('change', syncCwdBranch);
 renderSkills();
 renderMemories();
 renderCrons();
