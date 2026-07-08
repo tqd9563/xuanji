@@ -663,7 +663,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
           <option selected>全部(--all)</option>
         </select>
       </div>
-      <div class="notice"><span class="ok"></span>经 <span class="mono">claude agents --json --all</span> 刷新于 3 秒前 · daemon 正常 · 终端存活的交互会话仅只读展示,不可接管 · <span class="mono">← ↑ ↓ →</span> 选卡,<span class="mono">Enter</span> 回放,<span class="mono">Esc</span> 关闭</div>
+      <div class="notice"><span class="ok"></span>经 <span class="mono">claude agents --json --all</span> 刷新于 3 秒前 · daemon 正常 · 终端存活的交互会话仅只读展示,不可接管 · <span class="mono">← ↑ ↓ →</span> 选卡,<span class="mono">Space</span> 回放,<span class="mono">Esc</span> 关闭</div>
       <div class="board" id="board"></div>
     </section>
 
@@ -1179,8 +1179,8 @@ document.addEventListener('keydown', e => {
   if (!$('#view-sessions').classList.contains('active')) return;
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if ($('#drawer').classList.contains('show')) return; /* 抽屉内 Esc 已有全局处理 */
-  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) return;
-  e.preventDefault();
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) return;
+  e.preventDefault(); /* 空格默认滚动页面,一并拦截 */
   if (!kbPos) {
     const c = COLS.findIndex((_, i) => boardColCards(i).length);
     if (c === -1) return;
@@ -1189,7 +1189,7 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'ArrowRight') kbMoveCol(1);
   else if (e.key === 'ArrowUp') kbPos.r = Math.max(0, kbPos.r - 1);
   else if (e.key === 'ArrowDown') kbPos.r = Math.min(boardColCards(kbPos.c).length - 1, kbPos.r + 1);
-  if (e.key === 'Enter') {
+  if (e.key === ' ') {
     const el = boardColCards(kbPos.c)[kbPos.r];
     if (el) el.click();
     return;
