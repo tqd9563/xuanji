@@ -87,7 +87,8 @@
 - 轮询/事件驱动 `claude agents --json --all`,按 `state` 分列:**运行中 / blocked(等输入)/ idle / 已完成** —— 看板式布局;
 - 每个任务卡片补充 `jobs/<id>/state.json` 的 `detail`(最近进展摘要)和 `needs`(在等什么);
 - blocked 的会话一键跳转到对话页,用 `--resume <sessionId>` 续上并回复(见 4.3 的所有权约束);
-- 历史会话浏览:读 session jsonl 渲染完整对话回放(只读)。
+- 历史会话浏览:读 session jsonl 渲染完整对话回放(只读);
+- **会话名与重命名**(2026-07-08 原型评审定案):卡片标题直接取 `claude agents --json` 的 `name` / 会话元数据摘要题名——与终端 `/rename`、`--resume` 选择列表**同源**,终端改名后轮询自动跟进,璇玑侧零成本;web 派发的会话在璇玑内提供「重命名」动作,名字作为 display-name 覆盖存**自有 SQLite**(不写 `~/.claude` 内部元数据,守只读铁律),仅在璇玑界面生效——代价是终端 `--resume` 列表仍显示原自动名,已接受;终端存活的只读会话不提供改名入口(所有权规则)。
 
 ### 4.3 对话派发(核心交互)
 - **新任务**:Agent SDK `query()` streaming-input 模式,前端 WebSocket 双向流:用户输入 → SDK,SDK 消息/工具调用 → 前端实时渲染;
@@ -95,7 +96,11 @@
 - **续会话**:`resume(sessionId)` 接管 web 派发或已结束的会话;
 - **会话所有权规则**(防冲突):终端里活着的 interactive 会话(agents --json 里 pid 存活且 kind=interactive)只读不接管;web 只 resume ①自己派发的、②已退出的、③blocked 的后台会话;
 - **长任务转后台**:派发时可选 `claude --bg` 模式,交给 daemon 托管,回到 4.2 看板跟踪;
-- settingSources 配置为加载 user 级设置,让 web 派发的会话拥有和终端一致的 skills/MCP/CLAUDE.md。
+- settingSources 配置为加载 user 级设置,让 web 派发的会话拥有和终端一致的 skills/MCP/CLAUDE.md;
+- **跨目录交接**(2026-07-08 原型评审定案,方案二):会话进行中切换工作目录不影响当前会话,仅对下一个会话生效(UI 常驻提示);「携带摘要开新会话」= 取原会话消息记录,低成本模型调用生成结构化交接摘要(结论/未完成/关键口径),作为新目录会话的首条消息注入;同会话 add-dir(resume + additionalDirectories)留作后续进阶选项;
+- **任务通知**(2026-07-08 定案):完成/blocked 通知由**后端直发** macOS 横幅(osascript/terminal-notifier),不依赖网页层 Notification API——浏览器与 Pake 壳表现一致;默认只通知璇玑派发的会话与定时任务,终端会话通知默认关(避免与用户已有 hook 重复弹),范围可配置;
+- **后台任务权限预授**:转后台(--bg)派发的引导中提示写全任务描述并放宽权限模式(如 acceptEdits),避免无人值守任务深夜卡在审批上;
+- **桌面化**:M1 后端固定端口 + launchd 常驻,支持 Pake(Tauri 壳)包装为轻量桌面 app,通知走后端直发故不受 webview 限制。
 
 ### 4.4 技能一览
 - 扫描 skills / skills-disabled / plugins 的 SKILL.md frontmatter,列表展示:名称、描述、版本、user-invocable、allowed-tools、启用状态;
