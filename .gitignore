@@ -1,1 +1,32 @@
+# Node
+node_modules/
+*.log
+logs/
+
+# 构建产物
+dist/
+build/
+*.tsbuildinfo
+
+# 环境与密钥(永不提交)
+.env
+.env.*
+!.env.example
+
+# SQLite 自有数据(可重建)
+code/backend/data/
+
+# 测试
+coverage/
+.vitest-cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
 .DS_Store
+Thumbs.db
+
+# pnpm-lock.yaml 必须提交,不要忽略

@@ -1,0 +1,11 @@
+{"type":"custom-title","customTitle":"演示会话","sessionId":"11111111-2222-3333-4444-555555555555"}
+{"type":"mode","mode":"normal","sessionId":"11111111-2222-3333-4444-555555555555"}
+{"type":"permission-mode","permissionMode":"default","sessionId":"11111111-2222-3333-4444-555555555555"}
+{"type":"user","message":{"role":"user","content":"扫描一下高风险 IP"},"cwd":"/Users/me/demo-app","timestamp":"2026-07-08T10:00:00.000Z"}
+{"type":"assistant","message":{"model":"claude-fable-5","id":"msg_001","role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":"xxx"},{"type":"text","text":"好的,先看规则。"},{"type":"tool_use","id":"toolu_01","name":"Grep","input":{"pattern":"SignalL3","path":"internal/rules/"}}],"usage":{"input_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":50000,"output_tokens":300}},"timestamp":"2026-07-08T10:00:05.000Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01","content":[{"type":"text","text":"internal/rules/l3.go:24\ninternal/rules/l3.go:88"}]}]},"timestamp":"2026-07-08T10:00:06.000Z"}
+{"type":"assistant","message":{"model":"claude-fable-5","id":"msg_001","role":"assistant","content":[{"type":"text","text":"共 2 处匹配。"}],"usage":{"input_tokens":1000,"cache_creation_input_tokens":2000,"cache_read_input_tokens":50000,"output_tokens":300}},"timestamp":"2026-07-08T10:00:08.000Z"}
+{"type":"assistant","message":{"model":"claude-sonnet-5","id":"msg_002","role":"assistant","content":[{"type":"text","text":"子任务完成。"}],"usage":{"input_tokens":500,"cache_creation_input_tokens":0,"cache_read_input_tokens":1000,"output_tokens":200}},"timestamp":"2026-07-08T10:01:00.000Z"}
+{"type":"x-future-event","payload":{"pct":62}}
+this line is not json at all
+{"type":"system","subtype":"info","content":"tick"}
