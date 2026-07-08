@@ -387,6 +387,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
 .dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
 .dd-item.sel .tick { visibility: visible; }
+/* 切目录但会话仍在进行时的常驻提示(比 toast 更稳妥) */
+.cwd-note {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 8px 6px 0; font-size: 0.75rem; color: var(--muted);
+}
+.cwd-note .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); flex: none; }
+.cwd-note .mono { color: var(--ink); }
 .u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
@@ -685,6 +692,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
           <div class="dd dim" id="perm-dd" title="权限模式"></div>
           <span class="tag">settingSources: user</span>
         </div>
+        <div class="cwd-note" id="cwd-note" style="display:none"></div>
       </div>
     </section>
 
@@ -1225,6 +1233,42 @@ const CWD_INFO = {
   '~/project/cronjob': { branch: 'main',                 mod: 0, unt: 0, ahead: 0 },
 };
 let currentCwd = '~/go-antifraud';
+let sessionCwd = '~/go-antifraud'; /* 当前进行中会话绑定的目录(启动时定死,不随选择器变) */
+
+function updateCwdNote() {
+  const el = $('#cwd-note');
+  const activeChat = !$('#chat .chat-empty');
+  if (activeChat && currentCwd !== sessionCwd) {
+    el.style.display = 'flex';
+    el.innerHTML = `
+      <span class="dot"></span>
+      <span>当前会话仍绑定 <span class="mono">${esc(sessionCwd)}</span> · 新目录对下一个会话生效</span>
+      <button class="btn btn-sm" onclick="handoffTo()">携带摘要在 ${esc(currentCwd)} 开新会话</button>`;
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+/* 跨目录交接:自动生成上一会话摘要,注入新会话首条消息(mock) */
+function handoffTo() {
+  sessionCwd = currentCwd;
+  renderChat(`
+    <div class="resume-note">⇢ 已在 <span class="mono">${esc(currentCwd)}</span> 开启新会话,注入上一会话的交接摘要(自动生成 · 1.1k tokens)。原会话完整记录仍可在「会话」看板回放。</div>
+    <div class="chat-msg"><div class="who">Claude</div>
+      <div class="toolcard">
+        <button class="tc-head" onclick="this.parentElement.classList.toggle('open')">
+          <span class="fn">交接摘要</span><span>来自 ~/go-antifraud 的会话</span><span class="chev">▾</span>
+        </button>
+        <div class="tc-body">上一会话结论:go-antifraud 共 9 条 L3 弱信号规则(阈值 0.72,三分类),文档已写入 wiki/business/l3-weak-signals.md。
+未完成:CHANGELOG 更新与提交。
+关键口径:阈值 0.72 来自 5 月 A/B,改动需重跑离线评估。</div>
+      </div>
+      <div class="body">摘要已读。现在的工作目录是 <span class="mono">${esc(currentCwd)}</span>,要基于上面的结论继续哪部分?</div>
+    </div>`);
+  setAgentStatus('空闲 · 新会话已就绪');
+  updateCwdNote();
+  toast('已携带摘要开启新会话');
+}
 
 /* 自绘下拉:点开/选中/外点关闭/Esc 关闭,向上弹出 */
 function makeDD(sel, items, opts) {
@@ -1580,7 +1624,7 @@ renderProjects();
 renderBoard();
 renderChat(chatDefault());
 setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
-makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); toast(`下一个派发会话将运行在 ${v}`); } });
+makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); updateCwdNote(); } });
 makeDD('#model-dd', ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4.5'], { value: 'claude-fable-5' });
 makeDD('#perm-dd', ['default(逐项审批)', 'acceptEdits', 'plan'], { value: 'default(逐项审批)' });
 syncCwdBranch();
@@ -1609,7 +1653,7 @@ $('#send-btn').addEventListener('click', sendMessage);
 $('#composer-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); });
+$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); sessionCwd = currentCwd; updateCwdNote(); });
 $('#bg-switch').addEventListener('click', function () {
   this.classList.toggle('on');
   this.setAttribute('aria-checked', this.classList.contains('on'));
