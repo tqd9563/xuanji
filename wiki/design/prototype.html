@@ -251,6 +251,15 @@ select.input { appearance: none; padding-right: 28px;
 .heat-days span { font-size: 0.6875rem; color: var(--faint); text-align: center; }
 .heat-days span:first-child { text-align: left; }
 
+/* token 消耗:单色 jade 水平条,长度编码数值 */
+.tok { padding: 12px 18px 14px; }
+.tok-row { display: grid; grid-template-columns: 176px 1fr 84px; gap: 12px; align-items: center; padding: 5px 0; font-size: 0.8125rem; }
+.tok-row .lbl { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tok-row .lbl .proj { color: var(--faint); font-size: 0.6875rem; margin-left: 6px; }
+.tok-row .track { height: 8px; border-radius: 4px; background: var(--tint-muted); overflow: hidden; }
+.tok-row .fill { height: 100%; border-radius: 4px; background: var(--jade-dim); }
+.tok-row .val { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-align: right; white-space: nowrap; }
+
 /* ============ 项目 ============ */
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 84px; }
 .spark i { flex: 1; background: var(--jade-dim); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
@@ -311,6 +320,12 @@ select.input { appearance: none; padding-right: 28px;
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
 .dispatch-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .dispatch-bar label { font-size: 0.75rem; color: var(--muted); }
+/* 用量指示(对齐 claude-hud:上下文 / 5h / 周限额) */
+.u-chips { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+.u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+.u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
+.u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
 .chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 24px; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
@@ -518,13 +533,23 @@ select.input { appearance: none; padding-right: 28px;
           <div class="heat" id="dash-heat"></div>
         </div>
       </div>
+
+      <div class="panel" style="margin-top:16px">
+        <div class="panel-head">
+          <h2>Token 消耗</h2>
+          <span class="sub">今日 · 按任务聚合自 session jsonl 的 usage 字段(只读)</span>
+          <span class="spacer"></span>
+          <span class="sub">今日 <b style="color:var(--ink)">127.4k</b> · 本周 <b style="color:var(--ink)">0.98M</b></span>
+        </div>
+        <div class="tok" id="dash-tokens"></div>
+      </div>
     </section>
 
     <!-- ====== 项目 ====== -->
     <section class="view" id="view-projects">
       <div class="view-head">
         <h1>项目</h1>
-        <span class="sub">6 个有效项目 · 已过滤 142 个 multica 临时目录与 21 个失效路径</span>
+        <span class="sub">8 个有效项目 · 已按规则过滤 142 个 multica-workspaces-* 临时目录与 21 个失效路径(过滤规则可在设置调整)</span>
         <span class="spacer"></span>
         <input class="input" id="proj-search" type="search" placeholder="搜索项目名或路径…" style="width:220px">
       </div>
@@ -579,6 +604,13 @@ select.input { appearance: none; padding-right: 28px;
             <option>plan</option>
           </select>
           <span class="tag">settingSources: user</span>
+          <span class="u-chips">
+            <span class="u-chip" title="当前会话上下文占用(64k / 200k),取自最近一条 assistant 事件的 usage 字段">
+              上下文 <span class="u-bar"><i style="width:32%"></i></span><b>32%</b>
+            </span>
+            <span class="u-chip" title="5 小时滚动窗口限额用量">5h <span class="u-bar"><i style="width:41%"></i></span><b>41%</b></span>
+            <span class="u-chip" title="7 天滚动窗口限额用量,周四 08:00 重置">周 <span class="u-bar"><i style="width:63%;background:var(--amber)"></i></span><b style="color:var(--amber)">63%</b></span>
+          </span>
         </div>
         <div class="chat" id="chat"></div>
         <div class="composer">
@@ -606,6 +638,7 @@ select.input { appearance: none; padding-right: 28px;
         </div>
         <input class="input" id="skill-search" type="search" placeholder="搜索技能…" style="width:200px">
       </div>
+      <div class="notice"><span class="ok"></span>关闭开关 = 把技能目录移入 <span class="mono">~/.claude/skills-disabled/</span>,新会话不再加载该技能(显式写操作,二次确认后执行;插件技能走 plugin 配置)</div>
       <div class="panel">
         <table class="table">
           <thead><tr>
@@ -698,6 +731,8 @@ const PROJECTS = [
   { name: 'go-antifraud',  path: '~/go-antifraud',     branch: 'main',                 dirty: 2, sessions: 41, memories: 12, last: '2 小时前',  heat: [6,4,7,3,9,2,4] },
   { name: 'baize',         path: '~/baize',            branch: 'feature/cross-section',dirty: 0, sessions: 28, memories: 9,  last: '昨天',      heat: [3,5,2,6,4,1,0] },
   { name: 'data-analysis', path: '~/data-analysis',    branch: 'main',                 dirty: 1, sessions: 22, memories: 7,  last: '昨天',      heat: [1,3,2,5,2,3,1] },
+  { name: 'baize-web',     path: '~/baize-web',        branch: 'develop',              dirty: 3, sessions: 15, memories: 3,  last: '前天',      heat: [0,4,2,1,0,0,0] },
+  { name: 'antifraud-skills', path: '~/antifraud-skills', branch: 'main',              dirty: 0, sessions: 12, memories: 4,  last: '2 天前',    heat: [2,1,0,3,1,0,0] },
   { name: 'cronjob',       path: '~/project/cronjob',  branch: 'main',                 dirty: 0, sessions: 17, memories: 5,  last: '3 天前',    heat: [0,2,4,0,1,0,0] },
   { name: 'wiki-cards',    path: '~/wiki-cards',       branch: 'main',                 dirty: 0, sessions: 6,  memories: 2,  last: '上周',      heat: [2,0,0,1,0,0,0] },
 ];
@@ -717,6 +752,15 @@ const SESSIONS = [
     detail: '退出码 0 · 扫描 156 个 IP,3 个高风险', started: '08:30', ended: '08:47' },
   { id: '9d016e5f', title: 'CHANGELOG 整理', kind: 'background', state: 'done', cwd: '~/xuanji',
     detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
+];
+
+/* 今日 token 消耗 Top(按任务/会话聚合;input+cache_creation+output,cache_read 单列) */
+const TOKEN_TOP = [
+  { title: '白泽横截面诊断',   proj: 'baize',      tok: 48.2, cache: 312 },
+  { title: '每日舆情异动扫描', proj: 'cron',       tok: 31.2, cache: 187 },
+  { title: 'M0 原型构建',      proj: 'xuanji',     tok: 22.9, cache: 240 },
+  { title: '弱信号引擎评估',   proj: 'go-antifraud', tok: 14.6, cache: 96 },
+  { title: '周报汇总草稿',     proj: 'cronjob',    tok: 10.5, cache: 44 },
 ];
 
 const REPLAY = {
@@ -857,7 +901,7 @@ const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '
    ============================================================ */
 const NAVS = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
-  { id: 'projects',  label: '项目',   icon: 'M3 7l3-4h5l2 3h8v13H3z', count: 6 },
+  { id: 'projects',  label: '项目',   icon: 'M3 7l3-4h5l2 3h8v13H3z', count: 8 },
   { id: 'sessions',  label: '会话',   icon: 'M4 5h16v11H8l-4 4z', count: 7 },
   { id: 'dispatch',  label: '派发',   icon: 'M3 12l18-8-6 18-3-7z' },
   { id: 'skills',    label: '技能',   icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z', count: 13 },
@@ -910,6 +954,15 @@ function renderDashboard() {
   $('#dash-timeline').innerHTML = TIMELINE.map(i => `
     <li><span class="t">${i.t}</span><span class="proj">${i.p}</span><span class="msg">${esc(i.m)}</span></li>`).join('');
 
+  /* token 消耗:单色条,长度编码;数值 + cache_read 另列说明 */
+  const tokMax = Math.max(...TOKEN_TOP.map(t => t.tok));
+  $('#dash-tokens').innerHTML = TOKEN_TOP.map(t => `
+    <div class="tok-row">
+      <span class="lbl">${esc(t.title)}<span class="proj">${esc(t.proj)}</span></span>
+      <div class="track"><div class="fill" style="width:${Math.round(t.tok / tokMax * 100)}%"></div></div>
+      <span class="val" title="cache read 另计 ${t.cache}k">${t.tok}k</span>
+    </div>`).join('');
+
   /* 热力:sequential 单色 jade,浅→深映射 0→max */
   const max = Math.max(...PROJECTS.flatMap(p => p.heat));
   $('#dash-heat').innerHTML = PROJECTS.slice(0, 5).map(p => `
@@ -953,9 +1006,9 @@ function renderProjects(q) {
    会话看板
    ============================================================ */
 const COLS = [
+  { key: 'idle', label: '空闲' },
   { key: 'running', label: '运行中' },
   { key: 'blocked', label: '等待输入' },
-  { key: 'idle', label: '空闲' },
   { key: 'done', label: '已完成' },
 ];
 

@@ -11,4 +11,5 @@
 - **项目级 CLAUDE.md**:固化技术栈(Node/TS + Hono,明确禁止 Python 后端)、project-init 适配约定、三条架构铁律与流程规则,保证任何新开会话都继承正确上下文。
 
 ### 变更
+- **M0 原型迭代(第一轮审批反馈)**:会话看板列序改为「空闲 → 运行中 → 等待输入 → 已完成」;仪表盘新增「Token 消耗」面板(按任务聚合 session jsonl 的 usage 字段,今日/本周合计 + Top 任务单色条图);派发页顶栏新增上下文 / 5h / 周限额三枚用量指示(对齐 claude-hud 能力);项目视图 mock 补入 baize-web 与 antifraud-skills(此前缺失系 mock 数据未覆盖,非过滤逻辑问题),过滤说明改为明确的 multica-workspaces-* 规则并注明可配置;技能页新增开关语义说明条(关闭 = 移入 skills-disabled/,显式写操作需二次确认)。
 - **脚手架约定**:明确 project-init skill 的适配方式——结构不变量(code/ + wiki 四目录 + README + 原型关卡)全保留,Python 专属细节替换为 Node 等价物(uv→pnpm、FastAPI→Hono、pytest→vitest);项目 agent 规则文件按全局 R3 用 CLAUDE.md 而非 AGENTS.md。
