@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### 新增
+- **launchd 常驻**:`pnpm launchd:install` 生成按本机环境定制的 LaunchAgent(node/claude CLI 绝对路径入 PATH,launchd 不继承 shell 环境)并加载——开机自启、异常退出 5s 拉起(SuccessfulExit=false)、日志落 `~/Library/Logs/xuanji/`;`launchd:uninstall` 一键卸载。已验证 kill -9 后自动复活且 CLI 可达。璇玑从「手动起的开发服务」变成「装好了的软件」。
 - **M2 派发通道全量落地**:Agent SDK `query()` streaming-input 流式会话经 `/ws/dispatch` 双向通道接入派发页——打字机增量渲染、工具折叠卡实时回填、canUseTool 审批卡(允许一次/本次会话总是允许[携带 SDK suggestions]/拒绝)、`--resume` 续接(前置所有权检查:终端存活 interactive 拒绝接管)、转后台(claude --bg)、打断;Context 指示来自回合 usage,Usage/Weekly 指示来自 SDK 原生 `rate_limit_event`(无需 statusline 桥接);跨目录交接(方案二)= haiku 生成结构化摘要注入新会话;技能启停(铁律例外②,双确认目录移动)与 web 会话重命名(SQLite display-name 覆盖)开放;web 派发会话入 SQLite 并在看板带「web」来源标;回合完成/等待审批经 osascript 直发 macOS 横幅。全链路实弹验证:协议级(pwd $0.05 / 拒绝路径 / 放行路径文件落盘)+ 浏览器级(UI 发任务→审批卡→放行→$0.02 完成)+ resume 上下文恢复实测;修复 allow 响应缺 `updatedInput` 被 SDK Zod 拒绝的真 bug(模型会谎称完成,靠终端结果验收抓获)。18 个测试全绿。
 - **M1 前端:七视图只读驾驶舱上线**:React + Vite + Tailwind v4,样式 token 与组件 CSS 直接提取自获批原型(与 DESIGN.md 同源),shadcn 风格 Button/Input 基础组件按 token 校准;仪表盘(实时时钟/需处理/运行中/统计条/时间线/7 日热力/按模型堆叠的 Token 成本下钻)、项目(git zsh 风格状态/热力火花线/搜索)、会话看板(5s 轮询、方向键+Space 键盘导航、只读回放抽屉含工具折叠卡与未知事件降级)、技能(筛选/详情抽屉,启停开关只读禁用)、经验(项目分组/类型筛选/FTS5 全文搜索防抖/[[链接]]跳转)、定时(系统 crontab 只读)、派发占位(M2);数字键 1-7 切视图,hash 路由;后端构建后自动托管 SPA;真实数据端到端截图验证,`/impeccable hooks on` 已开启。
 - **回放 adapter 吸收命名事件**:真实数据发现 `ai-title`/`agent-name` 事件,吸收为会话标题而非降级 raw;Skill 工具调用主参数展示修正。

@@ -40,6 +40,16 @@ cd xuanji/code/backend && pnpm install
 cd ../frontend && pnpm install
 ```
 
+### 启动(日常使用:launchd 常驻)
+
+```bash
+cd code/frontend && pnpm build        # 构建 SPA(后端直接托管)
+cd ../backend && pnpm launchd:install # 安装 LaunchAgent:开机自启 + 崩溃 5s 拉起
+# 浏览器打开 http://127.0.0.1:7777
+```
+
+卸载常驻:`pnpm launchd:uninstall`;日志在 `~/Library/Logs/xuanji/`。
+
 ### 启动(开发)
 
 ```bash
@@ -49,6 +59,7 @@ cd code/backend && pnpm dev
 # 前端(Vite dev server,代理 /api 与 /ws 到后端)
 cd code/frontend && pnpm dev
 ```
+开发时先 `pnpm launchd:uninstall` 释放端口,避免与常驻实例冲突。
 
 ### 测试与检查
 
