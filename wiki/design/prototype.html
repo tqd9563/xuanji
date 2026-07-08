@@ -1009,8 +1009,8 @@ const NAVS = [
 ];
 
 function renderNav() {
-  $('#nav').innerHTML = NAVS.map(n => `
-    <button data-v="${n.id}" ${n.id === 'dashboard' ? 'class="active"' : ''}>
+  $('#nav').innerHTML = NAVS.map((n, i) => `
+    <button data-v="${n.id}" ${n.id === 'dashboard' ? 'class="active"' : ''} title="快捷键 ${i + 1}">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="${n.icon}"/></svg>
       ${n.label}
       ${n.count != null ? `<span class="count">${n.count}</span>` : ''}
@@ -1157,7 +1157,15 @@ const COLS = [
   { key: 'done', label: '已完成' },
 ];
 
-/* 键盘导航:方向键在看板卡片间移动,Enter 回放,Esc 关抽屉(对齐 claude agents TUI 手感) */
+/* 数字键 1-7 直切视图(焦点在输入控件时失效) */
+document.addEventListener('keydown', e => {
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const i = parseInt(e.key, 10);
+  if (i >= 1 && i <= NAVS.length) showView(NAVS[i - 1].id);
+});
+
+/* 键盘导航:方向键在看板卡片间移动,Space 回放,Esc 关抽屉(对齐 claude agents TUI 手感) */
 let kbPos = null;
 function boardColCards(c) {
   const col = $$('#board > div')[c];
