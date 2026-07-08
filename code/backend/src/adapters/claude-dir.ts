@@ -160,6 +160,13 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
       case 'custom-title':
         if (typeof j.customTitle === 'string') title = j.customTitle;
         break;
+      case 'ai-title':
+        // 自动命名事件:仅在无人工命名时采用
+        if (!title && typeof j.aiTitle === 'string') title = j.aiTitle;
+        break;
+      case 'agent-name':
+        if (typeof j.agentName === 'string') title = j.agentName;
+        break;
       case 'user': {
         const c = j.message?.content;
         if (typeof c === 'string') {
@@ -224,7 +231,7 @@ function compactInput(input: unknown): string {
   try {
     const j = input as Record<string, unknown>;
     // 常见工具的主参数优先展示
-    for (const key of ['command', 'file_path', 'pattern', 'query', 'prompt', 'url']) {
+    for (const key of ['command', 'file_path', 'pattern', 'query', 'prompt', 'url', 'skill', 'description']) {
       if (typeof j[key] === 'string') return (j[key] as string).slice(0, 500);
     }
     return JSON.stringify(input).slice(0, 500);

@@ -6,6 +6,8 @@
 ## [Unreleased]
 
 ### 新增
+- **M1 前端:七视图只读驾驶舱上线**:React + Vite + Tailwind v4,样式 token 与组件 CSS 直接提取自获批原型(与 DESIGN.md 同源),shadcn 风格 Button/Input 基础组件按 token 校准;仪表盘(实时时钟/需处理/运行中/统计条/时间线/7 日热力/按模型堆叠的 Token 成本下钻)、项目(git zsh 风格状态/热力火花线/搜索)、会话看板(5s 轮询、方向键+Space 键盘导航、只读回放抽屉含工具折叠卡与未知事件降级)、技能(筛选/详情抽屉,启停开关只读禁用)、经验(项目分组/类型筛选/FTS5 全文搜索防抖/[[链接]]跳转)、定时(系统 crontab 只读)、派发占位(M2);数字键 1-7 切视图,hash 路由;后端构建后自动托管 SPA;真实数据端到端截图验证,`/impeccable hooks on` 已开启。
+- **回放 adapter 吸收命名事件**:真实数据发现 `ai-title`/`agent-name` 事件,吸收为会话标题而非降级 raw;Skill 工具调用主参数展示修正。
 - **M1 后端:Adapter 层 + 只读 API 全量落地**:project-init 骨架按 Node 栈适配(code/backend + wiki 三类文档 + Node 版 README/.gitignore);Adapter 层(铁律 1 唯一非公开格式解析点)覆盖 projects 目录解码(jsonl 嗅探 cwd,解决路径含连字符的反解歧义)、history.jsonl、session jsonl 回放归一化(工具调用配对回填、未知事件降级 raw、坏行计数)、usage 抽取(message.id 去重)、SKILL.md/memory frontmatter、jobs state、`claude agents --json` 包装(状态归一化 + pid 存活判只读)与 git 状态;服务层 + Hono 路由提供 dashboard/projects/sessions/replay/skills/memories(+FTS5 搜索)/usage/crons 十个只读端点,SQLite(better-sqlite3+Drizzle)仅存可重建索引;ws + chokidar 变更推送;16 个 fixture 契约测试全绿,已对真实 `~/.claude` 端到端验证(19 有效项目/151 噪音过滤、58 技能、35 经验、747 事件回放零跳行)。
 - **M0 收尾:设计规范固化**:原型经十余轮迭代获用户浏览器审批,按 R2 流程执行 `/impeccable init` + `document`(scan 模式扫描获批原型)——新增根目录 `PRODUCT.md`(register/用户/目的/品牌个性/反例/五条设计原则/无障碍)与 `DESIGN.md`(OKLCH token frontmatter + 六段式规范,北极星「夜间观象台」,含状态色语义/等明度分类/一成玉/表格数字/悬浮才有影等具名规则)及 `.impeccable/design.json`(色阶/动效/阴影/断点 + 9 个组件快照);DESIGN.md 为设计唯一 source of truth,M1 前端实现以此为第一输入。
 - **产品规划补录评审定案**:§4.3 补入跨目录交接(方案二:携带自动摘要开新会话)、任务通知(后端直发 macOS 横幅,兼容 Pake 壳)、后台任务权限预授引导、Pake 桌面化路线。

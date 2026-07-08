@@ -1,4 +1,5 @@
 {"type":"custom-title","customTitle":"演示会话","sessionId":"11111111-2222-3333-4444-555555555555"}
+{"type":"agent-name","agentName":"演示会话改名","sessionId":"11111111-2222-3333-4444-555555555555"}
 {"type":"mode","mode":"normal","sessionId":"11111111-2222-3333-4444-555555555555"}
 {"type":"permission-mode","permissionMode":"default","sessionId":"11111111-2222-3333-4444-555555555555"}
 {"type":"user","message":{"role":"user","content":"扫描一下高风险 IP"},"cwd":"/Users/me/demo-app","timestamp":"2026-07-08T10:00:00.000Z"}

@@ -34,7 +34,8 @@ describe('parseReplay', () => {
     expect(file).toBeTruthy();
     const replay = await parseReplay(file!, SID);
 
-    expect(replay.title).toBe('演示会话');
+    // agent-name(改名事件)覆盖 custom-title;二者都不作为 raw 泄漏
+    expect(replay.title).toBe('演示会话改名');
     expect(replay.skippedLines).toBe(1); // "this line is not json at all"
 
     const kinds = replay.events.map((e) => e.kind);

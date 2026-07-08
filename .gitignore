@@ -16,6 +16,10 @@ build/
 # SQLite 自有数据(可重建)
 code/backend/data/
 
+# impeccable 本机私有配置
+.impeccable/config.local.json
+.impeccable/cache/
+
 # 测试
 coverage/
 .vitest-cache/
