@@ -1031,6 +1031,8 @@ function showView(id) {
     dispatchOrigin = null;
     const bb = document.getElementById('back-board');
     if (bb) bb.style.display = 'none';
+  } else { /* 进入派发即聚焦输入框,到手即打;Esc 可释放焦点 */
+    setTimeout(() => document.getElementById('composer-input')?.focus(), 0);
   }
 }
 
@@ -1407,8 +1409,8 @@ document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if ($$('.dd.open').length) { closeDDs(); return; }
   if ($('#drawer').classList.contains('show')) { closeDrawer(); return; }
-  if ($('#view-dispatch').classList.contains('active') && dispatchOrigin
-      && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) backToBoard();
+  if (document.activeElement.id === 'composer-input') { document.activeElement.blur(); return; } /* 先释放输入焦点,数字键切视图恢复可用 */
+  if ($('#view-dispatch').classList.contains('active') && dispatchOrigin) backToBoard();
 });
 
 /* ← 返回看板(对齐 claude agents 手感);焦点在 composer 且为空时同样生效,有内容时保持移光标本职 */
