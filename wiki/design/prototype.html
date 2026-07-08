@@ -252,7 +252,7 @@ select.input { appearance: none; padding-right: 28px;
 .tl li { display: flex; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; }
 .tl li:last-child { border-bottom: none; }
 .tl .t { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); flex: none; width: 58px; white-space: nowrap; }
-.tl .proj { color: var(--jade); font-size: 0.75rem; flex: none; }
+.tl .proj { font-size: 0.75rem; flex: none; } /* 颜色由项目分类色注入 */
 .tl .msg { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* 7 日热力(sequential:单色 jade 浅→深) */
@@ -313,7 +313,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 项目芯片:玉色 tint 底 + 玉色 mono 字,与仪表盘时间线的项目玉色惯例同一词汇;悬停见完整路径 */
 .proj-chip {
   font-family: var(--mono); font-size: 0.6875rem; font-weight: 500;
-  color: var(--jade); background: var(--tint-jade);
   border-radius: 4px; padding: 1.5px 8px; flex: none;
 }
 .scard .sid { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -996,6 +995,20 @@ function toast(msg) {
   t._h = setTimeout(() => t.classList.remove('show'), 2400);
 }
 
+/* 项目分类色:OKLCH 锁定 L/C 只转色相 → 不同底色、亮度饱和完全一致;
+   按首次出现顺序从色环取色(生产实现同此,存 SQLite 保持稳定),避开红(错误)与琥珀(等待)语义区 */
+const PROJ_HUES = [115, 245, 300, 195, 345, 55, 160, 270];
+const projHueMap = new Map();
+function projHue(name) {
+  if (!projHueMap.has(name)) projHueMap.set(name, PROJ_HUES[projHueMap.size % PROJ_HUES.length]);
+  return projHueMap.get(name);
+}
+function projChip(cwd) {
+  const name = cwd.split('/').pop();
+  const h = projHue(name);
+  return `<span class="proj-chip" title="${esc(cwd)}" style="color:oklch(0.78 0.12 ${h});background:oklch(0.78 0.12 ${h} / 0.16)">${esc(name)}</span>`;
+}
+
 const STATE_PILL = {
   running: '<span class="pill pill-run"><span class="dot"></span>运行中</span>',
   blocked: '<span class="pill pill-blk"><span class="dot"></span>等待输入</span>',
@@ -1067,7 +1080,7 @@ function renderDashboard() {
     </div>`).join('');
 
   $('#dash-timeline').innerHTML = TIMELINE.map(i => `
-    <li><span class="t">${i.t}</span><span class="proj">${i.p}</span><span class="msg">${esc(i.m)}</span></li>`).join('');
+    <li><span class="t">${i.t}</span><span class="proj" style="color:oklch(0.78 0.12 ${projHue(i.p)})">${i.p}</span><span class="msg">${esc(i.m)}</span></li>`).join('');
 
   renderTokens();
 
@@ -1237,7 +1250,7 @@ function renderBoard() {
             ${s.readonly ? '<span class="tag">只读</span>' : ''}
           </div>
           <div class="cwd">
-            <span class="proj-chip" title="${esc(s.cwd)}">${esc(s.cwd.split('/').pop())}</span>
+            ${projChip(s.cwd)}
             <span class="sid">${s.id}</span>
           </div>
           ${s.detail ? `<div class="detail">${esc(s.detail)}</div>` : ''}
