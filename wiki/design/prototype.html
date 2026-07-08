@@ -225,8 +225,9 @@ select.input { appearance: none; padding-right: 28px;
 .empty p { font-size: 0.8125rem; max-width: 34em; margin: 0 auto 4px; }
 
 /* ============ 仪表盘 ============ */
-/* 观象台时钟:等宽 + 表格数字,秒位跳动不抖版;信息级而非装饰级 */
-.clock { display: flex; align-items: baseline; gap: 8px; }
+/* 观象台时钟:日期+时间+时区一个仪表组(同类信息单注视点),等宽 + 表格数字,秒位跳动不抖版 */
+.clock { display: flex; align-items: baseline; gap: 10px; }
+.clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .clock #dash-clock {
   font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
   color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
@@ -582,9 +583,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <section class="view" id="view-dashboard">
       <div class="view-head">
         <h1>仪表盘</h1>
-        <span class="sub">2026-07-07 周二 · 观测中</span>
+        <span class="sub">观测中</span>
         <span class="spacer"></span>
-        <span class="clock" title="北京时间(UTC+8)"><span id="dash-clock">--:--:--</span><span class="tz">北京时间</span></span>
+        <span class="clock" title="北京时间(UTC+8)"><span class="date">2026-07-07 周二</span><span id="dash-clock">--:--:--</span><span class="tz">北京时间</span></span>
       </div>
 
       <div class="dash-now">
