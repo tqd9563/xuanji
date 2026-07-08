@@ -672,6 +672,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <section class="view" id="view-dispatch">
       <div class="view-head">
         <h1>派发</h1>
+        <button class="btn btn-sm" id="back-board" style="display:none" onclick="backToBoard()" title="快捷键 ← 或 Esc">‹ 会话看板</button>
         <span class="spacer"></span>
         <button class="btn" id="new-chat">新会话</button>
       </div>
@@ -1026,6 +1027,11 @@ function showView(id) {
   $$('.view').forEach(v => v.classList.toggle('active', v.id === 'view-' + id));
   $$('#nav button').forEach(b => b.classList.toggle('active', b.dataset.v === id));
   location.hash = id;
+  if (id !== 'dispatch') { /* 离开派发即清除来路,返回按钮随之隐藏 */
+    dispatchOrigin = null;
+    const bb = document.getElementById('back-board');
+    if (bb) bb.style.display = 'none';
+  }
 }
 
 /* ============================================================
@@ -1294,10 +1300,19 @@ function replayToChat(id) {
   }).join('');
 }
 
+/* 从看板进入的会话记住来路:← / Esc / 返回按钮原路回看板,选中卡保持高亮 */
+let dispatchOrigin = null;
+function backToBoard() {
+  showView('sessions');
+  kbApply();
+}
+
 function resumeSession(id) {
   const s = SESSIONS.find(x => x.id === id);
   closeDrawer();
   showView('dispatch');
+  dispatchOrigin = 'sessions';
+  $('#back-board').style.display = '';
   renderChat(replayToChat(id) + chatResumed(s));
   const waitingApproval = s.needs && s.needs.includes('权限审批');
   setAgentStatus(waitingApproval ? `等待你审批:${s.needs.replace('等待权限审批:', '')}` : s.needs ? '等待你输入' : '会话已续接 · 空闲', s.needs ? 'wait' : '');
@@ -1390,8 +1405,20 @@ function closeDDs() {
 document.addEventListener('click', closeDDs);
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
-  closeDDs();
-  if ($('#drawer').classList.contains('show')) closeDrawer();
+  if ($$('.dd.open').length) { closeDDs(); return; }
+  if ($('#drawer').classList.contains('show')) { closeDrawer(); return; }
+  if ($('#view-dispatch').classList.contains('active') && dispatchOrigin
+      && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) backToBoard();
+});
+
+/* ← 返回看板(对齐 claude agents 手感;焦点在输入框时不劫持光标键) */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft') return;
+  if (!$('#view-dispatch').classList.contains('active') || !dispatchOrigin) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if ($('#drawer').classList.contains('show')) return;
+  e.preventDefault();
+  backToBoard();
 });
 
 function syncCwdBranch() {
