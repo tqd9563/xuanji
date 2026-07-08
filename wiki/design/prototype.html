@@ -225,6 +225,14 @@ select.input { appearance: none; padding-right: 28px;
 .empty p { font-size: 0.8125rem; max-width: 34em; margin: 0 auto 4px; }
 
 /* ============ 仪表盘 ============ */
+/* 观象台时钟:等宽 + 表格数字,秒位跳动不抖版;信息级而非装饰级 */
+.clock { display: flex; align-items: baseline; gap: 8px; }
+.clock #dash-clock {
+  font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
+  color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.clock .tz { font-size: 0.6875rem; color: var(--faint); }
+
 .dash-now { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 16px; margin-bottom: 16px; }
 .need-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
 .need-item:last-child { border-bottom: none; }
@@ -575,6 +583,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
       <div class="view-head">
         <h1>仪表盘</h1>
         <span class="sub">2026-07-07 周二 · 观测中</span>
+        <span class="spacer"></span>
+        <span class="clock" title="北京时间(UTC+8)"><span id="dash-clock">--:--:--</span><span class="tz">北京时间</span></span>
       </div>
 
       <div class="dash-now">
@@ -1619,6 +1629,12 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(
 
 /* 绑定 */
 renderNav();
+/* 北京时间时钟:Intl 固定 Asia/Shanghai,与访问设备时区无关 */
+const clockFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+function tickClock() { $('#dash-clock').textContent = clockFmt.format(new Date()); }
+tickClock();
+setInterval(tickClock, 1000);
+
 renderDashboard();
 renderProjects();
 renderBoard();
