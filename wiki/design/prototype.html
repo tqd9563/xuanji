@@ -305,6 +305,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   transition: border-color 150ms var(--ease), background 150ms var(--ease);
 }
 .scard:hover { border-color: var(--muted); background: var(--hover); }
+.scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; }
 .scard .cwd { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-bottom: 6px; }
@@ -662,7 +663,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
           <option selected>全部(--all)</option>
         </select>
       </div>
-      <div class="notice"><span class="ok"></span>经 <span class="mono">claude agents --json --all</span> 刷新于 3 秒前 · daemon 正常 · 终端存活的交互会话仅只读展示,不可接管</div>
+      <div class="notice"><span class="ok"></span>经 <span class="mono">claude agents --json --all</span> 刷新于 3 秒前 · daemon 正常 · 终端存活的交互会话仅只读展示,不可接管 · <span class="mono">← ↑ ↓ →</span> 选卡,<span class="mono">Enter</span> 回放,<span class="mono">Esc</span> 关闭</div>
       <div class="board" id="board"></div>
     </section>
 
@@ -1156,6 +1157,46 @@ const COLS = [
   { key: 'done', label: '已完成' },
 ];
 
+/* 键盘导航:方向键在看板卡片间移动,Enter 回放,Esc 关抽屉(对齐 claude agents TUI 手感) */
+let kbPos = null;
+function boardColCards(c) {
+  const col = $$('#board > div')[c];
+  return col ? [...col.querySelectorAll('.scard')] : [];
+}
+function kbApply() {
+  $$('#board .scard.kb-sel').forEach(el => el.classList.remove('kb-sel'));
+  if (!kbPos) return;
+  const el = boardColCards(kbPos.c)[kbPos.r];
+  if (el) { el.classList.add('kb-sel'); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+}
+function kbMoveCol(dir) {
+  let c = kbPos.c;
+  do { c += dir; } while (c >= 0 && c < COLS.length && !boardColCards(c).length);
+  if (c < 0 || c >= COLS.length || !boardColCards(c).length) return;
+  kbPos = { c, r: Math.min(kbPos.r, boardColCards(c).length - 1) };
+}
+document.addEventListener('keydown', e => {
+  if (!$('#view-sessions').classList.contains('active')) return;
+  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  if ($('#drawer').classList.contains('show')) return; /* 抽屉内 Esc 已有全局处理 */
+  if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter'].includes(e.key)) return;
+  e.preventDefault();
+  if (!kbPos) {
+    const c = COLS.findIndex((_, i) => boardColCards(i).length);
+    if (c === -1) return;
+    kbPos = { c, r: 0 };
+  } else if (e.key === 'ArrowLeft') kbMoveCol(-1);
+  else if (e.key === 'ArrowRight') kbMoveCol(1);
+  else if (e.key === 'ArrowUp') kbPos.r = Math.max(0, kbPos.r - 1);
+  else if (e.key === 'ArrowDown') kbPos.r = Math.min(boardColCards(kbPos.c).length - 1, kbPos.r + 1);
+  if (e.key === 'Enter') {
+    const el = boardColCards(kbPos.c)[kbPos.r];
+    if (el) el.click();
+    return;
+  }
+  kbApply();
+});
+
 function renderBoard() {
   $('#board').innerHTML = COLS.map(c => {
     const items = SESSIONS.filter(s => s.state === c.key);
@@ -1313,7 +1354,11 @@ function closeDDs() {
   });
 }
 document.addEventListener('click', closeDDs);
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDDs(); });
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  closeDDs();
+  if ($('#drawer').classList.contains('show')) closeDrawer();
+});
 
 function syncCwdBranch() {
   const info = CWD_INFO[currentCwd] || { branch: '—', mod: 0, unt: 0, ahead: 0 };
