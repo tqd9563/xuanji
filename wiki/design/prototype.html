@@ -1411,11 +1411,12 @@ document.addEventListener('keydown', e => {
       && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) backToBoard();
 });
 
-/* ← 返回看板(对齐 claude agents 手感;焦点在输入框时不劫持光标键) */
+/* ← 返回看板(对齐 claude agents 手感);焦点在 composer 且为空时同样生效,有内容时保持移光标本职 */
 document.addEventListener('keydown', e => {
   if (e.key !== 'ArrowLeft') return;
   if (!$('#view-dispatch').classList.contains('active') || !dispatchOrigin) return;
-  if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
+  const ae = document.activeElement;
+  if (/INPUT|TEXTAREA|SELECT/.test(ae.tagName) && !(ae.id === 'composer-input' && ae.value === '')) return;
   if ($('#drawer').classList.contains('show')) return;
   e.preventDefault();
   backToBoard();
