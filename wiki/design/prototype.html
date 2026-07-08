@@ -307,10 +307,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard:hover { border-color: var(--muted); background: var(--hover); }
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; }
-.scard .cwd { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-bottom: 6px; }
-.scard .detail { font-size: 0.75rem; color: var(--muted); }
-.scard .needs { font-size: 0.75rem; color: var(--amber); margin-top: 6px; }
+/* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
+.scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scard .cwd { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-bottom: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scard .detail { font-size: 0.75rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scard .needs { font-size: 0.75rem; color: var(--amber); margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .scard .foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .scard .time { font-size: 0.6875rem; color: var(--faint); margin-left: auto; }
 
@@ -1214,7 +1215,7 @@ function renderBoard() {
     return `<div>
       <div class="col-head">${STATE_PILL[c.key]}<span class="n">${items.length}</span></div>
       ${items.map(s => `
-        <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0">
+        <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
           <div class="top">
             <span class="title">${esc(s.title)}</span>
             ${KIND_TAG[s.kind]}
