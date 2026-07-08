@@ -232,7 +232,6 @@ select.input { appearance: none; padding-right: 28px;
   font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
   color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
-.clock .tz { font-size: 0.6875rem; color: var(--faint); }
 
 .dash-now { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 16px; margin-bottom: 16px; }
 .need-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
@@ -583,9 +582,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <section class="view" id="view-dashboard">
       <div class="view-head">
         <h1>仪表盘</h1>
-        <span class="sub">观测中</span>
         <span class="spacer"></span>
-        <span class="clock" title="北京时间(UTC+8)"><span class="date">2026-07-07 周二</span><span id="dash-clock">--:--:--</span><span class="tz">北京时间</span></span>
+        <span class="clock" title="北京时间(UTC+8)"><span class="date">2026-07-07 周二</span><span id="dash-clock">--:--:--</span></span>
       </div>
 
       <div class="dash-now">
