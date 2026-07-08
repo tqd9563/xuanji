@@ -251,14 +251,33 @@ select.input { appearance: none; padding-right: 28px;
 .heat-days span { font-size: 0.6875rem; color: var(--faint); text-align: center; }
 .heat-days span:first-child { text-align: left; }
 
-/* token 消耗:单色 jade 水平条,长度编码数值 */
-.tok { padding: 12px 18px 14px; }
-.tok-row { display: grid; grid-template-columns: 176px 1fr 84px; gap: 12px; align-items: center; padding: 5px 0; font-size: 0.8125rem; }
-.tok-row .lbl { color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tok-row .lbl .proj { color: var(--faint); font-size: 0.6875rem; margin-left: 6px; }
-.tok-row .track { height: 8px; border-radius: 4px; background: var(--tint-muted); overflow: hidden; }
-.tok-row .fill { height: 100%; border-radius: 4px; background: var(--jade-dim); }
+/* token 消耗:项目级堆叠条(同色相三档:output 最亮=最贵,cache read 最淡),可展开会话明细 */
+.tok { padding: 10px 18px 14px; }
+.tok-row {
+  display: grid; grid-template-columns: 176px 1fr 76px; gap: 12px; align-items: center;
+  width: 100%; padding: 6px 0; font-size: 0.8125rem; text-align: left;
+  background: none; border: none; color: inherit; font-family: inherit;
+}
+button.tok-row { cursor: pointer; border-radius: var(--r-s); transition: background 150ms var(--ease); }
+button.tok-row:hover { background: var(--hover); }
+button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
+.tok-row .lbl { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+.tok-row .chev { color: var(--faint); font-size: 0.6875rem; transition: transform 150ms var(--ease); flex: none; }
+.tok-proj.open > .tok-row .chev { transform: rotate(90deg); }
+.tok-row .track { height: 9px; border-radius: 4px; background: var(--tint-muted); overflow: hidden; display: flex; }
+.tok-row .track i { height: 100%; }
+.s-in    { background: var(--jade-dim); }
+.s-cache { background: color-mix(in oklab, var(--jade) 22%, var(--surface-2)); }
+.s-out   { background: var(--jade); }
 .tok-row .val { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-align: right; white-space: nowrap; }
+.tok-subs { display: none; padding: 2px 0 6px; }
+.tok-proj.open .tok-subs { display: block; }
+.tok-row.sub { padding: 4px 0; }
+.tok-row.sub .lbl { font-weight: 400; color: var(--muted); padding-left: 22px; font-size: 0.75rem; }
+.tok-row.sub .track { height: 6px; }
+.tok-legend { display: flex; gap: 14px; font-size: 0.6875rem; color: var(--muted); }
+.tok-legend span { display: flex; align-items: center; gap: 5px; }
+.tok-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
 /* ============ 项目 ============ */
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 84px; }
@@ -318,16 +337,29 @@ select.input { appearance: none; padding-right: 28px;
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
-.dispatch-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.dispatch-bar label { font-size: 0.75rem; color: var(--muted); }
-/* 会话状态条:左侧 agent 实时状态,右侧用量指示(对齐 claude-hud:上下文 / 5h / 周限额) */
+/* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
 .chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
-.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
 .cs-state.wait .cs-dot { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
 .cs-state.wait { color: var(--amber); }
-.u-chips { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+.u-chips { display: flex; align-items: center; gap: 14px; }
+/* 终端式状态行(紧贴输入框下方):cwd ⎇ 分支 | 模型 · 权限模式 */
+.term-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 6px 0; font-size: 0.75rem; color: var(--muted); }
+.term-line .spacer { flex: 1; }
+.term-line .branch { color: var(--jade); font-size: 0.75rem; white-space: nowrap; }
+.term-line .branch .dirty { color: var(--amber); }
+.bare-sel {
+  background: none; border: none; color: var(--ink); font-family: var(--mono); font-size: 0.75rem;
+  padding: 2px 6px; margin: -2px 0; border-radius: var(--r-s); cursor: pointer;
+  transition: background 150ms var(--ease);
+}
+.bare-sel:hover { background: var(--hover); }
+.bare-sel:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
+.bare-sel.model { color: var(--blue); }
+.bare-sel.dim { color: var(--muted); font-family: var(--sans); }
+.bare-sel option { background: var(--surface); color: var(--ink); }
 .u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
@@ -357,7 +389,7 @@ select.input { appearance: none; padding-right: 28px;
 .approval.resolved { border-color: var(--line-soft); background: var(--surface); }
 .approval.resolved .a-head { color: var(--muted); }
 
-.composer { margin-top: 14px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
+.composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
@@ -524,7 +556,7 @@ select.input { appearance: none; padding-right: 28px;
 
       <div class="panel dash-strip">
         <span>今日派发 <b>4</b> 次</span>
-        <span>token 用量 <b>127.4k</b></span>
+        <span>今日 token <b>96.7k</b> <span style="color:var(--faint)">+ cache read 792k</span></span>
         <span>活跃项目 <b>3</b> 个</span>
         <span>定时任务 <b>2</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断</span>
       </div>
@@ -543,9 +575,13 @@ select.input { appearance: none; padding-right: 28px;
       <div class="panel" style="margin-top:16px">
         <div class="panel-head">
           <h2>Token 消耗</h2>
-          <span class="sub">今日 · 按任务聚合自 session jsonl 的 usage 字段(只读)</span>
+          <span class="sub">今日 · 按项目聚合自 session jsonl 的 usage 字段(只读)· 点击展开会话明细</span>
           <span class="spacer"></span>
-          <span class="sub">今日 <b style="color:var(--ink)">127.4k</b> · 本周 <b style="color:var(--ink)">0.98M</b></span>
+          <span class="tok-legend">
+            <span><i class="s-in"></i>input</span>
+            <span><i class="s-cache"></i>cache read</span>
+            <span><i class="s-out"></i>output</span>
+          </span>
         </div>
         <div class="tok" id="dash-tokens"></div>
       </div>
@@ -595,40 +631,16 @@ select.input { appearance: none; padding-right: 28px;
         <button class="btn" id="new-chat">新会话</button>
       </div>
       <div class="dispatch">
-        <div class="dispatch-bar">
-          <label>工作目录</label>
-          <select class="input" id="cwd-sel">
-            <option>~/go-antifraud</option>
-            <option>~/xuanji</option>
-            <option>~/baize</option>
-            <option>~/project/cronjob</option>
-          </select>
-          <span class="tag mono" id="cwd-branch" title="所选工作目录的当前 git 分支(● 为未提交变更数)"></span>
-          <label>权限模式</label>
-          <select class="input">
-            <option selected>default(逐项审批)</option>
-            <option>acceptEdits</option>
-            <option>plan</option>
-          </select>
-          <label>模型</label>
-          <select class="input" id="model-sel" title="派发会话所用模型,默认继承 settings.json">
-            <option selected>claude-fable-5(默认)</option>
-            <option>claude-opus-4-8</option>
-            <option>claude-sonnet-5</option>
-            <option>claude-haiku-4.5</option>
-          </select>
-          <span class="tag">settingSources: user</span>
-        </div>
         <div class="chat" id="chat"></div>
         <div class="chat-status">
-          <span class="cs-state" id="agent-status"><span class="cs-dot"></span>空闲</span>
           <span class="u-chips">
             <span class="u-chip" title="当前会话上下文占用(64k / 200k),取自最近一条 assistant 事件的 usage 字段">
-              上下文 <span class="u-bar"><i style="width:32%"></i></span><b>32%</b>
+              Context <span class="u-bar"><i style="width:32%"></i></span><b>32%</b>
             </span>
-            <span class="u-chip" title="5 小时滚动窗口限额用量">5h <span class="u-bar"><i style="width:41%"></i></span><b>41%</b></span>
-            <span class="u-chip" title="7 天滚动窗口限额用量,周四 08:00 重置">周 <span class="u-bar"><i style="width:63%;background:var(--amber)"></i></span><b style="color:var(--amber)">63%</b></span>
+            <span class="u-chip" title="5 小时滚动窗口限额用量">Usage <span class="u-bar"><i style="width:41%"></i></span><b>41%</b></span>
+            <span class="u-chip" title="7 天滚动窗口限额用量,周四 08:00 重置">Weekly <span class="u-bar"><i style="width:63%;background:var(--amber)"></i></span><b style="color:var(--amber)">63%</b></span>
           </span>
+          <span class="cs-state" id="agent-status"><span class="cs-dot"></span>空闲</span>
         </div>
         <div class="composer">
           <textarea id="composer-input" rows="2" placeholder="描述要派发的任务…"></textarea>
@@ -637,6 +649,28 @@ select.input { appearance: none; padding-right: 28px;
             <label class="bg-opt"><span class="switch" id="bg-switch" role="switch" aria-checked="false" tabindex="0"></span>转后台(--bg)</label>
             <button class="btn btn-primary" id="send-btn">发送</button>
           </div>
+        </div>
+        <div class="term-line">
+          <select class="bare-sel" id="cwd-sel" title="工作目录">
+            <option>~/go-antifraud</option>
+            <option>~/xuanji</option>
+            <option>~/baize</option>
+            <option>~/project/cronjob</option>
+          </select>
+          <span class="branch mono" id="cwd-branch" title="所选工作目录的当前 git 分支(● 为未提交变更数)"></span>
+          <span class="spacer"></span>
+          <select class="bare-sel model" id="model-sel" title="派发会话所用模型,默认继承 settings.json">
+            <option selected>claude-fable-5</option>
+            <option>claude-opus-4-8</option>
+            <option>claude-sonnet-5</option>
+            <option>claude-haiku-4.5</option>
+          </select>
+          <select class="bare-sel dim" title="权限模式">
+            <option selected>default(逐项审批)</option>
+            <option>acceptEdits</option>
+            <option>plan</option>
+          </select>
+          <span class="tag">settingSources: user</span>
         </div>
       </div>
     </section>
@@ -771,13 +805,24 @@ const SESSIONS = [
     detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
 ];
 
-/* 今日 token 消耗 Top(按任务/会话聚合;input+cache_creation+output,cache_read 单列) */
-const TOKEN_TOP = [
-  { title: '白泽横截面诊断',   proj: 'baize',      tok: 48.2, cache: 312 },
-  { title: '每日舆情异动扫描', proj: 'cron',       tok: 31.2, cache: 187 },
-  { title: 'M0 原型构建',      proj: 'xuanji',     tok: 22.9, cache: 240 },
-  { title: '弱信号引擎评估',   proj: 'go-antifraud', tok: 14.6, cache: 96 },
-  { title: '周报汇总草稿',     proj: 'cronjob',    tok: 10.5, cache: 44 },
+/* 今日 token 消耗:项目 → 会话两级(单位 k;in 含 cache 写入,cache = cache read) */
+const TOKEN_PROJECTS = [
+  { name: 'baize', in_: 9.8, cache: 412.0, out: 38.4, sessions: [
+    { title: '白泽横截面诊断',   in_: 6.2, cache: 312.0, out: 30.1 },
+    { title: '收入异动归因',     in_: 2.1, cache: 64.0,  out: 5.9 },
+    { title: '每日舆情异动扫描', in_: 1.5, cache: 36.0,  out: 2.4 },
+  ] },
+  { name: 'xuanji', in_: 5.4, cache: 240.3, out: 17.5, sessions: [
+    { title: 'M0 原型构建',      in_: 4.1, cache: 198.5, out: 14.2 },
+    { title: 'CHANGELOG 整理',   in_: 1.3, cache: 41.8,  out: 3.3 },
+  ] },
+  { name: 'go-antifraud', in_: 4.2, cache: 96.1, out: 10.4, sessions: [
+    { title: '弱信号引擎评估',   in_: 2.8, cache: 71.3, out: 7.6 },
+    { title: 'ip-risk 批量扫描', in_: 1.4, cache: 24.8, out: 2.8 },
+  ] },
+  { name: 'cronjob', in_: 3.1, cache: 44.0, out: 7.9, sessions: [
+    { title: '周报汇总草稿',     in_: 3.1, cache: 44.0, out: 7.9 },
+  ] },
 ];
 
 const REPLAY = {
@@ -971,15 +1016,50 @@ function renderDashboard() {
   $('#dash-timeline').innerHTML = TIMELINE.map(i => `
     <li><span class="t">${i.t}</span><span class="proj">${i.p}</span><span class="msg">${esc(i.m)}</span></li>`).join('');
 
-  /* token 消耗:单色条,长度编码;数值 + cache_read 另列说明 */
-  const tokMax = Math.max(...TOKEN_TOP.map(t => t.tok));
-  $('#dash-tokens').innerHTML = TOKEN_TOP.map(t => `
-    <div class="tok-row">
-      <span class="lbl">${esc(t.title)}<span class="proj">${esc(t.proj)}</span></span>
-      <div class="track"><div class="fill" style="width:${Math.round(t.tok / tokMax * 100)}%"></div></div>
-      <span class="val" title="cache read 另计 ${t.cache}k">${t.tok}k</span>
-    </div>`).join('');
+  renderTokens();
 
+  /* 热力:sequential 单色 jade,浅→深映射 0→max */
+  renderHeat();
+}
+
+/* token 消耗:项目级堆叠条(in/cache read/out 同色相三档明度),点击展开会话明细 */
+const tokOpen = new Set();
+const tokSum = t => t.in_ + t.cache + t.out;
+const tokFmt = v => v >= 100 ? Math.round(v) + 'k' : v.toFixed(1) + 'k';
+
+function tokBar(t, max) {
+  const w = v => (v / max * 100).toFixed(2) + '%';
+  return `<div class="track" title="input ${tokFmt(t.in_)} · cache read ${tokFmt(t.cache)} · output ${tokFmt(t.out)}">
+    <i class="s-in" style="width:${w(t.in_)}"></i><i class="s-cache" style="width:${w(t.cache)}"></i><i class="s-out" style="width:${w(t.out)}"></i>
+  </div>`;
+}
+
+function renderTokens() {
+  const max = Math.max(...TOKEN_PROJECTS.map(tokSum));
+  $('#dash-tokens').innerHTML = TOKEN_PROJECTS.map((p, i) => `
+    <div class="tok-proj ${tokOpen.has(i) ? 'open' : ''}">
+      <button class="tok-row" onclick="toggleTokProj(${i})" aria-expanded="${tokOpen.has(i)}">
+        <span class="lbl"><span class="chev">▸</span>${esc(p.name)}</span>
+        ${tokBar(p, max)}
+        <span class="val">${tokFmt(tokSum(p))}</span>
+      </button>
+      <div class="tok-subs">
+        ${p.sessions.map(s => `
+        <div class="tok-row sub">
+          <span class="lbl">${esc(s.title)}</span>
+          ${tokBar(s, max)}
+          <span class="val">${tokFmt(tokSum(s))}</span>
+        </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function toggleTokProj(i) {
+  tokOpen.has(i) ? tokOpen.delete(i) : tokOpen.add(i);
+  renderTokens();
+}
+
+function renderHeat() {
   /* 热力:sequential 单色 jade,浅→深映射 0→max */
   const max = Math.max(...PROJECTS.flatMap(p => p.heat));
   $('#dash-heat').innerHTML = PROJECTS.slice(0, 5).map(p => `
