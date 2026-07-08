@@ -320,7 +320,13 @@ select.input { appearance: none; padding-right: 28px;
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
 .dispatch-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 .dispatch-bar label { font-size: 0.75rem; color: var(--muted); }
-/* 用量指示(对齐 claude-hud:上下文 / 5h / 周限额) */
+/* 会话状态条:左侧 agent 实时状态,右侧用量指示(对齐 claude-hud:上下文 / 5h / 周限额) */
+.chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
+.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
+.cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
+.cs-state.wait .cs-dot { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
+.cs-state.wait { color: var(--amber); }
 .u-chips { display: flex; align-items: center; gap: 14px; margin-left: auto; }
 .u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
@@ -597,13 +603,25 @@ select.input { appearance: none; padding-right: 28px;
             <option>~/baize</option>
             <option>~/project/cronjob</option>
           </select>
+          <span class="tag mono" id="cwd-branch" title="所选工作目录的当前 git 分支(● 为未提交变更数)"></span>
           <label>权限模式</label>
           <select class="input">
             <option selected>default(逐项审批)</option>
             <option>acceptEdits</option>
             <option>plan</option>
           </select>
+          <label>模型</label>
+          <select class="input" id="model-sel" title="派发会话所用模型,默认继承 settings.json">
+            <option selected>claude-fable-5(默认)</option>
+            <option>claude-opus-4-8</option>
+            <option>claude-sonnet-5</option>
+            <option>claude-haiku-4.5</option>
+          </select>
           <span class="tag">settingSources: user</span>
+        </div>
+        <div class="chat" id="chat"></div>
+        <div class="chat-status">
+          <span class="cs-state" id="agent-status"><span class="cs-dot"></span>空闲</span>
           <span class="u-chips">
             <span class="u-chip" title="当前会话上下文占用(64k / 200k),取自最近一条 assistant 事件的 usage 字段">
               上下文 <span class="u-bar"><i style="width:32%"></i></span><b>32%</b>
@@ -612,7 +630,6 @@ select.input { appearance: none; padding-right: 28px;
             <span class="u-chip" title="7 天滚动窗口限额用量,周四 08:00 重置">周 <span class="u-bar"><i style="width:63%;background:var(--amber)"></i></span><b style="color:var(--amber)">63%</b></span>
           </span>
         </div>
-        <div class="chat" id="chat"></div>
         <div class="composer">
           <textarea id="composer-input" rows="2" placeholder="描述要派发的任务…"></textarea>
           <div class="c-bar">
@@ -1080,6 +1097,8 @@ function resumeSession(id) {
   closeDrawer();
   showView('dispatch');
   renderChat(chatResumed(s));
+  const waitingApproval = s.needs && s.needs.includes('权限审批');
+  setAgentStatus(waitingApproval ? `等待你审批:${s.needs.replace('等待权限审批:', '')}` : s.needs ? '等待你输入' : '会话已续接 · 空闲', s.needs ? 'wait' : '');
   toast(`已续接会话 ${s.id}(--resume)`);
 }
 
@@ -1087,6 +1106,25 @@ function resumeSession(id) {
    派发(chat)
    ============================================================ */
 let chatResolved = false;
+
+/* 工作目录 → git 分支(实际实现读 adapter 的 git status) */
+const CWD_INFO = {
+  '~/go-antifraud':    { branch: 'main', dirty: 2 },
+  '~/xuanji':          { branch: 'feature/m0-prototype', dirty: 0 },
+  '~/baize':           { branch: 'feature/cross-section', dirty: 0 },
+  '~/project/cronjob': { branch: 'main', dirty: 0 },
+};
+function syncCwdBranch() {
+  const info = CWD_INFO[$('#cwd-sel').value] || { branch: '—', dirty: 0 };
+  $('#cwd-branch').innerHTML = `⎇ ${esc(info.branch)}${info.dirty ? ` <span class="dirty">● ${info.dirty}</span>` : ''}`;
+}
+
+/* agent 实时状态(实际实现映射 SDK 流事件:thinking / tool_use / text delta / 回合结束) */
+function setAgentStatus(text, mode) {
+  const el = $('#agent-status');
+  el.className = 'cs-state' + (mode ? ' ' + mode : '');
+  el.innerHTML = `<span class="cs-dot"></span>${text}`;
+}
 
 function chatDefault() {
   return `
@@ -1164,21 +1202,25 @@ function approve(mode) {
   card.classList.add('resolved');
   card.querySelector('.a-actions').innerHTML = `<span style="font-size:0.75rem;color:${mode === 'deny' ? 'var(--red)' : 'var(--muted)'}">${label}</span>`;
   if (mode !== 'deny') {
+    setAgentStatus('正在执行 Write(wiki/business/l3-weak-signals.md)…', 'think');
     const cont = document.createElement('div');
     cont.className = 'chat-msg';
     cont.innerHTML = `<div class="who">Claude</div><div class="body"><span class="typing"><i></i><i></i><i></i></span></div>`;
     $('#chat').appendChild(cont);
     $('#chat').scrollTop = $('#chat').scrollHeight;
+    setTimeout(() => setAgentStatus('回复生成中…', 'think'), 500);
     setTimeout(() => {
       cont.querySelector('.body').innerHTML = '文档已写入 <span class="mono">wiki/business/l3-weak-signals.md</span>(9 条规则 × 三分类,附阈值与评估口径)。需要我同步更新 CHANGELOG 并提交吗?';
       $('#chat').scrollTop = $('#chat').scrollHeight;
-    }, 900);
+      setAgentStatus('空闲 · 回合结束');
+    }, 1200);
   } else {
     const cont = document.createElement('div');
     cont.className = 'chat-msg';
     cont.innerHTML = `<div class="who">Claude</div><div class="body">好的,不写入文件。我把整理结果直接贴在对话里,你确认后再决定落盘位置。</div>`;
     $('#chat').appendChild(cont);
     $('#chat').scrollTop = $('#chat').scrollHeight;
+    setAgentStatus('空闲 · 回合结束');
   }
 }
 
@@ -1204,16 +1246,20 @@ function sendMessage() {
     note.className = 'resume-note';
     note.innerHTML = '⇢ 已转后台(claude --bg),由 daemon 托管。可在「会话」看板跟踪进度。';
     $('#chat').appendChild(note);
+    setAgentStatus('已转后台 · 本窗口空闲');
     toast('已派发后台任务');
   } else {
+    setAgentStatus('思考中…', 'think');
     const cont = document.createElement('div');
     cont.className = 'chat-msg';
     cont.innerHTML = `<div class="who">Claude</div><div class="body"><span class="typing"><i></i><i></i><i></i></span></div>`;
     $('#chat').appendChild(cont);
+    setTimeout(() => setAgentStatus('回复生成中…', 'think'), 500);
     setTimeout(() => {
-      cont.querySelector('.body').textContent = '(原型示意:此处为 Agent SDK 的流式回复,工具调用以折叠卡逐条渲染,权限请求弹审批卡。)';
+      cont.querySelector('.body').textContent = '(原型示意:此处为 Agent SDK 的流式回复,文本按 token 增量打字机渲染,工具调用以折叠卡逐条出现,权限请求弹审批卡。)';
       $('#chat').scrollTop = $('#chat').scrollHeight;
-    }, 900);
+      setAgentStatus('空闲 · 回合结束');
+    }, 1200);
   }
   $('#chat').scrollTop = $('#chat').scrollHeight;
 }
@@ -1382,6 +1428,9 @@ renderDashboard();
 renderProjects();
 renderBoard();
 renderChat(chatDefault());
+setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
+syncCwdBranch();
+$('#cwd-sel').addEventListener('change', syncCwdBranch);
 renderSkills();
 renderMemories();
 renderCrons();
@@ -1407,7 +1456,7 @@ $('#send-btn').addEventListener('click', sendMessage);
 $('#composer-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-$('#new-chat').addEventListener('click', () => renderChat(chatEmpty()));
+$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); });
 $('#bg-switch').addEventListener('click', function () {
   this.classList.toggle('on');
   this.setAttribute('aria-checked', this.classList.contains('on'));
