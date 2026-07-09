@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock, timeAgo } from '@/lib/utils';
+import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
 import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -67,7 +67,15 @@ export function Sessions({
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
 
-  const columns = data?.columns;
+  // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序)
+  const columns = useMemo(() => {
+    if (!data) return undefined;
+    const out = { ...data.columns };
+    for (const key of Object.keys(out) as SessionState[]) {
+      out[key] = [...out[key]].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a)));
+    }
+    return out;
+  }, [data]);
 
   // 键盘选卡跟随滚动:选中卡始终保持在视口内
   useEffect(() => {
@@ -76,6 +84,7 @@ export function Sessions({
 
   const openReplay = useCallback(
     async (sessionId: string, session?: AgentSession) => {
+      markSeen(sessionId); // 看过回放 = 已验收,「待验收」标记熄灭
       setDrawerOpen(true);
       setReplayFor(session ?? null);
       setReplay(null);
@@ -205,7 +214,9 @@ export function Sessions({
               onClick={() => void openReplay(s.sessionId, s)}
             >
               <div className="top">
+                {isUnread(s) && <span className="u-dot" />}
                 <span className="title">{s.name}</span>
+                {isUnread(s) && <span className="tag t-unread">待验收</span>}
                 {xClose(s)}
               </div>
               <div className="cwd">
@@ -225,7 +236,9 @@ export function Sessions({
               onClick={() => void openReplay(s.sessionId, s)}
             >
               <div className="top">
+                {isUnread(s) && <span className="u-dot" />}
                 <span className="title">{s.name}</span>
+                {isUnread(s) && <span className="tag t-unread">待验收</span>}
                 <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                 {s.readonly && <Tag>只读</Tag>}
                 {xClose(s)}

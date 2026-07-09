@@ -48,6 +48,8 @@ export interface AgentSession {
   source?: 'web';
   /** 后端进程内存活的派发会话:看板点击直接 attach 回原事件流 */
   dispatchId?: string;
+  /** 最近一次产出时间:前端据此与本地已读时间比较,标「待验收」 */
+  lastOutputAt?: number;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */

@@ -3,7 +3,7 @@ import { api } from '@/api/client';
 import type { ProjectUsage, SessionUsage } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock, fmtCost, fmtTokens, modelColor, projColor, timeAgo } from '@/lib/utils';
+import { clock, fmtCost, fmtTokens, isUnread, modelColor, projColor, timeAgo } from '@/lib/utils';
 import { Pill, ProjChip, Tag } from '@/components/shared';
 
 const clockFmt = new Intl.DateTimeFormat('zh-CN', {
@@ -43,6 +43,18 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   if (!data) return <div className="view-head"><h1>仪表盘</h1><span className="sub">加载中…</span></div>;
 
   const maxHeat = Math.max(1, ...data.heat.flatMap((h) => h.days));
+  /** 待验收:有新产出且你还没看过的会话(已读状态在本地) */
+  const reviewable = (data.reviewCandidates ?? []).filter(isUnread);
+  const goSession = (s: (typeof reviewable)[number]) => {
+    if (s.dispatchId) {
+      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
+      location.hash = 'dispatch';
+      return;
+    }
+    if (s.readonly) return onGoSession(s.sessionId);
+    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
+    location.hash = 'dispatch';
+  };
 
   return (
     <>
@@ -56,10 +68,10 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
         <div className="panel">
           <div className="panel-head">
             <h2>需要你处理</h2>
-            <Pill state="blocked" label={String(data.needsAttention.length)} />
+            <Pill state="blocked" label={String(data.needsAttention.length + reviewable.length)} />
           </div>
           <div>
-            {data.needsAttention.length === 0 && (
+            {data.needsAttention.length === 0 && reviewable.length === 0 && (
               <div className="empty" style={{ padding: '20px' }}><p>没有等待你的会话。</p></div>
             )}
             {data.needsAttention.map((s) => (
@@ -67,24 +79,28 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
                 <div className="what">
                   <div className="t">
                     {s.name} <ProjChip name={s.project} path={s.cwd} />{' '}
+                    <span className="tag t-unread">等输入</span>{' '}
                     <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                   </div>
                   <div className="n">{s.needs ?? s.detail ?? '等待输入'}</div>
                 </div>
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() => {
-                    if (s.dispatchId) {
-                      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
-                      location.hash = 'dispatch';
-                      return;
-                    }
-                    if (s.readonly) return onGoSession(s.sessionId);
-                    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
-                    location.hash = 'dispatch';
-                  }}
-                >
+                <button className="btn btn-sm btn-primary" onClick={() => goSession(s)}>
                   {s.readonly ? '查看' : '去回复'}
+                </button>
+              </div>
+            ))}
+            {reviewable.map((s) => (
+              <div className="need-item" key={s.id}>
+                <div className="what">
+                  <div className="t">
+                    {s.name} <ProjChip name={s.project} path={s.cwd} />{' '}
+                    <span className="tag t-unread">待验收</span>{' '}
+                    <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
+                  </div>
+                  <div className="n plain">{s.detail ?? '回合结束,等你验收'}</div>
+                </div>
+                <button className="btn btn-sm btn-primary" onClick={() => goSession(s)}>
+                  去验收
                 </button>
               </div>
             ))}

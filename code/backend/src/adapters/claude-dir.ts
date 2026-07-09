@@ -408,6 +408,8 @@ export interface JobState {
   detail?: string;
   needs?: string;
   tokens?: number;
+  /** state.json 的 updatedAt(ms):bg 任务最近变化时间,「待验收」比较基准 */
+  updatedAt?: number;
 }
 
 export async function readJobStates(claudeDir: string): Promise<Map<string, JobState>> {
@@ -418,11 +420,13 @@ export async function readJobStates(claudeDir: string): Promise<Map<string, JobS
     try {
       const raw = await fsp.readFile(path.join(root, d, 'state.json'), 'utf8');
       const j = JSON.parse(raw);
+      const updatedAt = typeof j.updatedAt === 'string' ? Date.parse(j.updatedAt) : NaN;
       out.set(d, {
         state: typeof j.state === 'string' ? j.state : undefined,
         detail: typeof j.detail === 'string' ? j.detail : undefined,
         needs: typeof j.needs === 'string' ? j.needs : undefined,
         tokens: typeof j.tokens === 'number' ? j.tokens : undefined,
+        updatedAt: Number.isFinite(updatedAt) ? updatedAt : undefined,
       });
     } catch {
       /* 无 state.json 或坏文件,跳过 */

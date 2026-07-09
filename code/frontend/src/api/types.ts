@@ -36,6 +36,8 @@ export interface AgentSession {
   source?: 'web';
   /** 后端进程内存活的派发会话:点击直接 attach 回原事件流 */
   dispatchId?: string;
+  /** 最近一次产出时间:与本地已读表比较,标「待验收」 */
+  lastOutputAt?: number;
 }
 
 export type ReplayEvent =
@@ -120,6 +122,8 @@ export interface ProjectsResult {
 export interface Dashboard {
   needsAttention: AgentSession[];
   running: AgentSession[];
+  /** 「待验收」候选(空闲/已完成且有产出时间):是否未读由前端本地已读表判定 */
+  reviewCandidates?: AgentSession[];
   strip: {
     todayPrompts: number;
     todayTokensInOut: number;

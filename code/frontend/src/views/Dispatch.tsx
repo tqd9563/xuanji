@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem } from '@/lib/dispatch';
-import { cn, fmtCost } from '@/lib/utils';
+import { cn, fmtCost, markSeen } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ToolCard, toast } from '@/components/shared';
 import type { ReplayEvent } from '@/api/types';
@@ -110,6 +110,11 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
   }, [d.items]);
+
+  // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
+  useEffect(() => {
+    if (active && d.sessionId) markSeen(d.sessionId);
+  }, [active, d.sessionId, d.status.state, d.costUsd]);
 
   // 看板 ↔ 派发往返闭环(原型获批设计):从看板进入的会话 ← / Esc 返回看板。
   // ←:焦点在 composer 且输入为空时同样生效(有内容时保持移光标本职);
