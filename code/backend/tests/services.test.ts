@@ -90,6 +90,23 @@ describe('Storage 派发记录与改名覆盖', () => {
   });
 });
 
+describe('Storage 派发状态快照', () => {
+  it('updateDispatchState 写入并经 allDispatches 读回', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-snap-'));
+    const s = new Storage(dir);
+    s.recordDispatch('sid-1', '/p/demo', '测试会话');
+    s.updateDispatchState('sid-1', 'idle', 1234, 'Bash: sleep 6');
+    const row = s.allDispatches().find((r) => r.sessionId === 'sid-1')!;
+    expect(row.lastState).toBe('idle');
+    expect(row.lastOutputAt).toBe(1234);
+    expect(row.activity).toBe('Bash: sleep 6');
+    s.updateDispatchState('sid-1', 'ended', 5678, '完成');
+    expect(s.allDispatches().find((r) => r.sessionId === 'sid-1')!.lastState).toBe('ended');
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe('Storage 调色板分配', () => {
   it('首次出现顺序固定,重复调用不改序号,新名字顺延', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-palette-'));

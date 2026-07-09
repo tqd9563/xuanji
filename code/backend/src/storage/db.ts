@@ -22,6 +22,12 @@ export const dispatchesTable = sqliteTable('dispatches', {
   cwd: text('cwd').notNull(),
   createdAt: integer('created_at').notNull(),
   name: text('name'),
+  /** 会话死亡前的最后状态:重启后据此还原看板(idle/working/awaiting-permission → 空闲可续接;ended → 已完成) */
+  lastState: text('last_state'),
+  /** 最近产出时间:「待验收」标记跨重启保留 */
+  lastOutputAt: integer('last_output_at'),
+  /** 最近活动摘要:跨重启保留卡片 detail */
+  activity: text('activity'),
 });
 
 /** web 会话重命名的 display-name 覆盖(仅璇玑界面生效,不写 ~/.claude 元数据) */
@@ -75,10 +81,17 @@ export class Storage {
         tokenize = 'trigram'
       );
     `);
-    try {
-      this.sqlite.exec('ALTER TABLE dispatches ADD COLUMN name TEXT');
-    } catch {
-      /* 列已存在 */
+    for (const ddl of [
+      'ALTER TABLE dispatches ADD COLUMN name TEXT',
+      'ALTER TABLE dispatches ADD COLUMN last_state TEXT',
+      'ALTER TABLE dispatches ADD COLUMN last_output_at INTEGER',
+      'ALTER TABLE dispatches ADD COLUMN activity TEXT',
+    ]) {
+      try {
+        this.sqlite.exec(ddl);
+      } catch {
+        /* 列已存在 */
+      }
     }
   }
 
@@ -91,8 +104,25 @@ export class Storage {
   }
 
   /** 全部 web 派发记录:进程/CLI 都不再知道的历史 web 会话由此回到看板 */
-  allDispatches(): { sessionId: string; cwd: string; createdAt: number; name: string | null }[] {
+  allDispatches(): {
+    sessionId: string;
+    cwd: string;
+    createdAt: number;
+    name: string | null;
+    lastState: string | null;
+    lastOutputAt: number | null;
+    activity: string | null;
+  }[] {
     return this.orm.select().from(dispatchesTable).all();
+  }
+
+  /** 会话状态快照(每次状态/产出变化时写入):重启后看板据此如实还原 */
+  updateDispatchState(sessionId: string, lastState: string, lastOutputAt?: number, activity?: string) {
+    this.orm
+      .update(dispatchesTable)
+      .set({ lastState, lastOutputAt: lastOutputAt ?? null, activity: activity ?? null })
+      .where(eq(dispatchesTable.sessionId, sessionId))
+      .run();
   }
 
   isWebDispatched(sessionId: string): boolean {
