@@ -34,14 +34,24 @@ export function Dispatch({ active }: { active: boolean }) {
   const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
   const effectiveCwd = cwd || cwdOptions[0] || '';
 
-  // 进入视图:接收跳转意图(看板续接/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏
+  // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏
   useEffect(() => {
     if (!active) {
       setFromBoard(false);
       return;
     }
     const intent = takeDispatchIntent();
-    if (intent?.resume) {
+    if (intent?.attach) {
+      // 换会话先清当前状态,避免输入串进旧会话
+      if (d.started) d.reset();
+      setResumeInfo(null);
+      setSessionCwd(intent.attach.cwd);
+      setCwd(intent.attach.cwd);
+      setFromBoard(true);
+      void d.attach(intent.attach.dispatchId);
+    } else if (intent?.resume) {
+      if (d.started) d.reset();
+      setSessionCwd(null);
       setResumeInfo(intent.resume);
       setCwd(intent.resume.cwd);
       setFromBoard(true);

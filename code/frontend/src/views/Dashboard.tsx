@@ -73,6 +73,11 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
                 <button
                   className="btn btn-sm btn-primary"
                   onClick={() => {
+                    if (s.dispatchId) {
+                      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
+                      location.hash = 'dispatch';
+                      return;
+                    }
                     if (s.readonly) return onGoSession(s.sessionId);
                     setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
                     location.hash = 'dispatch';

@@ -11,7 +11,7 @@
 | GET | /api/health | 健康检查:CLI 版本、daemon 状态、数据目录可达性 |
 | GET | /api/dashboard | 仪表盘聚合:需处理/运行中会话、统计条、时间线、7 日热力、Token 成本树 |
 | GET | /api/projects | 项目列表(过滤噪音目录),含 git 状态、会话/经验计数、7 日热力 |
-| GET | /api/sessions | 会话看板:`claude agents --json --all` + jobs state 补充,按状态归列 |
+| GET | /api/sessions | 会话看板:`claude agents --json --all` + jobs state 补充,再注入后端进程内存活的派发会话(实时状态/会话名/dispatchId 覆盖,CLI 未收录的补合成卡),按状态归列 |
 | GET | /api/sessions/:sessionId/replay | 只读回放:session jsonl → 结构化事件流(未知类型降级 raw) |
 | GET | /api/skills | 技能列表(user / plugin / disabled),含 SKILL.md 正文 |
 | GET | /api/memories | 全部项目 memory 聚合(frontmatter + 正文 + [[链接]]) |

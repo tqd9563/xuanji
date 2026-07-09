@@ -22,8 +22,14 @@ export interface UsageChips {
 
 export interface DispatchIntent {
   resume?: { sessionId: string; name: string; cwd: string };
+  /** 后端存活的派发会话:直接 attach 回原事件流(不新开 SDK 会话) */
+  attach?: { dispatchId: string; cwd: string };
   prefill?: string;
 }
+
+const DISPATCH_KEY = 'xuanji-dispatch-id';
+/** 刷新后自动接回:attach 报「不存在」是正常情形(后端已重启),静默清除 */
+const GONE_MSG = '派发会话不存在或已结束';
 
 /** 跨视图跳转邮筒:看板「续接」→ 派发页 */
 let intentBox: DispatchIntent | null = null;
@@ -53,9 +59,14 @@ export function useDispatch() {
   const [costUsd, setCostUsd] = useState(0);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
+  const restoringRef = useRef(false);
 
   const handle = useCallback((e: Record<string, unknown>) => {
     switch (e.ev) {
+      case 'attached':
+        restoringRef.current = false;
+        sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
+        break;
       case 'init':
         setSessionId(String(e.sessionId));
         if (e.model) setModel(String(e.model));
@@ -149,6 +160,13 @@ export function useDispatch() {
         ]);
         break;
       case 'error':
+        if (restoringRef.current && e.message === GONE_MSG) {
+          // 刷新自动接回失败(后端已重启):静默回到全新状态
+          restoringRef.current = false;
+          startedRef.current = false;
+          sessionStorage.removeItem(DISPATCH_KEY);
+          break;
+        }
         setItems((prev) => [...prev, { t: 'error', text: String(e.message) }]);
         setStatus({ state: 'idle' });
         break;
@@ -174,6 +192,28 @@ export function useDispatch() {
   }, [handle]);
 
   useEffect(() => () => wsRef.current?.close(), []);
+
+  /** attach 到后端存活的派发会话(看板点击 / 刷新自动接回),事件流全量回放重建 */
+  const attach = useCallback(
+    async (dispatchId: string) => {
+      startedRef.current = true;
+      const ws = await ensureWs();
+      ws.send(JSON.stringify({ op: 'attach', dispatchId }));
+    },
+    [ensureWs],
+  );
+
+  // 刷新自动接回:本 tab 曾有派发会话且后端仍存活 → 静默重建
+  useEffect(() => {
+    const saved = sessionStorage.getItem(DISPATCH_KEY);
+    if (saved && !startedRef.current) {
+      restoringRef.current = true;
+      void attach(saved).catch(() => {
+        restoringRef.current = false;
+        startedRef.current = false;
+      });
+    }
+  }, [attach]);
 
   const send = useCallback(
     async (text: string, opts: StartOpts & { bg?: boolean }) => {
@@ -216,6 +256,8 @@ export function useDispatch() {
     wsRef.current?.close();
     wsRef.current = null;
     startedRef.current = false;
+    restoringRef.current = false;
+    sessionStorage.removeItem(DISPATCH_KEY);
     setItems([]);
     setStatus({ state: 'none' });
     setSessionId(null);
@@ -229,5 +271,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, decide, interrupt, reset, pushNote };
+  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, reset, pushNote };
 }
