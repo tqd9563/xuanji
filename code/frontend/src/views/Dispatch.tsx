@@ -227,7 +227,14 @@ export function Dispatch({ active }: { active: boolean }) {
         </div>
 
         <div className="term-line">
-          <DropUp id="cwd-dd" value={effectiveCwd} options={cwdOptions} onChange={setCwd} title="工作目录:决定下一个派发会话的 cwd 与加载的项目级 CLAUDE.md" />
+          <DropUp
+            id="cwd-dd"
+            value={effectiveCwd}
+            options={cwdOptions}
+            onChange={setCwd}
+            labelOf={(p) => projects.find((x) => x.path === p)?.name ?? p.split('/').filter(Boolean).pop() ?? p}
+            title={`工作目录:决定下一个派发会话的 cwd 与加载的项目级 CLAUDE.md${effectiveCwd ? `\n${effectiveCwd}` : ''}`}
+          />
           <span className="branch mono" title="git 状态:! 已修改 · ? 未跟踪 · ↑ 领先远端未推送">
             {curProject?.git ? (
               <>
