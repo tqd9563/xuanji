@@ -293,6 +293,17 @@ export function Dispatch({ active }: { active: boolean }) {
                 void submit();
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
+              // 空输入 ← 返回看板:与 document 级监听冗余——WKWebView(Pake)上
+              // 依赖冒泡+target 判定的链路不可靠,元素级处理内核无关
+              if (
+                e.key === 'ArrowLeft' &&
+                fromBoard &&
+                !(e.target as HTMLTextAreaElement).value &&
+                !e.nativeEvent.isComposing
+              ) {
+                e.preventDefault();
+                location.hash = 'sessions';
+              }
             }}
           />
           <div className="c-bar">
