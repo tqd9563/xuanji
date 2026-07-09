@@ -1773,7 +1773,7 @@ renderChat(chatDefault());
 setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
 makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); updateCwdNote(); } });
 makeDD('#model-dd', ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4.5'], { value: 'claude-fable-5' });
-makeDD('#perm-dd', ['default(逐项审批)', 'acceptEdits', 'plan'], { value: 'default(逐项审批)' });
+makeDD('#perm-dd', ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'], { value: 'default(逐项审批)' });
 syncCwdBranch();
 renderSkills();
 renderMemories();

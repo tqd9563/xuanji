@@ -7,10 +7,11 @@ import { DropUp } from '@/components/DropUp';
 import { ToolCard, toast } from '@/components/shared';
 
 const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
-const PERMS = ['default(逐项审批)', 'acceptEdits', 'plan'];
+const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
   acceptEdits: 'acceptEdits',
+  'bypassPermissions(免审批)': 'bypassPermissions',
   plan: 'plan',
 };
 
@@ -249,7 +250,13 @@ export function Dispatch({ active }: { active: boolean }) {
           </span>
           <span className="spacer" />
           <DropUp id="model-dd" value={modelSel} options={MODELS} onChange={setModelSel} title="派发会话所用模型,默认继承 settings.json" />
-          <DropUp className="dim" value={permSel} options={PERMS} onChange={setPermSel} title="权限模式" />
+          <DropUp
+            className="dim"
+            value={permSel}
+            options={PERMS}
+            onChange={setPermSel}
+            title="权限模式,对下一个新会话生效:default 逐项审批 · acceptEdits 自动放行文件编辑 · bypassPermissions 全部免审批(信任任务时用) · plan 只规划不执行"
+          />
           <span className="tag">settingSources: user</span>
         </div>
         {showCwdNote && (
