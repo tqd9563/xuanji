@@ -10,6 +10,8 @@ import type { Storage } from '../storage/db.js';
 export interface Dashboard {
   needsAttention: AgentSession[];
   running: AgentSession[];
+  /** 「待验收」候选(空闲/已完成且有产出时间):已读与否由前端本地已读表判定 */
+  reviewCandidates: AgentSession[];
   strip: {
     todayPrompts: number;
     todayTokensInOut: number;
@@ -61,6 +63,7 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
   return {
     needsAttention: board.columns.blocked,
     running: board.columns.running,
+    reviewCandidates: [...board.columns.idle, ...board.columns.done].filter((s) => s.lastOutputAt && !s.readonly),
     strip: {
       todayPrompts: todayEntries.length,
       todayTokensInOut: usage.totalTokens.inOut,

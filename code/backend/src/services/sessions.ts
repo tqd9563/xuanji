@@ -33,6 +33,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       s.detail = job.detail;
       s.needs = job.needs;
       s.tokens = job.tokens;
+      s.lastOutputAt = job.updatedAt;
     }
     const d = live.get(s.sessionId);
     if (d) {
@@ -42,6 +43,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       s.readonly = false;
       s.source = 'web';
       s.dispatchId = d.dispatchId;
+      s.lastOutputAt = d.lastOutputAt;
       if (d.state === 'awaiting-permission') s.needs = `等待权限审批:${d.detail ?? ''}`;
       else s.needs = undefined;
     }
@@ -67,6 +69,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       needs: d.state === 'awaiting-permission' ? `等待权限审批:${d.detail ?? ''}` : undefined,
       source: 'web',
       dispatchId: d.dispatchId,
+      lastOutputAt: d.lastOutputAt,
     });
   }
   // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回(bg fork 出的会话不再消失)

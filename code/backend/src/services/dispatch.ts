@@ -101,6 +101,8 @@ export class DispatchSession {
   /** 最近一次 status 事件,供会话看板注入实时状态 */
   state: 'working' | 'awaiting-permission' | 'idle' | 'ended' = 'working';
   stateDetail: string | undefined;
+  /** 最近一次产出时间(回合结束/错误):看板「待验收」标记的比较基准 */
+  lastOutputAt: number | null = null;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
 
@@ -152,6 +154,7 @@ export class DispatchSession {
       this.state = e.state;
       this.stateDetail = e.detail;
     }
+    if (e.ev === 'result' || e.ev === 'error') this.lastOutputAt = Date.now();
     this.events.push(e);
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
     for (const l of this.listeners) l(e);
@@ -404,6 +407,7 @@ export interface LiveDispatch {
   state: DispatchSession['state'];
   detail?: string;
   startedAt: number;
+  lastOutputAt?: number;
 }
 
 /** 后端进程内存活的派发会话(已拿到 sessionId 的),供看板注入实时状态与 attach 入口 */
@@ -419,6 +423,7 @@ export function liveDispatches(): LiveDispatch[] {
       state: s.state,
       detail: s.stateDetail,
       startedAt: s.startedAt,
+      lastOutputAt: s.lastOutputAt ?? undefined,
     });
   }
   return out;

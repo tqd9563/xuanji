@@ -27,6 +27,42 @@ export function projHue(name: string): number {
 export const projColor = (name: string) => `oklch(0.78 0.12 ${projHue(name)})`;
 export const projBg = (name: string) => `oklch(0.78 0.12 ${projHue(name)} / 0.16)`;
 
+// ---------- 已读表(「待验收」判定,per-viewer 状态存 localStorage) ----------
+
+const SEEN_KEY = 'xuanji-seen';
+const SEEN_BASELINE_KEY = 'xuanji-seen-baseline';
+
+function seenMap(): Record<string, number> {
+  try {
+    return JSON.parse(localStorage.getItem(SEEN_KEY) ?? '{}');
+  } catch {
+    return {};
+  }
+}
+
+/** 首次使用时以当下为基线:历史存量会话不集体点亮「待验收」 */
+function seenBaseline(): number {
+  let b = Number(localStorage.getItem(SEEN_BASELINE_KEY));
+  if (!b) {
+    b = Date.now();
+    localStorage.setItem(SEEN_BASELINE_KEY, String(b));
+  }
+  return b;
+}
+
+export function markSeen(sessionId: string) {
+  const m = seenMap();
+  m[sessionId] = Date.now();
+  localStorage.setItem(SEEN_KEY, JSON.stringify(m));
+}
+
+/** 待验收 = 空闲/已完成 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线) */
+export function isUnread(s: { sessionId: string; state: string; readonly: boolean; lastOutputAt?: number }): boolean {
+  if (!s.lastOutputAt || s.readonly) return false;
+  if (s.state !== 'idle' && s.state !== 'done') return false;
+  return s.lastOutputAt > (seenMap()[s.sessionId] ?? seenBaseline());
+}
+
 /** 图表系列色(模型):DESIGN.md chart-1/2/3 */
 export const MODEL_COLOR: Record<string, string> = {
   fable: 'var(--chart-1)',

@@ -1140,6 +1140,7 @@ function renderDashboard() {
     <div class="need-item">
       <div class="what">
         <div class="t">${esc(s.title)}
+          ${projChip(s.cwd)}
           <span class="tag t-unread">${s.state === 'blocked' ? '等输入' : '待验收'}</span>
           <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
         <div class="n${s.state === 'blocked' ? '' : ' plain'}">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
@@ -1152,6 +1153,7 @@ function renderDashboard() {
     <div class="run-item">
       <span class="pill pill-run"><span class="dot"></span></span>
       <b style="font-size:0.8125rem">${esc(s.title)}</b>
+      ${projChip(s.cwd)}
       ${s.readonly ? '<span class="tag">只读</span>' : ''}
       <span class="d">${esc(s.detail)}</span>
     </div>`).join('');
