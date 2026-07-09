@@ -21,6 +21,7 @@ export const dispatchesTable = sqliteTable('dispatches', {
   sessionId: text('session_id').primaryKey(),
   cwd: text('cwd').notNull(),
   createdAt: integer('created_at').notNull(),
+  name: text('name'),
 });
 
 /** web 会话重命名的 display-name 覆盖(仅璇玑界面生效,不写 ~/.claude 元数据) */
@@ -65,14 +66,24 @@ export class Storage {
         tokenize = 'trigram'
       );
     `);
+    try {
+      this.sqlite.exec('ALTER TABLE dispatches ADD COLUMN name TEXT');
+    } catch {
+      /* 列已存在 */
+    }
   }
 
-  recordDispatch(sessionId: string, cwd: string) {
+  recordDispatch(sessionId: string, cwd: string, name?: string) {
     this.orm
       .insert(dispatchesTable)
-      .values({ sessionId, cwd, createdAt: Date.now() })
+      .values({ sessionId, cwd, createdAt: Date.now(), name: name ?? null })
       .onConflictDoNothing()
       .run();
+  }
+
+  /** 全部 web 派发记录:进程/CLI 都不再知道的历史 web 会话由此回到看板 */
+  allDispatches(): { sessionId: string; cwd: string; createdAt: number; name: string | null }[] {
+    return this.orm.select().from(dispatchesTable).all();
   }
 
   isWebDispatched(sessionId: string): boolean {

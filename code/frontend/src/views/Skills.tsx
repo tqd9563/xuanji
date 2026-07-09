@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { api } from '@/api/client';
 import type { Skill } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
-import { Drawer, Empty, Tag, toast } from '@/components/shared';
+import { Drawer, Empty, Tag, confirmBox, toast } from '@/components/shared';
 import { Input } from '@/components/ui/input';
 
 type Filter = 'all' | 'on' | 'off' | 'plugin';
@@ -19,7 +19,7 @@ export function Skills() {
     const detail = s.enabled
       ? `目录将移入 skills-disabled/,新会话不再加载它。`
       : `目录将移回 skills/,新会话恢复加载。`;
-    if (!window.confirm(`确认${action}技能「${s.name}」?\n${detail}(操作可逆)`)) return;
+    if (!(await confirmBox(`确认${action}技能「${s.name}」?\n${detail}(操作可逆)`))) return;
     try {
       await api.toggleSkill(s.name, !s.enabled);
       toast(`已${action} ${s.name}`);

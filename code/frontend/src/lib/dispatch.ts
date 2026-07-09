@@ -133,8 +133,12 @@ export function useDispatch() {
         setChips((c) => ({ ...c, contextPct: Number(e.contextPct) }));
         setCostUsd((v) => v + Number(e.costUsd ?? 0));
         break;
+      case 'context':
+        // 后端 getContextUsage() 的权威上下文占用(与终端 /context 同源),覆盖 result 的估算
+        setChips((c) => ({ ...c, contextPct: Number(e.pct) }));
+        break;
       case 'rate-limit': {
-        const pct = Math.round(Number(e.utilization ?? 0) * 100);
+        const pct = Math.round(Number(e.utilization ?? 0)); // 后端统一 0-100
         if (e.kind === 'five_hour') setChips((c) => ({ ...c, fiveHourPct: pct }));
         if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct }));
         break;
@@ -173,6 +177,8 @@ export function useDispatch() {
     }
   }, []);
 
+  const attachRef = useRef<((dispatchId: string) => Promise<void>) | null>(null);
+
   const ensureWs = useCallback((): Promise<WebSocket> => {
     const cur = wsRef.current;
     if (cur && cur.readyState === WebSocket.OPEN) return Promise.resolve(cur);
@@ -188,20 +194,38 @@ export function useDispatch() {
           /* ignore */
         }
       };
+      // 静默断开(窗口挂起/后端重启)→ 自动接回:会话在后端存活,attach 全量回放补齐错过的事件
+      ws.onclose = () => {
+        if (wsRef.current !== ws) return; // 主动 reset / 已换新连接
+        wsRef.current = null;
+        const saved = sessionStorage.getItem(DISPATCH_KEY);
+        if (!startedRef.current || !saved) return;
+        const retry = () => {
+          restoringRef.current = true;
+          attachRef.current?.(saved).catch(() => setTimeout(retry, 3000));
+        };
+        setTimeout(retry, 800);
+      };
     });
   }, [handle]);
 
   useEffect(() => () => wsRef.current?.close(), []);
 
-  /** attach 到后端存活的派发会话(看板点击 / 刷新自动接回),事件流全量回放重建 */
+  /** attach 到后端存活的派发会话(看板点击 / 刷新或断线自动接回),事件流全量回放重建 */
   const attach = useCallback(
     async (dispatchId: string) => {
       startedRef.current = true;
+      // 服务端回放全部事件,先清空避免重复
+      setItems([]);
+      setStatus({ state: 'none' });
+      setCostUsd(0);
+      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
     },
     [ensureWs],
   );
+  attachRef.current = attach;
 
   // 刷新自动接回:本 tab 曾有派发会话且后端仍存活 → 静默重建
   useEffect(() => {
