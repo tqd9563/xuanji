@@ -132,6 +132,10 @@ export function attachWs(server: Server, storage: Storage) {
             case 'interrupt':
               await session?.interrupt();
               break;
+            case 'model':
+              if (!session) return send({ ev: 'error', message: '尚未开始会话' });
+              if (typeof msg.model === 'string' && msg.model) await session.changeModel(msg.model);
+              break;
             case 'bg': {
               if (typeof msg.cwd !== 'string' || typeof msg.prompt !== 'string') {
                 return send({ ev: 'error', message: 'bg 需要 cwd 与 prompt' });

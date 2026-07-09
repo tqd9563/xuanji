@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem } from '@/lib/dispatch';
@@ -16,6 +18,13 @@ const PERM_VALUE: Record<string, string> = {
 };
 /** 权限模式默认免审批(信任本机任务;需要逐项把关时手动切回) */
 const DEFAULT_PERM = PERMS[2]!;
+/** /model 简写 → 完整模型名 */
+const MODEL_SHORT: Record<string, string> = {
+  fable: 'claude-fable-5',
+  opus: 'claude-opus-4-8',
+  sonnet: 'claude-sonnet-5',
+  haiku: 'claude-haiku-4-5-20251001',
+};
 /** 模型默认沿用最近一次用过的,兜底 opus */
 const LAST_MODEL_KEY = 'xuanji-last-model';
 const initialModel = (): string => {
@@ -112,6 +121,18 @@ export function Dispatch({ active }: { active: boolean }) {
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e));
       }
+      return;
+    }
+    // /model 切换模型:未开始 → 设定下一会话;已开始 → SDK setModel 中途切换
+    if (/^\/model\b/.test(text)) {
+      const arg = text.replace(/^\/model\b/, '').trim().toLowerCase();
+      if (!arg) return toast(`当前模型:${d.model ?? modelSel} · 用法:/model fable|opus|sonnet|haiku 或完整模型名`);
+      const resolved = MODELS.find((m) => m.toLowerCase() === arg) ?? MODEL_SHORT[arg];
+      if (!resolved || resolved === MODELS[0]) return toast(`不认识的模型「${arg}」,可选:fable / opus / sonnet / haiku`);
+      setModelSel(resolved);
+      localStorage.setItem(LAST_MODEL_KEY, resolved);
+      if (d.started) d.changeModel(resolved);
+      else d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
@@ -330,8 +351,8 @@ function ChatRow({ item, onDecide }: { item: ChatItem; onDecide: (id: string, d:
     return (
       <div className="chat-msg">
         <div className="who">Claude</div>
-        <div className="body" style={{ whiteSpace: 'pre-wrap' }}>
-          {item.text}
+        <div className="body md">
+          <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>

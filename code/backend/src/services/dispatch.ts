@@ -71,6 +71,7 @@ export type DispatchEvent =
   | { ev: 'context'; pct: number }
   | { ev: 'user-echo'; text: string }
   | { ev: 'forked'; from: string; to: string }
+  | { ev: 'model-changed'; model: string }
   | { ev: 'error'; message: string };
 
 const CONTEXT_WINDOW = 200_000;
@@ -350,6 +351,12 @@ export class DispatchSession {
 
   async interrupt() {
     await this.q?.interrupt().catch(() => {});
+  }
+
+  /** 中途切换模型(SDK setModel,下一回合生效) */
+  async changeModel(model: string) {
+    await this.q?.setModel(model);
+    this.emit({ ev: 'model-changed', model });
   }
 
   async end() {

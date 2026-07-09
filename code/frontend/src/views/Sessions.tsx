@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Markdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
@@ -323,7 +325,13 @@ export function Sessions({
           return (
             <div className="replay-msg" key={i}>
               <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>{ev.kind === 'user' ? '你' : 'Claude'}</div>
-              <div className="body">{ev.text}</div>
+              {ev.kind === 'assistant' ? (
+                <div className="body md">
+                  <Markdown remarkPlugins={[remarkGfm]}>{ev.text}</Markdown>
+                </div>
+              ) : (
+                <div className="body">{ev.text}</div>
+              )}
             </div>
           );
         })}

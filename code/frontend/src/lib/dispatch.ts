@@ -143,6 +143,10 @@ export function useDispatch() {
         if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct }));
         break;
       }
+      case 'model-changed':
+        setModel(String(e.model));
+        setItems((prev) => [...prev, { t: 'note', text: `⇄ 模型已切换为 ${String(e.model)},下一回合生效。` }]);
+        break;
       case 'forked':
         setItems((prev) => [
           ...prev,
@@ -276,6 +280,10 @@ export function useDispatch() {
     wsRef.current?.send(JSON.stringify({ op: 'interrupt' }));
   }, []);
 
+  const changeModel = useCallback((model: string) => {
+    wsRef.current?.send(JSON.stringify({ op: 'model', model }));
+  }, []);
+
   const reset = useCallback(() => {
     wsRef.current?.close();
     wsRef.current = null;
@@ -295,5 +303,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, reset, pushNote };
+  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, changeModel, reset, pushNote };
 }
