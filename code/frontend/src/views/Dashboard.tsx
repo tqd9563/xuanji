@@ -4,7 +4,7 @@ import type { ProjectUsage, SessionUsage } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, fmtCost, fmtTokens, modelColor, projColor, timeAgo } from '@/lib/utils';
-import { Pill, Tag } from '@/components/shared';
+import { Pill, ProjChip, Tag } from '@/components/shared';
 
 const clockFmt = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
@@ -66,7 +66,8 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
               <div className="need-item" key={s.id}>
                 <div className="what">
                   <div className="t">
-                    {s.name} <Tag>{s.kind === 'background' ? '后台' : '终端'}</Tag>
+                    {s.name} <ProjChip name={s.project} path={s.cwd} />{' '}
+                    <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                   </div>
                   <div className="n">{s.needs ?? s.detail ?? '等待输入'}</div>
                 </div>
@@ -102,6 +103,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
               <div className="run-item" key={s.id}>
                 <span className="pill pill-run"><span className="dot" /></span>
                 <b style={{ fontSize: '0.8125rem' }}>{s.name}</b>
+                <ProjChip name={s.project} path={s.cwd} />
                 {s.readonly && <Tag>只读</Tag>}
                 <span className="d">{s.detail ?? s.cwd}</span>
               </div>

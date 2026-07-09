@@ -14,13 +14,21 @@ const PERM_VALUE: Record<string, string> = {
   'bypassPermissions(免审批)': 'bypassPermissions',
   plan: 'plan',
 };
+/** 权限模式默认免审批(信任本机任务;需要逐项把关时手动切回) */
+const DEFAULT_PERM = PERMS[2]!;
+/** 模型默认沿用最近一次用过的,兜底 opus */
+const LAST_MODEL_KEY = 'xuanji-last-model';
+const initialModel = (): string => {
+  const saved = localStorage.getItem(LAST_MODEL_KEY);
+  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-4-8';
+};
 
 export function Dispatch({ active }: { active: boolean }) {
   const d = useDispatch();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
-  const [modelSel, setModelSel] = useState(MODELS[0]!);
-  const [permSel, setPermSel] = useState(PERMS[0]!);
+  const [modelSel, setModelSel] = useState(initialModel);
+  const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string } | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -93,6 +101,20 @@ export function Dispatch({ active }: { active: boolean }) {
     const text = ta?.value.trim();
     if (!text || !effectiveCwd) return;
     ta!.value = '';
+    // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
+    if (/^\/rename\b/.test(text)) {
+      const newName = text.replace(/^\/rename\b/, '').trim();
+      if (!newName) return toast('用法:/rename 新的会话名');
+      if (!d.sessionId) return toast('会话尚未开始,发送第一条消息后再改名');
+      try {
+        await api.renameSession(d.sessionId, newName);
+        d.pushNote(`✎ 会话已重命名为「${newName}」(存璇玑本地,看板即时生效;不写 ~/.claude)`);
+      } catch (e) {
+        toast(e instanceof Error ? e.message : String(e));
+      }
+      return;
+    }
+    if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
     try {
       if (bg) {
         await d.send(text, { cwd: effectiveCwd, permissionMode: 'default', bg: true });
