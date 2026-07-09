@@ -49,6 +49,15 @@ export const paletteTable = sqliteTable('palette', {
   idx: integer('idx').notNull(),
 });
 
+/** web 派发的 prompt 流水:SDK 会话不写 ~/.claude/history.jsonl,时间线/统计由此补全 */
+export const dispatchPromptsTable = sqliteTable('dispatch_prompts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id'),
+  cwd: text('cwd').notNull(),
+  display: text('display').notNull(),
+  at: integer('at').notNull(),
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -75,6 +84,10 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS palette (
         name TEXT PRIMARY KEY, idx INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS dispatch_prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT, cwd TEXT NOT NULL, display TEXT NOT NULL, at INTEGER NOT NULL
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
@@ -114,6 +127,19 @@ export class Storage {
     activity: string | null;
   }[] {
     return this.orm.select().from(dispatchesTable).all();
+  }
+
+  recordPrompt(cwd: string, display: string, sessionId?: string) {
+    this.orm
+      .insert(dispatchPromptsTable)
+      .values({ cwd, display: display.slice(0, 200), sessionId: sessionId ?? null, at: Date.now() })
+      .run();
+  }
+
+  recentPrompts(sinceMs: number): { sessionId: string | null; cwd: string; display: string; at: number }[] {
+    return this.sqlite
+      .prepare('SELECT session_id as sessionId, cwd, display, at FROM dispatch_prompts WHERE at >= ? ORDER BY at ASC')
+      .all(sinceMs) as { sessionId: string | null; cwd: string; display: string; at: number }[];
   }
 
   /** 会话状态快照(每次状态/产出变化时写入):重启后看板据此如实还原 */

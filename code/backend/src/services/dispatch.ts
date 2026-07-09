@@ -393,6 +393,8 @@ export class DispatchSession {
   // ---------- 输入 / 控制 ----------
 
   send(text: string) {
+    // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
+    this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
     this.emit({ ev: 'user-echo', text });
     this.emit({ ev: 'status', state: 'working' });
     this.input.push({
