@@ -296,8 +296,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dirty { color: var(--amber); }
 
 /* ============ 会话看板 ============ */
-.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; }
+/* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
+.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+.board > div { display: flex; flex-direction: column; min-height: 0; }
+.col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.col-body::-webkit-scrollbar { width: 6px; }
+.col-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; flex: none; }
 .col-head .n { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 .scard {
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m);
@@ -315,6 +320,19 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
 .scard .x-close:hover { color: var(--red); }
+/* 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),砍掉概要、后台标、去回复 */
+.scard.compact { padding: 9px 12px; }
+.scard.compact .top { margin-bottom: 5px; }
+.scard.compact .cwd { margin-bottom: 0; }
+.scard.compact .ctime { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; margin-left: auto; }
+/* 已完成默认只展示最近几条,更早的折叠 */
+.col-more {
+  width: 100%; padding: 8px; margin-bottom: 10px; text-align: center; cursor: pointer;
+  font-size: 0.75rem; color: var(--muted); background: none;
+  border: 1px dashed var(--line-soft); border-radius: var(--r-m);
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.col-more:hover { color: var(--ink); border-color: var(--muted); }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
@@ -568,7 +586,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
   .dash-now, .dash-grid { grid-template-columns: 1fr; }
-  .board { grid-template-columns: repeat(4, 272px); }
+  .board { grid-template-columns: repeat(4, 272px); height: auto; }
+  .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
 }
@@ -844,12 +863,44 @@ const SESSIONS = [
     needs: '等待权限审批:Bash(pnpm test -- --run)', started: '11:20', owner: 'web' },
   { id: 'c410be77', title: '周报汇总草稿', kind: 'background', state: 'blocked', cwd: '~/project/cronjob',
     needs: 'send a prompt to start', started: '09:00' },
+  { id: 'b2f61a0d', title: 'mvp-2 评审与开发', kind: 'background', state: 'blocked', cwd: '~/jianghu-idle',
+    needs: 'approve or modify: (1) mechanics finalization (2) sect names (3) naming rules', started: '昨天 16:16' },
+  { id: '4e0c97ab', title: 'claude 工作模式梳理', kind: 'background', state: 'blocked', cwd: '~/project',
+    needs: 'send a prompt to start', started: '昨天 23:40' },
+  { id: '8c25d3f7', title: '知识小卡评审', kind: 'background', state: 'blocked', cwd: '~/project',
+    needs: 'review the 4 output groups, submit feedback via Submit All Reviews', started: '前天 19:11' },
+  { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'blocked', cwd: '~/baize',
+    needs: '要不要接着把 self_history 正式落地到引擎?', started: '前天 15:47' },
   { id: '5fd8a3b0', title: '知识小卡设计', kind: 'interactive', state: 'idle', cwd: '~/wiki-cards',
     detail: '空闲 42 分钟(终端存活,只读)', started: '12:10', readonly: true },
   { id: 'e2a79c14', title: 'ip-risk 批量扫描', kind: 'background', state: 'done', cwd: '~/go-antifraud',
     detail: '退出码 0 · 扫描 156 个 IP,3 个高风险', started: '08:30', ended: '08:47' },
   { id: '9d016e5f', title: 'CHANGELOG 整理', kind: 'background', state: 'done', cwd: '~/xuanji',
     detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
+  { id: '1a7e5c92', title: 'PGame 换卡自助 skill', kind: 'background', state: 'done', cwd: '~/yuiko-skills',
+    detail: 'cross-rarity swaps enabled by default', started: '昨天 16:56', ended: '昨天 17:20', owner: 'web' },
+  { id: '3c9b04d8', title: '添加归因 series 到 envelope', kind: 'background', state: 'done', cwd: '~/antifraud-skills',
+    detail: 'game_name NULL 已修复', started: '昨天 13:09', ended: '昨天 13:41' },
+  { id: '6e88f217', title: '白泽 web 开发', kind: 'background', state: 'done', cwd: '~/baize-web',
+    detail: '主题色从陶土红切换到深海蓝', started: '昨天 12:33', ended: '昨天 14:02' },
+  { id: '0f4d7a63', title: 'baize 算法大白话版', kind: 'background', state: 'done', cwd: '~/deep-baize',
+    detail: 'short_term_trend 用三个算法投票', started: '昨天 10:34', ended: '昨天 11:15' },
+  { id: 'd1c39e85', title: '白泽回归测试', kind: 'background', state: 'done', cwd: '~/antifraud-skills',
+    detail: '7 条具体建议 + 3 步迁移路径', started: '前天 17:42', ended: '前天 18:30' },
+  { id: '72b5f0ca', title: '衣橱管理', kind: 'background', state: 'done', cwd: '~/wardrobe',
+    detail: 'full-body photo try-on complete', started: '前天 15:53', ended: '前天 16:40' },
+  { id: 'a4e8d126', title: '黑 ip 打标分析', kind: 'background', state: 'done', cwd: '~/project',
+    detail: '批量打标完成,命中率 92%', started: '前天 11:08', ended: '前天 11:50' },
+  { id: 'c7f2a95b', title: '收入异动归因', kind: 'background', state: 'done', cwd: '~/baize',
+    detail: '定位到 US iOS 大 R 流失', started: '3 天前', ended: '3 天前', owner: 'web' },
+  { id: '85d0b3e4', title: '舆情异动扫描', kind: 'background', state: 'done', cwd: '~/baize',
+    detail: '无异常', started: '3 天前', ended: '3 天前' },
+  { id: '2b96c1f8', title: 'DAG 调度调整', kind: 'background', state: 'done', cwd: '~/lilith_offline_etl',
+    detail: 'hourly 20min mark, max_active_runs=1', started: '4 天前', ended: '4 天前' },
+  { id: 'e0a35d7c', title: '经验沉淀草稿', kind: 'background', state: 'done', cwd: '~/xuanji',
+    detail: '3 条 memory 草稿待确认', started: '5 天前', ended: '5 天前', owner: 'web' },
+  { id: '48c7e2b9', title: '竞品调研摘要', kind: 'background', state: 'done', cwd: '~/project',
+    detail: '5 家竞品对比表已产出', started: '6 天前', ended: '6 天前' },
 ];
 
 /* 今日 token 成本:项目 → 会话两级。cost(USD)= input×单价 + cache_read×0.1×单价 + output×单价,
@@ -1206,7 +1257,8 @@ document.addEventListener('keydown', e => {
 let kbPos = null;
 function boardColCards(c) {
   const col = $$('#board > div')[c];
-  return col ? [...col.querySelectorAll('.scard')] : [];
+  // 折叠区(hidden)里的卡不参与键盘导航
+  return col ? [...col.querySelectorAll('.scard')].filter(el => el.offsetParent !== null) : [];
 }
 function kbApply() {
   $$('#board .scard.kb-sel').forEach(el => el.classList.remove('kb-sel'));
@@ -1245,30 +1297,69 @@ document.addEventListener('keydown', e => {
   kbApply();
 });
 
+const DONE_RECENT = 5; // 已完成默认展示条数,更早的折叠
+
+function fullCard(s) {
+  return `
+    <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
+      <div class="top">
+        <span class="title">${esc(s.title)}</span>
+        ${KIND_TAG[s.kind]}
+        ${s.readonly ? '<span class="tag">只读</span>' : ''}
+        ${s.readonly ? '' : `<button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>`}
+      </div>
+      <div class="cwd">
+        ${projChip(s.cwd)}
+        <span class="sid">${s.id}</span>
+      </div>
+      ${s.detail ? `<div class="detail">${esc(s.detail)}</div>` : ''}
+      ${s.needs ? `<div class="needs">⏸ ${esc(s.needs)}</div>` : ''}
+      <div class="foot">
+        ${s.state === 'blocked' ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();resumeSession('${s.id}')">去回复</button>` : ''}
+        <span class="time">${s.ended ? `${s.started} → ${s.ended}` : s.started + ' 开始'}</span>
+      </div>
+    </div>`;
+}
+
+/* 已完成 = 归档,两行紧凑卡:标题 / 项目 + 完成时间;细节在悬停提示与回放页 */
+function compactCard(s) {
+  return `
+    <div class="scard compact" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
+      <div class="top">
+        <span class="title">${esc(s.title)}</span>
+        <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
+      </div>
+      <div class="cwd">
+        ${projChip(s.cwd)}
+        <span class="ctime">${esc(s.ended ?? s.started)}</span>
+      </div>
+    </div>`;
+}
+
+function toggleMore(btn) {
+  const wrap = btn.nextElementSibling;
+  wrap.hidden = !wrap.hidden;
+  btn.textContent = wrap.hidden ? btn.dataset.open : '收起 ▴';
+  kbApply();
+}
+
 function renderBoard() {
   $('#board').innerHTML = COLS.map(c => {
     const items = SESSIONS.filter(s => s.state === c.key);
+    let body;
+    if (c.key === 'done') {
+      const recent = items.slice(0, DONE_RECENT);
+      const older = items.slice(DONE_RECENT);
+      body = recent.map(compactCard).join('')
+        + (older.length ? `
+          <button class="col-more" data-open="更早的 ${older.length} 条 ▾" onclick="toggleMore(this)">更早的 ${older.length} 条 ▾</button>
+          <div hidden>${older.map(compactCard).join('')}</div>` : '');
+    } else {
+      body = items.map(fullCard).join('');
+    }
     return `<div>
       <div class="col-head">${STATE_PILL[c.key]}<span class="n">${items.length}</span></div>
-      ${items.map(s => `
-        <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
-          <div class="top">
-            <span class="title">${esc(s.title)}</span>
-            ${KIND_TAG[s.kind]}
-            ${s.readonly ? '<span class="tag">只读</span>' : ''}
-            ${s.readonly ? '' : `<button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>`}
-          </div>
-          <div class="cwd">
-            ${projChip(s.cwd)}
-            <span class="sid">${s.id}</span>
-          </div>
-          ${s.detail ? `<div class="detail">${esc(s.detail)}</div>` : ''}
-          ${s.needs ? `<div class="needs">⏸ ${esc(s.needs)}</div>` : ''}
-          <div class="foot">
-            ${s.state === 'blocked' ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();resumeSession('${s.id}')">去回复</button>` : ''}
-            <span class="time">${s.ended ? `${s.started} → ${s.ended}` : s.started + ' 开始'}</span>
-          </div>
-        </div>`).join('') || '<div class="empty" style="padding:24px 12px"><p>暂无</p></div>'}
+      <div class="col-body">${body || '<div class="empty" style="padding:24px 12px"><p>暂无</p></div>'}</div>
     </div>`;
   }).join('');
 }
