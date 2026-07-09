@@ -296,8 +296,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dirty { color: var(--amber); }
 
 /* ============ 会话看板 ============ */
-.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; }
-.col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; }
+/* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
+.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+.board > div { display: flex; flex-direction: column; min-height: 0; }
+.col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.col-body::-webkit-scrollbar { width: 6px; }
+.col-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; flex: none; }
 .col-head .n { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 .scard {
   background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m);
@@ -315,6 +320,19 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
 .scard .x-close:hover { color: var(--red); }
+/* 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),砍掉概要、后台标、去回复 */
+.scard.compact { padding: 9px 12px; }
+.scard.compact .top { margin-bottom: 5px; }
+.scard.compact .cwd { margin-bottom: 0; }
+.scard.compact .ctime { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; margin-left: auto; }
+/* 已完成默认只展示最近几条,更早的折叠 */
+.col-more {
+  width: 100%; padding: 8px; margin-bottom: 10px; text-align: center; cursor: pointer;
+  font-size: 0.75rem; color: var(--muted); background: none;
+  border: 1px dashed var(--line-soft); border-radius: var(--r-m);
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.col-more:hover { color: var(--ink); border-color: var(--muted); }
 
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
@@ -581,7 +599,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
   .dash-now, .dash-grid { grid-template-columns: 1fr; }
-  .board { grid-template-columns: repeat(4, 272px); }
+  .board { grid-template-columns: repeat(4, 272px); height: auto; }
+  .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
 }

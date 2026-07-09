@@ -3,7 +3,7 @@ import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock } from '@/lib/utils';
+import { clock, timeAgo } from '@/lib/utils';
 import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -28,6 +28,9 @@ const COLS: { key: SessionState; label: string }[] = [
   { key: 'blocked', label: '等待输入' },
   { key: 'done', label: '已完成' },
 ];
+
+/** 已完成 = 归档:默认展示最近条数,更早的折叠 */
+const DONE_RECENT = 5;
 
 export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
@@ -60,6 +63,7 @@ export function Sessions({
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
+  const [doneOpen, setDoneOpen] = useState(false);
 
   const columns = data?.columns;
 
@@ -92,11 +96,16 @@ export function Sessions({
   }, [registerHandle, openReplay]);
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
-  const kbRef = useRef({ kbPos, columns, drawerOpen });
-  kbRef.current = { kbPos, columns, drawerOpen };
+  const kbRef = useRef({ kbPos, columns, drawerOpen, doneOpen });
+  kbRef.current = { kbPos, columns, drawerOpen, doneOpen };
   useEffect(() => {
     if (!active) return;
-    const cardsIn = (c: number) => kbRef.current.columns?.[COLS[c]!.key] ?? [];
+    // 已完成折叠区里的卡不参与键盘导航
+    const cardsIn = (c: number) => {
+      const arr = kbRef.current.columns?.[COLS[c]!.key] ?? [];
+      if (COLS[c]!.key === 'done' && !kbRef.current.doneOpen) return arr.slice(0, DONE_RECENT);
+      return arr;
+    };
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || kbRef.current.drawerOpen) return;
       // Ctrl+X 关闭当前选中会话
@@ -165,64 +174,102 @@ export function Sessions({
       <div className="board">
         {COLS.map((col, ci) => {
           const items = columns?.[col.key] ?? [];
+          const isDone = col.key === 'done';
+          const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
+
+          const xClose = (s: AgentSession) =>
+            !s.readonly && (
+              <button
+                className="x-close"
+                title="关闭会话(Ctrl+X)"
+                aria-label={`关闭会话 ${s.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  void closeSession(s, refresh);
+                }}
+              >
+                ×
+              </button>
+            );
+
+          /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
+          const compactCard = (s: AgentSession, ri: number) => (
+            <div
+              key={s.id}
+              className={`scard compact ${kbPos?.c === ci && kbPos?.r === ri ? 'kb-sel' : ''}`}
+              role="button"
+              tabIndex={0}
+              title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+              onClick={() => void openReplay(s.sessionId, s)}
+            >
+              <div className="top">
+                <span className="title">{s.name}</span>
+                {xClose(s)}
+              </div>
+              <div className="cwd">
+                <ProjChip name={s.project} path={s.cwd} />
+                <span className="ctime">{timeAgo(s.startedAt)}</span>
+              </div>
+            </div>
+          );
+
+          const fullCard = (s: AgentSession, ri: number) => (
+            <div
+              key={s.id}
+              className={`scard ${kbPos?.c === ci && kbPos?.r === ri ? 'kb-sel' : ''}`}
+              role="button"
+              tabIndex={0}
+              title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+              onClick={() => void openReplay(s.sessionId, s)}
+            >
+              <div className="top">
+                <span className="title">{s.name}</span>
+                <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
+                {s.readonly && <Tag>只读</Tag>}
+                {xClose(s)}
+              </div>
+              <div className="cwd">
+                <ProjChip name={s.project} path={s.cwd} />
+                <span className="sid">{s.id}</span>
+              </div>
+              {s.detail && <div className="detail">{s.detail}</div>}
+              {s.needs && <div className="needs">⏸ {s.needs}</div>}
+              <div className="foot">
+                {s.state === 'blocked' && !s.readonly && (
+                  <button
+                    className="btn btn-sm btn-primary"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      smartOpen(s, (id, sess) => void openReplay(id, sess));
+                    }}
+                  >
+                    去回复
+                  </button>
+                )}
+                <span className="time">{clock(s.startedAt)} 开始</span>
+              </div>
+            </div>
+          );
+
+          const card = isDone ? compactCard : fullCard;
           return (
             <div key={col.key}>
               <div className="col-head">
                 <Pill state={col.key} />
                 <span className="n">{items.length}</span>
               </div>
-              {items.map((s, ri) => (
-                <div
-                  key={s.id}
-                  className={`scard ${kbPos?.c === ci && kbPos?.r === ri ? 'kb-sel' : ''}`}
-                  role="button"
-                  tabIndex={0}
-                  title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
-                  onClick={() => void openReplay(s.sessionId, s)}
-                >
-                  <div className="top">
-                    <span className="title">{s.name}</span>
-                    <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
-                    {s.readonly && <Tag>只读</Tag>}
-                    {!s.readonly && (
-                      <button
-                        className="x-close"
-                        title="关闭会话(Ctrl+X)"
-                        aria-label={`关闭会话 ${s.name}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void closeSession(s, refresh);
-                        }}
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                  <div className="cwd">
-                    <ProjChip name={s.project} path={s.cwd} />
-                    <span className="sid">{s.id}</span>
-                  </div>
-                  {s.detail && <div className="detail">{s.detail}</div>}
-                  {s.needs && <div className="needs">⏸ {s.needs}</div>}
-                  <div className="foot">
-                    {s.state === 'blocked' && !s.readonly && (
-                      <button
-                        className="btn btn-sm btn-primary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          smartOpen(s, (id, sess) => void openReplay(id, sess));
-                        }}
-                      >
-                        去回复
-                      </button>
-                    )}
-                    <span className="time">{clock(s.startedAt)} 开始</span>
-                  </div>
-                </div>
-              ))}
-              {items.length === 0 && (
-                <div className="empty" style={{ padding: '24px 12px' }}><p>暂无</p></div>
-              )}
+              <div className="col-body">
+                {items.slice(0, isDone ? DONE_RECENT : undefined).map((s, ri) => card(s, ri))}
+                {olderCount > 0 && (
+                  <button className="col-more" onClick={() => setDoneOpen(!doneOpen)}>
+                    {doneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
+                  </button>
+                )}
+                {isDone && doneOpen && items.slice(DONE_RECENT).map((s, i) => card(s, DONE_RECENT + i))}
+                {items.length === 0 && (
+                  <div className="empty" style={{ padding: '24px 12px' }}><p>暂无</p></div>
+                )}
+              </div>
             </div>
           );
         })}
