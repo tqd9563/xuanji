@@ -63,13 +63,24 @@ export function Dispatch({ active }: { active: boolean }) {
   const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
   const effectiveCwd = cwd || cwdOptions[0] || '';
 
-  // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏
+  // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏。
+  // 无意图进入(侧栏/数字键)= 全新派发:上一会话留在后端继续存活,可从会话页随时接回。
+  const prevActiveRef = useRef(false);
   useEffect(() => {
+    const entered = active && !prevActiveRef.current;
+    prevActiveRef.current = active;
     if (!active) {
       setFromBoard(false);
       return;
     }
     const intent = takeDispatchIntent();
+    if (!intent && entered && d.started) {
+      const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
+      d.reset();
+      setResumeInfo(null);
+      setSessionCwd(null);
+      if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
+    }
     if (intent?.attach) {
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
