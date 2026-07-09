@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
-import { usePoll } from '@/lib/hooks';
+import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem } from '@/lib/dispatch';
 import { cn, fmtCost } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
@@ -26,19 +26,24 @@ export function Dispatch({ active }: { active: boolean }) {
   const taRef = useRef<HTMLTextAreaElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
+  const [fromBoard, setFromBoard] = useState(false);
 
   const projects = projectsData?.projects ?? [];
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
   const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
   const effectiveCwd = cwd || cwdOptions[0] || '';
 
-  // 进入视图:接收跳转意图(看板续接/交接)并聚焦输入框
+  // 进入视图:接收跳转意图(看板续接/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setFromBoard(false);
+      return;
+    }
     const intent = takeDispatchIntent();
     if (intent?.resume) {
       setResumeInfo(intent.resume);
       setCwd(intent.resume.cwd);
+      setFromBoard(true);
       d.pushNote(`↻ 将续接会话 ${intent.resume.sessionId.slice(0, 8)}(${intent.resume.name}),发送第一条消息后恢复上下文。`);
     }
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
@@ -49,6 +54,28 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
   }, [d.items]);
+
+  // 看板 ↔ 派发往返闭环(原型获批设计):从看板进入的会话 ← / Esc 返回看板。
+  // ←:焦点在 composer 且输入为空时同样生效(有内容时保持移光标本职);
+  // Esc:下拉打开时让位给 DropUp 关闭,焦点在输入控件时让位给 blur,兜底才返回。
+  useEffect(() => {
+    if (!active || !fromBoard) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'ArrowLeft') {
+        const ta = taRef.current;
+        if (isTypingTarget(e.target) && !(ta && e.target === ta && !ta.value)) return;
+        if (e.isComposing) return;
+        e.preventDefault();
+        location.hash = 'sessions';
+      } else if (e.key === 'Escape') {
+        if (document.querySelector('.dd.open') || isTypingTarget(e.target)) return;
+        location.hash = 'sessions';
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, fromBoard]);
 
   const submit = async () => {
     const ta = taRef.current;
@@ -124,6 +151,11 @@ export function Dispatch({ active }: { active: boolean }) {
     <>
       <div className="view-head">
         <h1>派发</h1>
+        {fromBoard && (
+          <button className="btn btn-sm" title="快捷键 ← 或 Esc" onClick={() => (location.hash = 'sessions')}>
+            ‹ 会话看板
+          </button>
+        )}
         {d.sessionId && <span className="sub mono">session {d.sessionId.slice(0, 8)}</span>}
         <span className="spacer" />
         <button className="btn" onClick={newSession}>新会话</button>
