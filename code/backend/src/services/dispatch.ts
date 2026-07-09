@@ -124,6 +124,8 @@ export class DispatchSession {
         includePartialMessages: true,
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
+        // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
+        env: { ...process.env, XUANJI_DISPATCH: '1' },
         stderr: (data: string) => {
           for (const line of data.split('\n')) {
             const t = line.trim();
