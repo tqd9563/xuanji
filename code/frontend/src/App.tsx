@@ -82,7 +82,6 @@ export default function App() {
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
             {health === null ? '连接后端…' : health.cli ? `${health.cli} · 就绪` : '后端可用 · CLI 不可达'}
           </div>
-          <div className="row proto">M1 只读驾驶舱</div>
         </div>
       </aside>
 
