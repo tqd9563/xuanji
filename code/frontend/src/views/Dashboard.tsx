@@ -35,7 +35,22 @@ function Clock() {
   );
 }
 
-const DAY_LABELS = ['六天前', '五天前', '四天前', '三天前', '前天', '昨', '今'];
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
+
+/** 热力图横轴:近 7 天 → 「周几 … 昨 今」,悬停见完整日期 */
+function heatDayLabels(): { short: string; full: string }[] {
+  const out: { short: string; full: string }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const wd = WEEKDAYS[d.getDay()]!;
+    out.push({
+      short: i === 0 ? '今' : i === 1 ? '昨' : wd,
+      full: `${d.getMonth() + 1}/${d.getDate()} 周${wd}`,
+    });
+  }
+  return out;
+}
 
 export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) => void }) {
   const { data } = usePoll(api.dashboard, 15_000);
@@ -43,6 +58,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   if (!data) return <div className="view-head"><h1>仪表盘</h1><span className="sub">加载中…</span></div>;
 
   const maxHeat = Math.max(1, ...data.heat.flatMap((h) => h.days));
+  const dayLabels = heatDayLabels();
   /** 待验收:有新产出且你还没看过的会话(已读状态在本地) */
   const reviewable = (data.reviewCandidates ?? []).filter(isUnread);
   const goSession = (s: (typeof reviewable)[number]) => {
@@ -164,7 +180,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
                   <div
                     key={i}
                     className="heat-cell"
-                    title={`${DAY_LABELS[i]} · ${v} 条 prompt`}
+                    title={`${dayLabels[i]!.full} · ${v} 条 prompt`}
                     style={v ? { background: `color-mix(in oklab, var(--jade) ${18 + Math.round((v / maxHeat) * 72)}%, var(--surface-2))` } : undefined}
                   />
                 ))}
@@ -172,7 +188,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
             ))}
             <div className="heat-days">
               <span />
-              {DAY_LABELS.map((d) => <span key={d}>{d.length > 1 && d.includes('天') ? d[0] : d}</span>)}
+              {dayLabels.map((d, i) => <span key={i} title={d.full}>{d.short}</span>)}
             </div>
           </div>
         </div>
