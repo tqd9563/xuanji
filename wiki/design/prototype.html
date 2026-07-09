@@ -1265,12 +1265,14 @@ const COLS = [
   { key: 'done', label: '已完成' },
 ];
 
-/* 数字键 1-7 直切视图(焦点在输入控件时失效) */
+/* 视图切换双通道:⌘+数字任何时候可用(含输入框聚焦);裸数字在非输入状态保留 */
 document.addEventListener('keydown', e => {
+  const i = parseInt(e.key, 10);
+  if (!(i >= 1 && i <= NAVS.length)) return;
+  if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); showView(NAVS[i - 1].id); return; }
   if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) return;
   if (e.metaKey || e.ctrlKey || e.altKey) return;
-  const i = parseInt(e.key, 10);
-  if (i >= 1 && i <= NAVS.length) showView(NAVS[i - 1].id);
+  showView(NAVS[i - 1].id);
 });
 
 /* 键盘导航:方向键在看板卡片间移动,Space 回放,Esc 关抽屉(对齐 claude agents TUI 手感) */

@@ -48,12 +48,19 @@ export default function App() {
   // ws 变更订阅(M1 仅日志级消费:轮询已覆盖刷新;保留通道供 M2 扩展)
   useEffect(() => subscribeChanges(() => {}), []);
 
-  // 数字键 1-7 直切视图(焦点在输入控件或含修饰键时失效)
+  // 视图切换双通道:⌘+数字任何时候可用(含输入框聚焦,Pake 壳主用);
+  // 裸数字在非输入状态保留(普通浏览器里 ⌘+数字被标签页快捷键占用时的兜底)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
       const i = parseInt(e.key, 10);
-      if (i >= 1 && i <= VIEW_IDS.length) nav(VIEW_IDS[i - 1]!);
+      if (!(i >= 1 && i <= VIEW_IDS.length)) return;
+      if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        nav(VIEW_IDS[i - 1]!);
+        return;
+      }
+      if (isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      nav(VIEW_IDS[i - 1]!);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -80,7 +87,7 @@ export default function App() {
             <button
               key={n.id}
               className={view === n.id ? 'active' : ''}
-              title={`快捷键 ${i + 1}`}
+              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1})`}
               onClick={() => nav(n.id)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
