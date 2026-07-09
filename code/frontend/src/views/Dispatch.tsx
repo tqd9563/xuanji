@@ -74,7 +74,8 @@ export function Dispatch({ active }: { active: boolean }) {
       return;
     }
     const intent = takeDispatchIntent();
-    if (!intent && entered && d.started) {
+    // 清空条件必须含 items:只"看过"某会话(装载了历史但没发消息)时 started 为 false,残留照样要清
+    if (!intent && entered && (d.started || d.items.length > 0)) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
       setResumeInfo(null);
@@ -90,7 +91,7 @@ export function Dispatch({ active }: { active: boolean }) {
       setFromBoard(true);
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
-      if (d.started) d.reset();
+      if (d.started || d.items.length > 0) d.reset();
       setSessionCwd(null);
       setResumeInfo(intent.resume);
       setCwd(intent.resume.cwd);
