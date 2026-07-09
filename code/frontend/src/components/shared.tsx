@@ -128,8 +128,11 @@ export function ConfirmHost() {
   useEffect(() => {
     if (!req) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') doneRef.current(false);
-      if (e.key === 'Enter') doneRef.current(true);
+      if (e.key !== 'Escape' && e.key !== 'Enter') return;
+      // 吃掉整个按键:不拦截的话同一个 Enter 会继续传给看板键盘导航(确认删除的同时误入会话)
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      doneRef.current(e.key === 'Enter');
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
