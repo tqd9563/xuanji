@@ -192,8 +192,18 @@ export function Dispatch({ active }: { active: boolean }) {
     d.reset();
     setResumeInfo(null);
     setSessionCwd(null);
+    setFromBoard(false);
     taRef.current?.focus();
   };
+
+  // ⌘N 全局新建会话:App 层导航到派发页并广播该事件(已在派发页时 hash 不变,靠事件驱动)
+  const newSessionRef = useRef(newSession);
+  newSessionRef.current = newSession;
+  useEffect(() => {
+    const onNew = () => setTimeout(() => newSessionRef.current(), 50);
+    window.addEventListener('xuanji:new-session', onNew);
+    return () => window.removeEventListener('xuanji:new-session', onNew);
+  }, []);
 
   const doHandoff = async () => {
     if (!d.sessionId || handoffBusy) return;
@@ -247,7 +257,7 @@ export function Dispatch({ active }: { active: boolean }) {
         )}
         {d.sessionId && <span className="sub mono">session {d.sessionId.slice(0, 8)}</span>}
         <span className="spacer" />
-        <button className="btn" onClick={newSession}>新会话</button>
+        <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
       </div>
       <div className="dispatch">
         <div className="chat" ref={chatRef}>
