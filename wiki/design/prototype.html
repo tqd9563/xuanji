@@ -1265,6 +1265,15 @@ const COLS = [
   { key: 'done', label: '已完成' },
 ];
 
+/* ⌘N 新建会话:跳派发页 + 白纸(浏览器里被"新建窗口"占用,Pake 壳可用) */
+document.addEventListener('keydown', e => {
+  if ((e.key === 'n' || e.key === 'N') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+    e.preventDefault();
+    showView('dispatch');
+    document.getElementById('new-chat')?.click();
+  }
+});
+
 /* 视图切换双通道:⌘+数字任何时候可用(含输入框聚焦);裸数字在非输入状态保留 */
 document.addEventListener('keydown', e => {
   const i = parseInt(e.key, 10);

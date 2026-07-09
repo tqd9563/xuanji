@@ -52,6 +52,13 @@ export default function App() {
   // 裸数字在非输入状态保留(普通浏览器里 ⌘+数字被标签页快捷键占用时的兜底)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // ⌘N 新建会话:跳派发页并放下当前会话(浏览器里 ⌘N 被"新建窗口"占用,Pake 壳可用)
+      if ((e.key === 'n' || e.key === 'N') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('xuanji:new-session'));
+        nav('dispatch');
+        return;
+      }
       const i = parseInt(e.key, 10);
       if (!(i >= 1 && i <= VIEW_IDS.length)) return;
       if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
