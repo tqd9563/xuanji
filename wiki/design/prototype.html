@@ -314,8 +314,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard:hover { border-color: var(--muted); background: var(--hover); }
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-/* 待验收(未读):回合已结束但产出还没被看过——琥珀脉冲点 + 琥珀标签,看过即熄灭 */
-.tag.t-unread { color: var(--amber); background: var(--tint-amber); font-weight: 600; }
+/* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族里最重的一级,
+   压得住旁边的琥珀警示文字(实心块 > 琥珀文字 > 灰文字) */
+.tag.t-unread { color: oklch(0.24 0.05 85); background: var(--amber); border-color: transparent; font-weight: 650; }
 .scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }
 @keyframes udot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
