@@ -320,12 +320,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
 .scard .x-close:hover { color: var(--red); }
-/* 已完成 = 归档:单行紧凑卡,视觉重量匹配注意力价值(细节在悬停提示与回放页) */
-.scard.compact { padding: 8px 12px; }
-.scard.compact .top { margin-bottom: 0; }
-.scard.compact .ctime { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
-/* 紧凑卡里标题是第一识别要素:项目芯片限宽让位 */
-.scard.compact .proj-chip { max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),砍掉概要、后台标、去回复 */
+.scard.compact { padding: 9px 12px; }
+.scard.compact .top { margin-bottom: 5px; }
+.scard.compact .cwd { margin-bottom: 0; }
+.scard.compact .ctime { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; margin-left: auto; }
 /* 已完成默认只展示最近几条,更早的折叠 */
 .col-more {
   width: 100%; padding: 8px; margin-bottom: 10px; text-align: center; cursor: pointer;
@@ -1322,15 +1321,17 @@ function fullCard(s) {
     </div>`;
 }
 
-/* 已完成 = 归档,单行紧凑卡:标题 + 项目 + 完成时间,细节在悬停提示与回放页 */
+/* 已完成 = 归档,两行紧凑卡:标题 / 项目 + 完成时间;细节在悬停提示与回放页 */
 function compactCard(s) {
   return `
     <div class="scard compact" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
       <div class="top">
         <span class="title">${esc(s.title)}</span>
+        <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
+      </div>
+      <div class="cwd">
         ${projChip(s.cwd)}
         <span class="ctime">${esc(s.ended ?? s.started)}</span>
-        <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
       </div>
     </div>`;
 }
