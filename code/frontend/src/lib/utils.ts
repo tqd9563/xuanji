@@ -5,17 +5,17 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** 项目分类色:DESIGN.md「等明度分类规则」——oklch(0.78 0.12 H) 只转色相,
- *  八色环按首次出现顺序分配(会话内稳定;跨启动持久化是 M2 的 SQLite 工作)。 */
+/** 项目分类色:DESIGN.md「等明度分类规则」——oklch(0.78 0.12 H) 只转色相。
+ *  色环序号 = 项目名 FNV-1a 哈希:同名永远同色,跨视图/刷新/端一致,零状态
+ *  (取代按首次渲染顺序分配的旧实现——那会随数据顺序变化导致同项目变色)。 */
 const PROJ_HUES = [115, 245, 300, 195, 345, 55, 160, 270];
-const hueMap = new Map<string, number>();
 export function projHue(name: string): number {
-  let h = hueMap.get(name);
-  if (h === undefined) {
-    h = PROJ_HUES[hueMap.size % PROJ_HUES.length]!;
-    hueMap.set(name, h);
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) {
+    h ^= name.charCodeAt(i);
+    h = Math.imul(h, 16777619);
   }
-  return h;
+  return PROJ_HUES[(h >>> 0) % PROJ_HUES.length]!;
 }
 export const projColor = (name: string) => `oklch(0.78 0.12 ${projHue(name)})`;
 export const projBg = (name: string) => `oklch(0.78 0.12 ${projHue(name)} / 0.16)`;

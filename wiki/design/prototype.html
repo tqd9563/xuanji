@@ -1055,12 +1055,13 @@ function toast(msg) {
 }
 
 /* 项目分类色:OKLCH 锁定 L/C 只转色相 → 不同底色、亮度饱和完全一致;
-   按首次出现顺序从色环取色(生产实现同此,存 SQLite 保持稳定),避开红(错误)与琥珀(等待)语义区 */
+   色环序号 = 项目名 FNV-1a 哈希(同名永远同色,跨视图/刷新/端一致,零状态),
+   避开红(错误)与琥珀(等待)语义区 */
 const PROJ_HUES = [115, 245, 300, 195, 345, 55, 160, 270];
-const projHueMap = new Map();
 function projHue(name) {
-  if (!projHueMap.has(name)) projHueMap.set(name, PROJ_HUES[projHueMap.size % PROJ_HUES.length]);
-  return projHueMap.get(name);
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return PROJ_HUES[(h >>> 0) % PROJ_HUES.length];
 }
 function projChip(cwd) {
   const name = cwd.split('/').pop();
