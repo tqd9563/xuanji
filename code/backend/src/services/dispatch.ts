@@ -113,6 +113,8 @@ export class DispatchSession {
   stateDetail: string | undefined;
   /** 最近一次产出时间(回合结束/错误):看板「待验收」标记的比较基准 */
   lastOutputAt: number | null = null;
+  /** 最近活动摘要:运行中 = 正在执行的工具,空闲 = 最后一条回复的开头 */
+  activity: string | undefined;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
 
@@ -165,6 +167,8 @@ export class DispatchSession {
       this.stateDetail = e.detail;
     }
     if (e.ev === 'result' || e.ev === 'error') this.lastOutputAt = Date.now();
+    if (e.ev === 'tool') this.activity = `${e.name}: ${e.input.replace(/\s+/g, ' ').slice(0, 90)}`;
+    if (e.ev === 'assistant') this.activity = e.text.replace(/\s+/g, ' ').slice(0, 110);
     this.events.push(e);
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
     for (const l of this.listeners) l(e);
@@ -461,7 +465,8 @@ export function liveDispatches(): LiveDispatch[] {
       cwd: s.cwd,
       name: s.displayName,
       state: s.state,
-      detail: s.stateDetail,
+      // awaiting-permission 时 detail 是审批/提问文案(进 needs);其余状态给最近活动摘要(进卡片 detail)
+      detail: s.state === 'awaiting-permission' ? s.stateDetail : s.activity,
       startedAt: s.startedAt,
       lastOutputAt: s.lastOutputAt ?? undefined,
     });
