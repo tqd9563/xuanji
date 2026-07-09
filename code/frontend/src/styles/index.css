@@ -334,6 +334,28 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .col-more:hover { color: var(--ink); border-color: var(--muted); }
 
+/* Claude 输出的 markdown 渲染(react-markdown + gfm;原始 HTML 不渲染,会话内容按不可信数据处理) */
+.md > *:first-child { margin-top: 0; }
+.md > *:last-child { margin-bottom: 0; }
+.md p, .md ul, .md ol, .md pre, .md table, .md blockquote { margin: 0 0 10px; }
+.md h1, .md h2, .md h3, .md h4 { font-size: 0.9375rem; font-weight: 700; margin: 14px 0 8px; }
+.md h1 { font-size: 1.0625rem; }
+.md ul { padding-left: 1.25em; list-style: disc; }
+.md ol { padding-left: 1.4em; list-style: decimal; }
+.md li { margin: 3px 0; }
+.md li > p { margin-bottom: 4px; }
+.md strong { font-weight: 700; }
+.md a { color: var(--jade); text-underline-offset: 2px; }
+.md code { font-family: var(--mono); font-size: 0.8125em; background: var(--surface-2); border: 1px solid var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+.md pre { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-m); padding: 10px 12px; overflow-x: auto; }
+.md pre code { background: none; border: 0; padding: 0; font-size: 0.75rem; line-height: 1.6; }
+.md table { border-collapse: collapse; font-size: 0.8125rem; max-width: 100%; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line-soft); padding: 5px 10px; text-align: left; }
+.md th { background: var(--surface-2); font-weight: 600; }
+.md td { font-variant-numeric: tabular-nums; }
+.md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
+.md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
+
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
   position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
