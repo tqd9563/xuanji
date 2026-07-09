@@ -95,6 +95,10 @@ export class DispatchSession {
   private name: string;
   private resumeFrom: string | null;
   private fork: boolean;
+  readonly startedAt = Date.now();
+  /** 最近一次 status 事件,供会话看板注入实时状态 */
+  state: 'working' | 'awaiting-permission' | 'idle' | 'ended' = 'working';
+  stateDetail: string | undefined;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
 
@@ -135,7 +139,15 @@ export class DispatchSession {
 
   // ---------- 事件流 ----------
 
+  get displayName(): string {
+    return this.name;
+  }
+
   private emit(e: DispatchEvent) {
+    if (e.ev === 'status') {
+      this.state = e.state;
+      this.stateDetail = e.detail;
+    }
     this.events.push(e);
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
     for (const l of this.listeners) l(e);
@@ -323,6 +335,42 @@ export function getDispatch(id: string): DispatchSession | undefined {
   return sessions.get(id);
 }
 
+export interface LiveDispatch {
+  dispatchId: string;
+  sessionId: string;
+  cwd: string;
+  name: string;
+  state: DispatchSession['state'];
+  detail?: string;
+  startedAt: number;
+}
+
+/** 后端进程内存活的派发会话(已拿到 sessionId 的),供看板注入实时状态与 attach 入口 */
+export function liveDispatches(): LiveDispatch[] {
+  const out: LiveDispatch[] = [];
+  for (const s of sessions.values()) {
+    if (!s.sessionId) continue;
+    out.push({
+      dispatchId: s.id,
+      sessionId: s.sessionId,
+      cwd: s.cwd,
+      name: s.displayName,
+      state: s.state,
+      detail: s.stateDetail,
+      startedAt: s.startedAt,
+    });
+  }
+  return out;
+}
+
+/** 派发会话状态 → 看板四态 */
+export function dispatchBoardState(state: DispatchSession['state']): 'running' | 'blocked' | 'idle' | 'done' {
+  if (state === 'working') return 'running';
+  if (state === 'awaiting-permission') return 'blocked';
+  if (state === 'ended') return 'done';
+  return 'idle';
+}
+
 /**
  * 所有权规则:
  * - 终端存活的 interactive 会话只读,拒绝接管
@@ -341,6 +389,10 @@ export function resumePolicy(
 }
 
 export async function canResume(sessionId: string): Promise<{ ok: boolean; reason?: string; fork?: boolean }> {
+  // 本进程存活的派发会话是我们自己的:agents CLI 会把它列为 interactive+活 pid,须在只读判定前放行
+  for (const s of sessions.values()) {
+    if (s.sessionId === sessionId) return { ok: true, fork: false };
+  }
   const agents = await listAgents();
   return resumePolicy(agents.sessions, sessionId);
 }

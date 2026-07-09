@@ -34,6 +34,8 @@ export interface AgentSession {
   needs?: string;
   tokens?: number;
   source?: 'web';
+  /** 后端进程内存活的派发会话:点击直接 attach 回原事件流 */
+  dispatchId?: string;
 }
 
 export type ReplayEvent =

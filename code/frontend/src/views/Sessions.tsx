@@ -6,8 +6,13 @@ import { setDispatchIntent } from '@/lib/dispatch';
 import { clock } from '@/lib/utils';
 import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, toast } from '@/components/shared';
 
-/** 智能进入:可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
+/** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
+  if (s.dispatchId) {
+    setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
+    location.hash = 'dispatch';
+    return;
+  }
   if (s.readonly) {
     toast('终端存活的交互会话只读,已打开回放');
     openReplay(s.sessionId, s);
@@ -42,6 +47,11 @@ export function Sessions({
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
 
   const columns = data?.columns;
+
+  // 键盘选卡跟随滚动:选中卡始终保持在视口内
+  useEffect(() => {
+    if (kbPos) document.querySelector('.scard.kb-sel')?.scrollIntoView({ block: 'nearest' });
+  }, [kbPos]);
 
   const openReplay = useCallback(
     async (sessionId: string, session?: AgentSession) => {
@@ -147,7 +157,7 @@ export function Sessions({
                 >
                   <div className="top">
                     <span className="title">{s.name}</span>
-                    <Tag>{s.kind === 'background' ? '后台' : '终端'}</Tag>
+                    <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                     {s.readonly && <Tag>只读</Tag>}
                   </div>
                   <div className="cwd">
@@ -168,7 +178,6 @@ export function Sessions({
                         去回复
                       </button>
                     )}
-                    {s.source === 'web' && <Tag>web</Tag>}
                     <span className="time">{clock(s.startedAt)} 开始</span>
                   </div>
                 </div>

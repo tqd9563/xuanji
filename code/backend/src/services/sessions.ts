@@ -1,6 +1,7 @@
 import { config } from '../config.js';
 import { listAgents } from '../adapters/agents-cli.js';
 import { findSessionFile, parseReplay, readJobStates } from '../adapters/claude-dir.js';
+import { dispatchBoardState, liveDispatches } from './dispatch.js';
 import type { AgentSession, Replay, SessionState } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
@@ -21,6 +22,9 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
     blocked: [],
     done: [],
   };
+  // 本进程存活的派发会话:agents CLI 把它们列为 interactive+活 pid(名字还是自动生成的),
+  // 用注册表的实时状态/会话名/attach 入口覆盖,CLI 尚未收录的补充合成卡
+  const live = new Map(liveDispatches().map((d) => [d.sessionId, d]));
   for (const s of agents.sessions) {
     const job = jobStates.get(s.id);
     if (job) {
@@ -28,10 +32,37 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       s.needs = job.needs;
       s.tokens = job.tokens;
     }
+    const d = live.get(s.sessionId);
+    if (d) {
+      live.delete(s.sessionId);
+      s.name = d.name;
+      s.state = dispatchBoardState(d.state);
+      s.readonly = false;
+      s.source = 'web';
+      s.dispatchId = d.dispatchId;
+      if (d.state === 'awaiting-permission') s.needs = `等待权限审批:${d.detail ?? ''}`;
+      else s.needs = undefined;
+    }
     const override = names?.get(s.sessionId);
     if (override) s.name = override;
     if (webIds?.has(s.sessionId)) s.source = 'web';
     columns[s.state].push(s);
+  }
+  for (const d of live.values()) {
+    columns[dispatchBoardState(d.state)].push({
+      id: d.sessionId.slice(0, 8),
+      sessionId: d.sessionId,
+      name: names?.get(d.sessionId) ?? d.name,
+      cwd: d.cwd,
+      project: d.cwd.split('/').filter(Boolean).pop() ?? d.cwd,
+      kind: 'background',
+      state: dispatchBoardState(d.state),
+      startedAt: d.startedAt,
+      readonly: false,
+      needs: d.state === 'awaiting-permission' ? `等待权限审批:${d.detail ?? ''}` : undefined,
+      source: 'web',
+      dispatchId: d.dispatchId,
+    });
   }
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);
   return { ok: agents.ok, error: agents.error, columns, refreshedAt: Date.now() };
