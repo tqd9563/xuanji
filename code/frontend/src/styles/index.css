@@ -111,8 +111,8 @@ input, select, textarea { font: inherit; color: var(--ink); }
 .side-foot .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
 .side-foot .proto { color: var(--faint); }
 
-.main { min-width: 0; padding: 24px 32px 48px; }
-.view { display: none; max-width: 1240px; }
+.main { min-width: 0; padding: 24px clamp(32px, 3.5vw, 80px) 48px; }
+.view { display: none; }
 .view.active { display: block; animation: view-in 200ms var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
