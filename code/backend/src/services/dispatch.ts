@@ -169,6 +169,10 @@ export class DispatchSession {
     if (e.ev === 'result' || e.ev === 'error') this.lastOutputAt = Date.now();
     if (e.ev === 'tool') this.activity = `${e.name}: ${e.input.replace(/\s+/g, ' ').slice(0, 90)}`;
     if (e.ev === 'assistant') this.activity = e.text.replace(/\s+/g, ' ').slice(0, 110);
+    // 状态快照落库:后端重启后看板据此还原(空闲可续接/待验收/活动摘要都不丢)
+    if (this.sessionId && (e.ev === 'status' || e.ev === 'result' || e.ev === 'error')) {
+      this.storage.updateDispatchState(this.sessionId, this.state, this.lastOutputAt ?? undefined, this.activity);
+    }
     this.events.push(e);
     if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
     for (const l of this.listeners) l(e);

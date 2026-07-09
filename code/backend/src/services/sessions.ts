@@ -82,19 +82,24 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       lastOutputAt: d.lastOutputAt,
     });
   }
-  // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回(bg fork 出的会话不再消失)
+  // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回。
+  // 死于后端重启的(快照非 ended)按「空闲」还原——上下文在转录里,点开发消息即原地续接;
+  // 待验收标记与活动摘要一并从快照恢复。
   for (const row of storage?.allDispatches() ?? []) {
     if (seen.has(row.sessionId) || hidden?.has(row.sessionId)) continue;
-    columns.done.push({
+    const wasAlive = !!row.lastState && row.lastState !== 'ended';
+    columns[wasAlive ? 'idle' : 'done'].push({
       id: row.sessionId.slice(0, 8),
       sessionId: row.sessionId,
       name: names?.get(row.sessionId) ?? row.name ?? row.sessionId.slice(0, 8),
       cwd: row.cwd,
       project: row.cwd.split('/').filter(Boolean).pop() ?? row.cwd,
       kind: 'background',
-      state: 'done',
+      state: wasAlive ? 'idle' : 'done',
       startedAt: row.createdAt,
       readonly: false,
+      detail: row.activity ?? undefined,
+      lastOutputAt: row.lastOutputAt ?? undefined,
       source: 'web',
     });
   }
