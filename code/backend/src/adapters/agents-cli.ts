@@ -63,7 +63,18 @@ export interface AgentsResult {
   error?: string;
 }
 
+/** agents CLI 是子进程调用(数百 ms),看板 5s 轮询 + 仪表盘 + 用量端点都依赖它:短 TTL 合并重复拉起 */
+let agentsCache: { at: number; result: AgentsResult } | null = null;
+const AGENTS_TTL_MS = 2_500;
+
 export async function listAgents(): Promise<AgentsResult> {
+  if (agentsCache && Date.now() - agentsCache.at < AGENTS_TTL_MS) return agentsCache.result;
+  const result = await listAgentsUncached();
+  if (result.ok) agentsCache = { at: Date.now(), result };
+  return result;
+}
+
+async function listAgentsUncached(): Promise<AgentsResult> {
   try {
     const { stdout } = await execFileP('claude', ['agents', '--json', '--all'], {
       timeout: 15_000,
