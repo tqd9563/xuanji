@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
-import { ToastHost } from '@/components/shared';
+import { ConfirmHost, ToastHost } from '@/components/shared';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Sessions, type SessionsHandle } from '@/views/Sessions';
@@ -110,6 +110,7 @@ export default function App() {
       </main>
 
       <ToastHost />
+      <ConfirmHost />
     </div>
   );
 }

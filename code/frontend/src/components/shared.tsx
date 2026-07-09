@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 
@@ -97,6 +97,54 @@ export function Drawer({
         )}
       </aside>
     </>
+  );
+}
+
+// ---------- Confirm(应用内确认框:Pake/Tauri 的 WKWebView 不支持 window.confirm) ----------
+
+let pushConfirm: ((msg: string, resolve: (ok: boolean) => void) => void) | null = null;
+
+export function confirmBox(msg: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (pushConfirm) pushConfirm(msg, resolve);
+    else resolve(false);
+  });
+}
+
+export function ConfirmHost() {
+  const [req, setReq] = useState<{ msg: string; resolve: (ok: boolean) => void } | null>(null);
+  useEffect(() => {
+    pushConfirm = (msg, resolve) => setReq({ msg, resolve });
+    return () => {
+      pushConfirm = null;
+    };
+  }, []);
+  const done = (ok: boolean) => {
+    req?.resolve(ok);
+    setReq(null);
+  };
+  const doneRef = useRef(done);
+  doneRef.current = done;
+  useEffect(() => {
+    if (!req) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') doneRef.current(false);
+      if (e.key === 'Enter') doneRef.current(true);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [req]);
+  if (!req) return null;
+  return (
+    <div className="confirm-mask" onClick={() => done(false)}>
+      <div className="confirm-box" role="alertdialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <p>{req.msg}</p>
+        <div className="confirm-actions">
+          <button className="btn btn-sm" onClick={() => done(false)}>取消(Esc)</button>
+          <button className="btn btn-sm btn-primary" onClick={() => done(true)} autoFocus>确认(Enter)</button>
+        </div>
+      </div>
+    </div>
   );
 }
 

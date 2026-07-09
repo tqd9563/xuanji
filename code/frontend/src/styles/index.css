@@ -315,6 +315,19 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
 .scard .x-close:hover { color: var(--red); }
+
+/* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
+.confirm-mask {
+  position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--bg) 62%, transparent); backdrop-filter: blur(2px);
+}
+.confirm-box {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l);
+  padding: 20px 22px; max-width: 420px; min-width: 300px;
+  box-shadow: 0 18px 48px rgb(0 0 0 / 0.5);
+}
+.confirm-box p { font-size: 0.8125rem; line-height: 1.7; white-space: pre-line; margin-bottom: 16px; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }

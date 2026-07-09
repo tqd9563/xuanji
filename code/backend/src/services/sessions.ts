@@ -50,8 +50,10 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
     if (webIds?.has(s.sessionId)) s.source = 'web';
     columns[s.state].push(s);
   }
+  const seen = new Set(agents.sessions.map((s) => s.sessionId));
   for (const d of live.values()) {
     if (hidden?.has(d.sessionId)) continue;
+    seen.add(d.sessionId);
     columns[dispatchBoardState(d.state)].push({
       id: d.sessionId.slice(0, 8),
       sessionId: d.sessionId,
@@ -65,6 +67,22 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       needs: d.state === 'awaiting-permission' ? `等待权限审批:${d.detail ?? ''}` : undefined,
       source: 'web',
       dispatchId: d.dispatchId,
+    });
+  }
+  // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回(bg fork 出的会话不再消失)
+  for (const row of storage?.allDispatches() ?? []) {
+    if (seen.has(row.sessionId) || hidden?.has(row.sessionId)) continue;
+    columns.done.push({
+      id: row.sessionId.slice(0, 8),
+      sessionId: row.sessionId,
+      name: names?.get(row.sessionId) ?? row.name ?? row.sessionId.slice(0, 8),
+      cwd: row.cwd,
+      project: row.cwd.split('/').filter(Boolean).pop() ?? row.cwd,
+      kind: 'background',
+      state: 'done',
+      startedAt: row.createdAt,
+      readonly: false,
+      source: 'web',
     });
   }
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);

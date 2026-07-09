@@ -4,7 +4,7 @@ import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock } from '@/lib/utils';
-import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, toast } from '@/components/shared';
+import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
@@ -38,7 +38,7 @@ async function closeSession(s: AgentSession, refresh: () => void) {
   const msg = s.dispatchId
     ? `结束派发会话「${s.name}」?\n其进程将被终止并从看板移除,已生成的记录仍可回放/续接。`
     : `从看板移除会话「${s.name}」?\n仅在璇玑隐藏,~/.claude 数据与终端不受影响。`;
-  if (!window.confirm(msg)) return;
+  if (!(await confirmBox(msg))) return;
   try {
     await api.closeSession(s.sessionId);
     toast(`已关闭 ${s.name}`);

@@ -68,6 +68,7 @@ export type DispatchEvent =
   | { ev: 'permission-resolved'; requestId: string; decision: string }
   | { ev: 'result'; costUsd: number; contextTokens: number; contextPct: number; durationMs: number }
   | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number }
+  | { ev: 'context'; pct: number }
   | { ev: 'user-echo'; text: string }
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'error'; message: string };
@@ -165,12 +166,13 @@ export class DispatchSession {
           case 'system':
             if (msg.subtype === 'init') {
               this.sessionId = msg.session_id;
-              this.storage.recordDispatch(msg.session_id, this.cwd);
+              this.storage.recordDispatch(msg.session_id, this.cwd, this.name);
               this.emit({ ev: 'init', sessionId: msg.session_id, model: (msg as { model?: string }).model ?? '' });
               if (this.fork && this.resumeFrom && msg.session_id !== this.resumeFrom) {
                 this.emit({ ev: 'forked', from: this.resumeFrom, to: msg.session_id });
               }
               this.emit({ ev: 'status', state: 'working' });
+              this.refreshChips();
             }
             break;
           case 'stream_event': {
@@ -224,6 +226,7 @@ export class DispatchSession {
               durationMs: (msg as { duration_ms?: number }).duration_ms ?? 0,
             });
             this.emit({ ev: 'status', state: 'idle' });
+            this.refreshChips();
             notifyMac(this.name, '回合完成,等待你的下一步指示');
             break;
           }
@@ -234,7 +237,7 @@ export class DispatchSession {
               this.emit({
                 ev: 'rate-limit',
                 kind: info.rateLimitType,
-                utilization: info.utilization,
+                utilization: Math.max(0, Math.min(100, info.utilization)),
                 resetsAt: info.resetsAt,
               });
             }
@@ -255,6 +258,43 @@ export class DispatchSession {
       this.emit({ ev: 'error', message });
       this.emit({ ev: 'status', state: 'ended' });
     }
+  }
+
+  /**
+   * 主动拉取权威用量指示(回合开始/结束时):
+   * - getContextUsage → 上下文占用(与终端 /context 同源)
+   * - usage 控制请求 → claude.ai 官方 five_hour/seven_day 利用率(0-100)
+   * 被动 rate_limit_event 很少出现,不能作为唯一来源。
+   */
+  private refreshChips() {
+    const q = this.q;
+    if (!q) return;
+    void q
+      .getContextUsage()
+      .then((cu) => {
+        if (typeof cu.percentage === 'number') {
+          this.emit({ ev: 'context', pct: Math.max(0, Math.min(100, Math.round(cu.percentage))) });
+        }
+      })
+      .catch(() => {});
+    void q
+      .usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET()
+      .then((u) => {
+        const rl = u.rate_limits;
+        if (!u.rate_limits_available || !rl) return;
+        for (const kind of ['five_hour', 'seven_day'] as const) {
+          const w = rl[kind];
+          if (w?.utilization != null) {
+            this.emit({
+              ev: 'rate-limit',
+              kind,
+              utilization: Math.max(0, Math.min(100, w.utilization)),
+              resetsAt: w.resets_at ? Date.parse(w.resets_at) : undefined,
+            });
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   // ---------- 审批 ----------
