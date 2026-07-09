@@ -107,6 +107,23 @@ describe('Storage 派发状态快照', () => {
   });
 });
 
+describe('Storage 派发 prompt 流水', () => {
+  it('recordPrompt/recentPrompts 读写一致,长文截断,按时间升序', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-prompts-'));
+    const s = new Storage(dir);
+    s.recordPrompt('/p/a', 'x'.repeat(300), 'sid-1');
+    s.recordPrompt('/p/b', '第二条');
+    const rows = s.recentPrompts(0);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.display).toHaveLength(200);
+    expect(rows[1]!.cwd).toBe('/p/b');
+    expect(rows[1]!.sessionId).toBeNull();
+    expect(s.recentPrompts(Date.now() + 1000)).toHaveLength(0);
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe('Storage 调色板分配', () => {
   it('首次出现顺序固定,重复调用不改序号,新名字顺延', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-palette-'));

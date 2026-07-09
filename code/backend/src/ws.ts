@@ -5,6 +5,7 @@
  */
 import type { IncomingMessage, Server } from 'node:http';
 import type { Duplex } from 'node:stream';
+import fs from 'node:fs';
 import path from 'node:path';
 import chokidar from 'chokidar';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -97,6 +98,10 @@ export function attachWs(server: Server, storage: Storage) {
             case 'start': {
               if (typeof msg.cwd !== 'string' || typeof msg.prompt !== 'string' || !msg.prompt.trim()) {
                 return send({ ev: 'error', message: 'start 需要 cwd 与 prompt' });
+              }
+              // 不存在的 cwd 会让 SDK spawn ENOENT,报错极具误导性("原生二进制启动失败"),前置拦截
+              if (!fs.existsSync(msg.cwd)) {
+                return send({ ev: 'error', message: `工作目录不存在:${msg.cwd}` });
               }
               let fork = false;
               if (msg.resume) {

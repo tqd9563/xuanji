@@ -31,13 +31,22 @@ const DAY = 86_400_000;
 
 export async function dashboard(storage?: Storage): Promise<Dashboard> {
   const since = Date.now() - 8 * DAY;
-  const [history, board, usage, crontab, cli] = await Promise.all([
+  const [fileHistory, board, usage, crontab, cli] = await Promise.all([
     readHistory(config.claudeDir, { sinceMs: since }),
     sessionsBoard(storage),
     todayUsage(),
     readCrontab(),
     cliVersion(),
   ]);
+
+  // SDK 派发会话不写 history.jsonl:并入自有 prompt 流水,时间线/统计条/热力图才不会在纯璇玑使用时冻结
+  const webPrompts: HistoryEntry[] = (storage?.recentPrompts(since) ?? []).map((p) => ({
+    display: p.display,
+    timestamp: p.at,
+    project: p.cwd,
+    sessionId: p.sessionId ?? '',
+  }));
+  const history = [...fileHistory, ...webPrompts].sort((a, b) => a.timestamp - b.timestamp);
 
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
@@ -76,8 +85,8 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
     heat,
     usage,
     caliber: {
-      todayPrompts: 'history.jsonl 中今日(本地时区)的 prompt 条数',
-      heat: 'history.jsonl 近 7 日按项目 × 日聚合的 prompt 数',
+      todayPrompts: 'history.jsonl + 璇玑派发流水中今日(本地时区)的 prompt 条数',
+      heat: 'history.jsonl + 璇玑派发流水近 7 日按项目 × 日聚合的 prompt 数',
       usage: usage.caliber,
     },
     health: { cli, agentsOk: board.ok },
