@@ -6,10 +6,17 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /** 项目分类色:DESIGN.md「等明度分类规则」——oklch(0.78 0.12 H) 只转色相。
- *  色环序号 = 项目名 FNV-1a 哈希:同名永远同色,跨视图/刷新/端一致,零状态
- *  (取代按首次渲染顺序分配的旧实现——那会随数据顺序变化导致同项目变色)。 */
-const PROJ_HUES = [115, 245, 300, 195, 345, 55, 160, 270];
+ *  色环 11 个色相按最大间隔交错排列,避开红(错误)/琥珀(等待)语义区。
+ *  序号优先取后端调色板(/api/palette,首次出现顺序 SQLite 固定 → 前 11 个项目
+ *  保证互不撞色且全端一致);调色板未加载或未知名字时退化为 FNV-1a 哈希。 */
+const PROJ_HUES = [115, 265, 190, 340, 55, 215, 140, 290, 165, 315, 240];
+let paletteIdx: Record<string, number> = {};
+export function setPalette(map: Record<string, number>) {
+  paletteIdx = map;
+}
 export function projHue(name: string): number {
+  const idx = paletteIdx[name];
+  if (idx !== undefined) return PROJ_HUES[idx % PROJ_HUES.length]!;
   let h = 2166136261;
   for (let i = 0; i < name.length; i++) {
     h ^= name.charCodeAt(i);

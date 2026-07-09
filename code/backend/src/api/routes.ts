@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import fs from 'node:fs';
 import { config } from '../config.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
-import { moveSkill, readHistory } from '../adapters/claude-dir.js';
+import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { listProjects } from '../services/projects.js';
@@ -36,6 +36,21 @@ export function createApi(storage: Storage) {
   });
 
   api.get('/sessions', async (c) => c.json(await sessionsBoard(storage)));
+
+  /** 项目分类色调色板:name → 序号(首次出现顺序,SQLite 固定;色相映射在前端色环) */
+  api.get('/palette', async (c) => {
+    const [dirs, agents] = await Promise.all([scanProjectDirs(config.claudeDir), listAgents()]);
+    const names: string[] = [];
+    for (const p of dirs) {
+      if (config.projectNoisePatterns.some((re) => re.test(p.path) || re.test(p.encodedDir))) continue;
+      if (!p.exists) continue;
+      names.push(p.path.split('/').filter(Boolean).pop() ?? '');
+    }
+    for (const s of agents.sessions) names.push(s.project);
+    for (const d of storage.allDispatches()) names.push(d.cwd.split('/').filter(Boolean).pop() ?? '');
+    const map = storage.assignPalette(names.filter(Boolean));
+    return c.json({ idx: Object.fromEntries(map) });
+  });
 
   api.get('/sessions/:sessionId/replay', async (c) => {
     const replay = await sessionReplay(c.req.param('sessionId'));

@@ -36,6 +36,7 @@ export const api = {
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
   usage: () => get<UsageReport>('/api/usage/today'),
+  palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------
   canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),

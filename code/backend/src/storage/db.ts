@@ -37,6 +37,12 @@ export const hiddenSessionsTable = sqliteTable('hidden_sessions', {
   hiddenAt: integer('hidden_at').notNull(),
 });
 
+/** 项目分类色调色板:首次出现顺序分配序号并固定(前 N 个项目互不撞色,全端一致) */
+export const paletteTable = sqliteTable('palette', {
+  name: text('name').primaryKey(),
+  idx: integer('idx').notNull(),
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -60,6 +66,9 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS hidden_sessions (
         session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS palette (
+        name TEXT PRIMARY KEY, idx INTEGER NOT NULL
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
@@ -124,6 +133,21 @@ export class Storage {
   hiddenSessionIds(): Set<string> {
     const rows = this.orm.select().from(hiddenSessionsTable).all();
     return new Set(rows.map((r) => r.sessionId));
+  }
+
+  /** 调色板:已有的保持不变,新名字按当前最大序号顺延(首次出现即永久固定) */
+  assignPalette(names: string[]): Map<string, number> {
+    const rows = this.orm.select().from(paletteTable).all();
+    const map = new Map(rows.map((r) => [r.name, r.idx]));
+    let next = rows.length ? Math.max(...rows.map((r) => r.idx)) + 1 : 0;
+    const insert = this.sqlite.prepare('INSERT OR IGNORE INTO palette (name, idx) VALUES (?, ?)');
+    for (const n of names) {
+      if (!n || map.has(n)) continue;
+      insert.run(n, next);
+      map.set(n, next);
+      next++;
+    }
+    return map;
   }
 
   getMeta(key: string): string | null {
