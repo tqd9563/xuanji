@@ -239,6 +239,8 @@ select.input { appearance: none; padding-right: 28px;
 .need-item .what { min-width: 0; flex: 1; }
 .need-item .what .t { font-weight: 600; font-size: 0.8125rem; }
 .need-item .what .n { font-size: 0.75rem; color: var(--amber); }
+/* 待验收条目的摘要是产出信息不是警示:用 muted,琥珀只留给「待验收」标签本身 */
+.need-item .what .n.plain { color: var(--muted); }
 .run-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; }
 .run-item:last-child { border-bottom: none; }
 .run-item .d { color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1139,7 +1141,7 @@ function renderDashboard() {
         <div class="t">${esc(s.title)}
           ${s.state !== 'blocked' ? '<span class="tag t-unread">待验收</span>' : ''}
           <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
-        <div class="n">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
+        <div class="n${s.state === 'blocked' ? '' : ' plain'}">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
       </div>
       <button class="btn btn-sm btn-primary" onclick="resumeSession('${s.id}')">${s.state === 'blocked' ? '去回复' : '去验收'}</button>
     </div>`).join('');
