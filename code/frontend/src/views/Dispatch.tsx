@@ -3,7 +3,7 @@ import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
-import { takeDispatchIntent, useDispatch, type ChatItem } from '@/lib/dispatch';
+import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { cn, fmtCost, markSeen } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ToolCard, toast } from '@/components/shared';
@@ -224,7 +224,9 @@ export function Dispatch({ active }: { active: boolean }) {
       case 'working':
         return { text: d.items.some((i) => i.t === 'assistant' && i.streaming) ? '回复生成中…' : '思考中…', cls: 'think' };
       case 'awaiting-permission':
-        return { text: `等待你审批:${d.status.detail ?? ''}`, cls: 'wait' };
+        return d.status.detail === '回答 Claude 的提问'
+          ? { text: 'Claude 有问题等你回答', cls: 'wait' }
+          : { text: `等待你审批:${d.status.detail ?? ''}`, cls: 'wait' };
       case 'idle':
         return { text: `空闲 · 回合结束${d.costUsd ? ` · 本会话 ${fmtCost(d.costUsd)}` : ''}`, cls: '' };
       case 'ended':
@@ -264,7 +266,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </div>
           )}
           {d.items.map((item, i) => (
-            <ChatRow key={i} item={item} onDecide={d.decide} />
+            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} />
           ))}
         </div>
 
@@ -372,7 +374,103 @@ function Chip({ label, pct }: { label: string; pct: number | null }) {
   );
 }
 
-function ChatRow({ item, onDecide }: { item: ChatItem; onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void }) {
+/** agent 提问卡:单选点击即答;多问/多选/自定义 → 选完提交 */
+function QuestionCard({
+  item,
+  onAnswer,
+}: {
+  item: Extract<ChatItem, { t: 'question' }>;
+  onAnswer: (id: string, answers: Record<string, string>) => void;
+}) {
+  const [sel, setSel] = useState<Record<string, string>>({});
+  const [custom, setCustom] = useState<Record<string, string>>({});
+  const answered = item.answers;
+  const single = item.questions.length === 1 && !item.questions[0]!.multiSelect;
+
+  const submit = (answers: Record<string, string>) => onAnswer(item.requestId, answers);
+  const ready = item.questions.every((q) => (custom[q.question] ?? sel[q.question] ?? '').trim());
+
+  return (
+    <div className={cn('approval qcard', answered && 'resolved')}>
+      <div className="a-head">❓ Claude 提问 · AskUserQuestion</div>
+      {item.questions.map((q: QuestionSpec) => (
+        <div key={q.question} className="q-block">
+          <div className="q-text">
+            {q.header && <span className="tag">{q.header}</span>} {q.question}
+          </div>
+          {answered ? (
+            <div className="q-answered">↳ {answered[q.question] ?? '(未答)'}</div>
+          ) : (
+            <>
+              <div className="q-opts">
+                {q.options.map((o) => (
+                  <button
+                    key={o.label}
+                    className={cn('q-opt', sel[q.question] === o.label && 'sel')}
+                    onClick={() => {
+                      if (single) return submit({ [q.question]: o.label });
+                      setSel((prev) => {
+                        if (q.multiSelect) {
+                          const cur = (prev[q.question] ?? '').split('、').filter(Boolean);
+                          const next = cur.includes(o.label) ? cur.filter((x) => x !== o.label) : [...cur, o.label];
+                          return { ...prev, [q.question]: next.join('、') };
+                        }
+                        return { ...prev, [q.question]: o.label };
+                      });
+                    }}
+                  >
+                    <b>{o.label}</b>
+                    {o.description && <span>{o.description}</span>}
+                  </button>
+                ))}
+              </div>
+              <input
+                className="q-custom"
+                placeholder="或输入自定义回答…"
+                value={custom[q.question] ?? ''}
+                onChange={(e) => setCustom((prev) => ({ ...prev, [q.question]: e.target.value }))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && single && (custom[q.question] ?? '').trim()) {
+                    submit({ [q.question]: custom[q.question]!.trim() });
+                  }
+                  e.stopPropagation();
+                }}
+              />
+            </>
+          )}
+        </div>
+      ))}
+      {!answered && !single && (
+        <div className="a-actions">
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={!ready}
+            onClick={() => {
+              const answers: Record<string, string> = {};
+              for (const q of item.questions) {
+                answers[q.question] = (custom[q.question] ?? sel[q.question] ?? '').trim();
+              }
+              submit(answers);
+            }}
+          >
+            提交回答
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChatRow({
+  item,
+  onDecide,
+  onAnswer,
+}: {
+  item: ChatItem;
+  onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
+  onAnswer: (id: string, answers: Record<string, string>) => void;
+}) {
+  if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
     return (
       <div className="chat-msg user">

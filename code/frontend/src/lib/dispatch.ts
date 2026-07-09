@@ -1,11 +1,19 @@
 /** 派发页状态机:/ws/dispatch 双向流 → 消息列表 + agent 状态 + 用量指示 */
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+export interface QuestionSpec {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: { label: string; description?: string }[];
+}
+
 export type ChatItem =
   | { t: 'user'; text: string }
   | { t: 'assistant'; text: string; streaming: boolean }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
+  | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
   | { t: 'note'; text: string }
   | { t: 'error'; text: string };
 
@@ -121,6 +129,21 @@ export function useDispatch() {
             input: String(e.input),
           },
         ]);
+        break;
+      case 'question':
+        setItems((prev) => [
+          ...prev,
+          { t: 'question', requestId: String(e.requestId), questions: e.questions as QuestionSpec[] },
+        ]);
+        break;
+      case 'question-answered':
+        setItems((prev) =>
+          prev.map((it) =>
+            it.t === 'question' && it.requestId === e.requestId
+              ? { ...it, answers: e.answers as Record<string, string> }
+              : it,
+          ),
+        );
         break;
       case 'permission-resolved':
         setItems((prev) =>
@@ -276,6 +299,10 @@ export function useDispatch() {
     wsRef.current?.send(JSON.stringify({ op: 'permission', requestId, decision }));
   }, []);
 
+  const answer = useCallback((requestId: string, answers: Record<string, string>) => {
+    wsRef.current?.send(JSON.stringify({ op: 'answer', requestId, answers }));
+  }, []);
+
   const interrupt = useCallback(() => {
     wsRef.current?.send(JSON.stringify({ op: 'interrupt' }));
   }, []);
@@ -308,5 +335,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, changeModel, reset, pushNote, seedHistory };
+  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
 }
