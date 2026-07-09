@@ -22,6 +22,7 @@
 | POST | /api/skills/:name/toggle | 技能启停(铁律例外②:`{enable, confirm:true}` 双确认,目录移动可逆) |
 | PUT | /api/sessions/:sessionId/name | web 会话重命名(display-name 存自有 SQLite,终端存活会话 403) |
 | POST | /api/dispatch/handoff | 跨目录交接:`{sessionId}` → haiku 生成结构化摘要(结论/未完成/口径) |
+| POST | /api/sessions/:sessionId/close | 关闭会话:`{confirm:true}`;自有隐藏列表(不写 ~/.claude,可逆),进程内存活的派发会话额外终止其子进程;终端存活 403 / 运行中 bg 任务 409 |
 
 ## WebSocket
 

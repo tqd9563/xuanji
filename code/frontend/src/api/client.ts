@@ -45,6 +45,8 @@ export const api = {
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/name`, 'PUT', { name }),
   handoff: (sessionId: string) =>
     mutate<{ summary: string; from: string }>('/api/dispatch/handoff', 'POST', { sessionId }),
+  closeSession: (sessionId: string) =>
+    mutate<{ ok: boolean; ended: boolean }>(`/api/sessions/${sessionId}/close`, 'POST', { confirm: true }),
 };
 
 /** ws 变更订阅:scope 变化时回调,前端据此重取对应资源 */

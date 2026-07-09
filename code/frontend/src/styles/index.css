@@ -307,6 +307,14 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard:hover { border-color: var(--muted); background: var(--hover); }
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+/* 关闭按钮:悬停/键盘选中才现身,悬停转红示意移除 */
+.scard .x-close {
+  flex: none; border: 0; background: none; cursor: pointer; border-radius: 4px;
+  color: var(--faint); font-size: 1rem; line-height: 1; padding: 0 3px; margin: -2px -4px -2px 0;
+  opacity: 0; transition: opacity 120ms var(--ease), color 120ms var(--ease);
+}
+.scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
+.scard .x-close:hover { color: var(--red); }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }

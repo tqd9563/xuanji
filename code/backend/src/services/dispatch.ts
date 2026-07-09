@@ -335,6 +335,18 @@ export function getDispatch(id: string): DispatchSession | undefined {
   return sessions.get(id);
 }
 
+/** 结束并移除进程内存活的派发会话(看板「关闭」);返回是否命中 */
+export async function endDispatchBySessionId(sessionId: string): Promise<boolean> {
+  for (const [id, s] of sessions) {
+    if (s.sessionId === sessionId) {
+      await s.end();
+      sessions.delete(id);
+      return true;
+    }
+  }
+  return false;
+}
+
 export interface LiveDispatch {
   dispatchId: string;
   sessionId: string;
