@@ -90,6 +90,24 @@ describe('Storage 派发记录与改名覆盖', () => {
   });
 });
 
+describe('Storage 调色板分配', () => {
+  it('首次出现顺序固定,重复调用不改序号,新名字顺延', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-palette-'));
+    const s = new Storage(dir);
+    const a = s.assignPalette(['xuanji', 'baize', 'project']);
+    expect(a.get('xuanji')).toBe(0);
+    expect(a.get('baize')).toBe(1);
+    expect(a.get('project')).toBe(2);
+    // 再次调用(顺序打乱 + 新名字):旧序号不变,新名字顺延
+    const b = s.assignPalette(['project', 'antifraud_skills', 'xuanji']);
+    expect(b.get('xuanji')).toBe(0);
+    expect(b.get('project')).toBe(2);
+    expect(b.get('antifraud_skills')).toBe(3);
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
 describe('Storage FTS5', () => {
   it('中文 trigram 全文搜索命中 body', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-test-'));

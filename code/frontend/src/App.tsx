@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
+import { setPalette } from '@/lib/utils';
 import { ConfirmHost, ToastHost } from '@/components/shared';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
@@ -23,7 +24,19 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
 export default function App() {
   const [view, nav] = useHashRoute();
   const [health, setHealth] = useState<{ cli: string | null } | null>(null);
+  const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
+
+  // 项目分类色调色板(后端 SQLite 首次出现顺序):加载后重渲染;旧后端无此端点时静默用哈希兜底
+  useEffect(() => {
+    api
+      .palette()
+      .then((p) => {
+        setPalette(p.idx);
+        setPaletteReady(true);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     api
