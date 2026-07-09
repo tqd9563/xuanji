@@ -5,6 +5,18 @@ import { takeDispatchIntent, useDispatch, type ChatItem } from '@/lib/dispatch';
 import { cn, fmtCost } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ToolCard, toast } from '@/components/shared';
+import type { ReplayEvent } from '@/api/types';
+
+/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
+function replayToChat(events: ReplayEvent[]): ChatItem[] {
+  return events.slice(-200).map((ev, i): ChatItem => {
+    if (ev.kind === 'user') return { t: 'user', text: ev.text };
+    if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
+    if (ev.kind === 'tool')
+      return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
+    return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
+  });
+}
 
 const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
@@ -64,6 +76,11 @@ export function Dispatch({ active }: { active: boolean }) {
       setCwd(intent.resume.cwd);
       setFromBoard(true);
       d.pushNote(`↻ 将续接会话 ${intent.resume.sessionId.slice(0, 8)}(${intent.resume.name}),发送第一条消息后恢复上下文。`);
+      // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
+      void api
+        .replay(intent.resume.sessionId)
+        .then((r) => d.seedHistory(replayToChat(r.events)))
+        .catch(() => {});
     }
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
     setTimeout(() => taRef.current?.focus(), 0);
