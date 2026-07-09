@@ -302,6 +302,11 @@ export function useDispatch() {
     setItems((prev) => [...prev, { t: 'note', text }]);
   }, []);
 
+  /** 续接前装载历史对话(来自只读回放),插在当前消息之前 */
+  const seedHistory = useCallback((history: ChatItem[]) => {
+    setItems((prev) => [...history, ...prev]);
+  }, []);
+
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, changeModel, reset, pushNote };
+  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, interrupt, changeModel, reset, pushNote, seedHistory };
 }

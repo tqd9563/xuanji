@@ -28,6 +28,11 @@
 - 前端未过原型关卡(prototype.html 获批 → `/impeccable document` 出 DESIGN.md)前,不写任何前端代码(全局 R2)
 - 开发在 `feature/` 分支进行,不直接提交 main(全局 R7;仅文档类改动例外,遵循既有惯例)
 
+### 派发会话防自斩铁律(2026-07-09 事故后新增,最高优先级)
+- **环境变量 `XUANJI_DISPATCH=1` 的会话是璇玑后端的子进程**。此类会话**严禁**重启或杀死璇玑后端:不得执行 `launchctl kickstart/bootout … com.xuanji.backend`、不得 kill 7777 端口监听进程、不得跑 `pnpm launchd:install/uninstall`——后端是你的宿主,重启它 = 当场杀死你自己,任务中断且用户看到的会话凭空消失(2026-07-09 已实际发生两次)。
+- 派发会话对后端改动的验证以 `tsc --noEmit` + eslint + vitest + `pnpm build` 为准;「重启后端使改动生效」这一步写进交付说明,**留给用户或非派发会话执行**。
+- 在本仓库做代码修改的派发任务,开工前先建独立 git worktree(`git worktree add`)再切分支:多个会话共用同一工作树时,互相 checkout 会踩掉对方的未提交修改。
+
 ---
 
 ## 经验教训
