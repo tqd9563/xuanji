@@ -312,6 +312,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard:hover { border-color: var(--muted); background: var(--hover); }
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+/* 待验收(未读):回合已结束但产出还没被看过——琥珀脉冲点 + 琥珀标签,看过即熄灭 */
+.tag.t-unread { color: var(--amber); background: var(--tint-amber); font-weight: 600; }
+.scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }
+@keyframes udot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
 /* 关闭按钮:悬停/键盘选中才现身,悬停转红示意移除 */
 .scard .x-close {
   flex: none; border: 0; background: none; cursor: pointer; border-radius: 4px;
@@ -623,7 +628,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
       <div class="dash-now">
         <div class="panel">
-          <div class="panel-head"><h2>需要你处理</h2><span class="pill pill-blk"><span class="dot"></span>2</span></div>
+          <div class="panel-head"><h2>需要你处理</h2><span class="pill pill-blk"><span class="dot"></span><span id="dash-needs-n">2</span></span></div>
           <div id="dash-needs"></div>
         </div>
         <div class="panel">
@@ -871,14 +876,18 @@ const SESSIONS = [
     needs: 'review the 4 output groups, submit feedback via Submit All Reviews', started: '前天 19:11' },
   { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'blocked', cwd: '~/baize',
     needs: '要不要接着把 self_history 正式落地到引擎?', started: '前天 15:47' },
+  { id: 'f3ab12cd', title: 'baize 指标口径答疑', kind: 'background', state: 'idle', cwd: '~/deep-baize',
+    detail: '回合结束 · 已回答口径差异的三个来源', started: '13:58', owner: 'web', unread: true },
   { id: '5fd8a3b0', title: '知识小卡设计', kind: 'interactive', state: 'idle', cwd: '~/wiki-cards',
     detail: '空闲 42 分钟(终端存活,只读)', started: '12:10', readonly: true },
+  { id: '77aa34ef', title: '周报文案润色', kind: 'background', state: 'idle', cwd: '~/project',
+    detail: '回合结束 · 终稿已产出(你已查看)', started: '11:32', owner: 'web' },
   { id: 'e2a79c14', title: 'ip-risk 批量扫描', kind: 'background', state: 'done', cwd: '~/go-antifraud',
     detail: '退出码 0 · 扫描 156 个 IP,3 个高风险', started: '08:30', ended: '08:47' },
   { id: '9d016e5f', title: 'CHANGELOG 整理', kind: 'background', state: 'done', cwd: '~/xuanji',
     detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
   { id: '1a7e5c92', title: 'PGame 换卡自助 skill', kind: 'background', state: 'done', cwd: '~/yuiko-skills',
-    detail: 'cross-rarity swaps enabled by default', started: '昨天 16:56', ended: '昨天 17:20', owner: 'web' },
+    detail: 'cross-rarity swaps enabled by default', started: '昨天 16:56', ended: '昨天 17:20', owner: 'web', unread: true },
   { id: '3c9b04d8', title: '添加归因 series 到 envelope', kind: 'background', state: 'done', cwd: '~/antifraud-skills',
     detail: 'game_name NULL 已修复', started: '昨天 13:09', ended: '昨天 13:41' },
   { id: '6e88f217', title: '白泽 web 开发', kind: 'background', state: 'done', cwd: '~/baize-web',
@@ -1120,14 +1129,19 @@ function showView(id) {
    仪表盘
    ============================================================ */
 function renderDashboard() {
-  const blocked = SESSIONS.filter(s => s.state === 'blocked');
-  $('#dash-needs').innerHTML = blocked.map(s => `
+  /* 催办队列 = 等审批/输入的 + 有未读产出待验收的 */
+  const attention = SESSIONS.filter(s => s.state === 'blocked' || s.unread);
+  const needsN = document.getElementById('dash-needs-n');
+  if (needsN) needsN.textContent = attention.length;
+  $('#dash-needs').innerHTML = attention.map(s => `
     <div class="need-item">
       <div class="what">
-        <div class="t">${esc(s.title)} <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
-        <div class="n">${esc(s.needs)}</div>
+        <div class="t">${esc(s.title)}
+          ${s.state !== 'blocked' ? '<span class="tag t-unread">待验收</span>' : ''}
+          <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
+        <div class="n">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
       </div>
-      <button class="btn btn-sm btn-primary" onclick="resumeSession('${s.id}')">去回复</button>
+      <button class="btn btn-sm btn-primary" onclick="resumeSession('${s.id}')">${s.state === 'blocked' ? '去回复' : '去验收'}</button>
     </div>`).join('');
 
   const running = SESSIONS.filter(s => s.state === 'running');
@@ -1304,7 +1318,9 @@ function fullCard(s) {
   return `
     <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
       <div class="top">
+        ${s.unread ? '<span class="u-dot"></span>' : ''}
         <span class="title">${esc(s.title)}</span>
+        ${s.unread ? '<span class="tag t-unread">待验收</span>' : ''}
         ${KIND_TAG[s.kind]}
         ${s.readonly ? '<span class="tag">只读</span>' : ''}
         ${s.readonly ? '' : `<button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>`}
@@ -1327,7 +1343,9 @@ function compactCard(s) {
   return `
     <div class="scard compact" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
       <div class="top">
+        ${s.unread ? '<span class="u-dot"></span>' : ''}
         <span class="title">${esc(s.title)}</span>
+        ${s.unread ? '<span class="tag t-unread">待验收</span>' : ''}
         <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
       </div>
       <div class="cwd">
@@ -1346,7 +1364,8 @@ function toggleMore(btn) {
 
 function renderBoard() {
   $('#board').innerHTML = COLS.map(c => {
-    const items = SESSIONS.filter(s => s.state === c.key);
+    // 待验收(未读)排列顶:注意力优先
+    const items = SESSIONS.filter(s => s.state === c.key).sort((a, b) => (b.unread ? 1 : 0) - (a.unread ? 1 : 0));
     let body;
     if (c.key === 'done') {
       const recent = items.slice(0, DONE_RECENT);
