@@ -391,7 +391,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
 /* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
-.chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); width: 100%; max-width: 928px; margin-inline: auto; }
+.chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); width: 100%; max-width: 1048px; margin-inline: auto; }
 .cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
@@ -450,7 +450,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
 .chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 24px; }
 /* 对话列居中限宽:宽屏下"左文右空"→ 对称留白的聚焦阅读栏 */
-.chat > * { max-width: 880px; margin-left: auto; margin-right: auto; }
+.chat > * { max-width: 1000px; margin-left: auto; margin-right: auto; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .chat-msg.user .who { color: var(--jade); }
@@ -460,6 +460,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .chat-msg.user .body {
   background: var(--tint-jade); border-radius: var(--r-m);
   padding: 10px 14px; display: inline-block;
+  /* 限窄贴右:与左侧 Claude 文区(≤68ch)基本不共享横向地带,重叠感消除 */
+  max-width: min(52ch, 64%);
 }
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s infinite; }
@@ -477,7 +479,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .approval.resolved { border-color: var(--line-soft); background: var(--surface); }
 .approval.resolved .a-head { color: var(--muted); }
 
-.composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); width: 100%; max-width: 928px; margin-inline: auto; }
+.composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); width: 100%; max-width: 1048px; margin-inline: auto; }
 .composer:focus-within { border-color: var(--jade); }
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
