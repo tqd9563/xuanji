@@ -14,6 +14,7 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { listAgents } from '../adapters/agents-cli.js';
+import type { AgentSession } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { Storage } from '../storage/db.js';
 
@@ -68,6 +69,7 @@ export type DispatchEvent =
   | { ev: 'result'; costUsd: number; contextTokens: number; contextPct: number; durationMs: number }
   | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number }
   | { ev: 'user-echo'; text: string }
+  | { ev: 'forked'; from: string; to: string }
   | { ev: 'error'; message: string };
 
 const CONTEXT_WINDOW = 200_000;
@@ -91,11 +93,20 @@ export class DispatchSession {
   private storage: Storage;
   readonly cwd: string;
   private name: string;
+  private resumeFrom: string | null;
+  private fork: boolean;
+  /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
+  private stderrTail: string[] = [];
 
-  constructor(storage: Storage, opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; name?: string }) {
+  constructor(
+    storage: Storage,
+    opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
+  ) {
     this.storage = storage;
     this.cwd = opts.cwd;
     this.name = opts.name ?? '新会话';
+    this.resumeFrom = opts.resume ?? null;
+    this.fork = opts.fork ?? false;
     this.q = query({
       prompt: this.input,
       options: {
@@ -103,9 +114,19 @@ export class DispatchSession {
         model: opts.model,
         permissionMode: (opts.permissionMode as never) ?? 'default',
         resume: opts.resume,
+        // bg 后台代理会话归 daemon 所有,CLI 拒绝直接 --resume,只能分叉副本续接
+        forkSession: opts.fork || undefined,
         includePartialMessages: true,
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
+        stderr: (data: string) => {
+          for (const line of data.split('\n')) {
+            const t = line.trim();
+            if (!t) continue;
+            this.stderrTail.push(t);
+            if (this.stderrTail.length > 40) this.stderrTail.shift();
+          }
+        },
         canUseTool: (toolName, input, { suggestions, title }) => this.onPermission(toolName, input, suggestions, title),
       },
     });
@@ -134,6 +155,9 @@ export class DispatchSession {
               this.sessionId = msg.session_id;
               this.storage.recordDispatch(msg.session_id, this.cwd);
               this.emit({ ev: 'init', sessionId: msg.session_id, model: (msg as { model?: string }).model ?? '' });
+              if (this.fork && this.resumeFrom && msg.session_id !== this.resumeFrom) {
+                this.emit({ ev: 'forked', from: this.resumeFrom, to: msg.session_id });
+              }
               this.emit({ ev: 'status', state: 'working' });
             }
             break;
@@ -210,7 +234,13 @@ export class DispatchSession {
       }
       this.emit({ ev: 'status', state: 'ended' });
     } catch (e) {
-      this.emit({ ev: 'error', message: e instanceof Error ? e.message : String(e) });
+      let message = e instanceof Error ? e.message : String(e);
+      // 子进程异常退出时 SDK 只给 exit code,把 stderr 尾部一并透出才可诊断
+      const tail = this.stderrTail.slice(-6);
+      if (tail.length && /exited with code/.test(message)) {
+        message += `\n${tail.join('\n')}`;
+      }
+      this.emit({ ev: 'error', message });
       this.emit({ ev: 'status', state: 'ended' });
     }
   }
@@ -282,7 +312,7 @@ const sessions = new Map<string, DispatchSession>();
 
 export function createDispatch(
   storage: Storage,
-  opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; name?: string },
+  opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
 ): DispatchSession {
   const s = new DispatchSession(storage, opts);
   sessions.set(s.id, s);
@@ -293,14 +323,26 @@ export function getDispatch(id: string): DispatchSession | undefined {
   return sessions.get(id);
 }
 
-/** 所有权规则:终端存活的 interactive 会话拒绝接管;其余(web 派发/已退出/blocked 后台)放行 */
-export async function canResume(sessionId: string): Promise<{ ok: boolean; reason?: string }> {
-  const agents = await listAgents();
-  const live = agents.sessions.find((s) => s.sessionId === sessionId);
+/**
+ * 所有权规则:
+ * - 终端存活的 interactive 会话只读,拒绝接管
+ * - bg 后台代理会话归 daemon 所有,CLI 拒绝直接 --resume → 以 fork 副本续接(原会话不受影响)
+ * - 其余(web 派发/已退出终端)直接 resume
+ */
+export function resumePolicy(
+  agents: AgentSession[],
+  sessionId: string,
+): { ok: true; fork: boolean } | { ok: false; reason: string } {
+  const live = agents.find((s) => s.sessionId === sessionId);
   if (live?.readonly) {
     return { ok: false, reason: '终端存活的交互会话只读,不可接管(会话所有权规则)' };
   }
-  return { ok: true };
+  return { ok: true, fork: live?.kind === 'background' };
+}
+
+export async function canResume(sessionId: string): Promise<{ ok: boolean; reason?: string; fork?: boolean }> {
+  const agents = await listAgents();
+  return resumePolicy(agents.sessions, sessionId);
 }
 
 // ---------- 工具 ----------

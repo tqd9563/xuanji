@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { heatBuckets } from '../src/services/projects.js';
+import { resumePolicy } from '../src/services/dispatch.js';
+import type { AgentSession } from '../src/types.js';
 import { aggregateByModel, costUsd, priceOf, shortModel } from '../src/services/usage.js';
 import { Storage } from '../src/storage/db.js';
 import type { Memory } from '../src/types.js';
@@ -22,6 +24,30 @@ describe('heatBuckets', () => {
     const arr = buckets.get('/p/a')!;
     expect(arr[6]).toBe(1);
     expect(arr.reduce((a, b) => a + b, 0)).toBe(2);
+  });
+});
+
+describe('resumePolicy 所有权规则', () => {
+  const agent = (p: Partial<AgentSession>) => ({ sessionId: 's1', kind: 'background', readonly: false, ...p }) as AgentSession;
+
+  it('终端存活的 interactive 会话拒绝接管', () => {
+    const r = resumePolicy([agent({ kind: 'interactive', readonly: true })], 's1');
+    expect(r.ok).toBe(false);
+  });
+
+  it('bg 后台代理会话 → fork 副本续接(daemon 持有,CLI 拒绝直接 --resume)', () => {
+    const r = resumePolicy([agent({ kind: 'background' })], 's1');
+    expect(r).toEqual({ ok: true, fork: true });
+  });
+
+  it('已退出终端的 interactive 会话直接 resume', () => {
+    const r = resumePolicy([agent({ kind: 'interactive', readonly: false })], 's1');
+    expect(r).toEqual({ ok: true, fork: false });
+  });
+
+  it('agents 列表之外的会话(web 派发/历史会话)直接 resume', () => {
+    const r = resumePolicy([agent({})], 'other');
+    expect(r).toEqual({ ok: true, fork: false });
   });
 });
 

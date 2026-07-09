@@ -32,7 +32,7 @@
 ### /ws/dispatch — 派发双向流(每个派发页一条连接)
 
 client → server:
-- `{op:'start', cwd, permissionMode, model?, resume?, name?, prompt}` 开始/续接会话(resume 先过所有权检查)
+- `{op:'start', cwd, permissionMode, model?, resume?, name?, prompt}` 开始/续接会话(resume 先过所有权检查;目标为 bg 后台代理会话时自动 `forkSession` 分叉副本续接——daemon 持有原会话,CLI 拒绝直接 --resume)
 - `{op:'send', text}` 后续轮次输入(SDK streaming-input)
 - `{op:'permission', requestId, decision:'allow'|'always'|'deny'}` 审批决定(allow 回传原始 input;always 附 SDK suggestions)
 - `{op:'interrupt'}` 打断当前回合
@@ -40,7 +40,7 @@ client → server:
 - `{op:'attach', dispatchId}` 重连并回放事件
 
 server → client(DispatchEvent):
-`init`(sessionId/model) · `status`(working/awaiting-permission/idle/ended) · `delta`(打字机增量) · `assistant`(定稿文本) · `tool` / `tool-result` · `permission-request` / `permission-resolved` · `result`(costUsd/contextPct) · `rate-limit`(five_hour/seven_day 利用率,来自 SDK rate_limit_event) · `user-echo` · `bg-dispatched` · `error`
+`init`(sessionId/model) · `status`(working/awaiting-permission/idle/ended) · `delta`(打字机增量) · `assistant`(定稿文本) · `tool` / `tool-result` · `permission-request` / `permission-resolved` · `result`(costUsd/contextPct) · `rate-limit`(five_hour/seven_day 利用率,来自 SDK rate_limit_event) · `user-echo` · `forked`(bg 会话分叉续接:from/to) · `bg-dispatched` · `error`(子进程异常退出时附 stderr 尾部)
 
 派发会话完成/等待审批时,后端经 osascript 直发 macOS 横幅(仅璇玑派发的会话)。
 

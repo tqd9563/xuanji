@@ -98,15 +98,18 @@ export function attachWs(server: Server, storage: Storage) {
               if (typeof msg.cwd !== 'string' || typeof msg.prompt !== 'string' || !msg.prompt.trim()) {
                 return send({ ev: 'error', message: 'start 需要 cwd 与 prompt' });
               }
+              let fork = false;
               if (msg.resume) {
                 const check = await canResume(String(msg.resume));
                 if (!check.ok) return send({ ev: 'error', message: check.reason! });
+                fork = check.fork ?? false;
               }
               const s = createDispatch(storage, {
                 cwd: msg.cwd,
                 permissionMode: msg.permissionMode,
                 model: msg.model || undefined,
                 resume: msg.resume || undefined,
+                fork,
                 name: msg.name || undefined,
               });
               attach(s, false);

@@ -128,6 +128,15 @@ export function useDispatch() {
         if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct }));
         break;
       }
+      case 'forked':
+        setItems((prev) => [
+          ...prev,
+          {
+            t: 'note',
+            text: `⑂ 原会话归后台代理(--bg)所有,已分叉副本续接(新会话 ${String(e.to).slice(0, 8)},携带完整上下文,原会话不受影响)。`,
+          },
+        ]);
+        break;
       case 'bg-dispatched':
         setItems((prev) => [
           ...prev,
