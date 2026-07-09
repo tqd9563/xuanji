@@ -6,6 +6,7 @@
 ## [Unreleased]
 
 ### 新增
+- **看板快速关闭会话(× / Ctrl+X)**:卡片悬停或键盘选中时右上角出现 × 按钮(悬停转红),或方向键选卡后 `Ctrl+X`,二次确认后关闭——实现为璇玑自有 SQLite 隐藏列表,**不写 `~/.claude`、完全可逆**(铁律 2);进程内存活的 web 派发会话额外真正终止其子进程(记录仍可回放/续接)。护栏:终端存活的交互会话拒绝(403),运行中的后台任务拒绝(409,提示等完成或去终端处理);仪表盘同步过滤隐藏会话。实测:×/Ctrl+X 关闭、运行中拒绝、删隐藏行即恢复三路径全过。
 - **派发页刷新自动接回 + 看板一键 attach**:派发会话的 dispatchId 存 sessionStorage,刷新/升级前端后自动 attach 回后端存活的会话,事件流全量回放重建(消息、工具卡、成本、状态一个不少);后端已重启导致会话不存在时静默回到全新状态。会话看板与仪表盘「去回复」对进程内存活的派发会话直接 attach 接回原事件流(不再新开 SDK 会话),换会话时自动清空当前派发页避免输入串线。
 - **派发权限模式新增 bypassPermissions(免审批)档**:权限下拉从三档扩为四档(default 逐项审批 / acceptEdits 自动放行编辑 / bypassPermissions 全部免审批 / plan 只规划),信任的任务选免审批后全程不再弹审批卡;悬停提示补充四档语义,并注明模式只对下一个新会话生效。实弹验证:bypass 会话 Bash 落盘文件全程 0 次审批请求。原型同步。
 - **launchd 常驻**:`pnpm launchd:install` 生成按本机环境定制的 LaunchAgent(node/claude CLI 绝对路径入 PATH,launchd 不继承 shell 环境)并加载——开机自启、异常退出 5s 拉起(SuccessfulExit=false)、日志落 `~/Library/Logs/xuanji/`;`launchd:uninstall` 一键卸载。已验证 kill -9 后自动复活且 CLI 可达。璇玑从「手动起的开发服务」变成「装好了的软件」。

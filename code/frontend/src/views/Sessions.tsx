@@ -33,6 +33,21 @@ export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
 }
 
+/** 关闭会话:自有隐藏列表(~/.claude 不动);存活的 web 派发会话额外终止其进程 */
+async function closeSession(s: AgentSession, refresh: () => void) {
+  const msg = s.dispatchId
+    ? `结束派发会话「${s.name}」?\n其进程将被终止并从看板移除,已生成的记录仍可回放/续接。`
+    : `从看板移除会话「${s.name}」?\n仅在璇玑隐藏,~/.claude 数据与终端不受影响。`;
+  if (!window.confirm(msg)) return;
+  try {
+    await api.closeSession(s.sessionId);
+    toast(`已关闭 ${s.name}`);
+    refresh();
+  } catch (e) {
+    toast(e instanceof Error ? e.message : String(e));
+  }
+}
+
 export function Sessions({
   active,
   registerHandle,
@@ -40,7 +55,7 @@ export function Sessions({
   active: boolean;
   registerHandle?: (h: SessionsHandle) => void;
 }) {
-  const { data } = usePoll(api.sessions, 5_000);
+  const { data, refresh } = usePoll(api.sessions, 5_000);
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -84,6 +99,16 @@ export function Sessions({
     const cardsIn = (c: number) => kbRef.current.columns?.[COLS[c]!.key] ?? [];
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || kbRef.current.drawerOpen) return;
+      // Ctrl+X 关闭当前选中会话
+      if (e.ctrlKey && (e.key === 'x' || e.key === 'X')) {
+        const pos = kbRef.current.kbPos;
+        const s = pos ? cardsIn(pos.c)[pos.r] : undefined;
+        if (s && !s.readonly) {
+          e.preventDefault();
+          void closeSession(s, refresh);
+        }
+        return;
+      }
       if (![' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
       e.preventDefault();
       let pos = kbRef.current.kbPos;
@@ -116,7 +141,7 @@ export function Sessions({
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [active, openReplay]);
+  }, [active, openReplay, refresh]);
 
   return (
     <>
@@ -130,8 +155,8 @@ export function Sessions({
           <>
             经 <span className="mono">claude agents --json --all</span> 刷新于{' '}
             {Math.max(0, Math.round((Date.now() - data.refreshedAt) / 1000))} 秒前 · 终端存活的交互会话仅只读展示 ·{' '}
-            <span className="mono">← ↑ ↓ →</span> 选卡,<span className="mono">Space</span> 回放,
-            <span className="mono">Esc</span> 关闭
+            <span className="mono">← ↑ ↓ →</span> 选卡,<span className="mono">Space</span> 进入,
+            <span className="mono">Ctrl+X</span> 关闭会话,<span className="mono">Esc</span> 关抽屉
           </>
         ) : (
           '加载中…'
@@ -159,6 +184,19 @@ export function Sessions({
                     <span className="title">{s.name}</span>
                     <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                     {s.readonly && <Tag>只读</Tag>}
+                    {!s.readonly && (
+                      <button
+                        className="x-close"
+                        title="关闭会话(Ctrl+X)"
+                        aria-label={`关闭会话 ${s.name}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void closeSession(s, refresh);
+                        }}
+                      >
+                        ×
+                      </button>
+                    )}
                   </div>
                   <div className="cwd">
                     <ProjChip name={s.project} path={s.cwd} />

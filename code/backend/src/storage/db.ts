@@ -30,6 +30,12 @@ export const sessionNamesTable = sqliteTable('session_names', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+/** 看板「关闭」的隐藏列表(自有数据,可逆):~/.claude 不动,只是不再展示 */
+export const hiddenSessionsTable = sqliteTable('hidden_sessions', {
+  sessionId: text('session_id').primaryKey(),
+  hiddenAt: integer('hidden_at').notNull(),
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -50,6 +56,9 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS session_names (
         session_id TEXT PRIMARY KEY, name TEXT NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS hidden_sessions (
+        session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
@@ -90,6 +99,19 @@ export class Storage {
 
   webDispatchedIds(): Set<string> {
     const rows = this.orm.select().from(dispatchesTable).all();
+    return new Set(rows.map((r) => r.sessionId));
+  }
+
+  hideSession(sessionId: string) {
+    this.orm
+      .insert(hiddenSessionsTable)
+      .values({ sessionId, hiddenAt: Date.now() })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  hiddenSessionIds(): Set<string> {
+    const rows = this.orm.select().from(hiddenSessionsTable).all();
     return new Set(rows.map((r) => r.sessionId));
   }
 

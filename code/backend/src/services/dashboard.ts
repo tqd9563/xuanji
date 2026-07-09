@@ -5,6 +5,7 @@ import { sessionsBoard } from './sessions.js';
 import { heatBuckets } from './projects.js';
 import { todayUsage } from './usage.js';
 import type { AgentSession, HistoryEntry } from '../types.js';
+import type { Storage } from '../storage/db.js';
 
 export interface Dashboard {
   needsAttention: AgentSession[];
@@ -26,11 +27,11 @@ export interface Dashboard {
 
 const DAY = 86_400_000;
 
-export async function dashboard(): Promise<Dashboard> {
+export async function dashboard(storage?: Storage): Promise<Dashboard> {
   const since = Date.now() - 8 * DAY;
   const [history, board, usage, crontab, cli] = await Promise.all([
     readHistory(config.claudeDir, { sinceMs: since }),
-    sessionsBoard(),
+    sessionsBoard(storage),
     todayUsage(),
     readCrontab(),
     cliVersion(),

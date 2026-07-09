@@ -16,6 +16,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   const [agents, jobStates] = await Promise.all([listAgents(), readJobStates(config.claudeDir)]);
   const names = storage?.sessionNames();
   const webIds = storage?.webDispatchedIds();
+  const hidden = storage?.hiddenSessionIds();
   const columns: Record<SessionState, AgentSession[]> = {
     idle: [],
     running: [],
@@ -26,6 +27,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   // 用注册表的实时状态/会话名/attach 入口覆盖,CLI 尚未收录的补充合成卡
   const live = new Map(liveDispatches().map((d) => [d.sessionId, d]));
   for (const s of agents.sessions) {
+    if (hidden?.has(s.sessionId)) continue; // 用户已「关闭」:仅从看板隐藏,~/.claude 数据不动
     const job = jobStates.get(s.id);
     if (job) {
       s.detail = job.detail;
@@ -49,6 +51,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
     columns[s.state].push(s);
   }
   for (const d of live.values()) {
+    if (hidden?.has(d.sessionId)) continue;
     columns[dispatchBoardState(d.state)].push({
       id: d.sessionId.slice(0, 8),
       sessionId: d.sessionId,

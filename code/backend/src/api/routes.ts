@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import fs from 'node:fs';
 import { config } from '../config.js';
-import { cliVersion, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
+import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
-import { canResume } from '../services/dispatch.js';
+import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { listProjects } from '../services/projects.js';
 import { sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
@@ -28,7 +28,7 @@ export function createApi(storage: Storage) {
     });
   });
 
-  api.get('/dashboard', async (c) => c.json(await dashboard()));
+  api.get('/dashboard', async (c) => c.json(await dashboard(storage)));
 
   api.get('/projects', async (c) => {
     const history = await readHistory(config.claudeDir, { sinceMs: Date.now() - 90 * DAY });
@@ -102,6 +102,30 @@ export function createApi(storage: Storage) {
     } catch (e) {
       return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
     }
+  });
+
+  /**
+   * 看板「关闭」会话:自有隐藏列表(不写 ~/.claude,可逆);
+   * 进程内存活的派发会话额外真正结束其子进程;终端存活/运行中的 bg 任务拒绝。
+   */
+  api.post('/sessions/:sessionId/close', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const body = await c.req.json().catch(() => ({}));
+    if (body.confirm !== true) return c.json({ error: '需要 confirm: true(二次确认)' }, 400);
+    // 自家存活的派发会话:结束子进程 + 隐藏
+    if (await endDispatchBySessionId(sessionId)) {
+      storage.hideSession(sessionId);
+      return c.json({ ok: true, ended: true });
+    }
+    const agents = await listAgents();
+    const live = agents.sessions.find((s) => s.sessionId === sessionId);
+    if (live?.readonly) return c.json({ error: '终端存活的交互会话只读,请在终端里退出' }, 403);
+    if (live?.kind === 'background' && live.state === 'running') {
+      return c.json({ error: '运行中的后台任务不能从璇玑关闭,等它完成或在终端 claude agents 处理' }, 409);
+    }
+    storage.hideSession(sessionId);
+    return c.json({ ok: true, ended: false });
   });
 
   /** resume 前的所有权预检(前端在跳转派发页前调用) */
