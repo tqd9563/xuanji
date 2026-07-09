@@ -66,6 +66,8 @@ export type DispatchEvent =
       hasSuggestions: boolean;
     }
   | { ev: 'permission-resolved'; requestId: string; decision: string }
+  | { ev: 'question'; requestId: string; questions: QuestionSpec[] }
+  | { ev: 'question-answered'; requestId: string; answers: Record<string, string> }
   | { ev: 'result'; costUsd: number; contextTokens: number; contextPct: number; durationMs: number }
   | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number }
   | { ev: 'context'; pct: number }
@@ -75,6 +77,14 @@ export type DispatchEvent =
   | { ev: 'error'; message: string };
 
 const CONTEXT_WINDOW = 200_000;
+
+/** AskUserQuestion 的问题结构(agent 提问 ≠ 权限审批,渲染为提问卡) */
+export interface QuestionSpec {
+  question: string;
+  header?: string;
+  multiSelect?: boolean;
+  options: { label: string; description?: string }[];
+}
 
 interface Pending {
   resolve: (r: PermissionResult) => void;
@@ -312,6 +322,26 @@ export class DispatchSession {
     title: string | undefined,
   ): Promise<PermissionResult> {
     const requestId = randomUUID();
+    // AskUserQuestion 也走 canUseTool,但它是提问不是权限——bypassPermissions 也不会(不应)吞掉它
+    if (toolName === 'AskUserQuestion' && Array.isArray((input as { questions?: unknown }).questions)) {
+      const questions = (input.questions as Array<Record<string, unknown>>).map((q) => ({
+        question: String(q.question ?? ''),
+        header: typeof q.header === 'string' ? q.header : undefined,
+        multiSelect: q.multiSelect === true,
+        options: Array.isArray(q.options)
+          ? (q.options as Array<Record<string, unknown>>).map((o) => ({
+              label: String(o.label ?? ''),
+              description: typeof o.description === 'string' ? o.description : undefined,
+            }))
+          : [],
+      }));
+      this.emit({ ev: 'status', state: 'awaiting-permission', detail: '回答 Claude 的提问' });
+      this.emit({ ev: 'question', requestId, questions });
+      notifyMac(this.name, `Claude 有问题问你:${questions[0]?.question.slice(0, 40) ?? ''}`);
+      return new Promise<PermissionResult>((resolve) => {
+        this.pending.set(requestId, { resolve, toolName, input });
+      });
+    }
     this.emit({ ev: 'status', state: 'awaiting-permission', detail: toolName });
     this.emit({
       ev: 'permission-request',
@@ -325,6 +355,16 @@ export class DispatchSession {
     return new Promise<PermissionResult>((resolve) => {
       this.pending.set(requestId, { resolve, toolName, input, suggestions });
     });
+  }
+
+  /** 回答 agent 的提问:答案填进 updatedInput.answers(问题 → 答案文本) */
+  resolveQuestion(requestId: string, answers: Record<string, string>) {
+    const p = this.pending.get(requestId);
+    if (!p) return;
+    this.pending.delete(requestId);
+    this.emit({ ev: 'question-answered', requestId, answers });
+    this.emit({ ev: 'status', state: 'working' });
+    p.resolve({ behavior: 'allow', updatedInput: { ...p.input, answers } });
   }
 
   resolvePermission(requestId: string, decision: 'allow' | 'always' | 'deny') {

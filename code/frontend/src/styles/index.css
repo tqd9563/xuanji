@@ -334,6 +334,26 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .col-more:hover { color: var(--ink); border-color: var(--muted); }
 
+/* agent 提问卡(AskUserQuestion):提问 ≠ 权限,选项按钮纵排,已答折叠为答案回显 */
+.qcard .q-block { margin: 10px 0; }
+.qcard .q-text { font-size: 0.8125rem; margin-bottom: 8px; }
+.qcard .q-opts { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.qcard .q-opt {
+  text-align: left; padding: 8px 12px; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  color: var(--ink); transition: border-color 150ms var(--ease), background 150ms var(--ease);
+}
+.qcard .q-opt:hover { border-color: var(--muted); }
+.qcard .q-opt.sel { border-color: var(--jade); background: color-mix(in oklab, var(--jade) 10%, var(--surface-2)); }
+.qcard .q-opt b { display: block; font-size: 0.8125rem; font-weight: 600; }
+.qcard .q-opt span { display: block; font-size: 0.75rem; color: var(--muted); margin-top: 2px; }
+.qcard .q-answered { font-size: 0.8125rem; color: var(--muted); }
+.qcard .q-custom {
+  width: 100%; padding: 7px 12px; font-size: 0.8125rem; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-m);
+}
+.qcard .q-custom:focus { outline: none; border-color: var(--jade); }
+
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族最重的一级 */
 .tag.t-unread { color: oklch(0.24 0.05 85); background: var(--amber); border-color: transparent; font-weight: 650; flex: none; }
 .scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }

@@ -36,6 +36,7 @@ client → server:
 - `{op:'start', cwd, permissionMode, model?, resume?, name?, prompt}` 开始/续接会话(resume 先过所有权检查;目标为 bg 后台代理会话时自动 `forkSession` 分叉副本续接——daemon 持有原会话,CLI 拒绝直接 --resume)
 - `{op:'send', text}` 后续轮次输入(SDK streaming-input)
 - `{op:'permission', requestId, decision:'allow'|'always'|'deny'}` 审批决定(allow 回传原始 input;always 附 SDK suggestions)
+- `{op:'answer', requestId, answers:{问题:答案}}` 回答 agent 的 AskUserQuestion 提问(answers 填进 updatedInput.answers;提问 ≠ 权限,bypassPermissions 下同样出现)
 - `{op:'interrupt'}` 打断当前回合
 - `{op:'bg', cwd, prompt}` 转后台(claude --bg,daemon 托管)
 - `{op:'attach', dispatchId}` 重连并回放事件

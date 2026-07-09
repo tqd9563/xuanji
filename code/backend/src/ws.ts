@@ -129,6 +129,11 @@ export function attachWs(server: Server, storage: Storage) {
             case 'permission':
               session?.resolvePermission(String(msg.requestId), msg.decision);
               break;
+            case 'answer':
+              if (msg.answers && typeof msg.answers === 'object') {
+                session?.resolveQuestion(String(msg.requestId), msg.answers as Record<string, string>);
+              }
+              break;
             case 'interrupt':
               await session?.interrupt();
               break;

@@ -44,8 +44,9 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       s.source = 'web';
       s.dispatchId = d.dispatchId;
       s.lastOutputAt = d.lastOutputAt;
-      if (d.state === 'awaiting-permission') s.needs = `等待权限审批:${d.detail ?? ''}`;
-      else s.needs = undefined;
+      if (d.state === 'awaiting-permission') {
+        s.needs = d.detail === '回答 Claude 的提问' ? d.detail : `等待权限审批:${d.detail ?? ''}`;
+      } else s.needs = undefined;
     }
     const override = names?.get(s.sessionId);
     if (override) s.name = override;
@@ -66,7 +67,12 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       state: dispatchBoardState(d.state),
       startedAt: d.startedAt,
       readonly: false,
-      needs: d.state === 'awaiting-permission' ? `等待权限审批:${d.detail ?? ''}` : undefined,
+      needs:
+        d.state === 'awaiting-permission'
+          ? d.detail === '回答 Claude 的提问'
+            ? d.detail
+            : `等待权限审批:${d.detail ?? ''}`
+          : undefined,
       source: 'web',
       dispatchId: d.dispatchId,
       lastOutputAt: d.lastOutputAt,
