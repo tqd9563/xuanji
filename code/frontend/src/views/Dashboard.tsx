@@ -236,7 +236,16 @@ function CostPanel({ usage }: { usage: import('@/api/types').UsageReport }) {
             <div className="tok-subs">
               {p.sessions.map((s) => (
                 <div className="tok-row sub" key={s.sessionId} title={`session ${s.sessionId}`}>
-                  <span className="lbl">{s.title}</span>
+                  <span className="lbl">
+                    <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {s.title}
+                    </span>
+                    {s.title !== s.sessionId.slice(0, 8) && (
+                      <span className="mono" style={{ color: 'var(--faint)', flex: 'none' }}>
+                        ({s.sessionId.slice(0, 8)})
+                      </span>
+                    )}
+                  </span>
                   <CostBar usage={s} max={max} />
                   <span className="val">{fmtCost(s.totalCostUsd)}</span>
                 </div>

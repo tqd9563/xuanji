@@ -298,6 +298,52 @@ export async function extractUsage(jsonlPath: string): Promise<RawUsageRecord[]>
   return [...byMsgId.values()];
 }
 
+/**
+ * 会话默认名:注册表都查不到名字时,从转录提取一个可读标题。
+ * 优先 custom-title/ai-title/agent-name 事件,其次首条 user 文本;扫描上限 120 行(标题都在开头附近)。
+ */
+export async function extractSessionTitle(jsonlPath: string): Promise<string | undefined> {
+  const rl = readline.createInterface({
+    input: fs.createReadStream(jsonlPath, { encoding: 'utf8' }),
+    crlfDelay: Infinity,
+  });
+  let firstUser: string | undefined;
+  let scanned = 0;
+  try {
+    for await (const line of rl) {
+      if (++scanned > 120) break;
+      if (!line.trim()) continue;
+      let j: Record<string, unknown>;
+      try {
+        j = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const type = j.type;
+      if (type === 'custom-title' || type === 'ai-title' || type === 'agent-name') {
+        const t = typeof j.title === 'string' ? j.title : typeof j.name === 'string' ? j.name : undefined;
+        if (t?.trim()) return t.trim().slice(0, 60);
+      }
+      if (!firstUser && type === 'user') {
+        const content = (j.message as { content?: unknown } | undefined)?.content;
+        const text = typeof content === 'string'
+          ? content
+          : Array.isArray(content)
+            ? (content.find((b) => (b as { type?: string }).type === 'text') as { text?: string } | undefined)?.text
+            : undefined;
+        const t = text?.trim();
+        // 跳过系统注入的伪首条:compaction 续接摘要、caveat 前缀、命令输出、工具结果 XML
+        if (t && !t.startsWith('<') && !/^(This session is being continued|Caveat:|\[Request interrupted)/.test(t)) {
+          firstUser = t.replace(/\s+/g, ' ').slice(0, 40);
+        }
+      }
+    }
+  } finally {
+    rl.close();
+  }
+  return firstUser;
+}
+
 // ---------- 技能 ----------
 
 export async function scanSkills(claudeDir: string): Promise<Skill[]> {
