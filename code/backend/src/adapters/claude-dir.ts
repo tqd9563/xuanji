@@ -269,7 +269,11 @@ export interface RawUsageRecord {
  * 流式抽取一个 session jsonl 的 assistant usage 记录。
  * 同一条 API 回复的 usage 会随流事件重复出现,按 message.id 去重取最后一次。
  */
-export async function extractUsage(jsonlPath: string): Promise<RawUsageRecord[]> {
+/**
+ * 抽取会话用量记录。sinceMs 传入时只计入记录自身 timestamp ≥ sinceMs 的记录
+ *（今日成本必须按记录时间过滤,不能只按文件 mtime——否则今天动过的老会话会把整段历史算进今日)。
+ */
+export async function extractUsage(jsonlPath: string, sinceMs?: number): Promise<RawUsageRecord[]> {
   const byMsgId = new Map<string, RawUsageRecord>();
   let anon = 0;
   const rl = readline.createInterface({
@@ -283,6 +287,10 @@ export async function extractUsage(jsonlPath: string): Promise<RawUsageRecord[]>
       if (j.type !== 'assistant') continue;
       const u = j.message?.usage;
       if (!u || typeof u.output_tokens !== 'number') continue;
+      if (sinceMs !== undefined) {
+        const ts = typeof j.timestamp === 'string' ? Date.parse(j.timestamp) : NaN;
+        if (!Number.isFinite(ts) || ts < sinceMs) continue; // 无时间戳或早于起点:不计入
+      }
       const id = typeof j.message?.id === 'string' ? j.message.id : `anon-${anon++}`;
       byMsgId.set(id, {
         model: String(j.message?.model ?? 'unknown'),
