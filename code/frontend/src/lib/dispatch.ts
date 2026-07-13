@@ -26,6 +26,9 @@ export interface UsageChips {
   contextPct: number | null;
   fiveHourPct: number | null;
   sevenDayPct: number | null;
+  /** 限额窗口重置时间(ms epoch),悬停显示「还有多久重置」 */
+  fiveHourResetsAt: number | null;
+  sevenDayResetsAt: number | null;
 }
 
 export interface DispatchIntent {
@@ -61,7 +64,7 @@ export interface StartOpts {
 export function useDispatch() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [status, setStatus] = useState<AgentStatus>({ state: 'none' });
-  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null });
+  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
@@ -162,8 +165,9 @@ export function useDispatch() {
         break;
       case 'rate-limit': {
         const pct = Math.round(Number(e.utilization ?? 0)); // 后端统一 0-100
-        if (e.kind === 'five_hour') setChips((c) => ({ ...c, fiveHourPct: pct }));
-        if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct }));
+        const resetsAt = typeof e.resetsAt === 'number' ? e.resetsAt : null;
+        if (e.kind === 'five_hour') setChips((c) => ({ ...c, fiveHourPct: pct, fiveHourResetsAt: resetsAt }));
+        if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct, sevenDayResetsAt: resetsAt }));
         break;
       }
       case 'model-changed':
@@ -246,7 +250,7 @@ export function useDispatch() {
       setItems([]);
       setStatus({ state: 'none' });
       setCostUsd(0);
-      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null });
+      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
     },
@@ -322,7 +326,7 @@ export function useDispatch() {
     setSessionId(null);
     setModel(null);
     setCostUsd(0);
-    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null });
+    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
   }, []);
 
   const pushNote = useCallback((text: string) => {

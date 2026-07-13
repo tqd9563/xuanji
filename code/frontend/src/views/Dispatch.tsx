@@ -286,9 +286,9 @@ export function Dispatch({ active }: { active: boolean }) {
 
         <div className="chat-status">
           <span className="u-chips">
-            <Chip label="Context" pct={d.chips.contextPct} />
-            <Chip label="Usage" pct={d.chips.fiveHourPct} />
-            <Chip label="Weekly" pct={d.chips.sevenDayPct} />
+            <Chip label="Context" pct={d.chips.contextPct} hint="当前会话上下文占用(/200k)" />
+            <Chip label="Usage" pct={d.chips.fiveHourPct} resetsAt={d.chips.fiveHourResetsAt} hint="5 小时滚动窗口限额" />
+            <Chip label="Weekly" pct={d.chips.sevenDayPct} resetsAt={d.chips.sevenDayResetsAt} hint="7 天滚动窗口限额" />
           </span>
           <span className={cn('cs-state', statusText.cls)}>
             <span className="cs-dot" />
@@ -408,14 +408,37 @@ function usageColor(pct: number | null): string | undefined {
   return 'var(--jade-dim)';
 }
 
-function Chip({ label, pct }: { label: string; pct: number | null }) {
+/** 剩余重置时长:resetsAt(ms) → 「Xh Ym 后重置」/「Ym 后重置」 */
+function untilReset(resetsAt: number | null | undefined): string | null {
+  if (!resetsAt) return null;
+  const ms = resetsAt - Date.now();
+  if (ms <= 0) return '即将重置';
+  const totalMin = Math.round(ms / 60000);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  return `${h > 0 ? `${h}h ` : ''}${m}m 后重置`;
+}
+
+function Chip({
+  label,
+  pct,
+  resetsAt,
+  hint,
+}: {
+  label: string;
+  pct: number | null;
+  resetsAt?: number | null;
+  hint?: string;
+}) {
   const color = usageColor(pct);
   const alert = pct !== null && pct >= 50;
+  const reset = untilReset(resetsAt);
+  const title =
+    pct === null
+      ? '会话产生用量数据后显示'
+      : [`${label} ${pct}%`, reset, hint, '<50% 玉 / 50–75% 琥珀 / ≥75% 红'].filter(Boolean).join(' · ');
   return (
-    <span
-      className="u-chip"
-      title={pct === null ? '会话产生用量数据后显示' : `${label} ${pct}% · <50% 玉 / 50–75% 琥珀 / ≥75% 红`}
-    >
+    <span className="u-chip" title={title}>
       {label}{' '}
       <span className="u-bar">
         <i style={{ width: `${pct ?? 0}%`, background: color }} />
