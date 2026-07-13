@@ -89,6 +89,7 @@ input, select, textarea { font: inherit; color: var(--ink); }
 .brand { display: flex; align-items: baseline; gap: 8px; padding: 20px 20px 18px; }
 .brand .zh { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.06em; color: var(--jade); }
 .brand .en { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.brand .version { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
 .nav button {

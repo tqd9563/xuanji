@@ -89,6 +89,7 @@ input, select, textarea { font: inherit; color: var(--ink); }
 .brand { display: flex; align-items: baseline; gap: 8px; padding: 20px 20px 18px; }
 .brand .zh { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.06em; color: var(--jade); }
 .brand .en { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.brand .version { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
 .nav button {
@@ -614,7 +615,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
   <!-- ================= 侧栏 ================= -->
   <aside class="sidebar">
-    <div class="brand"><span class="zh">璇玑</span><span class="en">xuanji</span></div>
+    <div class="brand"><span class="zh">璇玑</span><span class="en">xuanji</span><span class="version">v1.0.0</span></div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
       <div class="row"><span class="ok"></span>claude CLI 2.1.202 · daemon 正常</div>

@@ -88,6 +88,7 @@ export default function App() {
         <div className="brand">
           <span className="zh">璇玑</span>
           <span className="en">xuanji</span>
+          <span className="version">v1.0.0</span>
         </div>
         <nav className="nav">
           {NAVS.map((n, i) => (
