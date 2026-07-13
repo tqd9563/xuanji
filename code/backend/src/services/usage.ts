@@ -99,8 +99,8 @@ export async function todayUsage(titleOf?: (sessionId: string) => string | undef
       if (!f.endsWith('.jsonl')) continue;
       const full = path.join(dir, f);
       const st = await fsp.stat(full).catch(() => null);
-      if (!st || st.mtimeMs < since) continue;
-      const records = await extractUsage(full);
+      if (!st || st.mtimeMs < since) continue; // 文件今天没动过 → 整体跳过(快速筛)
+      const records = await extractUsage(full, since); // 再按记录时间戳过滤,只留今日
       if (!records.length) continue;
       const byModel = aggregateByModel(records);
       const total = byModel.reduce((s, m) => s + m.costUsd, 0);

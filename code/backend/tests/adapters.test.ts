@@ -61,6 +61,14 @@ describe('extractUsage', () => {
     const fable = records.find((r) => r.model === 'claude-fable-5')!;
     expect(fable).toMatchObject({ input: 1000, cacheCreation: 2000, cacheRead: 50000, output: 300 });
   });
+
+  it('sinceMs 按记录时间戳过滤:晚于所有记录 → 空,早于则全留(今日成本口径)', async () => {
+    const file = await findSessionFile(FIX, SID);
+    // fixture 用量记录都在 2026-07-08,给一个更晚的起点应过滤为空
+    expect(await extractUsage(file!, Date.parse('2026-07-09T00:00:00Z'))).toHaveLength(0);
+    // 更早的起点保留全部
+    expect(await extractUsage(file!, Date.parse('2026-07-01T00:00:00Z'))).toHaveLength(2);
+  });
 });
 
 describe('readHistory', () => {
