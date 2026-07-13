@@ -157,16 +157,19 @@ export function Dispatch({ active }: { active: boolean }) {
       }
       return;
     }
-    // /model 切换模型:未开始 → 设定下一会话;已开始 → SDK setModel 中途切换
+    // /model 切换模型:已开始 → 只对当前会话 SDK setModel(不改新会话默认);未开始 → 设定新会话默认并记忆
     if (/^\/model\b/.test(text)) {
       const arg = text.replace(/^\/model\b/, '').trim().toLowerCase();
       if (!arg) return toast(`当前模型:${d.model ?? modelSel} · 用法:/model fable|opus|sonnet|haiku 或完整模型名`);
       const resolved = MODELS.find((m) => m.toLowerCase() === arg) ?? MODEL_SHORT[arg];
       if (!resolved || resolved === MODELS[0]) return toast(`不认识的模型「${arg}」,可选:fable / opus / sonnet / haiku`);
-      setModelSel(resolved);
-      localStorage.setItem(LAST_MODEL_KEY, resolved);
-      if (d.started) d.changeModel(resolved);
-      else d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
+      if (d.started) {
+        d.changeModel(resolved); // 仅当前会话
+      } else {
+        setModelSel(resolved);
+        localStorage.setItem(LAST_MODEL_KEY, resolved);
+        d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
+      }
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
@@ -359,7 +362,21 @@ export function Dispatch({ active }: { active: boolean }) {
             )}
           </span>
           <span className="spacer" />
-          <DropUp id="model-dd" value={modelSel} options={MODELS} onChange={setModelSel} title="派发会话所用模型,默认继承 settings.json" />
+          <DropUp
+            id="model-dd"
+            value={d.started ? (MODELS.find((m) => m === d.model) ?? d.model ?? modelSel) : modelSel}
+            options={MODELS}
+            onChange={(v) => {
+              // 有活跃会话 → 只切当前会话(SDK setModel,不改新会话默认);无会话 → 设新会话默认并记忆
+              if (d.started) {
+                if (v !== MODELS[0]) d.changeModel(v);
+              } else {
+                setModelSel(v);
+                if (v !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, v);
+              }
+            }}
+            title={d.started ? '当前会话模型(切换只对本会话生效)' : '新会话默认模型(记忆最近一次)'}
+          />
           <DropUp
             className="dim"
             value={permSel}
