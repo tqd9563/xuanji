@@ -454,7 +454,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .chat-msg.user .who { color: var(--jade); }
 /* 你的消息靠右贴边:与左侧 Claude 文区分居两侧,各自贴近外框(不再居中留大空) */
 .chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
-.chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; }
+/* overflow-wrap:长 URL/路径/哈希等无空格串强制断行,不再溢出气泡侵入对侧车道 */
+.chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; overflow-wrap: anywhere; word-break: break-word; }
 .chat-msg.user .body {
   background: var(--tint-jade); border-radius: var(--r-m);
   padding: 10px 14px; display: inline-block;
