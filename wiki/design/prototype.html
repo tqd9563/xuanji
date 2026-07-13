@@ -448,14 +448,18 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
 .u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
-.chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 24px; }
+.chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .chat-msg.user .who { color: var(--jade); }
-.chat-msg .body { font-size: 0.875rem; max-width: 68ch; text-wrap: pretty; }
+/* 你的消息靠右贴边:与左侧 Claude 文区分居两侧,各自贴近外框(不再居中留大空) */
+.chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+/* overflow-wrap:长 URL/路径/哈希等无空格串强制断行,不再溢出气泡侵入对侧车道 */
+.chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; overflow-wrap: anywhere; word-break: break-word; }
 .chat-msg.user .body {
   background: var(--tint-jade); border-radius: var(--r-m);
   padding: 10px 14px; display: inline-block;
+  max-width: 72%;
 }
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s infinite; }
