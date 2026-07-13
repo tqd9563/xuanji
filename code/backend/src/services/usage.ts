@@ -6,7 +6,7 @@
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import { config } from '../config.js';
-import { extractUsage, type RawUsageRecord } from '../adapters/claude-dir.js';
+import { extractSessionTitle, extractUsage, type RawUsageRecord } from '../adapters/claude-dir.js';
 import type { ModelUsage, ProjectUsage, SessionUsage } from '../types.js';
 
 /** USD per MTok: [input, output]。cache 系数固定:write 1.25×in, read 0.1×in */
@@ -105,7 +105,9 @@ export async function todayUsage(titleOf?: (sessionId: string) => string | undef
       const byModel = aggregateByModel(records);
       const total = byModel.reduce((s, m) => s + m.costUsd, 0);
       const sessionId = path.basename(f, '.jsonl');
-      sessions.push({ sessionId, title: titleOf?.(sessionId) ?? sessionId.slice(0, 8), byModel, totalCostUsd: total });
+      // 名字优先注册表(重命名/派发/jobs/看板),缺失则从转录提取默认标题,再兜底短 id
+      const title = titleOf?.(sessionId) || (await extractSessionTitle(full)) || sessionId.slice(0, 8);
+      sessions.push({ sessionId, title, byModel, totalCostUsd: total });
     }
     if (!sessions.length) continue;
     sessions.sort((a, b) => b.totalCostUsd - a.totalCostUsd);
