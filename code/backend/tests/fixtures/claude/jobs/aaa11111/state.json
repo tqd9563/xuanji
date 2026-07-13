@@ -1,0 +1,8 @@
+{
+  "state": "blocked",
+  "detail": "等待用户确认三个关键决策",
+  "tempo": "blocked",
+  "inFlight": { "tasks": 0, "queued": 0, "kinds": [] },
+  "tokens": 131839,
+  "needs": "确认:(1)主推组还是备选变体"
+}

@@ -1,0 +1,174 @@
+import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { heatBuckets } from '../src/services/projects.js';
+import { resumePolicy } from '../src/services/dispatch.js';
+import type { AgentSession } from '../src/types.js';
+import { aggregateByModel, costUsd, priceOf, shortModel } from '../src/services/usage.js';
+import { Storage } from '../src/storage/db.js';
+import type { Memory } from '../src/types.js';
+
+describe('heatBuckets', () => {
+  it('近 7 日按项目分桶,今日在末位,范围外丢弃', () => {
+    const now = Date.now();
+    const day = 86_400_000;
+    const buckets = heatBuckets(
+      [
+        { display: 'a', timestamp: now, project: '/p/a', sessionId: '1' },
+        { display: 'b', timestamp: now - 2 * day, project: '/p/a', sessionId: '2' },
+        { display: 'c', timestamp: now - 30 * day, project: '/p/a', sessionId: '3' },
+      ],
+      now,
+    );
+    const arr = buckets.get('/p/a')!;
+    expect(arr[6]).toBe(1);
+    expect(arr.reduce((a, b) => a + b, 0)).toBe(2);
+  });
+});
+
+describe('resumePolicy 所有权规则', () => {
+  const agent = (p: Partial<AgentSession>) => ({ sessionId: 's1', kind: 'background', readonly: false, ...p }) as AgentSession;
+
+  it('终端存活的 interactive 会话拒绝接管', () => {
+    const r = resumePolicy([agent({ kind: 'interactive', readonly: true })], 's1');
+    expect(r.ok).toBe(false);
+  });
+
+  it('bg 后台代理会话 → fork 副本续接(daemon 持有,CLI 拒绝直接 --resume)', () => {
+    const r = resumePolicy([agent({ kind: 'background' })], 's1');
+    expect(r).toEqual({ ok: true, fork: true });
+  });
+
+  it('已退出终端的 interactive 会话直接 resume', () => {
+    const r = resumePolicy([agent({ kind: 'interactive', readonly: false })], 's1');
+    expect(r).toEqual({ ok: true, fork: false });
+  });
+
+  it('agents 列表之外的会话(web 派发/历史会话)直接 resume', () => {
+    const r = resumePolicy([agent({})], 'other');
+    expect(r).toEqual({ ok: true, fork: false });
+  });
+});
+
+describe('usage 成本口径', () => {
+  it('cost = in×P + cacheWrite×1.25P + cacheRead×0.1P + out×P', () => {
+    const r = { model: 'claude-fable-5', input: 1_000_000, cacheCreation: 0, cacheRead: 0, output: 0 };
+    expect(costUsd(r)).toBeCloseTo(5);
+    const r2 = { model: 'claude-fable-5', input: 0, cacheCreation: 1_000_000, cacheRead: 1_000_000, output: 1_000_000 };
+    expect(costUsd(r2)).toBeCloseTo(5 * 1.25 + 5 * 0.1 + 25);
+  });
+  it('模型短名与牌价映射', () => {
+    expect(shortModel('claude-sonnet-5')).toBe('sonnet');
+    expect(priceOf('claude-opus-4-8')).toEqual([5, 25]);
+    expect(priceOf('unknown-model')).toEqual([3, 15]); // 保守取 sonnet 档
+  });
+  it('按模型聚合并按成本排序', () => {
+    const agg = aggregateByModel([
+      { model: 'claude-sonnet-5', input: 100, cacheCreation: 0, cacheRead: 0, output: 100 },
+      { model: 'claude-fable-5', input: 100, cacheCreation: 0, cacheRead: 0, output: 100 },
+      { model: 'claude-sonnet-5', input: 50, cacheCreation: 0, cacheRead: 0, output: 0 },
+    ]);
+    expect(agg[0]!.model).toBe('fable');
+    expect(agg.find((m) => m.model === 'sonnet')!.inputTokens).toBe(150);
+  });
+});
+
+describe('Storage 派发记录与改名覆盖', () => {
+  it('recordDispatch/isWebDispatched/setSessionName 读写一致', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-m2-'));
+    const s = new Storage(dir);
+    expect(s.isWebDispatched('sid-1')).toBe(false);
+    s.recordDispatch('sid-1', '/p/demo');
+    expect(s.isWebDispatched('sid-1')).toBe(true);
+    expect(s.webDispatchedIds().has('sid-1')).toBe(true);
+    s.setSessionName('sid-1', '改名后的会话');
+    s.setSessionName('sid-1', '再改一次');
+    expect(s.sessionNames().get('sid-1')).toBe('再改一次');
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('Storage 派发状态快照', () => {
+  it('updateDispatchState 写入并经 allDispatches 读回', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-snap-'));
+    const s = new Storage(dir);
+    s.recordDispatch('sid-1', '/p/demo', '测试会话');
+    s.updateDispatchState('sid-1', 'idle', 1234, 'Bash: sleep 6');
+    const row = s.allDispatches().find((r) => r.sessionId === 'sid-1')!;
+    expect(row.lastState).toBe('idle');
+    expect(row.lastOutputAt).toBe(1234);
+    expect(row.activity).toBe('Bash: sleep 6');
+    s.updateDispatchState('sid-1', 'ended', 5678, '完成');
+    expect(s.allDispatches().find((r) => r.sessionId === 'sid-1')!.lastState).toBe('ended');
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('Storage 派发 prompt 流水', () => {
+  it('recordPrompt/recentPrompts 读写一致,长文截断,按时间升序', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-prompts-'));
+    const s = new Storage(dir);
+    s.recordPrompt('/p/a', 'x'.repeat(300), 'sid-1');
+    s.recordPrompt('/p/b', '第二条');
+    const rows = s.recentPrompts(0);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]!.display).toHaveLength(200);
+    expect(rows[1]!.cwd).toBe('/p/b');
+    expect(rows[1]!.sessionId).toBeNull();
+    expect(s.recentPrompts(Date.now() + 1000)).toHaveLength(0);
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('Storage 调色板分配', () => {
+  it('首次出现顺序固定,重复调用不改序号,新名字顺延', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-palette-'));
+    const s = new Storage(dir);
+    const a = s.assignPalette(['xuanji', 'baize', 'project']);
+    expect(a.get('xuanji')).toBe(0);
+    expect(a.get('baize')).toBe(1);
+    expect(a.get('project')).toBe(2);
+    // 再次调用(顺序打乱 + 新名字):旧序号不变,新名字顺延
+    const b = s.assignPalette(['project', 'antifraud_skills', 'xuanji']);
+    expect(b.get('xuanji')).toBe(0);
+    expect(b.get('project')).toBe(2);
+    expect(b.get('antifraud_skills')).toBe(3);
+    s.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
+
+describe('Storage FTS5', () => {
+  it('中文 trigram 全文搜索命中 body', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-test-'));
+    const storage = new Storage(dir);
+    const mem = (name: string, body: string): Memory => ({
+      name,
+      description: '',
+      type: 'project',
+      project: 'demo',
+      projectPath: '/p/demo',
+      file: `/p/demo/${name}.md`,
+      body,
+      links: [],
+    });
+    storage.rebuildMemoryIndex([
+      mem('a', '上游 SLA 回调在网络抖动时会重复推送同一事件'),
+      mem('b', '阈值 0.72 来自 5 月 A/B 验证'),
+    ]);
+    expect(storage.searchMemories('重复推送')).toEqual(['/p/demo/a.md']);
+    expect(storage.searchMemories('0.72')).toEqual(['/p/demo/b.md']);
+    expect(storage.searchMemories('不存在的词')).toEqual([]);
+    // trigram 最短 3 字符,2 字查询由服务层朴素匹配兜底(此处应返回空)
+    expect(storage.searchMemories('阈值')).toEqual([]);
+    // 重建幂等
+    storage.rebuildMemoryIndex([mem('a', '只有一条')]);
+    expect(storage.searchMemories('重复推送')).toEqual([]);
+    storage.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});
