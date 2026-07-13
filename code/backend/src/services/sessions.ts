@@ -113,3 +113,49 @@ export async function sessionReplay(sessionId: string): Promise<Replay | null> {
   if (!file) return null;
   return parseReplay(file, sessionId);
 }
+
+export interface ClosedSession {
+  sessionId: string;
+  name: string;
+  cwd: string;
+  project: string;
+  hiddenAt: number;
+}
+
+/**
+ * 已关闭(隐藏)会话清单:/resume 弹窗数据源,按关闭时间倒序。
+ * 元数据与看板同源:自有 dispatches 表优先(web 派发必有记录),agents CLI 补全终端来源;
+ * display-name 覆盖同样生效。元数据已不可寻的(会话记录被清理)不展示,避免恢复出一张空卡。
+ */
+export async function closedSessions(storage: Storage, cwd?: string): Promise<ClosedSession[]> {
+  const rows = storage.hiddenSessions();
+  if (rows.length === 0) return [];
+  const hiddenIds = new Set(rows.map((r) => r.sessionId));
+  const meta = new Map<string, { name: string; cwd: string }>();
+  for (const d of storage.allDispatches()) {
+    if (hiddenIds.has(d.sessionId)) {
+      meta.set(d.sessionId, { name: d.name ?? d.sessionId.slice(0, 8), cwd: d.cwd });
+    }
+  }
+  const agents = await listAgents();
+  for (const s of agents.sessions) {
+    if (hiddenIds.has(s.sessionId) && !meta.has(s.sessionId)) {
+      meta.set(s.sessionId, { name: s.name, cwd: s.cwd });
+    }
+  }
+  const names = storage.sessionNames();
+  const out: ClosedSession[] = [];
+  for (const row of rows) {
+    const m = meta.get(row.sessionId);
+    if (!m) continue;
+    if (cwd && m.cwd !== cwd) continue;
+    out.push({
+      sessionId: row.sessionId,
+      name: names.get(row.sessionId) ?? m.name,
+      cwd: m.cwd,
+      project: m.cwd.split('/').filter(Boolean).pop() ?? m.cwd,
+      hiddenAt: row.hiddenAt,
+    });
+  }
+  return out.sort((a, b) => b.hiddenAt - a.hiddenAt);
+}

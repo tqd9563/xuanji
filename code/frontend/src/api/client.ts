@@ -1,4 +1,5 @@
 import type {
+  ClosedSession,
   CronsResult,
   Dashboard,
   Memory,
@@ -48,6 +49,10 @@ export const api = {
     mutate<{ summary: string; from: string }>('/api/dispatch/handoff', 'POST', { sessionId }),
   closeSession: (sessionId: string) =>
     mutate<{ ok: boolean; ended: boolean }>(`/api/sessions/${sessionId}/close`, 'POST', { confirm: true }),
+  closedSessions: (cwd?: string) =>
+    get<{ sessions: ClosedSession[] }>(`/api/sessions/closed${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  unhideSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/unhide`, 'POST', {}),
 };
 
 /** ws 变更订阅:scope 变化时回调,前端据此重取对应资源 */

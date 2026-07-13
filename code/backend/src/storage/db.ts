@@ -191,6 +191,16 @@ export class Storage {
     return new Set(rows.map((r) => r.sessionId));
   }
 
+  /** hide 的逆操作:从隐藏列表移除,卡片回看板(/resume 恢复已关闭会话) */
+  unhideSession(sessionId: string) {
+    this.orm.delete(hiddenSessionsTable).where(eq(hiddenSessionsTable.sessionId, sessionId)).run();
+  }
+
+  /** 隐藏(已关闭)会话完整行:/resume 弹窗数据源 */
+  hiddenSessions(): { sessionId: string; hiddenAt: number }[] {
+    return this.orm.select().from(hiddenSessionsTable).all();
+  }
+
   /** 调色板:已有的保持不变,新名字按当前最大序号顺延(首次出现即永久固定) */
   assignPalette(names: string[]): Map<string, number> {
     const rows = this.orm.select().from(paletteTable).all();

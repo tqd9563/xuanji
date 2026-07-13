@@ -6,8 +6,9 @@ import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { cn, fmtCost, markSeen } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
+import { ResumePalette } from '@/components/ResumePalette';
 import { ToolCard, toast } from '@/components/shared';
-import type { ReplayEvent } from '@/api/types';
+import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
@@ -53,6 +54,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const [bg, setBg] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string } | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [resumePalette, setResumePalette] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
@@ -62,6 +64,35 @@ export function Dispatch({ active }: { active: boolean }) {
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
   const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
   const effectiveCwd = cwd || cwdOptions[0] || '';
+
+  /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
+  const applyResume = (info: { sessionId: string; name: string; cwd: string }) => {
+    if (d.started || d.items.length > 0) d.reset();
+    setSessionCwd(null);
+    setResumeInfo(info);
+    setCwd(info.cwd);
+    d.pushNote(`↻ 将续接会话 ${info.sessionId.slice(0, 8)}(${info.name}),发送第一条消息后恢复上下文。`);
+    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
+    void api
+      .replay(info.sessionId)
+      .then((r) => d.seedHistory(replayToChat(r.events)))
+      .catch(() => {});
+  };
+
+  /** /resume 弹窗选中:所有权预检 → 取消隐藏(卡片回看板) → 装载续接 */
+  const pickClosed = async (s: ClosedSession) => {
+    setResumePalette(false);
+    try {
+      const check = await api.canResume(s.sessionId);
+      if (!check.ok) return toast(check.reason ?? '该会话当前不可续接');
+      await api.unhideSession(s.sessionId);
+      applyResume(s);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    } finally {
+      taRef.current?.focus();
+    }
+  };
 
   // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏。
   // 无意图进入(侧栏/数字键)= 全新派发:上一会话留在后端继续存活,可从会话页随时接回。
@@ -91,17 +122,8 @@ export function Dispatch({ active }: { active: boolean }) {
       setFromBoard(true);
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
-      if (d.started || d.items.length > 0) d.reset();
-      setSessionCwd(null);
-      setResumeInfo(intent.resume);
-      setCwd(intent.resume.cwd);
       setFromBoard(true);
-      d.pushNote(`↻ 将续接会话 ${intent.resume.sessionId.slice(0, 8)}(${intent.resume.name}),发送第一条消息后恢复上下文。`);
-      // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
-      void api
-        .replay(intent.resume.sessionId)
-        .then((r) => d.seedHistory(replayToChat(r.events)))
-        .catch(() => {});
+      applyResume(intent.resume);
     }
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
     setTimeout(() => taRef.current?.focus(), 0);
@@ -144,6 +166,11 @@ export function Dispatch({ active }: { active: boolean }) {
     const text = ta?.value.trim();
     if (!text || !effectiveCwd) return;
     ta!.value = '';
+    // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
+    if (/^\/resume\b/.test(text)) {
+      setResumePalette(true);
+      return;
+    }
     // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
     if (/^\/rename\b/.test(text)) {
       const newName = text.replace(/^\/rename\b/, '').trim();
@@ -386,6 +413,16 @@ export function Dispatch({ active }: { active: boolean }) {
           />
           <span className="tag">settingSources: user</span>
         </div>
+        {resumePalette && (
+          <ResumePalette
+            cwd={effectiveCwd}
+            onPick={(s) => void pickClosed(s)}
+            onClose={() => {
+              setResumePalette(false);
+              taRef.current?.focus();
+            }}
+          />
+        )}
         {showCwdNote && (
           <div className="cwd-note">
             <span className="dot" />

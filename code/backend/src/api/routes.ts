@@ -6,7 +6,7 @@ import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { listProjects } from '../services/projects.js';
-import { sessionsBoard, sessionReplay } from '../services/sessions.js';
+import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
 import { todayUsage } from '../services/usage.js';
@@ -146,6 +146,20 @@ export function createApi(storage: Storage) {
   /** resume 前的所有权预检(前端在跳转派发页前调用) */
   api.get('/sessions/:sessionId/can-resume', async (c) => {
     return c.json(await canResume(c.req.param('sessionId')));
+  });
+
+  /** 已关闭(隐藏)会话清单:/resume 弹窗数据源;cwd 过滤当前项目 */
+  api.get('/sessions/closed', async (c) => {
+    const cwd = c.req.query('cwd')?.trim() || undefined;
+    return c.json({ sessions: await closedSessions(storage, cwd) });
+  });
+
+  /** 恢复已关闭会话:hide 的逆操作(自有隐藏列表删行,~/.claude 不涉及),卡片回看板 */
+  api.post('/sessions/:sessionId/unhide', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    storage.unhideSession(sessionId);
+    return c.json({ ok: true });
   });
 
   api.get('/crons', async (c) => {

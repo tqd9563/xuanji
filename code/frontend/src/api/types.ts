@@ -113,6 +113,15 @@ export interface SessionsBoard {
   refreshedAt: number;
 }
 
+/** 已关闭(隐藏)会话:/resume 弹窗列表项 */
+export interface ClosedSession {
+  sessionId: string;
+  name: string;
+  cwd: string;
+  project: string;
+  hiddenAt: number;
+}
+
 export interface ProjectsResult {
   projects: Project[];
   filteredNoise: number;
