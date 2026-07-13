@@ -400,15 +400,27 @@ export function Dispatch({ active }: { active: boolean }) {
   );
 }
 
+/** 用量三档取色:<50% 玉(健康)/ 50–75% 琥珀(注意)/ ≥75% 红(告警) */
+function usageColor(pct: number | null): string | undefined {
+  if (pct === null) return undefined;
+  if (pct >= 75) return 'var(--red)';
+  if (pct >= 50) return 'var(--amber)';
+  return 'var(--jade-dim)';
+}
+
 function Chip({ label, pct }: { label: string; pct: number | null }) {
-  const over = pct !== null && pct >= 60;
+  const color = usageColor(pct);
+  const alert = pct !== null && pct >= 50;
   return (
-    <span className="u-chip" title={pct === null ? '会话产生用量数据后显示' : undefined}>
+    <span
+      className="u-chip"
+      title={pct === null ? '会话产生用量数据后显示' : `${label} ${pct}% · <50% 玉 / 50–75% 琥珀 / ≥75% 红`}
+    >
       {label}{' '}
       <span className="u-bar">
-        <i style={{ width: `${pct ?? 0}%`, background: over ? 'var(--amber)' : undefined }} />
+        <i style={{ width: `${pct ?? 0}%`, background: color }} />
       </span>
-      <b style={over ? { color: 'var(--amber)' } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
+      <b style={alert ? { color } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
     </span>
   );
 }
