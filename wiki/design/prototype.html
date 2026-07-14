@@ -588,6 +588,71 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
+/* ============ 壁纸 · 外观设置 ============ */
+/* 壁纸开启时 body 背景转透明,底色由 html 承接;壁纸层夹在两者之间 */
+html { background: var(--bg); }
+#wall {
+  position: fixed; inset: -48px; z-index: -1; pointer-events: none;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 300ms var(--ease);
+}
+body.wall-on { background: transparent; }
+body.wall-on #wall { opacity: var(--wall-opacity, 0.25); filter: blur(var(--wall-blur, 0px)); }
+
+/* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。 */
+body.wall-glass {
+  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) 74%, transparent);
+  --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) 66%, transparent);
+}
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop) {
+  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: blur(14px) saturate(1.1);
+}
+
+.wall-btn {
+  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
+  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
+  font-size: 0.75rem; color: var(--muted); text-align: left;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.wall-btn:hover { background: var(--hover); color: var(--ink); }
+.wall-btn svg { width: 14px; height: 14px; flex: none; }
+.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+.wall-pop {
+  position: fixed; left: 14px; bottom: 58px; width: 320px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 14px 16px 12px; z-index: var(--z-drawer);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
+  animation: view-in 200ms var(--ease);
+}
+.wall-pop[hidden] { display: none; }
+.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
+.wp-head h3 { font-size: 0.8125rem; }
+.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
+.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
+.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp-thumbs { display: flex; gap: 8px; flex: 1; }
+.wp-thumb {
+  width: 64px; height: 40px; border-radius: var(--r-s);
+  border: 1px solid var(--line); background-size: cover; background-position: center;
+  transition: border-color 150ms var(--ease); flex: none;
+}
+.wp-thumb:hover { border-color: var(--muted); }
+.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
+.wp-row input[type=range] {
+  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
+  border-radius: 99px; background: var(--line); cursor: pointer;
+}
+.wp-row input[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--jade); border: none;
+}
+.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
+.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
+.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
+
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
@@ -611,6 +676,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 </style>
 </head>
 <body>
+<div id="wall" aria-hidden="true"></div>
 <div class="app">
 
   <!-- ================= 侧栏 ================= -->
@@ -618,6 +684,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <div class="brand"><span class="zh">璇玑</span><span class="en">xuanji</span><span class="version">v1.0.0</span></div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
+      <button class="wall-btn" id="wall-btn" aria-haspopup="dialog" aria-expanded="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 2.5 2.5 3-3.5 3 3.5" stroke-linejoin="round"/></svg>
+        壁纸<span class="wp-state" id="wall-state">关闭</span>
+      </button>
       <div class="row"><span class="ok"></span>claude CLI 2.1.202 · daemon 正常</div>
       <div class="row proto">原型 · mock 数据 · M0</div>
     </div>
@@ -852,6 +922,42 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 </aside>
 
 <div class="toast" id="toast"></div>
+
+<!-- ================= 壁纸设置 ================= -->
+<div class="wall-pop" id="wall-pop" role="dialog" aria-label="壁纸设置" hidden>
+  <div class="wp-head"><h3>壁纸</h3><button class="x-btn" id="wall-close" aria-label="关闭">✕</button></div>
+  <div class="wp-row">
+    <span class="wp-label">模式</span>
+    <div class="filter-tabs" id="wall-mode" role="group" aria-label="壁纸模式">
+      <button data-m="off">关闭</button>
+      <button data-m="wall">壁纸</button>
+      <button data-m="glass">玻璃</button>
+    </div>
+  </div>
+  <div id="wall-ctrls">
+    <div class="wp-row">
+      <span class="wp-label">图片</span>
+      <div class="wp-thumbs" id="wall-thumbs"></div>
+      <button class="btn btn-sm" id="wall-file-btn">本地…</button>
+      <input type="file" id="wall-file" accept="image/*" hidden>
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-url">URL</label>
+      <input class="input" id="wall-url" placeholder="https://… 回车应用" spellcheck="false">
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-opacity">不透明度</label>
+      <input type="range" id="wall-opacity" min="5" max="50" step="1" value="25">
+      <span class="wp-val" id="wall-opacity-v">25%</span>
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-blur">模糊</label>
+      <input type="range" id="wall-blur" min="0" max="24" step="1" value="0">
+      <span class="wp-val" id="wall-blur-v">0px</span>
+    </div>
+  </div>
+  <p class="wp-note">玻璃档:面板转为半透明毛玻璃,壁纸整体透出。设置只存本机浏览器,不写 ~/.claude。</p>
+</div>
 
 <script>
 /* ============================================================
@@ -1951,6 +2057,159 @@ $('#bg-switch').addEventListener('keydown', function (e) {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
 });
 
+/* ===================== 壁纸 ===================== */
+function wallSvg(body) {
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">${body}</svg>`);
+}
+/* 星野:观象台夜空。北斗七星微亮,天璇·天玑二星以玉色致意产品本名 */
+function presetXingye() {
+  const rnd = i => Math.sin(i * 127.1 + 311.7) * 0.5 + 0.5;
+  let stars = '';
+  for (let i = 0; i < 150; i++) {
+    const x = (rnd(i) * 1600).toFixed(0), y = (rnd(i + 500) * 1000).toFixed(0);
+    const r = (0.5 + rnd(i + 900) * 1.2).toFixed(1), o = (0.12 + rnd(i + 1300) * 0.45).toFixed(2);
+    stars += `<circle cx="${x}" cy="${y}" r="${r}" fill="#cdd8c2" opacity="${o}"/>`;
+  }
+  /* 北斗:天枢-天璇-天玑-天权 构斗,玉衡-开阳-摇光 为柄 */
+  const dipper = [[1108,318],[1180,268],[1262,282],[1330,338],[1296,428],[1392,470],[1472,404]];
+  const line = dipper.map(p => p.join(',')).join(' ');
+  const named = [1, 2]; /* 天璇、天玑 */
+  const ds = dipper.map(([x, y], i) =>
+    `<circle cx="${x}" cy="${y}" r="${named.includes(i) ? 3.2 : 2.2}" fill="${named.includes(i) ? '#b8cf8f' : '#cdd8c2'}" opacity="${named.includes(i) ? 0.95 : 0.7}"/>` +
+    (named.includes(i) ? `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="#b8cf8f" stroke-width="0.6" opacity="0.35"/>` : '')
+  ).join('');
+  return wallSvg(
+    `<defs><radialGradient id="sky" cx="35%" cy="18%" r="95%">
+      <stop offset="0" stop-color="#1a2116"/><stop offset="0.55" stop-color="#11150d"/><stop offset="1" stop-color="#0a0d08"/>
+    </radialGradient></defs>
+    <rect width="1600" height="1000" fill="url(#sky)"/>
+    <ellipse cx="480" cy="180" rx="520" ry="300" fill="#25301c" opacity="0.18"/>
+    ${stars}<polyline points="${line}" fill="none" stroke="#8fa878" stroke-width="0.8" opacity="0.28"/>${ds}`);
+}
+/* 山岚:层叠远山 + 谷间雾 */
+function presetShanlan() {
+  return wallSvg(
+    `<defs>
+      <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#161c11" stop-opacity="0"/><stop offset="1" stop-color="#1c2415" stop-opacity="0.5"/>
+      </linearGradient>
+      <linearGradient id="air" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#171d12"/><stop offset="1" stop-color="#0e120a"/>
+      </linearGradient>
+    </defs>
+    <rect width="1600" height="1000" fill="url(#air)"/>
+    <path d="M0 560 L240 380 L430 520 L640 330 L860 540 L1080 400 L1300 560 L1470 460 L1600 540 L1600 1000 L0 1000 Z" fill="#131a0e" opacity="0.9"/>
+    <rect y="480" width="1600" height="240" fill="url(#mist)"/>
+    <path d="M0 700 L300 540 L560 680 L840 520 L1120 700 L1380 590 L1600 690 L1600 1000 L0 1000 Z" fill="#0f150b"/>
+    <path d="M0 840 L360 700 L720 830 L1060 690 L1420 840 L1600 780 L1600 1000 L0 1000 Z" fill="#0b0f08"/>`);
+}
+const WALL_PRESETS = [
+  { id: 'xingye', name: '星野', url: presetXingye() },
+  { id: 'shanlan', name: '山岚', url: presetShanlan() },
+];
+const WALL_KEY = 'xuanji.wall';
+let wall = { mode: 'off', src: 'preset:xingye', opacity: 25, blur: 0, custom: '' };
+try { Object.assign(wall, JSON.parse(localStorage.getItem(WALL_KEY) || '{}')); } catch (_) { /* 忽略坏数据 */ }
+
+function wallSrcUrl() {
+  if (wall.src === 'custom') return wall.custom || '';
+  if (wall.src.startsWith('preset:')) {
+    const p = WALL_PRESETS.find(p => p.id === wall.src.slice(7));
+    return p ? p.url : WALL_PRESETS[0].url;
+  }
+  return wall.src || '';
+}
+function wallSrcName() {
+  if (wall.src === 'custom') return '本地图片';
+  if (wall.src.startsWith('preset:')) return (WALL_PRESETS.find(p => p.id === wall.src.slice(7)) || WALL_PRESETS[0]).name;
+  return 'URL';
+}
+function saveWall() {
+  try {
+    const persist = { ...wall };
+    if (persist.custom && persist.custom.length > 1_500_000) persist.custom = ''; /* 大图不落盘,仅本次会话生效 */
+    localStorage.setItem(WALL_KEY, JSON.stringify(persist));
+  } catch (_) { /* 配额不足时静默放弃持久化 */ }
+}
+function applyWall() {
+  const url = wallSrcUrl();
+  const on = wall.mode !== 'off' && !!url;
+  document.body.classList.toggle('wall-on', on);
+  document.body.classList.toggle('wall-glass', on && wall.mode === 'glass');
+  $('#wall').style.backgroundImage = url ? `url("${url}")` : 'none';
+  document.body.style.setProperty('--wall-opacity', wall.opacity / 100);
+  document.body.style.setProperty('--wall-blur', wall.blur + 'px');
+  /* 控件同步 */
+  $$('#wall-mode button').forEach(b => b.classList.toggle('active', b.dataset.m === wall.mode));
+  $('#wall-ctrls').classList.toggle('is-off', wall.mode === 'off');
+  $('#wall-ctrls').setAttribute('aria-disabled', wall.mode === 'off');
+  $('#wall-opacity').value = wall.opacity; $('#wall-opacity-v').textContent = wall.opacity + '%';
+  $('#wall-blur').value = wall.blur; $('#wall-blur-v').textContent = wall.blur + 'px';
+  $$('#wall-thumbs .wp-thumb').forEach(t => t.classList.toggle('active', 'preset:' + t.dataset.p === wall.src));
+  $('#wall-state').textContent = wall.mode === 'off' ? '关闭'
+    : `${wallSrcName()} · ${wall.mode === 'glass' ? '玻璃' : '壁纸'} ${wall.opacity}%`;
+  saveWall();
+}
+/* 预设缩略图 */
+$('#wall-thumbs').innerHTML = WALL_PRESETS.map(p =>
+  `<button class="wp-thumb" data-p="${p.id}" style="background-image:url('${p.url}')" title="${p.name}" aria-label="预设壁纸:${p.name}"></button>`).join('');
+
+$('#wall-btn').addEventListener('click', () => {
+  const pop = $('#wall-pop'), open = pop.hidden;
+  pop.hidden = !open;
+  $('#wall-btn').setAttribute('aria-expanded', open);
+  if (open) $('#wall-mode button.active')?.focus();
+});
+$('#wall-close').addEventListener('click', () => { $('#wall-pop').hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); });
+document.addEventListener('click', e => {
+  const pop = $('#wall-pop');
+  if (pop.hidden) return;
+  if (!pop.contains(e.target) && !$('#wall-btn').contains(e.target)) { pop.hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#wall-pop').hidden) { $('#wall-pop').hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); $('#wall-btn').focus(); }
+});
+$('#wall-mode').addEventListener('click', e => {
+  const b = e.target.closest('button[data-m]');
+  if (!b) return;
+  wall.mode = b.dataset.m;
+  applyWall();
+});
+$('#wall-thumbs').addEventListener('click', e => {
+  const t = e.target.closest('.wp-thumb');
+  if (!t) return;
+  wall.src = 'preset:' + t.dataset.p;
+  $('#wall-url').value = '';
+  applyWall();
+});
+$('#wall-url').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const v = e.target.value.trim();
+  if (!v) return;
+  wall.src = v;
+  applyWall();
+  toast('已应用 URL 壁纸');
+});
+$('#wall-file-btn').addEventListener('click', () => $('#wall-file').click());
+$('#wall-file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    wall.custom = r.result;
+    wall.src = 'custom';
+    $('#wall-url').value = '';
+    applyWall();
+    if (wall.custom.length > 1_500_000) toast('图片较大,仅本次会话生效(正式版由后端存缩略副本)');
+  };
+  r.readAsDataURL(f);
+  e.target.value = '';
+});
+$('#wall-opacity').addEventListener('input', e => { wall.opacity = +e.target.value; applyWall(); });
+$('#wall-blur').addEventListener('input', e => { wall.blur = +e.target.value; applyWall(); });
+applyWall();
+
 /* hash 路由 */
 function syncHash() {
   const id = location.hash.slice(1);
@@ -1958,6 +2217,7 @@ function syncHash() {
 }
 window.addEventListener('hashchange', syncHash);
 syncHash();
+if (!document.querySelector('.view.active')) showView('dashboard'); /* 无 hash 打开时默认进仪表盘 */
 </script>
 </body>
 </html>
