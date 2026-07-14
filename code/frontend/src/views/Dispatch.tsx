@@ -68,6 +68,10 @@ export function Dispatch({ active }: { active: boolean }) {
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string }) => {
     if (d.started || d.items.length > 0) d.reset();
+    // 进入续接页装载历史 = 已浏览产出:立即标已读。
+    // 派发页原有的 markSeen 效应依赖 d.sessionId(发出第一条消息才有值),
+    // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
+    markSeen(info.sessionId);
     setSessionCwd(null);
     setResumeInfo(info);
     setCwd(info.cwd);
