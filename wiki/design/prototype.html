@@ -599,12 +599,13 @@ html { background: var(--bg); }
 body.wall-on { background: transparent; }
 body.wall-on #wall { opacity: var(--wall-opacity, 0.25); filter: blur(var(--wall-blur, 0px)); }
 
-/* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。 */
+/* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。
+   表面不透明度由 --wall-surface 驱动(设置面板可调),surface-2 恒比 surface 低一档 */
 body.wall-glass {
-  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) 74%, transparent);
-  --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) 66%, transparent);
+  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 55%), transparent);
+  --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 55%) - 6%), transparent);
 }
-body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop) {
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
   backdrop-filter: blur(14px) saturate(1.1);
   -webkit-backdrop-filter: blur(14px) saturate(1.1);
 }
@@ -955,8 +956,13 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
       <input type="range" id="wall-blur" min="0" max="24" step="1" value="0">
       <span class="wp-val" id="wall-blur-v">0px</span>
     </div>
+    <div class="wp-row" id="wall-surface-row">
+      <label class="wp-label" for="wall-surface">表面</label>
+      <input type="range" id="wall-surface" min="25" max="95" step="1" value="55">
+      <span class="wp-val" id="wall-surface-v">55%</span>
+    </div>
   </div>
-  <p class="wp-note">玻璃档:面板转为半透明毛玻璃,壁纸整体透出。设置只存本机浏览器,不写 ~/.claude。</p>
+  <p class="wp-note">「表面」= 面板/侧栏底色的不透明度,仅玻璃档生效:调低即壁纸透进面板,毛玻璃保证文字可读。设置只存本机浏览器,不写 ~/.claude。</p>
 </div>
 
 <script>
@@ -2109,7 +2115,7 @@ const WALL_PRESETS = [
   { id: 'shanlan', name: '山岚', url: presetShanlan() },
 ];
 const WALL_KEY = 'xuanji.wall';
-let wall = { mode: 'off', src: 'preset:xingye', opacity: 25, blur: 0, custom: '' };
+let wall = { mode: 'off', src: 'preset:xingye', opacity: 25, blur: 0, surface: 55, custom: '' };
 try { Object.assign(wall, JSON.parse(localStorage.getItem(WALL_KEY) || '{}')); } catch (_) { /* 忽略坏数据 */ }
 
 function wallSrcUrl() {
@@ -2140,12 +2146,15 @@ function applyWall() {
   $('#wall').style.backgroundImage = url ? `url("${url}")` : 'none';
   document.body.style.setProperty('--wall-opacity', wall.opacity / 100);
   document.body.style.setProperty('--wall-blur', wall.blur + 'px');
+  document.body.style.setProperty('--wall-surface', wall.surface + '%');
   /* 控件同步 */
   $$('#wall-mode button').forEach(b => b.classList.toggle('active', b.dataset.m === wall.mode));
   $('#wall-ctrls').classList.toggle('is-off', wall.mode === 'off');
   $('#wall-ctrls').setAttribute('aria-disabled', wall.mode === 'off');
   $('#wall-opacity').value = wall.opacity; $('#wall-opacity-v').textContent = wall.opacity + '%';
   $('#wall-blur').value = wall.blur; $('#wall-blur-v').textContent = wall.blur + 'px';
+  $('#wall-surface').value = wall.surface; $('#wall-surface-v').textContent = wall.surface + '%';
+  $('#wall-surface-row').classList.toggle('is-off', wall.mode !== 'glass'); /* 仅玻璃档生效 */
   $$('#wall-thumbs .wp-thumb').forEach(t => t.classList.toggle('active', 'preset:' + t.dataset.p === wall.src));
   $('#wall-state').textContent = wall.mode === 'off' ? '关闭'
     : `${wallSrcName()} · ${wall.mode === 'glass' ? '玻璃' : '壁纸'} ${wall.opacity}%`;
@@ -2208,6 +2217,7 @@ $('#wall-file').addEventListener('change', e => {
 });
 $('#wall-opacity').addEventListener('input', e => { wall.opacity = +e.target.value; applyWall(); });
 $('#wall-blur').addEventListener('input', e => { wall.blur = +e.target.value; applyWall(); });
+$('#wall-surface').addEventListener('input', e => { wall.surface = +e.target.value; applyWall(); });
 applyWall();
 
 /* hash 路由 */
