@@ -3,6 +3,8 @@ import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette } from '@/lib/utils';
 import { ConfirmHost, ToastHost } from '@/components/shared';
+import { WallpaperSettings } from '@/components/WallpaperSettings';
+import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Sessions, type SessionsHandle } from '@/views/Sessions';
@@ -26,6 +28,9 @@ export default function App() {
   const [health, setHealth] = useState<{ cli: string | null } | null>(null);
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
+  const [wall, patchWall] = useWallpaper();
+  const [wallOpen, setWallOpen] = useState(false);
+  const wallUrl = wallSrcUrl(wall);
 
   // 项目分类色调色板(后端 SQLite 首次出现顺序):加载后重渲染;旧后端无此端点时静默用哈希兜底
   useEffect(() => {
@@ -84,6 +89,7 @@ export default function App() {
 
   return (
     <div className="app">
+      <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
       <aside className="sidebar">
         <div className="brand">
           <span className="zh">璇玑</span>
@@ -106,6 +112,7 @@ export default function App() {
           ))}
         </nav>
         <div className="side-foot">
+          <WallpaperSettings wall={wall} patch={patchWall} open={wallOpen} onToggle={setWallOpen} />
           <div className="row">
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
             {health === null ? '连接后端…' : health.cli ? `${health.cli} · 就绪` : '后端可用 · CLI 不可达'}
