@@ -63,12 +63,12 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   const reviewable = (data.reviewCandidates ?? []).filter(isUnread);
   const goSession = (s: (typeof reviewable)[number]) => {
     if (s.dispatchId) {
-      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
+      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
       location.hash = 'dispatch';
       return;
     }
     if (s.readonly) return onGoSession(s.sessionId);
-    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
+    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd, project: s.project } });
     location.hash = 'dispatch';
   };
 
