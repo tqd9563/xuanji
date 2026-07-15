@@ -663,6 +663,71 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
+/* ============ 壁纸 · 外观设置 ============ */
+/* 壁纸开启时 body 背景转透明,底色由 html 承接;壁纸层夹在两者之间 */
+html { background: var(--bg); }
+#wall {
+  position: fixed; inset: -48px; z-index: -1; pointer-events: none;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 300ms var(--ease);
+}
+body.wall-on { background: transparent; }
+body.wall-on #wall { opacity: var(--wall-opacity, 0.4); filter: blur(var(--wall-blur, 0px)); }
+
+/* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。
+   表面不透明度由 --wall-surface 驱动,surface-2 恒比 surface 低一档 */
+body.wall-glass {
+  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
+  --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
+}
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
+  backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+}
+
+.wall-btn {
+  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
+  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
+  font-size: 0.75rem; color: var(--muted); text-align: left;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.wall-btn:hover { background: var(--hover); color: var(--ink); }
+.wall-btn svg { width: 14px; height: 14px; flex: none; }
+.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+.wall-pop {
+  position: fixed; left: 14px; bottom: 92px; width: 320px; /* 悬于 side-foot 之上,不遮入口按钮 */
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 14px 16px 12px; z-index: var(--z-drawer);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
+  animation: view-in 200ms var(--ease);
+}
+.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
+.wp-head h3 { font-size: 0.8125rem; }
+.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
+.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
+.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp-thumbs { display: flex; gap: 8px; flex: 1; }
+.wp-thumb {
+  width: 64px; height: 40px; border-radius: var(--r-s);
+  border: 1px solid var(--line); background-size: cover; background-position: center;
+  transition: border-color 150ms var(--ease); flex: none;
+}
+.wp-thumb:hover { border-color: var(--muted); }
+.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
+.wp-row input[type=range] {
+  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
+  border-radius: 99px; background: var(--line); cursor: pointer;
+}
+.wp-row input[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--jade); border: none;
+}
+.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
+.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
+.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
+
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
