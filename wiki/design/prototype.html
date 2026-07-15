@@ -391,6 +391,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
+/* 会话标识(页头):当前窗口绑定会话的 名称 + 项目芯片 + id,沿用会话看板卡片的同一词汇。
+   与来路返回按钮解耦:只要 chat 还挂着这个会话,离开再回来标识仍在;标题限一行截断(可变字段纪律) */
+.sess-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 14px; border-left: 1px solid var(--line); }
+.sess-ctx .sc-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
+.sess-ctx .sc-title.unnamed { color: var(--faint); font-weight: 400; }
+.sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
 /* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
 .chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
 .cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
@@ -669,6 +675,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
+  .sess-ctx { border-left: none; padding-left: 0; } /* 窄屏换行后分隔线沦为孤立短竖线,撤掉 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -790,6 +797,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
       <div class="view-head">
         <h1>派发</h1>
         <button class="btn btn-sm" id="back-board" style="display:none" onclick="backToBoard()" title="快捷键 ← 或 Esc">‹ 会话看板</button>
+        <div class="sess-ctx" id="sess-ctx" style="display:none"></div>
         <span class="spacer"></span>
         <button class="btn" id="new-chat">新会话</button>
       </div>
@@ -1591,12 +1599,29 @@ function backToBoard() {
   kbApply();
 }
 
+/* 会话标识:派发页头部展示当前 chat 绑定会话的 名称 + 项目 + id。
+   生命周期跟随 chat 绑定的会话(resume / 新会话 / 跨目录交接 / 首轮自动命名),与 dispatchOrigin(来路)无关。
+   实际实现:名称来自 jobs/state.json 的 name 字段或 --resume 会话的 summary,首轮回复结束后由 daemon 回填。 */
+function setSessCtx(s) {
+  const el = $('#sess-ctx');
+  if (!s) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `
+    <span class="sc-title${s.title ? '' : ' unnamed'}" title="${esc(s.title || '首轮回复结束后自动命名')}">${esc(s.title || '未命名会话')}</span>
+    ${projChip(s.cwd)}
+    <span class="sc-id">${esc(s.id)}</span>`;
+}
+function mockId() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function resumeSession(id) {
   const s = SESSIONS.find(x => x.id === id);
   closeDrawer();
   showView('dispatch');
   dispatchOrigin = 'sessions';
   $('#back-board').style.display = '';
+  setSessCtx(s);
   renderChat(replayToChat(id) + chatResumed(s));
   const waitingApproval = s.needs && s.needs.includes('权限审批');
   setAgentStatus(waitingApproval ? `等待你审批:${s.needs.replace('等待权限审批:', '')}` : s.needs ? '等待你输入' : '会话已续接 · 空闲', s.needs ? 'wait' : '');
@@ -1635,6 +1660,7 @@ function updateCwdNote() {
 /* 跨目录交接:自动生成上一会话摘要,注入新会话首条消息(mock) */
 function handoffTo() {
   sessionCwd = currentCwd;
+  setSessCtx({ id: mockId(), title: null, cwd: currentCwd }); /* 新会话尚未命名,首轮结束后回填 */
   renderChat(`
     <div class="resume-note">⇢ 已在 <span class="mono">${esc(currentCwd)}</span> 开启新会话,注入上一会话的交接摘要(自动生成 · 1.1k tokens)。原会话完整记录仍可在「会话」看板回放。</div>
     <div class="chat-msg"><div class="who">Claude</div>
@@ -1844,6 +1870,9 @@ function sendMessage() {
     setAgentStatus('已转后台 · 本窗口空闲');
     toast('已派发后台任务');
   } else {
+    /* 白纸首条消息 = 新会话诞生:先挂未命名标识,首轮回复结束后回填自动命名(mock:截取首条消息) */
+    const born = empty ? { id: mockId(), title: null, cwd: sessionCwd } : null;
+    if (born) setSessCtx(born);
     setAgentStatus('思考中…', 'think');
     const cont = document.createElement('div');
     cont.className = 'chat-msg';
@@ -1854,6 +1883,7 @@ function sendMessage() {
       cont.querySelector('.body').textContent = '(原型示意:此处为 Agent SDK 的流式回复,文本按 token 增量打字机渲染,工具调用以折叠卡逐条出现,权限请求弹审批卡。)';
       $('#chat').scrollTop = $('#chat').scrollHeight;
       setAgentStatus('空闲 · 回合结束');
+      if (born) setSessCtx({ ...born, title: text.length > 18 ? text.slice(0, 18) + '…' : text });
     }, 1200);
   }
   $('#chat').scrollTop = $('#chat').scrollHeight;
@@ -2029,6 +2059,7 @@ renderDashboard();
 renderProjects();
 renderBoard();
 renderChat(chatDefault());
+setSessCtx({ id: '6b0e42d1', title: 'L3 弱信号规则文档整理', cwd: '~/go-antifraud' }); /* 初始演示会话 */
 setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
 makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); updateCwdNote(); } });
 makeDD('#model-dd', ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4.5'], { value: 'claude-fable-5' });
@@ -2059,7 +2090,7 @@ $('#send-btn').addEventListener('click', sendMessage);
 $('#composer-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); sessionCwd = currentCwd; updateCwdNote(); });
+$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); setSessCtx(null); sessionCwd = currentCwd; updateCwdNote(); });
 $('#bg-switch').addEventListener('click', function () {
   this.classList.toggle('on');
   this.setAttribute('aria-checked', this.classList.contains('on'));
