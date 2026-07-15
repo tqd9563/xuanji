@@ -653,6 +653,36 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .sys-note { font-size: 0.75rem; color: var(--faint); padding: 10px 18px 4px; }
 
+/* ============ 回顾(周活动) ============ */
+.week-nav { display: flex; align-items: center; gap: 4px; }
+.week-nav .range { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); font-variant-numeric: tabular-nums; padding: 0 6px; }
+.week-nav .wk-btn { padding: 3px 8px; border-radius: var(--r-s); color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+.week-nav .wk-btn:hover { background: var(--hover); color: var(--ink); }
+.week-nav .wk-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+
+.rv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+.rv-proj { border-bottom: 1px solid var(--line-soft); }
+.rv-proj:last-child { border-bottom: none; }
+.rv-proj-head { display: flex; align-items: center; gap: 10px; padding: 11px 18px 9px; font-size: 0.8125rem; }
+.rv-proj-head .m { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.rv-proj-head .cost { margin-left: auto; font-family: var(--mono); font-size: 0.75rem; color: var(--faint); }
+.rv-sess { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 18px 7px 28px; font-size: 0.8125rem; text-align: left; transition: background 120ms var(--ease); }
+.rv-sess:hover { background: var(--hover); }
+.rv-sess .chev { color: var(--faint); font-size: 0.625rem; flex: none; transition: transform 150ms var(--ease); }
+.rv-item.open .rv-sess .chev { transform: rotate(90deg); }
+.rv-sess .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sess .n { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); flex: none; }
+.rv-sess .span { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; white-space: nowrap; }
+.rv-prompts { display: none; margin: 2px 18px 10px 40px; border-left: 2px solid var(--line); padding: 2px 0 2px 12px; }
+.rv-item.open .rv-prompts { display: block; }
+.rv-prompts li { list-style: none; font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-prompts li.more { color: var(--faint); font-family: var(--sans); }
+
+.draft-body { padding: 16px 20px; font-size: 0.8125rem; max-width: 68ch; }
+.draft-run { display: flex; align-items: center; gap: 10px; padding: 20px; font-size: 0.8125rem; color: var(--muted); }
+.draft-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 0.6875rem; color: var(--faint); padding: 10px 20px; border-top: 1px solid var(--line-soft); }
+
 /* toast */
 .toast {
   position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 80px);
@@ -738,7 +768,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .nav .count { display: none; }
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
-  .dash-now, .dash-grid { grid-template-columns: 1fr; }
+  .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }

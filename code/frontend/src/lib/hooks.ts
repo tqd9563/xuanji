@@ -34,8 +34,8 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
   return { data, error, refresh };
 }
 
-export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron';
-export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron'];
+export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review';
+export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron', 'review'];
 
 /** hash 路由(与原型一致:#dashboard…#cron),浏览器前进后退可用 */
 export function useHashRoute(): [ViewId, (v: ViewId) => void] {

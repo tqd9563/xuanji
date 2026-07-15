@@ -8,6 +8,8 @@ import type {
   SessionsBoard,
   Skill,
   UsageReport,
+  WeeklyDraft,
+  WeeklyReview,
 } from './types';
 
 async function get<T>(path: string): Promise<T> {
@@ -53,6 +55,12 @@ export const api = {
     get<{ sessions: ClosedSession[] }>(`/api/sessions/closed${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
   unhideSession: (sessionId: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/unhide`, 'POST', {}),
+  // ---------- 周回顾 ----------
+  weeklyReview: (start: number, end: number) =>
+    get<WeeklyReview>(`/api/weekly-review?start=${start}&end=${end}`),
+  weeklyDrafts: () => get<{ drafts: WeeklyDraft[] }>('/api/weekly-review/drafts'),
+  startWeeklyDraft: (start: number, end: number) =>
+    mutate<{ id: number; dispatchId: string }>('/api/weekly-review/draft', 'POST', { start, end }),
 };
 
 /** ws 变更订阅:scope 变化时回调,前端据此重取对应资源 */

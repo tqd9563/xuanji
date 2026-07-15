@@ -153,3 +153,48 @@ export interface CronsResult {
   system: string[];
   caliber: string;
 }
+
+// ---------- 周回顾 ----------
+
+export interface ReviewSession {
+  sessionId: string;
+  title: string;
+  prompts: number;
+  firstAt: number;
+  lastAt: number;
+  days: number[];
+  promptTexts: string[];
+  source: 'terminal' | 'web';
+  costUsd: number;
+}
+
+export interface ReviewProject {
+  project: string;
+  path: string;
+  prompts: number;
+  days: number[];
+  costUsd: number;
+  commits: string[];
+  sessions: ReviewSession[];
+}
+
+export interface WeeklyReview {
+  range: { start: number; end: number; dayCount: number };
+  totals: { prompts: number; sessions: number; projects: number; activeDays: number; costUsd: number };
+  projects: ReviewProject[];
+  caliber: Record<string, string>;
+  computedAt: number;
+}
+
+export interface WeeklyDraft {
+  id: number;
+  rangeStart: number;
+  rangeEnd: number;
+  status: 'running' | 'done' | 'error';
+  content: string | null;
+  error: string | null;
+  model: string;
+  sessionId: string | null;
+  createdAt: number;
+  finishedAt: number | null;
+}
