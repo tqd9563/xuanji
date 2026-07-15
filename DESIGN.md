@@ -116,6 +116,10 @@ components:
   proj-chip:
     rounded: "{rounded.chip}"
     padding: "1.5px 8px"
+  wallpaper-panel:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    padding: "14px 16px 12px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -134,6 +138,7 @@ components:
 - 单一无衬线 UI 字族 + 等宽数据字族,实时数字一律表格数字
 - 平面优先,深度靠色调分层;阴影只属于悬浮层(抽屉/菜单/toast)
 - 动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion
+- 壁纸为可选个性化层:默认关闭,开启后仍以暗色预设与低不透明度服从「数据是唯一主角」的底线
 
 ## 2. Colors
 
@@ -164,6 +169,8 @@ components:
 
 **一成玉规则。** 玉色在任何一屏的覆盖面积 ≤10%。它的稀有就是它的层级。
 
+**玻璃表面规则。** 仅当用户显式开启壁纸「玻璃」档时,`--surface`/`--surface-2` 才由 `--wall-surface`(默认 30%,范围 25–95%)经 `color-mix(… , transparent)` 重映射为半透明,surface-2 恒比 surface 低 6 个百分点。这是全站唯一允许 surface 透明的场景;默认(壁纸关闭或纯壁纸档)surface 永远不透明。
+
 ## 3. Typography
 
 **Display Font:** 无(本系统没有 display 字体;最大字号即 1.25rem 的视图标题)
@@ -193,8 +200,13 @@ components:
 - **抽屉影** (`box-shadow: -12px 0 32px oklch(0.05 0 0 / 0.45)`):右侧回放抽屉。
 - **悬浮影** (`box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5)`):下拉菜单与 toast。
 
+### 壁纸玻璃档(可选深度材质)
+玻璃档为面板与悬浮层(sidebar / panel / drawer / composer / chat / toast / scard / dd-menu / notice / wall-pop)叠加 `backdrop-filter: blur(var(--wall-frost)) saturate(1.1)`,让壁纸透过面板并被柔化。这是全站唯一被批准的 backdrop 模糊用途,默认 `--wall-frost: 0`(纯透明、无磨砂),仅用户主动调高(0–24px)才出现。壁纸图层本身(`#wall`)固定于 `z-index: -1`,以 `--wall-opacity`(默认 0.4)透出、`--wall-blur`(默认 0px)柔化,永不参与文档流。
+
 ### Named Rules
 **悬浮才有影规则。** 任何贴在文档流里的元素(卡片、面板、按钮)禁止 box-shadow;看到影子就意味着"这层悬浮着,点外面会收回去"。
+
+**磨砂即选项规则。** backdrop 模糊只属于用户显式开启的壁纸玻璃档,默认值恒为 0;任何非壁纸场景把 backdrop-filter 当装饰使用都被禁止。
 
 ## 5. Components
 
@@ -235,6 +247,22 @@ components:
 ### 会话状态条(Signature Component)
 派发页输入框上下各一条超轻仪表:上条左侧 Context/Usage/Weekly 三枚用量指示(52px 微型进度条 + mono 百分比,超阈值转琥珀),右侧 agent 实时状态(等待审批琥珀脉冲/工作玉色脉冲/空闲灰);下条终端式状态行(蓝色 cwd ⎇ 玉色分支 + zsh 风格 `!n ?n ↑n` + 紫色模型名)。
 
+### 外观 · 壁纸(Signature Component)
+侧栏底部入口按钮(`.wall-btn`,mono 态标签显示当前档位)向上弹出设置面板(`.wall-pop`:surface 底、10px 圆角、悬浮影、贴屏底 92px 上弹、Esc / 外点关闭)。三档模式 + 四个运行参数,全部经 `--wall-*` CSS 变量驱动,存 localStorage,永不写 `~/.claude`;本地大图(>1.5MB dataURL)仅当次会话生效不落盘。
+
+**三档模式(`.filter-tabs` 分段):**
+- **关闭:** 壁纸层隐藏,回到纯夜空底(默认)。
+- **壁纸:** 壁纸透在主背景区,面板保持不透明——最保守,不改变任何面板可读性。
+- **玻璃:** 面板转半透明毛玻璃,壁纸整体透出——仅此档启用 `--wall-surface` 与 `--wall-frost`。
+
+**四个参数(滑杆,默认 40 / 0 / 30 / 0,均 `tabular-nums` 显示):**
+- **不透明度** `--wall-opacity`(默认 40%,范围 5–50%):壁纸图层透出强度,始终生效。
+- **模糊** `--wall-blur`(默认 0px,范围 0–24px):壁纸图层全局柔化,始终生效。
+- **表面** `--wall-surface`(默认 30%,范围 25–95%):面板底色不透明度,仅玻璃档生效;调低即壁纸透进面板。
+- **磨砂** `--wall-frost`(默认 0px,范围 0–24px):面板毛玻璃模糊强度,仅玻璃档生效;非玻璃档时对应滑杆置灰(`.is-off`)。
+
+**图源:** 内置两个暗色 SVG 预设(星野=北斗缀夜空、山岚=层叠远山雾),支持本地图片与任意 URL;缩略图选中态玉色描边。**默认参数 40/0/30/0 是用户实测确认的舒适档,不得擅自更改。**
+
 ## 6. Do's and Don'ts
 
 ### Do:
@@ -244,12 +272,13 @@ components:
 - **Do** 新增项目分类色时沿用 oklch(0.78 0.12 H) 锁明度公式,从八色环顺序取色。
 - **Do** 所有过渡 150–250ms、`cubic-bezier(0.22, 1, 0.36, 1)` 缓出,且只在状态变化时发生;提供 `prefers-reduced-motion` 瞬时降级。
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
+- **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
 
 ### Don't:
 - **Don't** 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效——这是工作台,不是落地页(PRODUCT.md 反例原文)。
 - **Don't** 引入大面积亮白底:用户常年深色终端环境,白屏刺眼即失败(PRODUCT.md 反例原文)。
 - **Don't** 堆「Grafana 式图表墙」:每个图表必须回答一个具体问题,否则删掉(PRODUCT.md 反例原文)。
 - **Don't** 把状态色用作装饰或图表系列色;图表大面积填充只允许 chart-* 降饱和系列。
-- **Don't** 使用 >1px 的彩色侧条(border-left 强调)、`background-clip: text` 渐变字、默认玻璃模糊——全线禁止。
+- **Don't** 使用 >1px 的彩色侧条(border-left 强调)、`background-clip: text` 渐变字,或把玻璃模糊当默认外观——全线禁止。玻璃拟态**仅**作为用户显式开启、默认关闭的壁纸玻璃档存在;`--wall-frost` 默认恒为 0,绝不把 backdrop 模糊塞进任何非壁纸场景当装饰。
 - **Don't** 让任何贴流元素投影;看到 box-shadow 而不悬浮,即是缺陷。
 - **Don't** 用原生 select 弹层/系统默认控件样式直接见人——组件词汇全站唯一,同一动作在两处长得不一样,其中一处就是错的。

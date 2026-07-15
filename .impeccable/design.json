@@ -1,24 +1,140 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-08T18:00:23+08:00",
+  "generatedAt": "2026-07-15T00:00:00Z",
   "title": "Design System: 璇玑 xuanji",
   "extensions": {
     "colorMeta": {
-      "jade": { "role": "primary", "displayName": "玉 Jade", "canonical": "oklch(0.80 0.13 115)", "tonalRamp": ["oklch(0.15 0.03 115)", "oklch(0.27 0.05 115)", "oklch(0.39 0.07 115)", "oklch(0.51 0.09 115)", "oklch(0.63 0.11 115)", "oklch(0.75 0.13 115)", "oklch(0.85 0.10 115)", "oklch(0.95 0.04 115)"] },
-      "amber": { "role": "secondary", "displayName": "琥珀 Amber(等待)", "canonical": "oklch(0.78 0.14 80)", "tonalRamp": ["oklch(0.15 0.03 80)", "oklch(0.27 0.06 80)", "oklch(0.39 0.08 80)", "oklch(0.51 0.10 80)", "oklch(0.63 0.12 80)", "oklch(0.75 0.14 80)", "oklch(0.85 0.10 80)", "oklch(0.95 0.04 80)"] },
-      "blue": { "role": "secondary", "displayName": "信使蓝 Blue(完成/信息)", "canonical": "oklch(0.72 0.11 245)", "tonalRamp": ["oklch(0.15 0.03 245)", "oklch(0.27 0.05 245)", "oklch(0.39 0.07 245)", "oklch(0.51 0.09 245)", "oklch(0.63 0.10 245)", "oklch(0.75 0.11 245)", "oklch(0.85 0.08 245)", "oklch(0.95 0.03 245)"] },
-      "violet": { "role": "secondary", "displayName": "紫 Violet(模型标识)", "canonical": "oklch(0.73 0.11 300)", "tonalRamp": ["oklch(0.15 0.03 300)", "oklch(0.27 0.05 300)", "oklch(0.39 0.07 300)", "oklch(0.51 0.09 300)", "oklch(0.63 0.10 300)", "oklch(0.75 0.11 300)", "oklch(0.85 0.08 300)", "oklch(0.95 0.03 300)"] },
-      "red": { "role": "secondary", "displayName": "赤 Red(错误/熔断)", "canonical": "oklch(0.68 0.19 25)", "tonalRamp": ["oklch(0.15 0.05 25)", "oklch(0.27 0.08 25)", "oklch(0.39 0.11 25)", "oklch(0.51 0.14 25)", "oklch(0.63 0.17 25)", "oklch(0.75 0.16 25)", "oklch(0.85 0.10 25)", "oklch(0.95 0.04 25)"] },
-      "bg": { "role": "neutral", "displayName": "夜空 Night Sky", "canonical": "oklch(0.145 0.006 120)", "tonalRamp": ["oklch(0.145 0.006 120)", "oklch(0.165 0.007 120)", "oklch(0.185 0.008 120)", "oklch(0.215 0.009 120)", "oklch(0.225 0.009 120)", "oklch(0.27 0.010 120)", "oklch(0.40 0.010 120)", "oklch(0.60 0.012 110)"] },
-      "ink": { "role": "neutral", "displayName": "墨 Ink", "canonical": "oklch(0.93 0.008 110)", "tonalRamp": ["oklch(0.30 0.008 110)", "oklch(0.40 0.010 110)", "oklch(0.50 0.011 110)", "oklch(0.60 0.012 110)", "oklch(0.71 0.015 110)", "oklch(0.80 0.012 110)", "oklch(0.93 0.008 110)", "oklch(0.97 0.005 110)"] }
+      "jade": {
+        "role": "primary",
+        "displayName": "玉 Jade",
+        "canonical": "oklch(0.80 0.13 115)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 115)",
+          "oklch(0.27 0.05 115)",
+          "oklch(0.39 0.07 115)",
+          "oklch(0.51 0.09 115)",
+          "oklch(0.63 0.11 115)",
+          "oklch(0.75 0.13 115)",
+          "oklch(0.85 0.10 115)",
+          "oklch(0.95 0.04 115)"
+        ]
+      },
+      "amber": {
+        "role": "secondary",
+        "displayName": "琥珀 Amber(等待)",
+        "canonical": "oklch(0.78 0.14 80)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 80)",
+          "oklch(0.27 0.06 80)",
+          "oklch(0.39 0.08 80)",
+          "oklch(0.51 0.10 80)",
+          "oklch(0.63 0.12 80)",
+          "oklch(0.75 0.14 80)",
+          "oklch(0.85 0.10 80)",
+          "oklch(0.95 0.04 80)"
+        ]
+      },
+      "blue": {
+        "role": "secondary",
+        "displayName": "信使蓝 Blue(完成/信息)",
+        "canonical": "oklch(0.72 0.11 245)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 245)",
+          "oklch(0.27 0.05 245)",
+          "oklch(0.39 0.07 245)",
+          "oklch(0.51 0.09 245)",
+          "oklch(0.63 0.10 245)",
+          "oklch(0.75 0.11 245)",
+          "oklch(0.85 0.08 245)",
+          "oklch(0.95 0.03 245)"
+        ]
+      },
+      "violet": {
+        "role": "secondary",
+        "displayName": "紫 Violet(模型标识)",
+        "canonical": "oklch(0.73 0.11 300)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 300)",
+          "oklch(0.27 0.05 300)",
+          "oklch(0.39 0.07 300)",
+          "oklch(0.51 0.09 300)",
+          "oklch(0.63 0.10 300)",
+          "oklch(0.75 0.11 300)",
+          "oklch(0.85 0.08 300)",
+          "oklch(0.95 0.03 300)"
+        ]
+      },
+      "red": {
+        "role": "secondary",
+        "displayName": "赤 Red(错误/熔断)",
+        "canonical": "oklch(0.68 0.19 25)",
+        "tonalRamp": [
+          "oklch(0.15 0.05 25)",
+          "oklch(0.27 0.08 25)",
+          "oklch(0.39 0.11 25)",
+          "oklch(0.51 0.14 25)",
+          "oklch(0.63 0.17 25)",
+          "oklch(0.75 0.16 25)",
+          "oklch(0.85 0.10 25)",
+          "oklch(0.95 0.04 25)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "夜空 Night Sky",
+        "canonical": "oklch(0.145 0.006 120)",
+        "tonalRamp": [
+          "oklch(0.145 0.006 120)",
+          "oklch(0.165 0.007 120)",
+          "oklch(0.185 0.008 120)",
+          "oklch(0.215 0.009 120)",
+          "oklch(0.225 0.009 120)",
+          "oklch(0.27 0.010 120)",
+          "oklch(0.40 0.010 120)",
+          "oklch(0.60 0.012 110)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "墨 Ink",
+        "canonical": "oklch(0.93 0.008 110)",
+        "tonalRamp": [
+          "oklch(0.30 0.008 110)",
+          "oklch(0.40 0.010 110)",
+          "oklch(0.50 0.011 110)",
+          "oklch(0.60 0.012 110)",
+          "oklch(0.71 0.015 110)",
+          "oklch(0.80 0.012 110)",
+          "oklch(0.93 0.008 110)",
+          "oklch(0.97 0.005 110)"
+        ]
+      }
     },
     "typographyMeta": {
-      "display": { "displayName": "时钟 Display", "purpose": "仪表盘实时时钟专用;mono + tabular-nums,秒跳不抖版。" },
-      "headline": { "displayName": "视图标题", "purpose": "每视图一个 h1,text-wrap: balance。" },
-      "title": { "displayName": "面板标题", "purpose": "panel-head h2 与卡片标题。" },
-      "body": { "displayName": "正文", "purpose": "正文与聊天内容,长文 text-wrap: pretty,≤68ch。" },
-      "label": { "displayName": "标签", "purpose": "状态胶囊、tag、图例、快捷键提示。" },
-      "data": { "displayName": "数据 Mono", "purpose": "路径、id、分支、命令、token 数——机器的话一律等宽。" }
+      "display": {
+        "displayName": "时钟 Display",
+        "purpose": "仪表盘实时时钟专用;mono + tabular-nums,秒跳不抖版。"
+      },
+      "headline": {
+        "displayName": "视图标题",
+        "purpose": "每视图一个 h1,text-wrap: balance。"
+      },
+      "title": {
+        "displayName": "面板标题",
+        "purpose": "panel-head h2 与卡片标题。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "正文与聊天内容,长文 text-wrap: pretty,≤68ch。"
+      },
+      "label": {
+        "displayName": "标签",
+        "purpose": "状态胶囊、tag、图例、快捷键提示。"
+      },
+      "data": {
+        "displayName": "数据 Mono",
+        "purpose": "路径、id、分支、命令、token 数——机器的话一律等宽。"
+      }
     },
     "derivedTints": {
       "tint-jade": "color-mix(in oklab, oklch(0.80 0.13 115) 13%, transparent)",
@@ -29,24 +145,155 @@
     },
     "categoricalProjectColors": {
       "formula": "oklch(0.78 0.12 H) 文字 / oklch(0.78 0.12 H / 0.16) 底;锁明度锁饱和只转色相",
-      "hueWheel": [115, 245, 300, 195, 345, 55, 160, 270],
+      "hueWheel": [
+        115,
+        245,
+        300,
+        195,
+        345,
+        55,
+        160,
+        270
+      ],
       "assignment": "按项目首次出现顺序取色,生产实现持久化到 SQLite"
     },
     "shadows": [
-      { "name": "drawer", "value": "-12px 0 32px oklch(0.05 0 0 / 0.45)", "purpose": "右侧回放抽屉;悬浮层专属。" },
-      { "name": "float", "value": "0 8px 24px oklch(0.05 0 0 / 0.5)", "purpose": "自绘下拉菜单与 toast。" }
+      {
+        "name": "drawer",
+        "value": "-12px 0 32px oklch(0.05 0 0 / 0.45)",
+        "purpose": "右侧回放抽屉;悬浮层专属。"
+      },
+      {
+        "name": "float",
+        "value": "0 8px 24px oklch(0.05 0 0 / 0.5)",
+        "purpose": "自绘下拉菜单与 toast。"
+      }
     ],
     "motion": [
-      { "name": "ease-standard", "value": "cubic-bezier(0.22, 1, 0.36, 1)", "purpose": "全站唯一缓动,指数缓出。" },
-      { "name": "duration-state", "value": "150ms", "purpose": "hover/焦点/背景等状态过渡。" },
-      { "name": "duration-view", "value": "200ms", "purpose": "视图切换入场(淡入 + 4px 上移)。" },
-      { "name": "duration-overlay", "value": "240ms", "purpose": "抽屉滑入、toast 弹出。" },
-      { "name": "pulse", "value": "2s ease-in-out infinite(opacity 1→0.35)", "purpose": "运行/等待状态圆点脉冲;唯一的循环动效。" }
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "全站唯一缓动,指数缓出。"
+      },
+      {
+        "name": "duration-state",
+        "value": "150ms",
+        "purpose": "hover/焦点/背景等状态过渡。"
+      },
+      {
+        "name": "duration-view",
+        "value": "200ms",
+        "purpose": "视图切换入场(淡入 + 4px 上移)。"
+      },
+      {
+        "name": "duration-overlay",
+        "value": "240ms",
+        "purpose": "抽屉滑入、toast 弹出。"
+      },
+      {
+        "name": "pulse",
+        "value": "2s ease-in-out infinite(opacity 1→0.35)",
+        "purpose": "运行/等待状态圆点脉冲;唯一的循环动效。"
+      }
     ],
     "breakpoints": [
-      { "name": "narrow", "value": "960px", "purpose": "侧栏转顶部横条,面板栈单列,看板横向滚动。" }
+      {
+        "name": "narrow",
+        "value": "960px",
+        "purpose": "侧栏转顶部横条,面板栈单列,看板横向滚动。"
+      }
     ],
-    "zIndexScale": { "dropdown": 10, "sticky": 20, "backdrop": 30, "drawer": 40, "toast": 50 }
+    "zIndexScale": {
+      "dropdown": 10,
+      "sticky": 20,
+      "backdrop": 30,
+      "drawer": 40,
+      "toast": 50
+    },
+    "wallpaper": {
+      "purpose": "可选个性化背景层;默认关闭。三档模式 off/wall/glass,四个 --wall-* 运行参数存 localStorage,永不写 ~/.claude。",
+      "modes": [
+        {
+          "name": "off",
+          "label": "关闭",
+          "desc": "壁纸层隐藏,纯夜空底(默认)。"
+        },
+        {
+          "name": "wall",
+          "label": "壁纸",
+          "desc": "壁纸透在主背景区,面板保持不透明。"
+        },
+        {
+          "name": "glass",
+          "label": "玻璃",
+          "desc": "面板转半透明毛玻璃,壁纸整体透出;仅此档启用 surface/frost。"
+        }
+      ],
+      "params": [
+        {
+          "cssVar": "--wall-opacity",
+          "label": "不透明度",
+          "default": "0.4",
+          "range": "5-50%",
+          "scope": "always",
+          "purpose": "壁纸图层透出强度。"
+        },
+        {
+          "cssVar": "--wall-blur",
+          "label": "模糊",
+          "default": "0px",
+          "range": "0-24px",
+          "scope": "always",
+          "purpose": "壁纸图层全局柔化。"
+        },
+        {
+          "cssVar": "--wall-surface",
+          "label": "表面",
+          "default": "30%",
+          "range": "25-95%",
+          "scope": "glass-only",
+          "purpose": "面板底色不透明度;调低即壁纸透进面板。surface-2 恒低 6 个百分点。"
+        },
+        {
+          "cssVar": "--wall-frost",
+          "label": "磨砂",
+          "default": "0px",
+          "range": "0-24px",
+          "scope": "glass-only",
+          "purpose": "面板 backdrop-filter 模糊强度;全站唯一被批准的 backdrop 模糊用途。"
+        }
+      ],
+      "presets": [
+        {
+          "id": "xingye",
+          "name": "星野",
+          "desc": "北斗七星缀近黑夜空(天璇·天玑玉色致意产品本名),SVG 内联。"
+        },
+        {
+          "id": "shanlan",
+          "name": "山岚",
+          "desc": "层叠远山 + 谷间雾,暗色 SVG 内联。"
+        }
+      ],
+      "persistence": {
+        "store": "localStorage(xuanji.wall)",
+        "writesClaudeDir": false,
+        "largeImageThresholdBytes": 1500000,
+        "largeImageBehavior": "dataURL >1.5MB 仅当次会话生效,不落盘"
+      }
+    },
+    "wallpaperGlassTargets": [
+      ".sidebar",
+      ".panel",
+      ".drawer",
+      ".composer",
+      ".chat",
+      ".toast",
+      ".wall-pop",
+      ".scard",
+      ".dd-menu",
+      ".notice"
+    ]
   },
   "components": [
     {
@@ -128,6 +375,14 @@
       "description": "自绘下拉:无边触发钮 + 悬浮菜单 + 玉色选中勾;原生 select 弹层禁用。",
       "html": "<div class=\"ds-dd\"><button class=\"ds-dd-btn\">~/go-antifraud<span class=\"ds-dd-caret\">▾</span></button><div class=\"ds-dd-menu\"><button class=\"ds-dd-item sel\">~/go-antifraud<span class=\"ds-dd-tick\">✓</span></button><button class=\"ds-dd-item\">~/xuanji<span class=\"ds-dd-tick\">✓</span></button></div></div>",
       "css": ".ds-dd { position: relative; display: inline-block; } .ds-dd-btn { display: flex; align-items: center; gap: 5px; background: none; border: none; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; color: oklch(0.72 0.11 245); padding: 3px 7px; border-radius: 6px; cursor: pointer; transition: background 150ms cubic-bezier(0.22,1,0.36,1); } .ds-dd-btn:hover { background: oklch(0.215 0.009 120); } .ds-dd-caret { font-size: 0.5625rem; color: oklch(0.60 0.012 110); } .ds-dd-menu { position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 200px; background: oklch(0.185 0.008 120); border: 1px solid oklch(0.27 0.010 120); border-radius: 10px; padding: 4px; box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); } .ds-dd-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; background: none; border: none; text-align: left; cursor: pointer; font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.75rem; color: oklch(0.93 0.008 110); padding: 7px 10px; border-radius: 6px; transition: background 150ms cubic-bezier(0.22,1,0.36,1); } .ds-dd-item:hover { background: oklch(0.215 0.009 120); } .ds-dd-tick { color: oklch(0.80 0.13 115); font-size: 0.6875rem; visibility: hidden; } .ds-dd-item.sel .ds-dd-tick { visibility: visible; }"
+    },
+    {
+      "name": "Wallpaper Settings Panel",
+      "kind": "custom",
+      "refersTo": "wallpaper-panel",
+      "description": "侧栏底部入口向上弹出的壁纸设置面板:三档模式 + 四滑杆,surface 底、10px 圆角、悬浮影。",
+      "html": "<div class=\"ds-wall-pop\" role=\"dialog\" aria-label=\"壁纸设置\"><div class=\"ds-wall-row\"><span class=\"ds-wall-label\">不透明度</span><input type=\"range\" min=\"5\" max=\"50\" value=\"40\"><span class=\"ds-wall-val\">40%</span></div></div>",
+      "css": ".ds-wall-pop { background: var(--surface, oklch(0.185 0.008 120)); border: 1px solid var(--line, oklch(0.27 0.01 120)); border-radius: 10px; padding: 14px 16px 12px; width: 320px; box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45); } .ds-wall-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; } .ds-wall-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted, oklch(0.71 0.015 110)); } .ds-wall-pop input[type=range] { flex: 1; appearance: none; -webkit-appearance: none; height: 4px; border-radius: 99px; background: var(--line, oklch(0.27 0.01 120)); cursor: pointer; } .ds-wall-pop input[type=range]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--jade, oklch(0.80 0.13 115)); } .ds-wall-val { flex: none; width: 40px; text-align: right; font-family: ui-monospace, monospace; font-size: 0.6875rem; color: var(--muted, oklch(0.71 0.015 110)); font-variant-numeric: tabular-nums; }"
     }
   ],
   "narrative": {
@@ -141,12 +396,46 @@
       "动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion"
     ],
     "rules": [
-      { "name": "状态色即语义规则", "body": "玉=运行、琥珀=等待、蓝=完成/信息、红=错误/熔断。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。", "section": "colors" },
-      { "name": "等明度分类规则", "body": "项目分类色一律 oklch(0.78 0.12 H) 只转色相(八色环避开红与琥珀语义区),按首次出现顺序分配并持久化。", "section": "colors" },
-      { "name": "一成玉规则", "body": "玉色在任何一屏的覆盖面积 ≤10%。它的稀有就是它的层级。", "section": "colors" },
-      { "name": "表格数字规则", "body": "一切会跳动的数字必须开 tabular-nums,数字变化不得引起横向抖动。", "section": "typography" },
-      { "name": "两族分工规则", "body": "UI 说人话用无衬线,机器说话用等宽;禁止第三字族,禁止 display 字体出现在标签、按钮或数据上。", "section": "typography" },
-      { "name": "悬浮才有影规则", "body": "任何贴在文档流里的元素禁止 box-shadow;看到影子就意味着这层悬浮着,点外面会收回去。", "section": "elevation" }
+      {
+        "name": "状态色即语义规则",
+        "body": "玉=运行、琥珀=等待、蓝=完成/信息、红=错误/熔断。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。",
+        "section": "colors"
+      },
+      {
+        "name": "等明度分类规则",
+        "body": "项目分类色一律 oklch(0.78 0.12 H) 只转色相(八色环避开红与琥珀语义区),按首次出现顺序分配并持久化。",
+        "section": "colors"
+      },
+      {
+        "name": "一成玉规则",
+        "body": "玉色在任何一屏的覆盖面积 ≤10%。它的稀有就是它的层级。",
+        "section": "colors"
+      },
+      {
+        "name": "表格数字规则",
+        "body": "一切会跳动的数字必须开 tabular-nums,数字变化不得引起横向抖动。",
+        "section": "typography"
+      },
+      {
+        "name": "两族分工规则",
+        "body": "UI 说人话用无衬线,机器说话用等宽;禁止第三字族,禁止 display 字体出现在标签、按钮或数据上。",
+        "section": "typography"
+      },
+      {
+        "name": "悬浮才有影规则",
+        "body": "任何贴在文档流里的元素禁止 box-shadow;看到影子就意味着这层悬浮着,点外面会收回去。",
+        "section": "elevation"
+      },
+      {
+        "name": "玻璃表面规则",
+        "body": "仅当用户显式开启壁纸玻璃档时,--surface/--surface-2 才由 --wall-surface(默认 30%,范围 25-95%)经 color-mix 重映射为半透明,surface-2 恒比 surface 低 6 个百分点。默认(关闭或纯壁纸档)surface 永远不透明。",
+        "section": "colors"
+      },
+      {
+        "name": "磨砂即选项规则",
+        "body": "backdrop 模糊只属于用户显式开启的壁纸玻璃档,默认值恒为 0;任何非壁纸场景把 backdrop-filter 当装饰使用都被禁止。",
+        "section": "elevation"
+      }
     ],
     "dos": [
       "Do 用四层色调阶梯(bg → surface-2 → surface → hover)表达一切静态深度;影子只给悬浮层。",
@@ -154,7 +443,8 @@
       "Do 状态永远「色 + 文字标签」并行;图表永远配图例与悬停精确值。",
       "Do 新增项目分类色时沿用 oklch(0.78 0.12 H) 锁明度公式,从八色环顺序取色。",
       "Do 所有过渡 150–250ms、cubic-bezier(0.22,1,0.36,1) 缓出,只在状态变化时发生;提供 prefers-reduced-motion 瞬时降级。",
-      "Do 可变长度文案一律限行截断,全文放下钻层或悬停提示。"
+      "Do 可变长度文案一律限行截断,全文放下钻层或悬停提示。",
+      "Do 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 --wall-* 参数用户可调、存 localStorage,永不写 ~/.claude;预设一律暗色低饱和以守夜间底线。"
     ],
     "donts": [
       "Don't 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效。",
@@ -163,7 +453,8 @@
       "Don't 把状态色用作装饰或图表系列色;图表大面积填充只允许 chart-* 降饱和系列。",
       "Don't 使用 >1px 彩色侧条、background-clip: text 渐变字、默认玻璃模糊。",
       "Don't 让任何贴流元素投影。",
-      "Don't 用原生 select 弹层/系统默认控件样式直接见人;同一动作在两处长得不一样,其中一处就是错的。"
+      "Don't 用原生 select 弹层/系统默认控件样式直接见人;同一动作在两处长得不一样,其中一处就是错的。",
+      "Don't 把玻璃模糊当默认外观:玻璃拟态仅作为用户显式开启、默认关闭的壁纸玻璃档存在,--wall-frost 默认恒为 0,绝不把 backdrop 模糊塞进任何非壁纸场景当装饰。"
     ]
   }
 }
