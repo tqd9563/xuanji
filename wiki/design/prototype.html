@@ -391,12 +391,21 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
-/* 会话标识(页头):当前窗口绑定会话的 名称 + 项目芯片 + id,沿用会话看板卡片的同一词汇。
-   与来路返回按钮解耦:只要 chat 还挂着这个会话,离开再回来标识仍在;标题限一行截断(可变字段纪律) */
-.sess-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 14px; border-left: 1px solid var(--line); }
-.sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
-.sess-ctx .sc-title.unnamed { color: var(--faint); font-weight: 400; }
+/* 会话标识:当前窗口绑定会话的 名称 + id。名称按所属项目色「荧光」呈现——项目身份编码进颜色,
+   于是项目芯片不再单列(悬停 title 仍可见项目路径,term-line 也另有蓝色 cwd 兜底)。
+   未命名态转 faint 中性、去光晕,区分「待首轮命名」。与来路返回解耦:chat 挂着会话标识就在。
+   三处候选位置(顶部页头 / 输入框上 / 输入框下)由页头位置开关切换,便于对比取舍。 */
+.sess-ctx { display: flex; align-items: center; gap: 10px; min-width: 0; }
+#sc-slot-top { padding-left: 14px; border-left: 1px solid var(--line); }
+.sess-ctx-bar { padding: 9px 6px; }
+.sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
+/* 荧光名:项目色(--ph 由 JS 注入色相),叠一层同色低透光晕——「数据是唯一发光的东西」的北极星 */
+.sess-ctx .sc-title.named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
+.sess-ctx .sc-title.unnamed { color: var(--faint); font-weight: 400; text-shadow: none; }
 .sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
+/* 位置开关:原型对比取舍用,复用 filter-tabs 分段样式 */
+.place-switch { flex: none; }
+.place-switch button { font-size: 0.6875rem; padding: 4px 10px; }
 /* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
 .chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
 .cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
@@ -675,7 +684,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
-  .sess-ctx { border-left: none; padding-left: 0; } /* 窄屏换行后分隔线沦为孤立短竖线,撤掉 */
+  #sc-slot-top { border-left: none; padding-left: 0; } /* 窄屏换行后分隔线沦为孤立短竖线,撤掉 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -797,8 +806,13 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
       <div class="view-head">
         <h1>派发</h1>
         <button class="btn btn-sm" id="back-board" style="display:none" onclick="backToBoard()" title="快捷键 ← 或 Esc">‹ 会话看板</button>
-        <div class="sess-ctx" id="sess-ctx" style="display:none"></div>
+        <div class="sess-ctx" id="sc-slot-top" style="display:none"></div>
         <span class="spacer"></span>
+        <div class="place-switch filter-tabs" id="place-switch" title="原型对比:会话标识放在哪里">
+          <button data-place="top" class="active">顶部</button>
+          <button data-place="above">输入框上</button>
+          <button data-place="below">输入框下</button>
+        </div>
         <button class="btn" id="new-chat">新会话</button>
       </div>
       <div class="dispatch">
@@ -814,6 +828,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
           </span>
           <span class="cs-state" id="agent-status"><span class="cs-dot"></span>空闲</span>
         </div>
+        <div class="sess-ctx sess-ctx-bar" id="sc-slot-above" style="display:none"></div>
         <div class="composer">
           <textarea id="composer-input" rows="2" placeholder="描述要派发的任务…"></textarea>
           <div class="c-bar">
@@ -822,6 +837,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
             <button class="btn btn-primary" id="send-btn">发送</button>
           </div>
         </div>
+        <div class="sess-ctx sess-ctx-bar" id="sc-slot-below" style="display:none"></div>
         <div class="term-line">
           <div class="dd" id="cwd-dd" title="工作目录:决定下一个派发会话的 cwd 与加载的项目级 CLAUDE.md"></div>
           <span class="branch mono" id="cwd-branch" title="git 状态:! 已修改 · ? 未跟踪 · ↑ 领先远端未推送"></span>
@@ -1602,14 +1618,28 @@ function backToBoard() {
 /* 会话标识:派发页头部展示当前 chat 绑定会话的 名称 + 项目 + id。
    生命周期跟随 chat 绑定的会话(resume / 新会话 / 跨目录交接 / 首轮自动命名),与 dispatchOrigin(来路)无关。
    实际实现:名称来自 jobs/state.json 的 name 字段或 --resume 会话的 summary,首轮回复结束后由 daemon 回填。 */
-function setSessCtx(s) {
-  const el = $('#sess-ctx');
-  if (!s) { el.style.display = 'none'; el.innerHTML = ''; return; }
-  el.style.display = '';
-  el.innerHTML = `
-    <span class="sc-title${s.title ? '' : ' unnamed'}" title="${esc(s.title || '首轮回复结束后自动命名')}">${esc(s.title || '未命名会话')}</span>
-    ${projChip(s.cwd)}
+let placeMode = 'top'; /* 会话标识位置:top(顶部页头)/ above(输入框上)/ below(输入框下),原型对比用 */
+const SC_SLOTS = { top: '#sc-slot-top', above: '#sc-slot-above', below: '#sc-slot-below' };
+function applyPlace() {
+  const hasSess = $('#sc-slot-top').innerHTML.trim() !== '';
+  Object.entries(SC_SLOTS).forEach(([mode, sel]) => {
+    $(sel).style.display = (hasSess && mode === placeMode) ? '' : 'none';
+  });
+}
+function sessCtxHTML(s) {
+  if (!s) return '';
+  const h = projHue(s.cwd.split('/').pop()); /* 名称荧光色 = 该项目锁明度分类色的色相 */
+  const named = !!s.title;
+  const label = named ? s.title : '未命名会话';
+  const tip = (named ? s.title : '首轮回复结束后自动命名') + ' · 项目 ' + s.cwd; /* 项目芯片隐藏后,项目路径退到悬停 */
+  return `
+    <span class="sc-title ${named ? 'named' : 'unnamed'}" style="--ph:${h}" title="${esc(tip)}">${esc(label)}</span>
     <span class="sc-id">${esc(s.id)}</span>`;
+}
+function setSessCtx(s) {
+  const html = sessCtxHTML(s);
+  Object.values(SC_SLOTS).forEach(sel => { $(sel).innerHTML = html; });
+  applyPlace();
 }
 function mockId() {
   return Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -2091,6 +2121,13 @@ $('#composer-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 $('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); setSessCtx(null); sessionCwd = currentCwd; updateCwdNote(); });
+$('#place-switch').addEventListener('click', e => {
+  const b = e.target.closest('button[data-place]');
+  if (!b) return;
+  placeMode = b.dataset.place;
+  $$('#place-switch button').forEach(x => x.classList.toggle('active', x === b));
+  applyPlace();
+});
 $('#bg-switch').addEventListener('click', function () {
   this.classList.toggle('on');
   this.setAttribute('aria-checked', this.classList.contains('on'));
