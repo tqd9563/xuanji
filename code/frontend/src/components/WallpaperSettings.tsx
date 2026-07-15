@@ -5,7 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { toast } from '@/components/shared';
 import {
-  isEphemeralCustom,
+  saveLocalImage,
   wallSrcName,
   WALL_PRESETS,
   type WallMode,
@@ -56,14 +56,14 @@ export function WallpaperSettings({
 
   const onPickFile = (f: File | undefined) => {
     if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      patch({ custom: String(r.result), src: 'custom' });
-      if (String(r.result).length > 1_500_000) {
-        toast('图片较大,仅本次会话生效(不落 localStorage)');
-      }
-    };
-    r.readAsDataURL(f);
+    // 换图前回收上一张 object URL,避免内存泄漏
+    if (wall.custom.startsWith('blob:')) URL.revokeObjectURL(wall.custom);
+    saveLocalImage(f)
+      .then(({ url, persistent }) => {
+        patch({ custom: url, src: 'custom' });
+        if (!persistent) toast('浏览器不支持本地持久化,图片仅本次会话生效');
+      })
+      .catch(() => toast('图片读取失败'));
   };
 
   const stateLabel =
@@ -167,8 +167,7 @@ export function WallpaperSettings({
           </div>
           <p className="wp-note">
             「表面」= 面板底色不透明度,「磨砂」= 面板毛玻璃模糊强度,均仅玻璃档生效。
-            {isEphemeralCustom(wall) ? '当前本地图片较大,仅本次会话生效。' : ''}
-            设置只存本机浏览器,不写 ~/.claude。
+            设置与本地图片只存本机浏览器,不写 ~/.claude。
           </p>
         </div>
       )}
