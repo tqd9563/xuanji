@@ -10,9 +10,17 @@ import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessio
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
 import { todayUsage } from '../services/usage.js';
+import { weeklyReview } from '../services/weekly-review.js';
+import { startWeeklyDraft } from '../services/weekly-draft.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
+
+/** query/body 数值参数:仅接受有限正数 */
+function num(v: unknown): number | undefined {
+  const n = typeof v === 'string' ? Number(v) : typeof v === 'number' ? v : NaN;
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
 
 export function createApi(storage: Storage) {
   const api = new Hono();
@@ -160,6 +168,40 @@ export function createApi(storage: Storage) {
     if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
     storage.unhideSession(sessionId);
     return c.json({ ok: true });
+  });
+
+  // ---------- 周回顾 ----------
+
+  /** 周活动聚合:默认最近 7 天;start/end 为 epoch ms,窗口封顶 32 天 */
+  api.get('/weekly-review', async (c) => {
+    const now = Date.now();
+    const end = num(c.req.query('end')) ?? now;
+    const start = num(c.req.query('start')) ?? end - 7 * DAY;
+    if (!(start < end) || end - start > 32 * DAY) {
+      return c.json({ error: 'start/end 需为 ms 且 0 < end - start ≤ 32 天' }, 400);
+    }
+    return c.json(await weeklyReview(storage, start, end));
+  });
+
+  /** 手动生成周报草稿:走派发通道(看板可跟踪),立即返回草稿 id,前端轮询 drafts */
+  api.post('/weekly-review/draft', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const end = num(body.end) ?? Date.now();
+    const start = num(body.start) ?? end - 7 * DAY;
+    if (!(start < end) || end - start > 32 * DAY) {
+      return c.json({ error: 'start/end 需为 ms 且 0 < end - start ≤ 32 天' }, 400);
+    }
+    const model = typeof body.model === 'string' && body.model ? body.model : undefined;
+    try {
+      return c.json(await startWeeklyDraft(storage, { start, end, model }));
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  });
+
+  /** 草稿列表(倒序,含 running/done/error),前端按窗口过滤与轮询 */
+  api.get('/weekly-review/drafts', async (c) => {
+    return c.json({ drafts: storage.listDrafts() });
   });
 
   api.get('/crons', async (c) => {

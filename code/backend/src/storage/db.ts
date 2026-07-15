@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { eq } from 'drizzle-orm';
-import type { Memory } from '../types.js';
+import type { Memory, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -58,6 +58,20 @@ export const dispatchPromptsTable = sqliteTable('dispatch_prompts', {
   at: integer('at').notNull(),
 });
 
+/** 周报草稿(自有数据):周回顾视图的产物,生成会话可在看板跟踪/续接 */
+export const weeklyDraftsTable = sqliteTable('weekly_drafts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  rangeStart: integer('range_start').notNull(),
+  rangeEnd: integer('range_end').notNull(),
+  status: text('status').notNull(), // running | done | error
+  content: text('content'),
+  error: text('error'),
+  model: text('model').notNull(),
+  sessionId: text('session_id'),
+  createdAt: integer('created_at').notNull(),
+  finishedAt: integer('finished_at'),
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -88,6 +102,13 @@ export class Storage {
       CREATE TABLE IF NOT EXISTS dispatch_prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT, cwd TEXT NOT NULL, display TEXT NOT NULL, at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS weekly_drafts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        range_start INTEGER NOT NULL, range_end INTEGER NOT NULL,
+        status TEXT NOT NULL, content TEXT, error TEXT,
+        model TEXT NOT NULL, session_id TEXT,
+        created_at INTEGER NOT NULL, finished_at INTEGER
       );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
@@ -214,6 +235,38 @@ export class Storage {
       next++;
     }
     return map;
+  }
+
+  // ---------- 周报草稿 ----------
+
+  createDraft(rangeStart: number, rangeEnd: number, model: string): number {
+    const r = this.orm
+      .insert(weeklyDraftsTable)
+      .values({ rangeStart, rangeEnd, status: 'running', model, createdAt: Date.now() })
+      .run();
+    return Number(r.lastInsertRowid);
+  }
+
+  updateDraft(
+    id: number,
+    patch: Partial<{ status: string; content: string; error: string; sessionId: string; finishedAt: number }>,
+  ) {
+    this.orm.update(weeklyDraftsTable).set(patch).where(eq(weeklyDraftsTable.id, id)).run();
+  }
+
+  getDraft(id: number): WeeklyDraft | null {
+    return (this.orm.select().from(weeklyDraftsTable).where(eq(weeklyDraftsTable.id, id)).get() as WeeklyDraft | undefined) ?? null;
+  }
+
+  /** 最近草稿(倒序),前端按窗口自行过滤 */
+  listDrafts(limit = 20): WeeklyDraft[] {
+    return this.sqlite
+      .prepare(
+        `SELECT id, range_start as rangeStart, range_end as rangeEnd, status, content, error,
+                model, session_id as sessionId, created_at as createdAt, finished_at as finishedAt
+         FROM weekly_drafts ORDER BY id DESC LIMIT ?`,
+      )
+      .all(limit) as WeeklyDraft[];
   }
 
   getMeta(key: string): string | null {
