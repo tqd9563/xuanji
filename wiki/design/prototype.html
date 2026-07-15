@@ -395,9 +395,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    于是项目芯片不再单列(悬停 title 仍可见项目路径,term-line 也另有蓝色 cwd 兜底)。
    未命名态转 faint 中性、去光晕,区分「待首轮命名」。与来路返回解耦:chat 挂着会话标识就在。
    三处候选位置(顶部页头 / 输入框上 / 输入框下)由页头位置开关切换,便于对比取舍。 */
-.sess-ctx { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sess-ctx { display: flex; align-items: center; gap: 10px; min-width: 0; flex: none; }
 #sc-slot-top { padding-left: 14px; border-left: 1px solid var(--line); }
 .sess-ctx-bar { padding: 9px 6px; }
+/* "输入框上"是与用量条同行的行内标识,标题需给三条用量条与右侧 agent 状态让出空间,上限收窄 */
+#sc-slot-inline { max-width: 40%; }
+#sc-slot-inline .sc-title { max-width: 20ch; }
 .sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
 /* 荧光名:项目色(--ph 由 JS 注入色相),叠一层同色低透光晕——「数据是唯一发光的东西」的北极星 */
 .sess-ctx .sc-title.named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
@@ -685,6 +688,9 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
   #sc-slot-top { border-left: none; padding-left: 0; } /* 窄屏换行后分隔线沦为孤立短竖线,撤掉 */
+  .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
+  #sc-slot-inline { max-width: 100%; }
+  .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -809,8 +815,8 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
         <div class="sess-ctx" id="sc-slot-top" style="display:none"></div>
         <span class="spacer"></span>
         <div class="place-switch filter-tabs" id="place-switch" title="原型对比:会话标识放在哪里">
-          <button data-place="top" class="active">顶部</button>
-          <button data-place="above">输入框上</button>
+          <button data-place="top">顶部</button>
+          <button data-place="above" class="active">输入框上</button>
           <button data-place="below">输入框下</button>
         </div>
         <button class="btn" id="new-chat">新会话</button>
@@ -818,6 +824,8 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
       <div class="dispatch">
         <div class="chat" id="chat"></div>
         <div class="chat-status">
+          <!-- "输入框上"的会话标识与用量条同一行:标识占左端,用量条紧随其右,agent 状态仍靠 margin-left:auto 顶到最右 -->
+          <div class="sess-ctx" id="sc-slot-inline" style="display:none"></div>
           <!-- 用量三档取色:<50% 玉(健康)/ 50–75% 琥珀(注意)/ ≥75% 红(告警) -->
           <span class="u-chips">
             <span class="u-chip" title="Context 32%">
@@ -828,7 +836,6 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
           </span>
           <span class="cs-state" id="agent-status"><span class="cs-dot"></span>空闲</span>
         </div>
-        <div class="sess-ctx sess-ctx-bar" id="sc-slot-above" style="display:none"></div>
         <div class="composer">
           <textarea id="composer-input" rows="2" placeholder="描述要派发的任务…"></textarea>
           <div class="c-bar">
@@ -1618,8 +1625,8 @@ function backToBoard() {
 /* 会话标识:派发页头部展示当前 chat 绑定会话的 名称 + 项目 + id。
    生命周期跟随 chat 绑定的会话(resume / 新会话 / 跨目录交接 / 首轮自动命名),与 dispatchOrigin(来路)无关。
    实际实现:名称来自 jobs/state.json 的 name 字段或 --resume 会话的 summary,首轮回复结束后由 daemon 回填。 */
-let placeMode = 'top'; /* 会话标识位置:top(顶部页头)/ above(输入框上)/ below(输入框下),原型对比用 */
-const SC_SLOTS = { top: '#sc-slot-top', above: '#sc-slot-above', below: '#sc-slot-below' };
+let placeMode = 'above'; /* 会话标识位置:top(顶部页头)/ above(输入框上,与用量条同行,当前倾向)/ below(输入框下),原型对比用 */
+const SC_SLOTS = { top: '#sc-slot-top', above: '#sc-slot-inline', below: '#sc-slot-below' };
 function applyPlace() {
   const hasSess = $('#sc-slot-top').innerHTML.trim() !== '';
   Object.entries(SC_SLOTS).forEach(([mode, sel]) => {
