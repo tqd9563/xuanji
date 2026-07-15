@@ -7,9 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
-import { eq } from 'drizzle-orm';
-import type { Memory, WeeklyDraft } from '../types.js';
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { desc, eq } from 'drizzle-orm';
+import type { Memory, ScheduledJob, ScheduledRun, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -56,6 +56,41 @@ export const dispatchPromptsTable = sqliteTable('dispatch_prompts', {
   cwd: text('cwd').notNull(),
   display: text('display').notNull(),
   at: integer('at').notNull(),
+});
+
+/** 定时任务定义(自有数据,M3):一次性 + 周期统一模型,到点由 SchedulerService 触发真实派发会话 */
+export const scheduledJobsTable = sqliteTable('scheduled_jobs', {
+  id: text('id').primaryKey(),
+  kind: text('kind').notNull(), // once | cron
+  name: text('name').notNull(),
+  prompt: text('prompt').notNull(),
+  cwd: text('cwd').notNull(),
+  model: text('model'),
+  permissionMode: text('permission_mode').notNull(),
+  maxBudgetUsd: real('max_budget_usd'),
+  runAt: integer('run_at'),
+  cronExpr: text('cron_expr'),
+  status: text('status').notNull(),
+  consecutiveFailures: integer('consecutive_failures').notNull().default(0),
+  resultSessionId: text('result_session_id'),
+  lastError: text('last_error'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  nextRunAt: integer('next_run_at'),
+});
+
+/** 定时任务运行历史(自有数据,M3):每次触发一行,周期任务逐期累积 */
+export const scheduledRunsTable = sqliteTable('scheduled_runs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  jobId: text('job_id').notNull(),
+  scheduledFor: integer('scheduled_for').notNull(),
+  startedAt: integer('started_at'),
+  finishedAt: integer('finished_at'),
+  status: text('status').notNull(), // running | done | error | blocked | missed
+  sessionId: text('session_id'),
+  costUsd: real('cost_usd'),
+  durationMs: integer('duration_ms'),
+  error: text('error'),
 });
 
 /** 周报草稿(自有数据):周回顾视图的产物,生成会话可在看板跟踪/续接 */
@@ -110,6 +145,20 @@ export class Storage {
         model TEXT NOT NULL, session_id TEXT,
         created_at INTEGER NOT NULL, finished_at INTEGER
       );
+      CREATE TABLE IF NOT EXISTS scheduled_jobs (
+        id TEXT PRIMARY KEY, kind TEXT NOT NULL, name TEXT NOT NULL, prompt TEXT NOT NULL,
+        cwd TEXT NOT NULL, model TEXT, permission_mode TEXT NOT NULL, max_budget_usd REAL,
+        run_at INTEGER, cron_expr TEXT, status TEXT NOT NULL,
+        consecutive_failures INTEGER NOT NULL DEFAULT 0,
+        result_session_id TEXT, last_error TEXT,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, next_run_at INTEGER
+      );
+      CREATE TABLE IF NOT EXISTS scheduled_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, job_id TEXT NOT NULL,
+        scheduled_for INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER,
+        status TEXT NOT NULL, session_id TEXT, cost_usd REAL, duration_ms INTEGER, error TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_scheduled_runs_job ON scheduled_runs(job_id, id DESC);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
@@ -307,6 +356,63 @@ export class Storage {
     } catch {
       return [];
     }
+  }
+
+  // ---------- 定时任务(M3) ----------
+
+  createScheduledJob(job: Omit<ScheduledJob, 'createdAt' | 'updatedAt'>) {
+    const now = Date.now();
+    this.orm
+      .insert(scheduledJobsTable)
+      .values({ ...job, createdAt: now, updatedAt: now })
+      .run();
+  }
+
+  updateScheduledJob(id: string, patch: Partial<Omit<ScheduledJob, 'id' | 'createdAt'>>) {
+    this.orm
+      .update(scheduledJobsTable)
+      .set({ ...patch, updatedAt: Date.now() })
+      .where(eq(scheduledJobsTable.id, id))
+      .run();
+  }
+
+  getScheduledJob(id: string): ScheduledJob | null {
+    return (this.orm.select().from(scheduledJobsTable).where(eq(scheduledJobsTable.id, id)).get() as ScheduledJob | undefined) ?? null;
+  }
+
+  /** 全部任务,创建时间倒序(新建的排前面) */
+  listScheduledJobs(): ScheduledJob[] {
+    return this.orm.select().from(scheduledJobsTable).orderBy(desc(scheduledJobsTable.createdAt)).all() as ScheduledJob[];
+  }
+
+  deleteScheduledJob(id: string) {
+    this.orm.delete(scheduledJobsTable).where(eq(scheduledJobsTable.id, id)).run();
+    this.sqlite.prepare('DELETE FROM scheduled_runs WHERE job_id = ?').run(id);
+  }
+
+  createScheduledRun(run: Omit<ScheduledRun, 'id'>): number {
+    const r = this.orm.insert(scheduledRunsTable).values(run).run();
+    return Number(r.lastInsertRowid);
+  }
+
+  updateScheduledRun(id: number, patch: Partial<Omit<ScheduledRun, 'id' | 'jobId'>>) {
+    this.orm.update(scheduledRunsTable).set(patch).where(eq(scheduledRunsTable.id, id)).run();
+  }
+
+  /** 某任务的运行历史,倒序(最新在前);limit 封顶,「查看全部」由更大 limit 的同一接口满足 */
+  listScheduledRuns(jobId: string, limit = 50): ScheduledRun[] {
+    return this.sqlite
+      .prepare(
+        `SELECT id, job_id as jobId, scheduled_for as scheduledFor, started_at as startedAt, finished_at as finishedAt,
+                status, session_id as sessionId, cost_usd as costUsd, duration_ms as durationMs, error
+         FROM scheduled_runs WHERE job_id = ? ORDER BY id DESC LIMIT ?`,
+      )
+      .all(jobId, limit) as ScheduledRun[];
+  }
+
+  countScheduledRuns(jobId: string): number {
+    const row = this.sqlite.prepare('SELECT COUNT(*) as n FROM scheduled_runs WHERE job_id = ?').get(jobId) as { n: number };
+    return row.n;
   }
 
   close() {

@@ -12,6 +12,7 @@ import { listMemories, searchMemories } from '../services/memories.js';
 import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
+import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
@@ -22,7 +23,7 @@ function num(v: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-export function createApi(storage: Storage) {
+export function createApi(storage: Storage, scheduler: SchedulerService) {
   const api = new Hono();
 
   api.get('/health', async (c) => {
@@ -207,10 +208,120 @@ export function createApi(storage: Storage) {
   api.get('/crons', async (c) => {
     const system = await readCrontab();
     return c.json({
-      app: [], // 应用内调度器 M3 落地
+      app: scheduler.list(),
       system,
-      caliber: 'system 来自 crontab -l 只读输出(过滤注释与空行),仅展示不接管',
+      caliber: 'app 为璇玑应用内调度器(croner);system 来自 crontab -l 只读输出(过滤注释与空行),仅展示不接管',
     });
+  });
+
+  // ---------- 定时任务(M3) ----------
+
+  const PERMISSION_MODES = new Set(['default', 'acceptEdits', 'plan', 'bypassPermissions']);
+
+  function validateJobBody(body: Record<string, unknown>): { error: string } | null {
+    if (body.kind !== 'once' && body.kind !== 'cron') return { error: 'kind 需为 once 或 cron' };
+    if (typeof body.name !== 'string' || !body.name.trim()) return { error: 'name 不能为空' };
+    if (typeof body.prompt !== 'string' || !body.prompt.trim()) return { error: 'prompt 不能为空' };
+    if (typeof body.cwd !== 'string' || !body.cwd.trim()) return { error: 'cwd 不能为空' };
+    if (body.permissionMode !== undefined && !PERMISSION_MODES.has(String(body.permissionMode))) {
+      return { error: `permissionMode 需为 ${[...PERMISSION_MODES].join('/')}` };
+    }
+    if (body.kind === 'once' && !num(body.runAt)) return { error: 'once 任务需要 runAt(未来时间,epoch ms)' };
+    if (body.kind === 'cron' && (typeof body.cronExpr !== 'string' || !body.cronExpr.trim())) {
+      return { error: 'cron 任务需要 cronExpr' };
+    }
+    if (body.maxBudgetUsd !== undefined && body.maxBudgetUsd !== null && !num(body.maxBudgetUsd)) {
+      return { error: 'maxBudgetUsd 需为正数或省略(不限)' };
+    }
+    return null;
+  }
+
+  api.get('/schedules', async (c) => c.json({ jobs: scheduler.list() }));
+
+  api.post('/schedules', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const invalid = validateJobBody(body);
+    if (invalid) return c.json(invalid, 400);
+    try {
+      const job = scheduler.create({
+        kind: body.kind,
+        name: String(body.name).trim(),
+        prompt: String(body.prompt).trim(),
+        cwd: String(body.cwd).trim(),
+        model: typeof body.model === 'string' && body.model ? body.model : undefined,
+        permissionMode: body.permissionMode ? String(body.permissionMode) : 'default',
+        maxBudgetUsd: num(body.maxBudgetUsd),
+        runAt: num(body.runAt),
+        cronExpr: typeof body.cronExpr === 'string' ? body.cronExpr : undefined,
+      });
+      return c.json({ job }, 201);
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+  });
+
+  api.get('/schedules/:id', async (c) => {
+    const job = scheduler.get(c.req.param('id'));
+    if (!job) return c.json({ error: 'not found' }, 404);
+    return c.json({ job });
+  });
+
+  api.patch('/schedules/:id', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (body.permissionMode !== undefined && !PERMISSION_MODES.has(String(body.permissionMode))) {
+      return c.json({ error: `permissionMode 需为 ${[...PERMISSION_MODES].join('/')}` }, 400);
+    }
+    const patch: UpdateJobInput = {
+      name: typeof body.name === 'string' && body.name.trim() ? body.name.trim() : undefined,
+      prompt: typeof body.prompt === 'string' && body.prompt.trim() ? body.prompt.trim() : undefined,
+      cwd: typeof body.cwd === 'string' && body.cwd.trim() ? body.cwd.trim() : undefined,
+      model: body.model !== undefined ? (typeof body.model === 'string' && body.model ? body.model : null) : undefined,
+      permissionMode: typeof body.permissionMode === 'string' ? body.permissionMode : undefined,
+      maxBudgetUsd: body.maxBudgetUsd !== undefined ? (num(body.maxBudgetUsd) ?? null) : undefined,
+      runAt: body.runAt !== undefined ? (num(body.runAt) ?? null) : undefined,
+      cronExpr: typeof body.cronExpr === 'string' ? body.cronExpr : undefined,
+    };
+    try {
+      const job = scheduler.update(c.req.param('id'), patch);
+      return c.json({ job });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 400);
+    }
+  });
+
+  api.delete('/schedules/:id', async (c) => {
+    if (!scheduler.get(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    scheduler.remove(c.req.param('id'));
+    return c.json({ ok: true });
+  });
+
+  /** 运行历史:逐期一行,倒序;limit 默认 7(折叠态摘要),?limit=all 或大数字取完整历史(「查看全部」) */
+  api.get('/schedules/:id/runs', async (c) => {
+    if (!scheduler.get(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    const limitParam = c.req.query('limit');
+    const limit = limitParam === 'all' ? 100_000 : (num(limitParam) ?? 7);
+    return c.json(scheduler.runs(c.req.param('id'), limit));
+  });
+
+  api.post('/schedules/:id/run-now', async (c) => {
+    if (!scheduler.runNow(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  api.post('/schedules/:id/pause', async (c) => {
+    if (!scheduler.pause(c.req.param('id'))) return c.json({ error: '仅周期任务可暂停,或任务不存在' }, 400);
+    return c.json({ ok: true });
+  });
+
+  api.post('/schedules/:id/resume', async (c) => {
+    if (!scheduler.resume(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  /** 一次性任务取消(尚未触发时);周期任务用 /pause */
+  api.post('/schedules/:id/cancel', async (c) => {
+    if (!scheduler.cancel(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
   });
 
   return api;
