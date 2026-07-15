@@ -1,7 +1,8 @@
 /**
- * 壁纸背景:状态模型 + 内置预设 + localStorage 持久化 + DOM 应用。
+ * 壁纸背景:状态模型 + 内置预设 + 本地持久化 + DOM 应用。
  * 设计规范来源:wiki/design/prototype.html 壁纸演示(2026-07-14 获批,默认 40/30/0/0)。
- * 只存本机浏览器(localStorage),不写 ~/.claude(架构铁律:只读优先)。
+ * 持久化只在本机浏览器:元数据存 localStorage,本地图片原图 Blob 存 IndexedDB;
+ * 均不写 ~/.claude(架构铁律:只读优先)。
  */
 import { useCallback, useEffect, useState } from 'react';
 
@@ -9,7 +10,7 @@ export type WallMode = 'off' | 'wall' | 'glass';
 
 export interface WallState {
   mode: WallMode;
-  /** 'preset:<id>' | 'custom'(本地图片 dataURL) | 其它任意 URL */
+  /** 'preset:<id>' | 'custom'(本地图片,原图存 IndexedDB) | 其它任意 URL */
   src: string;
   /** 壁纸不透明度 % */
   opacity: number;
@@ -19,7 +20,10 @@ export interface WallState {
   surface: number;
   /** 玻璃档:面板毛玻璃模糊 px */
   frost: number;
-  /** 本地图片 dataURL(过大时不持久化,仅本次会话生效) */
+  /**
+   * 本地图片的运行期 URL(object URL 或降级 dataURL)。
+   * 不写 localStorage:src==='custom' 时挂载后由 IndexedDB 异步读回并填充。
+   */
   custom: string;
 }
 
@@ -35,8 +39,108 @@ export const WALL_DEFAULTS: WallState = {
 };
 
 const STORAGE_KEY = 'xuanji.wall';
-/** dataURL 超过此长度不写 localStorage(5MB 配额保护) */
-const PERSIST_MAX = 1_500_000;
+
+/* ---------- IndexedDB:本地壁纸原图(Blob)持久化 ---------- */
+const IDB_NAME = 'xuanji';
+const IDB_STORE = 'wallpaper';
+const IDB_IMG_KEY = 'custom-image';
+
+function idbOpen(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('indexedDB unavailable'));
+      return;
+    }
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = () => {
+      if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbPutImage(blob: Blob): Promise<void> {
+  const db = await idbOpen();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put(blob, IDB_IMG_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+      tx.onabort = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function idbGetImage(): Promise<Blob | null> {
+  const db = await idbOpen();
+  try {
+    return await new Promise<Blob | null>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get(IDB_IMG_KEY);
+      req.onsuccess = () => resolve((req.result as Blob | undefined) ?? null);
+      req.onerror = () => reject(req.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+async function idbDeleteImage(): Promise<void> {
+  const db = await idbOpen();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).delete(IDB_IMG_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+/**
+ * 保存用户选择的本地图片:优先写 IndexedDB(持久,跨会话),返回可用于背景的 object URL。
+ * IndexedDB 不可用时降级为内存 dataURL(仅本次会话生效),persistent=false。
+ */
+export async function saveLocalImage(file: File): Promise<{ url: string; persistent: boolean }> {
+  try {
+    await idbPutImage(file);
+    return { url: URL.createObjectURL(file), persistent: true };
+  } catch {
+    // 降级:读成 dataURL 挂内存,刷新即失效
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = () => reject(r.error);
+      r.readAsDataURL(file);
+    });
+    return { url: dataUrl, persistent: false };
+  }
+}
+
+/** 从 IndexedDB 读回上次的本地图片,生成 object URL;无图或不可用返回 null */
+export async function loadLocalImage(): Promise<string | null> {
+  try {
+    const blob = await idbGetImage();
+    return blob ? URL.createObjectURL(blob) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** 清除 IndexedDB 中的本地图片(切走预设/URL 时可选调用;当前保留以便切回) */
+export async function clearLocalImage(): Promise<void> {
+  try {
+    await idbDeleteImage();
+  } catch {
+    /* 忽略 */
+  }
+}
 
 function wallSvg(body: string): string {
   return (
@@ -137,25 +241,35 @@ function loadWall(): WallState {
 
 function saveWall(w: WallState) {
   try {
-    const persist = { ...w };
-    if (persist.custom && persist.custom.length > PERSIST_MAX) persist.custom = '';
+    // custom 是运行期 URL(object URL / dataURL),不进 localStorage;
+    // src==='custom' 已足够标记"下次从 IndexedDB 读回本地图片"
+    const { custom: _custom, ...persist } = w;
+    void _custom;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
   } catch {
     /* 配额不足时静默放弃持久化 */
   }
 }
 
-/** 本地图片是否会因体积放弃持久化(用于 UI 提示) */
-export function isEphemeralCustom(w: WallState): boolean {
-  return w.src === 'custom' && w.custom.length > PERSIST_MAX;
-}
-
 /**
  * 壁纸状态 hook:读取持久化状态,变更时应用到 <body>(类名 + CSS 变量)并回写 localStorage。
+ * src==='custom' 时挂载后从 IndexedDB 异步读回本地图片。
  * 壁纸图层本身由调用方渲染 <div id="wall"> 并以 wallSrcUrl(w) 为背景。
  */
 export function useWallpaper(): [WallState, (patch: Partial<WallState>) => void] {
   const [wall, setWall] = useState<WallState>(loadWall);
+
+  // 挂载/切回 custom 且尚无运行 URL 时,从 IndexedDB 读回本地图片
+  useEffect(() => {
+    if (wall.src !== 'custom' || wall.custom) return;
+    let cancelled = false;
+    loadLocalImage().then((url) => {
+      if (url && !cancelled) setWall((w) => (w.src === 'custom' && !w.custom ? { ...w, custom: url } : w));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [wall.src, wall.custom]);
 
   useEffect(() => {
     const url = wallSrcUrl(wall);
