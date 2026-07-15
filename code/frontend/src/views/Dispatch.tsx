@@ -265,8 +265,10 @@ export function Dispatch({ active }: { active: boolean }) {
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
-    // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id
-    if (!resumeInfo) {
+    // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
+    // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
+    // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
+    if (!resumeInfo && !sessCtx) {
       setSessCtx({ id: null, name: text.slice(0, 40), project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
     }
     repin(); // 发消息 = 主动回到「看最新」
