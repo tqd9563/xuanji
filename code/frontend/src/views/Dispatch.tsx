@@ -57,6 +57,12 @@ export function Dispatch({ active }: { active: boolean }) {
   const [resumePalette, setResumePalette] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
+  const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
+  const repin = () => {
+    pinnedRef.current = true;
+    lastChatTopRef.current = 0;
+  };
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
 
@@ -72,6 +78,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 派发页原有的 markSeen 效应依赖 d.sessionId(发出第一条消息才有值),
     // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
     markSeen(info.sessionId);
+    repin();
     setSessionCwd(null);
     setResumeInfo(info);
     setCwd(info.cwd);
@@ -113,6 +120,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!intent && entered && (d.started || d.items.length > 0)) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
+      repin();
       setResumeInfo(null);
       setSessionCwd(null);
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
@@ -124,6 +132,7 @@ export function Dispatch({ active }: { active: boolean }) {
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
       setFromBoard(true);
+      repin();
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
       setFromBoard(true);
@@ -133,9 +142,22 @@ export function Dispatch({ active }: { active: boolean }) {
     setTimeout(() => taRef.current?.focus(), 0);
   }, [active, d]);
 
-  // 消息区自动滚底
+  // 消息区自动滚底 —— 仅当用户钉在底部时跟随。
+  // 修复:流式输出期间向上翻历史,每条新增量都把视口拽回底部,历史根本没法看。
+  // 解钉/回钉用「滚动方向」判定而非只看距底距离:程序滚底后 scroll 事件异步派发,
+  // 快速流式下事件到达时内容又长高了,按距离判会把程序滚底误判成"离开了底部"而自我解钉。
+  // scrollTop 变小 = 用户向上翻(程序滚底只会变大,天然免疫)→ 解钉;滚回距底 <48px → 回钉,自愈无需按钮。
+  // 会话切换类动作(发送/续接/接回/新会话/交接)一律重新钉住:那是用户主动回到「看最新」。
+  const onChatScroll = () => {
+    const el = chatRef.current;
+    if (!el) return;
+    const prev = lastChatTopRef.current;
+    lastChatTopRef.current = el.scrollTop;
+    if (el.scrollTop < prev - 1) pinnedRef.current = false;
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
+  };
   useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
+    if (pinnedRef.current) chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
   }, [d.items]);
 
   // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
@@ -204,6 +226,7 @@ export function Dispatch({ active }: { active: boolean }) {
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
+    repin(); // 发消息 = 主动回到「看最新」
     try {
       if (bg) {
         await d.send(text, { cwd: effectiveCwd, permissionMode: 'default', bg: true });
@@ -225,6 +248,7 @@ export function Dispatch({ active }: { active: boolean }) {
 
   const newSession = () => {
     d.reset();
+    repin();
     setResumeInfo(null);
     setSessionCwd(null);
     setFromBoard(false);
@@ -248,6 +272,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const { summary, from } = await api.handoff(d.sessionId);
       const target = effectiveCwd;
       d.reset();
+      repin();
       setResumeInfo(null);
       setSessionCwd(target);
       d.pushNote(`⇢ 已从「${from}」携带交接摘要,新会话将运行在 ${target}。摘要已注入,直接描述要继续的工作。`);
@@ -295,7 +320,7 @@ export function Dispatch({ active }: { active: boolean }) {
         <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
       </div>
       <div className="dispatch">
-        <div className="chat" ref={chatRef}>
+        <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           {d.items.length === 0 && (
             <div className="chat-empty">
               <h2>派发一个新任务</h2>
