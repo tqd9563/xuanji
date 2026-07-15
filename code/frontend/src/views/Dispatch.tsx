@@ -45,19 +45,6 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-4-8';
 };
 
-/** 输入框 ↑/↓ 回溯历史 prompt:全局(跨会话/跨项目)存 localStorage,类比 shell history */
-const PROMPT_HISTORY_KEY = 'xuanji-prompt-history';
-const PROMPT_HISTORY_MAX = 200;
-const loadPromptHistory = (): string[] => {
-  try {
-    const raw = localStorage.getItem(PROMPT_HISTORY_KEY);
-    const arr: unknown = raw ? JSON.parse(raw) : [];
-    return Array.isArray(arr) ? arr.filter((x): x is string => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-};
-
 /** 会话标识(输入框上方,与用量条同行):名称按所属项目色荧光呈现,id 到手后补显。
  *  id 为 null 表示「已知名称/项目,SDK 会话尚未分配 id」(如刚发出首条消息);name 为 null 表示「未命名占位」。 */
 interface SessCtx {
@@ -78,9 +65,10 @@ export function Dispatch({ active }: { active: boolean }) {
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [resumePalette, setResumePalette] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  // 输入框历史回溯:historyIdx === history.length 表示「未在浏览,停在当前草稿」
-  const historyRef = useRef<string[]>(loadPromptHistory());
-  const historyIdxRef = useRef<number>(historyRef.current.length);
+  // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
+  // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
+  // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
+  const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
@@ -106,6 +94,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
     markSeen(info.sessionId);
     repin();
+    resetHistoryBrowse(); // 换会话:↑/↓ 回溯范围重新从这个(待续接)会话算起
     setSessionCwd(null);
     setResumeInfo(info);
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
@@ -149,6 +138,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
       repin();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(null);
       setSessCtx(null);
@@ -157,6 +147,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (intent?.attach) {
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
@@ -242,36 +233,40 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
-  /** 发送成功即计入历史(含斜杠命令,与 shell history 行为一致);连续重复不重复记 */
-  const pushPromptHistory = (text: string) => {
-    const hist = historyRef.current;
-    if (hist[hist.length - 1] !== text) {
-      hist.push(text);
-      if (hist.length > PROMPT_HISTORY_MAX) hist.splice(0, hist.length - PROMPT_HISTORY_MAX);
-      try {
-        localStorage.setItem(PROMPT_HISTORY_KEY, JSON.stringify(hist));
-      } catch {
-        /* 存储不可用/已满,静默跳过持久化,不影响本次会话内的回溯 */
-      }
-    }
-    historyIdxRef.current = historyRef.current.length;
+  /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
+  const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
+
+  /** 回到「未在浏览」:发消息(该 prompt 已进 d.items,自然成为历史最新一条)/ 换会话时调用 */
+  const resetHistoryBrowse = () => {
+    historyIdxRef.current = null;
     historyDraftRef.current = '';
   };
 
-  /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿 */
+  /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿。
+   *  历史条目本身可能含换行(真实任务描述常见),所以「是否劫持方向键」只在草稿态按内容判——
+   *  一旦已经在浏览历史(historyIdxRef !== null),后续 ↑/↓ 无条件继续翻,不会被途中某条多行历史卡住。 */
   const recallPromptHistory = (dir: -1 | 1) => {
     const ta = taRef.current;
-    const hist = historyRef.current;
-    if (!ta || hist.length === 0) return;
+    if (!ta) return;
+    const hist = promptHistory();
+    if (hist.length === 0) return;
     if (dir === -1) {
-      if (historyIdxRef.current === hist.length) historyDraftRef.current = ta.value;
-      if (historyIdxRef.current === 0) return;
-      historyIdxRef.current -= 1;
+      if (historyIdxRef.current === null) {
+        historyDraftRef.current = ta.value;
+        historyIdxRef.current = hist.length - 1;
+      } else if (historyIdxRef.current > 0) {
+        historyIdxRef.current -= 1;
+      }
+      // 已在最早一条:原地不动
     } else {
-      if (historyIdxRef.current >= hist.length) return;
-      historyIdxRef.current += 1;
+      if (historyIdxRef.current === null) return; // 本就在草稿态,没有更"新"的可去
+      if (historyIdxRef.current < hist.length - 1) {
+        historyIdxRef.current += 1;
+      } else {
+        historyIdxRef.current = null; // 越过最新一条,回到浏览前的草稿
+      }
     }
-    ta.value = historyIdxRef.current === hist.length ? historyDraftRef.current : hist[historyIdxRef.current]!;
+    ta.value = historyIdxRef.current === null ? historyDraftRef.current : hist[historyIdxRef.current]!;
     const pos = ta.value.length;
     ta.setSelectionRange(pos, pos);
   };
@@ -281,7 +276,7 @@ export function Dispatch({ active }: { active: boolean }) {
     const text = ta?.value.trim();
     if (!text || !effectiveCwd) return;
     ta!.value = '';
-    pushPromptHistory(text);
+    resetHistoryBrowse();
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       setResumePalette(true);
@@ -346,6 +341,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const newSession = () => {
     d.reset();
     repin();
+    resetHistoryBrowse();
     setResumeInfo(null);
     setSessionCwd(null);
     setSessCtx(null);
@@ -371,6 +367,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const target = effectiveCwd;
       d.reset();
       repin();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(target);
       // 交接落地的新会话尚未发消息,还没有名称;项目已知(交接目标),先占位显示未命名
@@ -463,12 +460,13 @@ export function Dispatch({ active }: { active: boolean }) {
                 void submit();
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
-              // ↑/↓ 回溯历史 prompt(类 shell history);仅在草稿不含换行时接管方向键——
-              // 含换行的多行草稿保留浏览器默认的行间移动,避免和 Shift+Enter 换行冲突
+              // ↑/↓ 回溯历史 prompt(类 shell history)。草稿态(尚未开始浏览)只在草稿不含换行时
+              // 接管方向键,避免打断 Shift+Enter 多行草稿的行间移动;一旦已经在浏览历史(某条历史
+              // 本身可能带换行),后续 ↑/↓ 无条件继续翻,不会被中途某条多行历史卡住(2026-07-15 修复)。
               if (
                 (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
                 !e.nativeEvent.isComposing &&
-                !(e.target as HTMLTextAreaElement).value.includes('\n')
+                (historyIdxRef.current !== null || !(e.target as HTMLTextAreaElement).value.includes('\n'))
               ) {
                 e.preventDefault();
                 recallPromptHistory(e.key === 'ArrowUp' ? -1 : 1);
@@ -487,7 +485,7 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
             onInput={() => {
               // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
-              historyIdxRef.current = historyRef.current.length;
+              historyIdxRef.current = null;
             }}
           />
           <div className="c-bar">
