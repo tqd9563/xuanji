@@ -14,6 +14,33 @@ async function git(cwd: string, args: string[]): Promise<string | null> {
   }
 }
 
+/**
+ * 窗口内 commit 题目(所有分支,不含 merge commit,封顶 limit 条)。
+ * 非 git 目录返回 null;周回顾用它作为「实际产出」素材。
+ */
+export async function gitLogSubjects(
+  cwd: string,
+  sinceMs: number,
+  untilMs: number,
+  limit = 50,
+): Promise<string[] | null> {
+  const out = await git(cwd, [
+    'log',
+    '--all',
+    '--no-merges',
+    `--since=${new Date(sinceMs).toISOString()}`,
+    `--until=${new Date(untilMs).toISOString()}`,
+    '--pretty=%s',
+    '-n',
+    String(limit),
+  ]);
+  if (out === null) return null;
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
 export async function gitStatus(cwd: string): Promise<GitStatus | null> {
   const branchOut = await git(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
   if (branchOut === null) return null;

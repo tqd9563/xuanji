@@ -136,6 +136,28 @@ export async function findSessionFile(claudeDir: string, sessionId: string): Pro
   return null;
 }
 
+/**
+ * 批量定位 sessionId → jsonl 文件:一次扫完 projects/ 目录树,
+ * 避免逐个 findSessionFile 的 O(会话数 × 目录数) readdir。
+ */
+export async function mapSessionFiles(claudeDir: string, sessionIds: Iterable<string>): Promise<Map<string, string>> {
+  const want = new Set(sessionIds);
+  const out = new Map<string, string>();
+  if (!want.size) return out;
+  const root = path.join(claudeDir, 'projects');
+  const dirs = await fsp.readdir(root).catch(() => [] as string[]);
+  for (const d of dirs) {
+    if (out.size >= want.size) break;
+    const files = await fsp.readdir(path.join(root, d)).catch(() => [] as string[]);
+    for (const f of files) {
+      if (!f.endsWith('.jsonl')) continue;
+      const id = f.slice(0, -'.jsonl'.length);
+      if (want.has(id) && !out.has(id)) out.set(id, path.join(root, d, f));
+    }
+  }
+  return out;
+}
+
 export async function parseReplay(jsonlPath: string, sessionId: string): Promise<Replay> {
   const events: ReplayEvent[] = [];
   let skippedLines = 0;
@@ -270,10 +292,10 @@ export interface RawUsageRecord {
  * 同一条 API 回复的 usage 会随流事件重复出现,按 message.id 去重取最后一次。
  */
 /**
- * 抽取会话用量记录。sinceMs 传入时只计入记录自身 timestamp ≥ sinceMs 的记录
- *（今日成本必须按记录时间过滤,不能只按文件 mtime——否则今天动过的老会话会把整段历史算进今日)。
+ * 抽取会话用量记录。sinceMs/untilMs 传入时只计入记录自身 timestamp 落在窗口内的记录
+ *（成本必须按记录时间过滤,不能只按文件 mtime——否则窗口内动过的老会话会把整段历史算进来)。
  */
-export async function extractUsage(jsonlPath: string, sinceMs?: number): Promise<RawUsageRecord[]> {
+export async function extractUsage(jsonlPath: string, sinceMs?: number, untilMs?: number): Promise<RawUsageRecord[]> {
   const byMsgId = new Map<string, RawUsageRecord>();
   let anon = 0;
   const rl = readline.createInterface({
@@ -287,9 +309,11 @@ export async function extractUsage(jsonlPath: string, sinceMs?: number): Promise
       if (j.type !== 'assistant') continue;
       const u = j.message?.usage;
       if (!u || typeof u.output_tokens !== 'number') continue;
-      if (sinceMs !== undefined) {
+      if (sinceMs !== undefined || untilMs !== undefined) {
         const ts = typeof j.timestamp === 'string' ? Date.parse(j.timestamp) : NaN;
-        if (!Number.isFinite(ts) || ts < sinceMs) continue; // 无时间戳或早于起点:不计入
+        if (!Number.isFinite(ts)) continue; // 开了时间过滤但无时间戳:不计入
+        if (sinceMs !== undefined && ts < sinceMs) continue;
+        if (untilMs !== undefined && ts > untilMs) continue;
       }
       const id = typeof j.message?.id === 'string' ? j.message.id : `anon-${anon++}`;
       byMsgId.set(id, {

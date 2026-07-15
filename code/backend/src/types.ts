@@ -102,6 +102,68 @@ export interface HistoryEntry {
   sessionId: string;
 }
 
+// ---------- 周回顾(weekly review) ----------
+
+export interface ReviewSession {
+  sessionId: string;
+  title: string;
+  /** 窗口内我发出的 prompt 数(活跃口径) */
+  prompts: number;
+  firstAt: number;
+  lastAt: number;
+  /** 窗口内逐日 prompt 数,[窗口首日..末日] */
+  days: number[];
+  /** prompt 原文样本(截断/封顶,见 caliber) */
+  promptTexts: string[];
+  /** terminal = history.jsonl;web = 璇玑派发流水 */
+  source: 'terminal' | 'web';
+  /** 窗口内该会话的 token 成本(USD,按记录时间过滤) */
+  costUsd: number;
+}
+
+export interface ReviewProject {
+  /** basename 展示名(分类色键) */
+  project: string;
+  /** 真实绝对路径 */
+  path: string;
+  prompts: number;
+  days: number[];
+  costUsd: number;
+  /** 窗口内 git commit 题目(--all --no-merges,封顶截取);非 git 目录为空 */
+  commits: string[];
+  sessions: ReviewSession[];
+}
+
+export interface WeeklyReview {
+  range: { start: number; end: number; dayCount: number };
+  totals: {
+    prompts: number;
+    sessions: number;
+    projects: number;
+    /** 有 ≥1 条 prompt 的自然日数 */
+    activeDays: number;
+    costUsd: number;
+  };
+  projects: ReviewProject[];
+  caliber: Record<string, string>;
+  computedAt: number;
+}
+
+/** 周报草稿(自有数据,SQLite) */
+export interface WeeklyDraft {
+  id: number;
+  rangeStart: number;
+  rangeEnd: number;
+  status: 'running' | 'done' | 'error';
+  content: string | null;
+  error: string | null;
+  model: string;
+  /** 生成草稿的派发会话(可在看板跟踪/续接迭代) */
+  sessionId: string | null;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
 export interface ModelUsage {
   model: string;
   inputTokens: number;
