@@ -91,7 +91,7 @@ const PERM_LABEL: Record<string, string> = {
   bypassPermissions: '完全放行',
 };
 const PERMS = ['acceptEdits', 'default', 'plan', 'bypassPermissions'];
-const MODELS = ['sonnet', 'opus', 'haiku'];
+const MODELS = ['sonnet', 'opus', 'haiku', 'fable'];
 const BUDGETS: [string, number | undefined][] = [
   ['$10 / 次', 10],
   ['$20 / 次', 20],

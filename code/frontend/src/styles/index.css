@@ -770,9 +770,16 @@ body.wall-glass {
   --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
   --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
 }
-body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .notice) {
   backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
   -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+}
+/* .dd-menu 是浮在任意前景内容之上的弹出菜单(非静态外壳面板),不应跟随玻璃档变半透明——
+   否则菜单会透出下方内容,干扰选项选择。固定用不透明的原始 surface 色,不随 --wall-surface 变化。 */
+body.wall-glass .dd-menu {
+  background: oklch(0.185 0.008 120);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .wall-btn {
