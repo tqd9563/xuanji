@@ -45,7 +45,9 @@ export function DropUp({
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <span className="dd-val">{labelOf?.(value) ?? value}</span>
+        <span className="dd-val" title={labelOf?.(value) ?? value}>
+          {labelOf?.(value) ?? value}
+        </span>
         <span className="caret">▾</span>
       </button>
       <div className="dd-menu" role="listbox">
@@ -55,12 +57,13 @@ export function DropUp({
             className={cn('dd-item', o === value && 'sel')}
             role="option"
             aria-selected={o === value}
+            title={labelOf?.(o) ?? o}
             onClick={() => {
               onChange(o);
               setOpen(false);
             }}
           >
-            {labelOf?.(o) ?? o}
+            <span className="dd-item-label">{labelOf?.(o) ?? o}</span>
             <span className="tick">✓</span>
           </button>
         ))}
