@@ -495,19 +495,22 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 自绘下拉(原生 select 弹层由 OS 绘制,无法主题化;实现层用 shadcn/ui Select):状态行内向上弹出 */
 .dd { position: relative; }
 .dd-btn {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 5px; min-width: 0;
   background: none; border: none; font-family: var(--mono); font-size: 0.75rem;
   padding: 3px 7px; margin: -3px 0; border-radius: var(--r-s); cursor: pointer;
   transition: background 150ms var(--ease);
 }
 .dd-btn:hover { background: var(--hover); }
 .dd-btn:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
-.dd-btn .caret { font-size: 0.5625rem; color: var(--faint); }
+.dd-btn .caret { font-size: 0.5625rem; color: var(--faint); flex: none; }
+/* 长路径(如工作目录)超出下拉框宽度时省略号截断,不再撑破右边界;完整值走 title 悬浮提示 */
+.dd-val { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #cwd-dd .dd-btn { color: var(--blue); }
 #model-dd .dd-btn { color: var(--violet); }
 .dd.dim .dd-btn { color: var(--muted); font-family: var(--sans); }
 .dd-menu {
   position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 200px;
+  max-width: min(420px, calc(100vw - 32px));
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
   padding: 4px; z-index: var(--z-dropdown); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
   opacity: 0; transform: translateY(4px); pointer-events: none;
@@ -523,7 +526,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dd.dim .dd-item { font-family: var(--sans); }
 .dd-item:hover { background: var(--hover); }
 .dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
-.dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
+.dd-item-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; flex: none; }
 .dd-item.sel .tick { visibility: visible; }
 #jm-cwd-dd .dd-btn { color: var(--blue); }
 #jm-model-dd .dd-btn { color: var(--violet); }
@@ -770,9 +774,16 @@ body.wall-glass {
   --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
   --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
 }
-body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .notice) {
   backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
   -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+}
+/* .dd-menu 是浮在任意前景内容之上的弹出菜单(非静态外壳面板),不应跟随玻璃档变半透明——
+   否则菜单会透出下方内容,干扰选项选择。固定用不透明的原始 surface 色,不随 --wall-surface 变化。 */
+body.wall-glass .dd-menu {
+  background: oklch(0.185 0.008 120);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .wall-btn {
