@@ -467,8 +467,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
-/* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
+/* 会话状态条(紧贴输入框上方):会话标识(左端)→ 用量指示(对齐 claude-hud:Context / Usage / Weekly)→ agent 实时状态(auto 顶到最右) */
 .chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
+/* 会话标识:名称按所属项目的锁明度分类色「荧光」呈现(叠一层同色低透光晕,呼应「数据是唯一发光的东西」),
+   项目身份编码进颜色后不再单列项目芯片;未命名态转 faint 中性、去光晕以区分「待命名」。
+   与同行的用量条/agent 状态共享 gap,故内部再收窄一层 gap 并给标题限宽,避免挤没三条用量条。 */
+.sess-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 40%; flex: none; }
+.sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 20ch; }
+.sess-ctx .sc-title.sc-named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
+.sess-ctx .sc-title.sc-unnamed { color: var(--faint); font-weight: 400; }
+.sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
 .cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
@@ -743,6 +751,9 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
+  .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
+  .sess-ctx { max-width: 100%; }
+  .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
 }
 
 @media (prefers-reduced-motion: reduce) {
