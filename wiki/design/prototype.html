@@ -394,7 +394,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 会话标识(页头):当前窗口绑定会话的 名称 + 项目芯片 + id,沿用会话看板卡片的同一词汇。
    与来路返回按钮解耦:只要 chat 还挂着这个会话,离开再回来标识仍在;标题限一行截断(可变字段纪律) */
 .sess-ctx { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 14px; border-left: 1px solid var(--line); }
-.sess-ctx .sc-title { font-size: 0.8125rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
+.sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 32ch; }
 .sess-ctx .sc-title.unnamed { color: var(--faint); font-weight: 400; }
 .sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
 /* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
