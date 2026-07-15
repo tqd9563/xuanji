@@ -36,7 +36,7 @@
       },
       "blue": {
         "role": "secondary",
-        "displayName": "信使蓝 Blue(完成/信息)",
+        "displayName": "信使蓝 Blue(纯信息)",
         "canonical": "oklch(0.72 0.11 245)",
         "tonalRamp": [
           "oklch(0.15 0.03 245)",
@@ -47,6 +47,21 @@
           "oklch(0.75 0.11 245)",
           "oklch(0.85 0.08 245)",
           "oklch(0.95 0.03 245)"
+        ]
+      },
+      "green": {
+        "role": "secondary",
+        "displayName": "翠 Green(已完成)",
+        "canonical": "oklch(0.74 0.12 155)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 155)",
+          "oklch(0.27 0.05 155)",
+          "oklch(0.39 0.07 155)",
+          "oklch(0.51 0.09 155)",
+          "oklch(0.63 0.11 155)",
+          "oklch(0.75 0.12 155)",
+          "oklch(0.85 0.09 155)",
+          "oklch(0.95 0.04 155)"
         ]
       },
       "violet": {
@@ -140,6 +155,7 @@
       "tint-jade": "color-mix(in oklab, oklch(0.80 0.13 115) 13%, transparent)",
       "tint-amber": "color-mix(in oklab, oklch(0.78 0.14 80) 14%, transparent)",
       "tint-blue": "color-mix(in oklab, oklch(0.72 0.11 245) 14%, transparent)",
+      "tint-green": "color-mix(in oklab, oklch(0.74 0.12 155) 14%, transparent)",
       "tint-red": "color-mix(in oklab, oklch(0.68 0.19 25) 15%, transparent)",
       "tint-muted": "color-mix(in oklab, oklch(0.71 0.015 110) 12%, transparent)"
     },
@@ -324,9 +340,9 @@
       "name": "Status Pill",
       "kind": "chip",
       "refersTo": "pill-running",
-      "description": "状态胶囊三件套:tint 底 + 全饱和字 + currentColor 圆点;运行态脉冲。",
-      "html": "<span class=\"ds-pill ds-pill-run\"><i class=\"ds-dot\"></i>运行中</span> <span class=\"ds-pill ds-pill-blk\"><i class=\"ds-dot\"></i>等待输入</span> <span class=\"ds-pill ds-pill-done\"><i class=\"ds-dot\"></i>已完成</span>",
-      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; white-space: nowrap; } .ds-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; } .ds-pill-run { color: oklch(0.80 0.13 115); background: color-mix(in oklab, oklch(0.80 0.13 115) 13%, transparent); } .ds-pill-run .ds-dot { animation: ds-pulse 2s cubic-bezier(0.22,1,0.36,1) infinite; } .ds-pill-blk { color: oklch(0.78 0.14 80); background: color-mix(in oklab, oklch(0.78 0.14 80) 14%, transparent); } .ds-pill-done { color: oklch(0.72 0.11 245); background: color-mix(in oklab, oklch(0.72 0.11 245) 14%, transparent); } @keyframes ds-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }"
+      "description": "状态胶囊三件套:tint 底 + 全饱和字 + currentColor 圆点;运行/等待态脉冲。已完成恒绿,待执行(排程未到点)用蓝——完成是终结态,排程是纯信息。",
+      "html": "<span class=\"ds-pill ds-pill-run\"><i class=\"ds-dot\"></i>运行中</span> <span class=\"ds-pill ds-pill-blk\"><i class=\"ds-dot\"></i>等待输入</span> <span class=\"ds-pill ds-pill-sched\">待执行</span> <span class=\"ds-pill ds-pill-done\"><i class=\"ds-dot\"></i>已完成</span> <span class=\"ds-pill ds-pill-err\"><i class=\"ds-dot\"></i>已熔断</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; white-space: nowrap; } .ds-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; } .ds-pill-run { color: oklch(0.80 0.13 115); background: color-mix(in oklab, oklch(0.80 0.13 115) 13%, transparent); } .ds-pill-run .ds-dot, .ds-pill-blk .ds-dot { animation: ds-pulse 2s cubic-bezier(0.22,1,0.36,1) infinite; } .ds-pill-blk { color: oklch(0.78 0.14 80); background: color-mix(in oklab, oklch(0.78 0.14 80) 14%, transparent); } .ds-pill-sched { color: oklch(0.72 0.11 245); background: color-mix(in oklab, oklch(0.72 0.11 245) 14%, transparent); } .ds-pill-done { color: oklch(0.74 0.12 155); background: color-mix(in oklab, oklch(0.74 0.12 155) 14%, transparent); } .ds-pill-err { color: oklch(0.68 0.19 25); background: color-mix(in oklab, oklch(0.68 0.19 25) 15%, transparent); } @keyframes ds-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }"
     },
     {
       "name": "Project Chip",
@@ -383,6 +399,14 @@
       "description": "侧栏底部入口向上弹出的壁纸设置面板:三档模式 + 四滑杆,surface 底、10px 圆角、悬浮影。",
       "html": "<div class=\"ds-wall-pop\" role=\"dialog\" aria-label=\"壁纸设置\"><div class=\"ds-wall-row\"><span class=\"ds-wall-label\">不透明度</span><input type=\"range\" min=\"5\" max=\"50\" value=\"40\"><span class=\"ds-wall-val\">40%</span></div></div>",
       "css": ".ds-wall-pop { background: var(--surface, oklch(0.185 0.008 120)); border: 1px solid var(--line, oklch(0.27 0.01 120)); border-radius: 10px; padding: 14px 16px 12px; width: 320px; box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45); } .ds-wall-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; } .ds-wall-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted, oklch(0.71 0.015 110)); } .ds-wall-pop input[type=range] { flex: 1; appearance: none; -webkit-appearance: none; height: 4px; border-radius: 99px; background: var(--line, oklch(0.27 0.01 120)); cursor: pointer; } .ds-wall-pop input[type=range]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--jade, oklch(0.80 0.13 115)); } .ds-wall-val { flex: none; width: 40px; text-align: right; font-family: ui-monospace, monospace; font-size: 0.6875rem; color: var(--muted, oklch(0.71 0.015 110)); font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Centered Modal",
+      "kind": "custom",
+      "refersTo": "modal",
+      "description": "创建/编辑类表单用居中模态(区别于查看/回放用的侧滑抽屉,例:新建定时任务)。surface 底、1px line 边、10px 圆角、悬浮影,缩放+淡入 180ms;modal-head 吸顶、modal-foot 常驻取消/主操作。",
+      "html": "<div class=\"ds-modal\" role=\"dialog\" aria-modal=\"true\"><div class=\"ds-modal-head\"><h2>新建定时任务</h2><button class=\"ds-modal-x\">✕</button></div><div class=\"ds-modal-body\">…表单字段…</div><div class=\"ds-modal-foot\"><button class=\"ds-btn\">取消</button><button class=\"ds-btn-primary\">保存任务</button></div></div>",
+      "css": ".ds-modal { width: min(560px, calc(100vw - 40px)); background: oklch(0.185 0.008 120); border: 1px solid oklch(0.27 0.010 120); border-radius: 10px; box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); } .ds-modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid oklch(0.225 0.009 120); } .ds-modal-head h2 { font-size: 0.9375rem; color: oklch(0.93 0.008 110); } .ds-modal-x { margin-left: auto; color: oklch(0.71 0.015 110); padding: 4px 8px; border-radius: 6px; background: none; border: none; cursor: pointer; } .ds-modal-x:hover { background: oklch(0.215 0.009 120); color: oklch(0.93 0.008 110); } .ds-modal-body { padding: 18px 20px 20px; color: oklch(0.93 0.008 110); } .ds-modal-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid oklch(0.225 0.009 120); }"
     }
   ],
   "narrative": {
@@ -398,7 +422,7 @@
     "rules": [
       {
         "name": "状态色即语义规则",
-        "body": "玉=运行、琥珀=等待、蓝=完成/信息、红=错误/熔断。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。",
+        "body": "玉=运行、琥珀=等待、绿=完成、蓝=纯信息、红=错误/熔断。「已完成」与「信息」是两件事:前者是终结状态必须绿色,后者是事实标注(路径/计数/目录)永远蓝色,两者不得混用同一色相。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。",
         "section": "colors"
       },
       {
@@ -454,7 +478,9 @@
       "Don't 使用 >1px 彩色侧条、background-clip: text 渐变字、默认玻璃模糊。",
       "Don't 让任何贴流元素投影。",
       "Don't 用原生 select 弹层/系统默认控件样式直接见人;同一动作在两处长得不一样,其中一处就是错的。",
-      "Don't 把玻璃模糊当默认外观:玻璃拟态仅作为用户显式开启、默认关闭的壁纸玻璃档存在,--wall-frost 默认恒为 0,绝不把 backdrop 模糊塞进任何非壁纸场景当装饰。"
+      "Don't 把玻璃模糊当默认外观:玻璃拟态仅作为用户显式开启、默认关闭的壁纸玻璃档存在,--wall-frost 默认恒为 0,绝不把 backdrop 模糊塞进任何非壁纸场景当装饰。",
+      "Don't 把蓝色用作「已完成」的状态色;完成态一律绿色,蓝色专指纯信息。",
+      "Don't 为失败/需审批的定时任务新开一个会话去问 Claude「发生了什么」;真实转录已在 session jsonl 里,只读回放抽屉是唯一入口。"
     ]
   }
 }

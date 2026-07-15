@@ -186,3 +186,69 @@ export interface ProjectUsage {
   totalCostUsd: number;
   sessions: SessionUsage[];
 }
+
+// ---------- 定时任务(scheduled jobs,自有数据 SQLite) ----------
+
+export type ScheduledJobKind = 'once' | 'cron';
+
+/**
+ * pending  待执行(排程未到点 / cron 等待下次)
+ * running  已触发,派发会话进行中
+ * blocked  会话卡在权限审批,挂起等用户处理(不计入熔断失败)
+ * done     一次性:成功完成,终态;周期:本期成功,已回到 pending 等下一期
+ * error    一次性:本次运行失败,终态
+ * fused    周期:连续失败达阈值,调度已停止
+ * missed   一次性:错过触发且超出补跑宽限期
+ * canceled 用户取消(一次性)
+ * paused   用户暂停(周期)
+ */
+export type ScheduledJobStatus =
+  | 'pending'
+  | 'running'
+  | 'blocked'
+  | 'done'
+  | 'error'
+  | 'fused'
+  | 'missed'
+  | 'canceled'
+  | 'paused';
+
+export interface ScheduledJob {
+  id: string;
+  kind: ScheduledJobKind;
+  name: string;
+  prompt: string;
+  cwd: string;
+  model: string | null;
+  permissionMode: string;
+  /** 单次运行预算上限(USD),null = 不限。软上限:回合结束后核对,超出记录但不能中途打断(SDK 未暴露增量成本流) */
+  maxBudgetUsd: number | null;
+  /** kind='once' 的计划执行时间(epoch ms) */
+  runAt: number | null;
+  /** kind='cron' 的 cron 表达式(croner 语法,Asia/Shanghai 时区) */
+  cronExpr: string | null;
+  status: ScheduledJobStatus;
+  /** 连续失败计数:达 3 熔断(仅 cron 有意义) */
+  consecutiveFailures: number;
+  /** 最近一次触发产生的派发会话 id;前端「结果会话」跳转与只读回放的入口 */
+  resultSessionId: string | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+  /** 下次触发时间(epoch ms),由 croner 计算回填,pending 态才有意义 */
+  nextRunAt: number | null;
+}
+
+export interface ScheduledRun {
+  id: number;
+  jobId: string;
+  /** 计划触发时间(epoch ms);错过/延迟触发时与 startedAt 存在差值 */
+  scheduledFor: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  status: 'running' | 'done' | 'error' | 'blocked' | 'missed';
+  sessionId: string | null;
+  costUsd: number | null;
+  durationMs: number | null;
+  error: string | null;
+}

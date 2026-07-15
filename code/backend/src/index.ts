@@ -8,11 +8,15 @@ import { config } from './config.js';
 import { createApi } from './api/routes.js';
 import { attachWs } from './ws.js';
 import { Storage } from './storage/db.js';
+import { SchedulerService } from './services/scheduler.js';
 
 const storage = new Storage(config.dataDir);
+const scheduler = new SchedulerService(storage);
+scheduler.init(); // 重启不丢任务:重新加载全部 pending/blocked 任务并注册 croner 触发器
+
 const app = new Hono();
 
-app.route('/api', createApi(storage));
+app.route('/api', createApi(storage, scheduler));
 
 // 生产模式:若前端已构建,由后端直接托管 SPA
 const frontendDist = path.join(import.meta.dirname, '..', '..', 'frontend', 'dist');

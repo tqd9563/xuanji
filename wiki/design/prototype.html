@@ -34,6 +34,7 @@
   --blue:  oklch(0.72 0.11 245);
   --violet: oklch(0.73 0.11 300);
   --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
   /* 图表系列色:大面积填充专用,统一明度、降饱和,避免高亮块刺眼 */
   --chart-1: oklch(0.68 0.075 115);
   --chart-2: oklch(0.65 0.065 300);
@@ -42,6 +43,7 @@
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
   --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
   --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
 
@@ -162,9 +164,10 @@ select.input { appearance: none; padding-right: 28px;
 .pill-run  { color: var(--jade);  background: var(--tint-jade); }
 .pill-blk  { color: var(--amber); background: var(--tint-amber); }
 .pill-idle { color: var(--muted); background: var(--tint-muted); }
-.pill-done { color: var(--blue);  background: var(--tint-blue); }
+.pill-done { color: var(--green); background: var(--tint-green); }
 .pill-err  { color: var(--red);   background: var(--tint-red); }
-.pill-run .dot { animation: pulse 2s var(--ease) infinite; }
+.pill-sched{ color: var(--blue);  background: var(--tint-blue); }
+.pill-run .dot, .pill-blk .dot { animation: pulse 2s var(--ease) infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .tag {
@@ -219,6 +222,34 @@ select.input { appearance: none; padding-right: 28px;
 .drawer-foot { padding: 14px 24px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; }
 .x-btn { margin-left: auto; color: var(--muted); padding: 4px 8px; border-radius: var(--r-s); flex: none; }
 .x-btn:hover { background: var(--hover); color: var(--ink); }
+
+/* 居中模态(新建定时任务表单;区别于侧滑抽屉,复用 .backdrop) */
+.modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -46%);
+  width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  z-index: var(--z-drawer);
+}
+.modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--surface); }
+.modal-head h2 { font-size: 0.9375rem; }
+.modal-body { padding: 18px 20px 20px; }
+.modal-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--line-soft); }
+.mfield { margin-bottom: 16px; }
+.mfield > label { display: block; font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.mfield .hint { font-size: 0.6875rem; color: var(--faint); margin-top: 5px; }
+.mfield .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.time-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.time-chips button { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 0.75rem; transition: all 140ms var(--ease); }
+.time-chips button:hover { border-color: var(--muted); color: var(--ink); }
+.time-chips button.active { background: var(--tint-jade); border-color: var(--jade); color: var(--jade); font-weight: 600; }
+.seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.seg button { padding: 5px 16px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); }
+.seg button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+.msummary { font-size: 0.75rem; color: var(--muted); }
+.msummary b { color: var(--jade); font-weight: 600; }
 
 /* 空态 */
 .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
@@ -456,6 +487,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
 .dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
 .dd-item.sel .tick { visibility: visible; }
+/* 模态内下拉:向下弹出(默认向上弹出是为贴屏底的 composer 设计) */
+.dd.down .dd-menu { bottom: auto; top: calc(100% + 6px); }
+.dd.down .dd-btn { width: 100%; justify-content: space-between; background: var(--surface); border: 1px solid var(--line); padding: 6px 12px; margin: 0; }
+.dd.down .dd-btn:hover { border-color: var(--muted); }
+.dd.down.open .dd-btn { border-color: var(--jade); }
+.dd.down .dd-menu { width: 100%; min-width: 0; }
+.dd-item .d { display: block; font-size: 0.6875rem; color: var(--faint); font-family: var(--sans); margin-top: 1px; }
 /* 切目录但会话仍在进行时的常驻提示(比 toast 更稳妥) */
 .cwd-note {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -575,9 +613,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cron-item:last-child { border-bottom: none; }
 .cron-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; cursor: pointer; transition: background 120ms var(--ease); }
 .cron-row:hover { background: var(--hover); }
-.cron-row .name { font-weight: 600; font-size: 0.8125rem; min-width: 0; }
-.cron-row .expr { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 8px; white-space: nowrap; }
-.cron-row .next { font-size: 0.75rem; color: var(--faint); margin-left: auto; white-space: nowrap; }
+.cron-row .kind { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+.cron-row .name { font-weight: 600; font-size: 0.8125rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cron-row .when { font-size: 0.75rem; margin-left: auto; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.cron-row .when .clock { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.cron-row .when .rel { color: var(--faint); }
 .cron-detail { display: none; padding: 4px 18px 16px 18px; }
 .cron-item.open .cron-detail { display: block; }
 .cron-detail .prompt {
@@ -589,10 +629,21 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cron-meta b { color: var(--ink); font-weight: 600; }
 .runs { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
 .runs th { text-align: left; color: var(--faint); font-weight: 600; padding: 5px 10px; border-bottom: 1px solid var(--line-soft); }
-.runs td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.runs td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); vertical-align: top; }
 .runs td:first-child { font-family: var(--mono); }
 .runs tr:last-child td { border-bottom: none; }
+.runs a.sid { font-family: var(--mono); color: var(--blue); text-decoration: none; }
+.runs a.sid:hover { text-decoration: underline; }
+.runs-more { display: block; font-size: 0.6875rem; color: var(--faint); padding: 8px 10px 0; }
+.runs-more:hover { color: var(--ink); }
 .fuse-note { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--red); background: var(--tint-red); border-radius: var(--r-s); padding: 7px 12px; margin-bottom: 12px; }
+.notice-amber { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--amber); background: var(--tint-amber); border-radius: var(--r-s); padding: 7px 12px; margin-bottom: 12px; }
+/* 折叠行上的近 7 期状态点(周期任务,不展开也能扫出好坏,左旧右新) */
+.runline { display: inline-flex; align-items: center; gap: 3px; }
+.runline i { width: 6px; height: 6px; border-radius: 50%; background: var(--tint-muted); }
+.runline i.g { background: var(--green); }
+.runline i.r { background: var(--red); }
+.runline i.a { background: var(--amber); }
 
 .sys-note { font-size: 0.75rem; color: var(--faint); padding: 10px 18px 4px; }
 
@@ -783,7 +834,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
         <span>今日派发 <b>4</b> 次</span>
         <span>今日 token <b>96.7k</b> · 成本 <b>$7.31</b></span>
         <span>活跃项目 <b>3</b> 个</span>
-        <span>定时任务 <b>2</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断</span>
+        <span>定时任务 <b>3</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断 · <b style="color:var(--amber)">1</b> 个错过</span>
       </div>
 
       <div class="dash-grid">
@@ -954,26 +1005,23 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
     <section class="view" id="view-cron">
       <div class="view-head">
         <h1>定时任务</h1>
+        <span class="sub">安排未来 / 周期任务,到点由常驻后端自动开一个 Claude 会话执行</span>
         <span class="spacer"></span>
-        <button class="btn btn-primary">新建任务</button>
-      </div>
-
-      <div class="panel" style="margin-bottom:16px">
-        <div class="panel-head"><h2>应用内任务</h2><span class="sub">croner 调度 · run history 存 SQLite · 连续失败 3 次熔断</span></div>
-        <div id="cron-list"></div>
+        <div class="filter-tabs" id="cron-filter">
+          <button class="active" data-f="all">全部</button>
+          <button data-f="once">一次性</button>
+          <button data-f="cron">周期</button>
+        </div>
+        <button class="btn btn-primary" onclick="openJobModal()">＋ 新建任务</button>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>系统 crontab</h2><span class="sub">只读展示,不接管</span></div>
-        <div class="sys-note">以下任务由系统 crontab 管理。璇玑不修改、不执行、不记录其运行历史。</div>
-        <table class="table">
-          <thead><tr><th>表达式</th><th>命令</th><th>说明</th></tr></thead>
-          <tbody>
-            <tr><td class="mono">30 11 * * 1-5</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/lunch_bot.py</td><td style="color:var(--muted)">点饭提醒 bot</td></tr>
-            <tr><td class="mono">0 17 * * 5</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/weekly_report.py</td><td style="color:var(--muted)">周报 bot</td></tr>
-            <tr><td class="mono">0 10 * * *</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/wgame_bot.py</td><td style="color:var(--muted)">wgame bot</td></tr>
-          </tbody>
-        </table>
+        <div class="panel-head">
+          <h2>璇玑调度</h2>
+          <span class="sub">croner 调度 · 定义与运行历史存 SQLite · 预算超限 / 连续失败熔断</span>
+        </div>
+        <div class="sys-note">到点运行 = 创建一个真实派发会话:运行中 / 需审批 / 已完成的实例会同步出现在「会话」看板(带 <span class="tag">◷ 定时</span> 来源标),审批可直接在会话页处理;此处的「结果会话」链接跳转同一份只读回放,不新开会话查询。</div>
+        <div id="cron-list"></div>
       </div>
     </section>
 
@@ -1036,6 +1084,83 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   <div class="drawer-body" id="drawer-body"></div>
   <div class="drawer-foot" id="drawer-foot"></div>
 </aside>
+
+<!-- 新建定时任务模态 -->
+<div class="backdrop" id="job-modal-backdrop" onclick="closeJobModal()"></div>
+<div class="modal" id="job-modal" role="dialog" aria-modal="true" aria-label="新建定时任务">
+  <div class="modal-head">
+    <h2>新建定时任务</h2>
+    <span class="spacer"></span>
+    <button class="x-btn" onclick="closeJobModal()" aria-label="关闭">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="mfield">
+      <label>任务类型</label>
+      <div class="seg" id="jm-seg-kind">
+        <button class="active" data-k="once">一次性</button>
+        <button data-k="cron">周期</button>
+      </div>
+    </div>
+
+    <div class="mfield">
+      <label>任务名称</label>
+      <input class="input" id="jm-name" placeholder="例:今晚汇总本周周报草稿">
+    </div>
+
+    <div class="mfield">
+      <label>Prompt(发给 Claude 的指令)</label>
+      <textarea class="input mono" id="jm-prompt" rows="4" style="resize:vertical;line-height:1.55;font-size:0.75rem" placeholder="汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。"></textarea>
+    </div>
+
+    <div class="mfield two-col">
+      <div><label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">工作目录(cwd)</label><div class="dd down" id="jm-cwd-dd"></div></div>
+      <div><label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">模型</label><div class="dd down" id="jm-model-dd"></div></div>
+    </div>
+
+    <div class="mfield" id="jm-once-time">
+      <label>执行时间</label>
+      <div class="time-chips" id="jm-time-chips">
+        <button class="active" data-t="20">今晚 20:00</button>
+        <button data-t="22">今晚 22:00</button>
+        <button data-t="tmr9">明早 09:00</button>
+        <button data-t="custom">自定义</button>
+      </div>
+      <input class="input" type="datetime-local" id="jm-datetime" style="display:none">
+      <div class="hint" id="jm-time-hint">将在 <b style="color:var(--jade)">今晚 20:00</b>(约 4 小时后)执行一次</div>
+    </div>
+
+    <div class="mfield" id="jm-cron-time" style="display:none">
+      <label>周期(cron 表达式)</label>
+      <div class="time-chips" id="jm-cron-chips">
+        <button class="active" data-c="0 9 * * *">每天 09:00</button>
+        <button data-c="0 18 * * 5">每周五 18:00</button>
+        <button data-c="0 8 * * 1">每周一 08:00</button>
+        <button data-c="custom">自定义</button>
+      </div>
+      <input class="input mono" id="jm-cron" value="0 9 * * *">
+      <div class="hint">croner 解析,支持时区(Asia/Shanghai)</div>
+    </div>
+
+    <div class="mfield two-col">
+      <div>
+        <label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">权限模式</label>
+        <div class="dd down" id="jm-perm-dd"></div>
+        <div class="hint">保守模式被卡时会弹审批横幅并挂起,你可以随时继续</div>
+      </div>
+      <div>
+        <label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">预算上限</label>
+        <div class="dd down" id="jm-budget-dd"></div>
+        <div class="hint">超限自动停,防无人值守跑飞</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <span class="msummary" id="jm-summary">一次性 · 今晚 20:00 · ~/xuanji · sonnet</span>
+    <span class="spacer"></span>
+    <button class="btn btn-quiet" onclick="closeJobModal()">取消</button>
+    <button class="btn btn-primary" onclick="saveJob()">保存任务</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 
@@ -1195,6 +1320,21 @@ const REPLAY = {
     { who: 'tool', fn: 'Read', arg: 'internal/engine/l3_signal.go', out: '(412 行 · 特征定义 × 9)' },
     { who: 'assistant', text: '需要执行测试来确认管道行为,已发起权限请求,等待审批:Bash(pnpm test -- --run)' },
   ],
+  /* 定时任务失败:排查靠只读回放里的真实转录,不是新开会话问 Claude */
+  '9d21c4': [
+    { who: 'user', text: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。' },
+    { who: 'assistant', text: '开始搜索未来一周的游戏发布档期,先调用搜索接口。' },
+    { who: 'tool', fn: 'WebSearch', arg: '"game release schedule" 2026-07-11..2026-07-17', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'assistant', text: '搜索接口限流(429),按重试策略等待 60s 后重试。' },
+    { who: 'tool', fn: 'WebSearch', arg: '"game release schedule" 2026-07-11..2026-07-17(重试 1/3)', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'raw', note: '进程异常退出 · exit code 1', text: 'Error: upstream search API rate-limited after 3 attempts. Aborting task.\n  at searchGameReleases (game-release/index.js:42:11)\n  at main (game-release/index.js:18:5)' },
+  ],
+  a3f9c0: [
+    { who: 'user', text: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。' },
+    { who: 'assistant', text: '先检查当前依赖版本,再执行升级。' },
+    { who: 'tool', fn: 'Bash', arg: 'pnpm outdated', out: 'baize-core   2.3.1 → 2.4.0\nzod          3.22.4 → 3.23.0' },
+    { who: 'assistant', text: '即将执行 `pnpm up -L` 升级到最新次版本,这是写操作,按当前权限模式需要你确认。' },
+  ],
 };
 
 const SKILLS = [
@@ -1252,32 +1392,43 @@ const MEMORIES = [
     body: '<p>工作环境是深色终端 + 夜间时段,亮色大面积白底刺眼。</p>' },
 ];
 
-const CRONS = [
-  { name: '每日舆情异动扫描', expr: '0 9 * * *', human: '每天 09:00', cwd: '~/baize',
+/* 一次性 + 周期统一模型:kind 区分,state 覆盖全部生命周期 */
+const JOBS = [
+  { kind: 'once', name: '今晚汇总本周周报草稿', when: '今晚 22:00', rel: '约 6 小时后', cwd: '~/project/cronjob', model: 'sonnet',
+    prompt: '汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'pending',
+    runs: [] },
+  { kind: 'once', name: '深夜依赖升级 + 冒烟', when: '运行中', rel: '22:03 起', cwd: '~/xuanji', model: 'sonnet',
+    prompt: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。',
+    perm: '保守', budget: '$50 / 次', state: 'blocked', blockedSid: 'a3f9c0',
+    notice: '已挂起等审批:想执行 `pnpm up -L`(写操作)。审批横幅已发,你处理后自动继续。',
+    runs: [ { t: '今天 22:03', dur: '进行中', tok: '8.1k', sid: 'a3f9c0', s: 'blk' } ] },
+  { kind: 'cron', name: '每日舆情异动扫描', when: '每天 09:00', rel: '下次 明天 09:00', cwd: '~/baize', model: 'sonnet',
     prompt: '用 using-talk 扫描全部在营游戏近 24h 舆情异动,负面为主的话题写入飞书多维表,并把摘要发到值班群。',
-    budget: '50k tokens/次', next: '明天 09:00', state: 'ok',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'done', total: 30,
     runs: [
-      { t: '07-07 09:00', dur: '4m 12s', tok: '31.2k', exit: 0, s: 'ok' },
-      { t: '07-06 09:00', dur: '3m 48s', tok: '28.9k', exit: 0, s: 'ok' },
-      { t: '07-05 09:00', dur: '5m 02s', tok: '35.1k', exit: 0, s: 'ok' },
+      { t: '今天 09:00', dur: '4m 12s', tok: '31.2k', sid: '7c1e88', s: 'ok' },
+      { t: '昨天 09:00', dur: '3m 48s', tok: '28.9k', sid: '5b0a12', s: 'ok' },
+      { t: '07-13 09:00', dur: '—', tok: '—', sid: '—', s: 'miss' },
+      { t: '07-12 09:00', dur: '5m 02s', tok: '35.1k', sid: '2fd7a9', s: 'ok' },
+      { t: '07-11 09:00', dur: '4m 40s', tok: '30.6k', sid: 'c07f5e', s: 'ok' },
+      { t: '07-10 09:00', dur: '3m 59s', tok: '27.8k', sid: 'e4a2b1', s: 'ok' },
+      { t: '07-09 09:00', dur: '4m 05s', tok: '29.4k', sid: 'd83a71', s: 'ok' },
     ] },
-  { name: '周报草稿生成', expr: '0 18 * * 5', human: '每周五 18:00', cwd: '~/project/cronjob',
-    prompt: '汇总本周个人周报素材(git log + 会话记录),按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
-    budget: '80k tokens/次', next: '07-11(周五)18:00', state: 'ok',
-    runs: [
-      { t: '07-04 18:00', dur: '6m 40s', tok: '52.3k', exit: 0, s: 'ok' },
-      { t: '06-27 18:00', dur: '7m 12s', tok: '61.0k', exit: 0, s: 'ok' },
-    ] },
-  { name: '竞品档期追踪', expr: '0 8 * * 1', human: '每周一 08:00', cwd: '~/data-analysis',
+  { kind: 'cron', name: '竞品档期追踪', when: '每周一 08:00', rel: '已暂停(熔断)', cwd: '~/data-analysis', model: 'haiku',
     prompt: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。',
-    budget: '40k tokens/次', next: '已暂停(熔断)', state: 'fused',
-    fuse: '连续失败 3 次已熔断:上游搜索接口 429(07-06 08:00 / 08:10 / 08:20)。修复后手动恢复。',
+    perm: '自动接受编辑', budget: '$20 / 次', state: 'fused', total: 12,
+    notice: '连续失败 3 次已熔断:上游搜索接口 429。修复后手动恢复调度。',
     runs: [
-      { t: '07-06 08:20', dur: '0m 41s', tok: '2.1k', exit: 1, s: 'err' },
-      { t: '07-06 08:10', dur: '0m 38s', tok: '2.0k', exit: 1, s: 'err' },
-      { t: '07-06 08:00', dur: '0m 44s', tok: '2.2k', exit: 1, s: 'err' },
-      { t: '06-30 08:00', dur: '3m 55s', tok: '18.7k', exit: 0, s: 'ok' },
+      { t: '07-14 08:20', dur: '0m 41s', tok: '2.1k', sid: '9d21c4', s: 'err', err: '上游搜索接口 429,重试 3 次后放弃' },
+      { t: '07-14 08:10', dur: '0m 38s', tok: '2.0k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-14 08:00', dur: '0m 44s', tok: '2.2k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-07 08:00', dur: '3m 55s', tok: '18.7k', sid: 'b83d09', s: 'ok' },
     ] },
+  { kind: 'once', name: '半夜生成竞品周报(已错过)', when: '02:00', rel: '昨夜错过', cwd: '~/data-analysis', model: 'sonnet',
+    prompt: '生成竞品动态周报初稿。', perm: '自动接受编辑', budget: '$20 / 次', state: 'missed',
+    notice: '电脑睡眠错过触发,且超出 30 分钟补跑宽限期,已标记为「已错过」并通知。可点「立即补跑」。',
+    runs: [] },
 ];
 
 const TIMELINE = [
@@ -1325,7 +1476,20 @@ const STATE_PILL = {
   idle:    '<span class="pill pill-idle"><span class="dot"></span>空闲</span>',
   done:    '<span class="pill pill-done"><span class="dot"></span>已完成</span>',
 };
-const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>' };
+const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>', cronjob: '<span class="tag">◷ 定时</span>' };
+
+/* 定时任务触发的会话:轻量描述符,不进主 SESSIONS 列表(那里是看板),openReplay 兜底查找 */
+const JOB_SESSIONS = {
+  a3f9c0: { id: 'a3f9c0', title: '深夜依赖升级 + 冒烟', kind: 'cronjob', state: 'blocked', cwd: '~/xuanji', needs: '等待权限审批:Bash(pnpm up -L)' },
+  '7c1e88': { id: '7c1e88', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '5b0a12': { id: '5b0a12', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '2fd7a9': { id: '2fd7a9', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  c07f5e: { id: 'c07f5e', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  e4a2b1: { id: 'e4a2b1', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  d83a71: { id: 'd83a71', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '9d21c4': { id: '9d21c4', title: '竞品档期追踪', kind: 'cronjob', state: 'done', cwd: '~/data-analysis' },
+  b83d09: { id: 'b83d09', title: '竞品档期追踪', kind: 'cronjob', state: 'done', cwd: '~/data-analysis' },
+};
 
 /* ============================================================
    导航
@@ -1337,7 +1501,7 @@ const NAVS = [
   { id: 'dispatch',  label: '派发',   icon: 'M3 12l18-8-6 18-3-7z' },
   { id: 'skills',    label: '技能',   icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z', count: 13 },
   { id: 'memory',    label: '经验',   icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4', count: 10 },
-  { id: 'cron',      label: '定时',   icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2', count: 3 },
+  { id: 'cron',      label: '定时',   icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2', count: JOBS.length },
   { id: 'review',    label: '回顾',   icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
 ];
 
@@ -1641,7 +1805,7 @@ function renderBoard() {
 
 /* 回放抽屉 */
 function openReplay(id) {
-  const s = SESSIONS.find(x => x.id === id);
+  const s = SESSIONS.find(x => x.id === id) || JOB_SESSIONS[id];
   const events = REPLAY[id];
   $('#drawer-title').textContent = s.title;
   $('#drawer-meta').innerHTML = `
@@ -1666,7 +1830,7 @@ function openReplay(id) {
       </div>`;
   }).join('') : `
     <div class="empty"><div class="glyph">◌</div>
-      <p>历史回放从 session jsonl 只读解析(原型仅两个会话有 mock 事件)。</p>
+      <p>历史回放从 session jsonl 只读解析(原型仅部分会话有 mock 事件)。</p>
       <p style="color:var(--faint)">长会话增量加载,列表页只取 tail 与元数据。</p>
     </div>`;
   $('#drawer-foot').innerHTML =
@@ -1738,7 +1902,7 @@ function mockId() {
 }
 
 function resumeSession(id) {
-  const s = SESSIONS.find(x => x.id === id);
+  const s = SESSIONS.find(x => x.id === id) || JOB_SESSIONS[id];
   closeDrawer();
   showView('dispatch');
   dispatchOrigin = 'sessions';
@@ -1838,6 +2002,7 @@ document.addEventListener('click', closeDDs);
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if ($$('.dd.open').length) { closeDDs(); return; }
+  if ($('#job-modal').classList.contains('show')) { closeJobModal(); return; }
   if ($('#drawer').classList.contains('show')) { closeDrawer(); return; }
   if (document.activeElement.id === 'composer-input') { document.activeElement.blur(); return; } /* 先释放输入焦点,数字键切视图恢复可用 */
   if ($('#view-dispatch').classList.contains('active') && dispatchOrigin) backToBoard();
@@ -2113,45 +2278,133 @@ function openMemory(name) {
 }
 
 /* ============================================================
-   定时
+   定时(一次性 + 周期统一;全生命周期状态;失败/审批直连回放抽屉)
    ============================================================ */
+const JOB_STATE_PILL = {
+  pending: { cls: 'pill-sched', txt: '待执行' },
+  running: { cls: 'pill-run',   txt: '运行中' },
+  blocked: { cls: 'pill-blk',   txt: '需审批' },
+  done:    { cls: 'pill-done',  txt: '已完成' },
+  fused:   { cls: 'pill-err',   txt: '已熔断' },
+  missed:  { cls: 'pill-blk',   txt: '已错过' },
+};
+let cronFilter = 'all';
 function renderCrons() {
-  $('#cron-list').innerHTML = CRONS.map((c, i) => `
+  const list = JOBS.filter(j => cronFilter === 'all' || j.kind === cronFilter);
+  if (!list.length) { $('#cron-list').innerHTML = `<div class="empty"><div class="glyph">◷</div><p>该分类下暂无任务。</p></div>`; return; }
+  $('#cron-list').innerHTML = list.map((j) => {
+    const i = JOBS.indexOf(j);
+    const m = JOB_STATE_PILL[j.state];
+    const whenColor = (j.state === 'fused' || j.state === 'missed') ? 'var(--faint)' : (j.state === 'blocked' ? 'var(--amber)' : 'var(--ink)');
+    return `
     <div class="cron-item" id="cron-${i}">
       <div class="cron-row" onclick="document.getElementById('cron-${i}').classList.toggle('open')">
-        ${c.state === 'fused'
-          ? '<span class="pill pill-err"><span class="dot"></span>熔断</span>'
-          : '<span class="pill pill-run"><span class="dot"></span>正常</span>'}
-        <span class="name">${esc(c.name)}</span>
-        <span class="expr">${c.expr}</span>
-        <span style="font-size:0.75rem;color:var(--muted)">${c.human}</span>
-        <span class="next">下次:${c.next}</span>
+        <span class="pill ${m.cls}"><span class="dot"></span>${m.txt}</span>
+        <span class="kind">${j.kind === 'once' ? '一次性' : '周期'}</span>
+        <span class="name">${esc(j.name)}</span>
+        <span class="when">
+          ${j.kind === 'cron' && j.runs.length ? `<span class="runline" title="近 ${Math.min(j.runs.length, 7)} 期运行状态(左旧右新)">${j.runs.slice(0, 7).reverse().map(r => `<i class="${r.s === 'ok' ? 'g' : r.s === 'err' ? 'r' : 'a'}"></i>`).join('')}</span>` : ''}
+          <span class="clock" style="color:${whenColor}">${esc(j.when)}</span><span class="rel">${esc(j.rel)}</span>
+        </span>
       </div>
       <div class="cron-detail">
-        ${c.fuse ? `<div class="fuse-note">⚠ ${esc(c.fuse)} <button class="btn btn-sm" style="margin-left:auto" onclick="toast('已恢复调度(原型示意)')">恢复</button></div>` : ''}
+        ${j.notice ? `<div class="${j.state === 'fused' ? 'fuse-note' : 'notice-amber'}">
+            <span>${j.state === 'fused' ? '⚠' : '◷'}</span><span>${esc(j.notice)}</span>
+            ${j.state === 'blocked' ? `<button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="event.stopPropagation();openReplay('${j.blockedSid}')">去审批</button>` : ''}
+            ${j.state === 'fused' ? `<button class="btn btn-sm" style="margin-left:auto" onclick="event.stopPropagation();toast('已恢复调度(原型示意)')">恢复</button>` : ''}
+            ${j.state === 'missed' ? `<button class="btn btn-sm" style="margin-left:auto" onclick="event.stopPropagation();toast('已触发补跑(原型示意)')">立即补跑</button>` : ''}
+        </div>` : ''}
         <div class="cron-meta">
-          <span>目录 <b class="mono">${esc(c.cwd)}</b></span>
-          <span>预算 <b>${c.budget}</b></span>
-          <span>执行 <b class="mono">claude -p · stream-json</b></span>
-          <span>追赶策略 <b>错过跳过</b></span>
+          <span>目录 <b class="mono">${esc(j.cwd)}</b></span>
+          <span>模型 <b>${esc(j.model)}</b></span>
+          <span>权限 <b>${esc(j.perm)}</b></span>
+          <span>预算 <b>${esc(j.budget)}</b></span>
+          <span>执行 <b>Agent SDK 会话</b></span>
         </div>
-        <div class="prompt">${esc(c.prompt)}</div>
-        <table class="runs">
-          <thead><tr><th>时间</th><th>耗时</th><th>tokens</th><th>退出码</th><th>状态</th></tr></thead>
-          <tbody>
-            ${c.runs.map(r => `<tr>
-              <td>${r.t}</td><td>${r.dur}</td><td>${r.tok}</td><td>${r.exit}</td>
-              <td>${r.s === 'ok' ? '<span class="pill pill-done"><span class="dot"></span>成功</span>' : '<span class="pill pill-err"><span class="dot"></span>失败</span>'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
+        <div class="prompt">${esc(j.prompt)}</div>
+        ${j.runs.length ? `<table class="runs">
+          <thead><tr><th>${j.kind === 'cron' ? '周期(计划时间)' : '时间'}</th><th>耗时</th><th>tokens</th><th>结果会话 / 日志</th><th>状态</th></tr></thead>
+          <tbody>${j.runs.map(r => `<tr>
+            <td>${r.t}${r.err ? `<div style="color:var(--red);font-size:0.6875rem;margin-top:2px">${esc(r.err)}</div>` : ''}</td>
+            <td>${r.dur}</td><td>${r.tok}</td>
+            <td>${r.sid === '—' ? '—' : `<a class="sid" href="#" onclick="event.stopPropagation();openReplay('${r.sid}');return false">${r.sid} · 查看日志</a>`}</td>
+            <td>${r.s === 'ok' ? '<span class="pill pill-done"><span class="dot"></span>成功</span>' : r.s === 'blk' ? '<span class="pill pill-blk"><span class="dot"></span>审批中</span>' : r.s === 'miss' ? '<span class="pill pill-blk"><span class="dot"></span>错过</span>' : '<span class="pill pill-err"><span class="dot"></span>失败</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table>${j.total && j.total > j.runs.length ? `<button class="runs-more" onclick="event.stopPropagation();toast('展开全部 ${j.total} 期运行历史(原型示意)')">查看全部 ${j.total} 期运行 →</button>` : ''}` : '<div style="font-size:0.75rem;color:var(--faint);padding:4px 0">尚未运行,无历史记录。</div>'}
         <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn btn-sm" onclick="toast('已触发一次立即运行(原型示意)')">立即运行</button>
-          <button class="btn btn-sm btn-quiet">编辑</button>
-          <button class="btn btn-sm btn-quiet">${c.state === 'fused' ? '删除' : '暂停'}</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();toast('已触发一次立即运行(原型示意)')">立即运行</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();openJobModal()">编辑</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();toast('已${j.kind === 'once' ? '取消' : '暂停'}(原型示意)')">${j.kind === 'once' ? '取消' : '暂停'}</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="event.stopPropagation();toast('已删除(原型示意)')">删除</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+$('#cron-filter')?.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#cron-filter').children].forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); cronFilter = b.dataset.f; renderCrons();
+});
+
+/* ---------- 新建任务模态 ---------- */
+let jmKind = 'once', jmTime = '20';
+const JM_TIME_LABEL = { '20': '今晚 20:00', '22': '今晚 22:00', 'tmr9': '明早 09:00', 'custom': '自定义时间' };
+const JM_TIME_REL = { '20': '约 4 小时后', '22': '约 6 小时后', 'tmr9': '约 15 小时后', 'custom': '' };
+function openJobModal() {
+  makeDD('#jm-cwd-dd', ['~/xuanji', '~/baize', '~/antifraud_skills', '~/project/cronjob', '~/data-analysis'], { value: '~/xuanji', onChange: updateJmSummary });
+  makeDD('#jm-model-dd', ['sonnet', 'opus', 'haiku'], { value: 'sonnet', onChange: updateJmSummary });
+  makeDD('#jm-perm-dd', ['自动接受编辑', '保守', '计划模式', '完全放行'], { value: '自动接受编辑', onChange: updateJmSummary });
+  makeDD('#jm-budget-dd', ['$10 / 次', '$20 / 次', '$50 / 次', '$100 / 次', '不限'], { value: '$50 / 次', onChange: updateJmSummary });
+  updateJmSummary();
+  $('#job-modal-backdrop').classList.add('show');
+  $('#job-modal').classList.add('show');
+}
+function closeJobModal() {
+  $('#job-modal-backdrop').classList.remove('show');
+  $('#job-modal').classList.remove('show');
+}
+$('#jm-seg-kind').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-seg-kind').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  jmKind = b.dataset.k;
+  $('#jm-once-time').style.display = jmKind === 'once' ? '' : 'none';
+  $('#jm-cron-time').style.display = jmKind === 'cron' ? '' : 'none';
+  updateJmSummary();
+});
+$('#jm-time-chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-time-chips').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  jmTime = b.dataset.t;
+  const custom = jmTime === 'custom';
+  $('#jm-datetime').style.display = custom ? '' : 'none';
+  $('#jm-time-hint').innerHTML = custom ? '选择一个具体日期时间' : `将在 <b style="color:var(--jade)">${JM_TIME_LABEL[jmTime]}</b>(${JM_TIME_REL[jmTime]})执行一次`;
+  updateJmSummary();
+});
+$('#jm-cron-chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-cron-chips').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  if (b.dataset.c !== 'custom') $('#jm-cron').value = b.dataset.c;
+  updateJmSummary();
+});
+function jmVal(sel) { const el = $(sel + ' .dd-val'); return el ? el.textContent : ''; }
+function updateJmSummary() {
+  const cwd = jmVal('#jm-cwd-dd'), model = jmVal('#jm-model-dd');
+  const when = jmKind === 'once' ? (jmTime === 'custom' ? '自定义时间' : JM_TIME_LABEL[jmTime]) : ('cron ' + $('#jm-cron').value);
+  $('#jm-summary').innerHTML = `${jmKind === 'once' ? '一次性' : '周期'} · <b>${esc(when)}</b> · ${esc(cwd)} · ${esc(model)}`;
+}
+function saveJob() {
+  const name = $('#jm-name').value.trim() || (jmKind === 'once' ? '未命名一次性任务' : '未命名周期任务');
+  const when = jmKind === 'once' ? JM_TIME_LABEL[jmTime] : ('cron ' + $('#jm-cron').value);
+  JOBS.unshift({
+    kind: jmKind, name, when, rel: jmKind === 'once' ? (JM_TIME_REL[jmTime] || '待执行') : '已排程',
+    cwd: jmVal('#jm-cwd-dd'), model: jmVal('#jm-model-dd'),
+    prompt: $('#jm-prompt').value.trim() || '(未填写 prompt)',
+    perm: jmVal('#jm-perm-dd'), budget: jmVal('#jm-budget-dd'),
+    state: 'pending', runs: [],
+  });
+  closeJobModal(); renderCrons();
+  toast('任务已保存,到点后端自动执行 ✓');
 }
 
 /* ============================================================
