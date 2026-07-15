@@ -113,6 +113,15 @@ export interface SessionsBoard {
   refreshedAt: number;
 }
 
+/** 已关闭(隐藏)会话:/resume 弹窗列表项 */
+export interface ClosedSession {
+  sessionId: string;
+  name: string;
+  cwd: string;
+  project: string;
+  hiddenAt: number;
+}
+
 export interface ProjectsResult {
   projects: Project[];
   filteredNoise: number;
@@ -131,6 +140,7 @@ export interface Dashboard {
     todayCostUsd: number;
     activeProjects: number;
     systemCrons: number;
+    scheduledJobs: { normal: number; fused: number; missed: number };
   };
   timeline: { time: number; project: string; message: string }[];
   heat: { project: string; days: number[] }[];
@@ -139,8 +149,101 @@ export interface Dashboard {
   health: { cli: string | null; agentsOk: boolean };
 }
 
+// ---------- 定时任务(M3) ----------
+
+export type ScheduledJobKind = 'once' | 'cron';
+
+export type ScheduledJobStatus =
+  | 'pending'
+  | 'running'
+  | 'blocked'
+  | 'done'
+  | 'error'
+  | 'fused'
+  | 'missed'
+  | 'canceled'
+  | 'paused';
+
+export interface ScheduledJob {
+  id: string;
+  kind: ScheduledJobKind;
+  name: string;
+  prompt: string;
+  cwd: string;
+  model: string | null;
+  permissionMode: string;
+  maxBudgetUsd: number | null;
+  runAt: number | null;
+  cronExpr: string | null;
+  status: ScheduledJobStatus;
+  consecutiveFailures: number;
+  resultSessionId: string | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+  nextRunAt: number | null;
+}
+
+export interface ScheduledRun {
+  id: number;
+  jobId: string;
+  scheduledFor: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  status: 'running' | 'done' | 'error' | 'blocked' | 'missed';
+  sessionId: string | null;
+  costUsd: number | null;
+  durationMs: number | null;
+  error: string | null;
+}
+
 export interface CronsResult {
-  app: unknown[];
+  app: ScheduledJob[];
   system: string[];
   caliber: string;
+}
+
+// ---------- 周回顾 ----------
+
+export interface ReviewSession {
+  sessionId: string;
+  title: string;
+  prompts: number;
+  firstAt: number;
+  lastAt: number;
+  days: number[];
+  promptTexts: string[];
+  source: 'terminal' | 'web';
+  costUsd: number;
+}
+
+export interface ReviewProject {
+  project: string;
+  path: string;
+  prompts: number;
+  days: number[];
+  costUsd: number;
+  commits: string[];
+  sessions: ReviewSession[];
+}
+
+export interface WeeklyReview {
+  range: { start: number; end: number; dayCount: number };
+  totals: { prompts: number; sessions: number; projects: number; activeDays: number; costUsd: number };
+  projects: ReviewProject[];
+  caliber: Record<string, string>;
+  computedAt: number;
+}
+
+export interface WeeklyDraft {
+  id: number;
+  rangeStart: number;
+  rangeEnd: number;
+  status: 'running' | 'done' | 'error';
+  content: string | null;
+  error: string | null;
+  model: string;
+  sessionId: string | null;
+  createdAt: number;
+  finishedAt: number | null;
 }

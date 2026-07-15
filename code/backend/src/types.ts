@@ -102,6 +102,68 @@ export interface HistoryEntry {
   sessionId: string;
 }
 
+// ---------- 周回顾(weekly review) ----------
+
+export interface ReviewSession {
+  sessionId: string;
+  title: string;
+  /** 窗口内我发出的 prompt 数(活跃口径) */
+  prompts: number;
+  firstAt: number;
+  lastAt: number;
+  /** 窗口内逐日 prompt 数,[窗口首日..末日] */
+  days: number[];
+  /** prompt 原文样本(截断/封顶,见 caliber) */
+  promptTexts: string[];
+  /** terminal = history.jsonl;web = 璇玑派发流水 */
+  source: 'terminal' | 'web';
+  /** 窗口内该会话的 token 成本(USD,按记录时间过滤) */
+  costUsd: number;
+}
+
+export interface ReviewProject {
+  /** basename 展示名(分类色键) */
+  project: string;
+  /** 真实绝对路径 */
+  path: string;
+  prompts: number;
+  days: number[];
+  costUsd: number;
+  /** 窗口内 git commit 题目(--all --no-merges,封顶截取);非 git 目录为空 */
+  commits: string[];
+  sessions: ReviewSession[];
+}
+
+export interface WeeklyReview {
+  range: { start: number; end: number; dayCount: number };
+  totals: {
+    prompts: number;
+    sessions: number;
+    projects: number;
+    /** 有 ≥1 条 prompt 的自然日数 */
+    activeDays: number;
+    costUsd: number;
+  };
+  projects: ReviewProject[];
+  caliber: Record<string, string>;
+  computedAt: number;
+}
+
+/** 周报草稿(自有数据,SQLite) */
+export interface WeeklyDraft {
+  id: number;
+  rangeStart: number;
+  rangeEnd: number;
+  status: 'running' | 'done' | 'error';
+  content: string | null;
+  error: string | null;
+  model: string;
+  /** 生成草稿的派发会话(可在看板跟踪/续接迭代) */
+  sessionId: string | null;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
 export interface ModelUsage {
   model: string;
   inputTokens: number;
@@ -123,4 +185,70 @@ export interface ProjectUsage {
   byModel: ModelUsage[];
   totalCostUsd: number;
   sessions: SessionUsage[];
+}
+
+// ---------- 定时任务(scheduled jobs,自有数据 SQLite) ----------
+
+export type ScheduledJobKind = 'once' | 'cron';
+
+/**
+ * pending  待执行(排程未到点 / cron 等待下次)
+ * running  已触发,派发会话进行中
+ * blocked  会话卡在权限审批,挂起等用户处理(不计入熔断失败)
+ * done     一次性:成功完成,终态;周期:本期成功,已回到 pending 等下一期
+ * error    一次性:本次运行失败,终态
+ * fused    周期:连续失败达阈值,调度已停止
+ * missed   一次性:错过触发且超出补跑宽限期
+ * canceled 用户取消(一次性)
+ * paused   用户暂停(周期)
+ */
+export type ScheduledJobStatus =
+  | 'pending'
+  | 'running'
+  | 'blocked'
+  | 'done'
+  | 'error'
+  | 'fused'
+  | 'missed'
+  | 'canceled'
+  | 'paused';
+
+export interface ScheduledJob {
+  id: string;
+  kind: ScheduledJobKind;
+  name: string;
+  prompt: string;
+  cwd: string;
+  model: string | null;
+  permissionMode: string;
+  /** 单次运行预算上限(USD),null = 不限。软上限:回合结束后核对,超出记录但不能中途打断(SDK 未暴露增量成本流) */
+  maxBudgetUsd: number | null;
+  /** kind='once' 的计划执行时间(epoch ms) */
+  runAt: number | null;
+  /** kind='cron' 的 cron 表达式(croner 语法,Asia/Shanghai 时区) */
+  cronExpr: string | null;
+  status: ScheduledJobStatus;
+  /** 连续失败计数:达 3 熔断(仅 cron 有意义) */
+  consecutiveFailures: number;
+  /** 最近一次触发产生的派发会话 id;前端「结果会话」跳转与只读回放的入口 */
+  resultSessionId: string | null;
+  lastError: string | null;
+  createdAt: number;
+  updatedAt: number;
+  /** 下次触发时间(epoch ms),由 croner 计算回填,pending 态才有意义 */
+  nextRunAt: number | null;
+}
+
+export interface ScheduledRun {
+  id: number;
+  jobId: string;
+  /** 计划触发时间(epoch ms);错过/延迟触发时与 startedAt 存在差值 */
+  scheduledFor: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  status: 'running' | 'done' | 'error' | 'blocked' | 'missed';
+  sessionId: string | null;
+  costUsd: number | null;
+  durationMs: number | null;
+  error: string | null;
 }

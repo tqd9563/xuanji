@@ -63,12 +63,12 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   const reviewable = (data.reviewCandidates ?? []).filter(isUnread);
   const goSession = (s: (typeof reviewable)[number]) => {
     if (s.dispatchId) {
-      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd } });
+      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
       location.hash = 'dispatch';
       return;
     }
     if (s.readonly) return onGoSession(s.sessionId);
-    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd } });
+    setDispatchIntent({ resume: { sessionId: s.sessionId, name: s.name, cwd: s.cwd, project: s.project } });
     location.hash = 'dispatch';
   };
 
@@ -150,6 +150,15 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
           今日 token <b>{fmtTokens(data.strip.todayTokensInOut)}</b> · 成本 <b>{fmtCost(data.strip.todayCostUsd)}</b>
         </span>
         <span>活跃项目 <b>{data.strip.activeProjects}</b> 个</span>
+        <span>
+          定时任务 <b>{data.strip.scheduledJobs.normal}</b> 个正常
+          {data.strip.scheduledJobs.fused > 0 && (
+            <> · <b style={{ color: 'var(--red)' }}>{data.strip.scheduledJobs.fused}</b> 个熔断</>
+          )}
+          {data.strip.scheduledJobs.missed > 0 && (
+            <> · <b style={{ color: 'var(--amber)' }}>{data.strip.scheduledJobs.missed}</b> 个错过</>
+          )}
+        </span>
         <span>系统定时 <b>{data.strip.systemCrons}</b> 条(只读)</span>
         <span className="spacer" />
         <span style={{ color: data.health.agentsOk ? 'var(--muted)' : 'var(--red)' }}>

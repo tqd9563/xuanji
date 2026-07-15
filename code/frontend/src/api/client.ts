@@ -1,12 +1,17 @@
 import type {
+  ClosedSession,
   CronsResult,
   Dashboard,
   Memory,
   ProjectsResult,
   Replay,
+  ScheduledJob,
+  ScheduledRun,
   SessionsBoard,
   Skill,
   UsageReport,
+  WeeklyDraft,
+  WeeklyReview,
 } from './types';
 
 async function get<T>(path: string): Promise<T> {
@@ -48,6 +53,49 @@ export const api = {
     mutate<{ summary: string; from: string }>('/api/dispatch/handoff', 'POST', { sessionId }),
   closeSession: (sessionId: string) =>
     mutate<{ ok: boolean; ended: boolean }>(`/api/sessions/${sessionId}/close`, 'POST', { confirm: true }),
+  closedSessions: (cwd?: string) =>
+    get<{ sessions: ClosedSession[] }>(`/api/sessions/closed${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  unhideSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/unhide`, 'POST', {}),
+  // ---------- 周回顾 ----------
+  weeklyReview: (start: number, end: number) =>
+    get<WeeklyReview>(`/api/weekly-review?start=${start}&end=${end}`),
+  weeklyDrafts: () => get<{ drafts: WeeklyDraft[] }>('/api/weekly-review/drafts'),
+  startWeeklyDraft: (start: number, end: number) =>
+    mutate<{ id: number; dispatchId: string }>('/api/weekly-review/draft', 'POST', { start, end }),
+  // ---------- 定时任务(M3) ----------
+  schedules: () => get<{ jobs: ScheduledJob[] }>('/api/schedules'),
+  createSchedule: (input: {
+    kind: 'once' | 'cron';
+    name: string;
+    prompt: string;
+    cwd: string;
+    model?: string;
+    permissionMode: string;
+    maxBudgetUsd?: number;
+    runAt?: number;
+    cronExpr?: string;
+  }) => mutate<{ job: ScheduledJob }>('/api/schedules', 'POST', input),
+  updateSchedule: (
+    id: string,
+    patch: Partial<{
+      name: string;
+      prompt: string;
+      cwd: string;
+      model: string | null;
+      permissionMode: string;
+      maxBudgetUsd: number | null;
+      runAt: number | null;
+      cronExpr: string | null;
+    }>,
+  ) => mutate<{ job: ScheduledJob }>(`/api/schedules/${id}`, 'PATCH', patch),
+  deleteSchedule: (id: string) => mutate<{ ok: boolean }>(`/api/schedules/${id}`, 'DELETE', {}),
+  scheduleRuns: (id: string, limit?: number) =>
+    get<{ runs: ScheduledRun[]; total: number }>(`/api/schedules/${id}/runs${limit ? `?limit=${limit}` : ''}`),
+  runScheduleNow: (id: string) => mutate<{ ok: boolean }>(`/api/schedules/${id}/run-now`, 'POST', {}),
+  pauseSchedule: (id: string) => mutate<{ ok: boolean }>(`/api/schedules/${id}/pause`, 'POST', {}),
+  resumeSchedule: (id: string) => mutate<{ ok: boolean }>(`/api/schedules/${id}/resume`, 'POST', {}),
+  cancelSchedule: (id: string) => mutate<{ ok: boolean }>(`/api/schedules/${id}/cancel`, 'POST', {}),
 };
 
 /** ws 变更订阅:scope 变化时回调,前端据此重取对应资源 */

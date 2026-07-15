@@ -3,6 +3,8 @@ import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette } from '@/lib/utils';
 import { ConfirmHost, ToastHost } from '@/components/shared';
+import { WallpaperSettings } from '@/components/WallpaperSettings';
+import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Sessions, type SessionsHandle } from '@/views/Sessions';
@@ -10,6 +12,7 @@ import { Dispatch } from '@/views/Dispatch';
 import { Skills } from '@/views/Skills';
 import { Memories } from '@/views/Memories';
 import { Crons } from '@/views/Crons';
+import { Review } from '@/views/Review';
 
 const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
@@ -19,6 +22,7 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'skills', label: '技能', icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z' },
   { id: 'memory', label: '经验', icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4' },
   { id: 'cron', label: '定时', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2' },
+  { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
 ];
 
 export default function App() {
@@ -26,6 +30,9 @@ export default function App() {
   const [health, setHealth] = useState<{ cli: string | null } | null>(null);
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
+  const [wall, patchWall] = useWallpaper();
+  const [wallOpen, setWallOpen] = useState(false);
+  const wallUrl = wallSrcUrl(wall);
 
   // 项目分类色调色板(后端 SQLite 首次出现顺序):加载后重渲染;旧后端无此端点时静默用哈希兜底
   useEffect(() => {
@@ -84,11 +91,12 @@ export default function App() {
 
   return (
     <div className="app">
+      <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
       <aside className="sidebar">
         <div className="brand">
           <span className="zh">璇玑</span>
           <span className="en">xuanji</span>
-          <span className="version">v1.0.0</span>
+          <span className="version">v1.1.0</span>
         </div>
         <nav className="nav">
           {NAVS.map((n, i) => (
@@ -106,6 +114,7 @@ export default function App() {
           ))}
         </nav>
         <div className="side-foot">
+          <WallpaperSettings wall={wall} patch={patchWall} open={wallOpen} onToggle={setWallOpen} />
           <div className="row">
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
             {health === null ? '连接后端…' : health.cli ? `${health.cli} · 就绪` : '后端可用 · CLI 不可达'}
@@ -134,6 +143,9 @@ export default function App() {
         </section>
         <section className={`view ${view === 'cron' ? 'active' : ''}`}>
           {view === 'cron' && <Crons />}
+        </section>
+        <section className={`view ${view === 'review' ? 'active' : ''}`}>
+          {view === 'review' && <Review />}
         </section>
       </main>
 

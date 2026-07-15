@@ -1,13 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { cn, fmtCost, markSeen } from '@/lib/utils';
+import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
+import { ResumePalette } from '@/components/ResumePalette';
 import { ToolCard, toast } from '@/components/shared';
-import type { ReplayEvent } from '@/api/types';
+import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
@@ -44,6 +45,15 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-4-8';
 };
 
+/** 会话标识(输入框上方,与用量条同行):名称按所属项目色荧光呈现,id 到手后补显。
+ *  id 为 null 表示「已知名称/项目,SDK 会话尚未分配 id」(如刚发出首条消息);name 为 null 表示「未命名占位」。 */
+interface SessCtx {
+  id: string | null;
+  name: string | null;
+  project: string;
+  cwd: string;
+}
+
 export function Dispatch({ active }: { active: boolean }) {
   const d = useDispatch();
   const { data: projectsData } = usePoll(api.projects, 60_000);
@@ -51,17 +61,60 @@ export function Dispatch({ active }: { active: boolean }) {
   const [modelSel, setModelSel] = useState(initialModel);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
-  const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string } | null>(null);
+  const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
+  const [resumePalette, setResumePalette] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const chatRef = useRef<HTMLDivElement>(null);
+  const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
+  const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
+  const repin = () => {
+    pinnedRef.current = true;
+    lastChatTopRef.current = 0;
+  };
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
+  const [sessCtx, setSessCtx] = useState<SessCtx | null>(null);
 
   const projects = projectsData?.projects ?? [];
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
   const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
   const effectiveCwd = cwd || cwdOptions[0] || '';
+
+  /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
+  const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
+    if (d.started || d.items.length > 0) d.reset();
+    // 进入续接页装载历史 = 已浏览产出:立即标已读。
+    // 派发页原有的 markSeen 效应依赖 d.sessionId(发出第一条消息才有值),
+    // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
+    markSeen(info.sessionId);
+    repin();
+    setSessionCwd(null);
+    setResumeInfo(info);
+    setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
+    setCwd(info.cwd);
+    d.pushNote(`↻ 将续接会话 ${info.sessionId.slice(0, 8)}(${info.name}),发送第一条消息后恢复上下文。`);
+    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
+    void api
+      .replay(info.sessionId)
+      .then((r) => d.seedHistory(replayToChat(r.events)))
+      .catch(() => {});
+  };
+
+  /** /resume 弹窗选中:所有权预检 → 取消隐藏(卡片回看板) → 装载续接 */
+  const pickClosed = async (s: ClosedSession) => {
+    setResumePalette(false);
+    try {
+      const check = await api.canResume(s.sessionId);
+      if (!check.ok) return toast(check.reason ?? '该会话当前不可续接');
+      await api.unhideSession(s.sessionId);
+      applyResume(s);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    } finally {
+      taRef.current?.focus();
+    }
+  };
 
   // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏。
   // 无意图进入(侧栏/数字键)= 全新派发:上一会话留在后端继续存活,可从会话页随时接回。
@@ -78,8 +131,10 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!intent && entered && (d.started || d.items.length > 0)) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
+      repin();
       setResumeInfo(null);
       setSessionCwd(null);
+      setSessCtx(null);
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
     }
     if (intent?.attach) {
@@ -89,33 +144,64 @@ export function Dispatch({ active }: { active: boolean }) {
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
       setFromBoard(true);
+      // name/project 看板已随手带过来(见 DispatchIntent.attach 注释),id 待 attach 重放 init 事件后由下方 effect 补上
+      setSessCtx({ id: null, name: intent.attach.name || null, project: intent.attach.project, cwd: intent.attach.cwd });
+      repin();
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
-      if (d.started || d.items.length > 0) d.reset();
-      setSessionCwd(null);
-      setResumeInfo(intent.resume);
-      setCwd(intent.resume.cwd);
       setFromBoard(true);
-      d.pushNote(`↻ 将续接会话 ${intent.resume.sessionId.slice(0, 8)}(${intent.resume.name}),发送第一条消息后恢复上下文。`);
-      // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
-      void api
-        .replay(intent.resume.sessionId)
-        .then((r) => d.seedHistory(replayToChat(r.events)))
-        .catch(() => {});
+      applyResume(intent.resume);
     }
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
     setTimeout(() => taRef.current?.focus(), 0);
   }, [active, d]);
 
-  // 消息区自动滚底
+  // 消息区自动滚底 —— 仅当用户钉在底部时跟随。
+  // 修复:流式输出期间向上翻历史,每条新增量都把视口拽回底部,历史根本没法看。
+  // 解钉/回钉用「滚动方向」判定而非只看距底距离:程序滚底后 scroll 事件异步派发,
+  // 快速流式下事件到达时内容又长高了,按距离判会把程序滚底误判成"离开了底部"而自我解钉。
+  // scrollTop 变小 = 用户向上翻(程序滚底只会变大,天然免疫)→ 解钉;滚回距底 <48px → 回钉,自愈无需按钮。
+  // 会话切换类动作(发送/续接/接回/新会话/交接)一律重新钉住:那是用户主动回到「看最新」。
+  const onChatScroll = () => {
+    const el = chatRef.current;
+    if (!el) return;
+    const prev = lastChatTopRef.current;
+    lastChatTopRef.current = el.scrollTop;
+    if (el.scrollTop < prev - 1) pinnedRef.current = false;
+    else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
+  };
   useEffect(() => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
+    if (pinnedRef.current) chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
   }, [d.items]);
 
   // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
   useEffect(() => {
     if (active && d.sessionId) markSeen(d.sessionId);
   }, [active, d.sessionId, d.status.state, d.costUsd]);
+
+  // SDK 分配 sessionId(init 事件)后补上会话标识里悬空的 id——新会话首次发送、attach 重放 init 均走这里
+  useEffect(() => {
+    if (!d.sessionId) return;
+    setSessCtx((prev) => (prev && prev.id === null ? { ...prev, id: d.sessionId } : prev));
+  }, [d.sessionId]);
+
+  // 兜底:刷新页面后 useDispatch 内部静默 attach 回存活会话(不经过看板意图),
+  // 本组件没有 name/project 可用,按 sessionId 查一次会话看板补全。
+  useEffect(() => {
+    if (!d.sessionId || sessCtx) return;
+    let cancelled = false;
+    void api
+      .sessions()
+      .then((board) => {
+        if (cancelled) return;
+        const match = Object.values(board.columns).flat().find((s) => s.sessionId === d.sessionId);
+        if (match) setSessCtx({ id: match.sessionId, name: match.name || null, project: match.project, cwd: match.cwd });
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [d.sessionId, sessCtx]);
 
   // 看板 ↔ 派发往返闭环(原型获批设计):从看板进入的会话 ← / Esc 返回看板。
   // ←:焦点在 composer 且输入为空时同样生效(有内容时保持移光标本职);
@@ -144,6 +230,11 @@ export function Dispatch({ active }: { active: boolean }) {
     const text = ta?.value.trim();
     if (!text || !effectiveCwd) return;
     ta!.value = '';
+    // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
+    if (/^\/resume\b/.test(text)) {
+      setResumePalette(true);
+      return;
+    }
     // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
     if (/^\/rename\b/.test(text)) {
       const newName = text.replace(/^\/rename\b/, '').trim();
@@ -151,6 +242,7 @@ export function Dispatch({ active }: { active: boolean }) {
       if (!d.sessionId) return toast('会话尚未开始,发送第一条消息后再改名');
       try {
         await api.renameSession(d.sessionId, newName);
+        setSessCtx((prev) => (prev ? { ...prev, name: newName } : prev));
         d.pushNote(`✎ 会话已重命名为「${newName}」(存璇玑本地,看板即时生效;不写 ~/.claude)`);
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e));
@@ -173,6 +265,13 @@ export function Dispatch({ active }: { active: boolean }) {
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
+    // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
+    // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
+    // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
+    if (!resumeInfo && !sessCtx) {
+      setSessCtx({ id: null, name: text.slice(0, 40), project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
+    }
+    repin(); // 发消息 = 主动回到「看最新」
     try {
       if (bg) {
         await d.send(text, { cwd: effectiveCwd, permissionMode: 'default', bg: true });
@@ -194,8 +293,10 @@ export function Dispatch({ active }: { active: boolean }) {
 
   const newSession = () => {
     d.reset();
+    repin();
     setResumeInfo(null);
     setSessionCwd(null);
+    setSessCtx(null);
     setFromBoard(false);
     taRef.current?.focus();
   };
@@ -217,8 +318,11 @@ export function Dispatch({ active }: { active: boolean }) {
       const { summary, from } = await api.handoff(d.sessionId);
       const target = effectiveCwd;
       d.reset();
+      repin();
       setResumeInfo(null);
       setSessionCwd(target);
+      // 交接落地的新会话尚未发消息,还没有名称;项目已知(交接目标),先占位显示未命名
+      setSessCtx({ id: null, name: null, project: curProject?.name ?? target, cwd: target });
       d.pushNote(`⇢ 已从「${from}」携带交接摘要,新会话将运行在 ${target}。摘要已注入,直接描述要继续的工作。`);
       if (taRef.current) {
         taRef.current.value = `以下是上一会话的交接摘要:\n${summary}\n\n请基于以上上下文继续:`;
@@ -259,12 +363,11 @@ export function Dispatch({ active }: { active: boolean }) {
             ‹ 会话看板
           </button>
         )}
-        {d.sessionId && <span className="sub mono">session {d.sessionId.slice(0, 8)}</span>}
         <span className="spacer" />
         <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
       </div>
       <div className="dispatch">
-        <div className="chat" ref={chatRef}>
+        <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           {d.items.length === 0 && (
             <div className="chat-empty">
               <h2>派发一个新任务</h2>
@@ -285,6 +388,7 @@ export function Dispatch({ active }: { active: boolean }) {
         </div>
 
         <div className="chat-status">
+          {sessCtx && <SessCtxBadge ctx={sessCtx} />}
           <span className="u-chips">
             <Chip label="Context" pct={d.chips.contextPct} />
             <Chip label="Usage" pct={d.chips.fiveHourPct} resetsAt={d.chips.fiveHourResetsAt} />
@@ -386,6 +490,16 @@ export function Dispatch({ active }: { active: boolean }) {
           />
           <span className="tag">settingSources: user</span>
         </div>
+        {resumePalette && (
+          <ResumePalette
+            cwd={effectiveCwd}
+            onPick={(s) => void pickClosed(s)}
+            onClose={() => {
+              setResumePalette(false);
+              taRef.current?.focus();
+            }}
+          />
+        )}
         {showCwdNote && (
           <div className="cwd-note">
             <span className="dot" />
@@ -417,6 +531,21 @@ function untilReset(resetsAt: number | null | undefined): string | null {
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${h > 0 ? `${h}h ` : ''}${m}m 后重置`;
+}
+
+/** 会话标识:名称按项目色荧光呈现,id 未到手前只显名称+项目;悬停给出完整信息(未命名时提示原因)。 */
+function SessCtxBadge({ ctx }: { ctx: SessCtx }) {
+  const named = !!ctx.name;
+  const hue = projHue(ctx.project);
+  const title = `${named ? ctx.name : '会话名称加载中…'} · 项目 ${ctx.project}(${ctx.cwd})`;
+  return (
+    <div className="sess-ctx" title={title}>
+      <span className={cn('sc-title', named ? 'sc-named' : 'sc-unnamed')} style={{ '--ph': hue } as CSSProperties}>
+        {named ? ctx.name : '未命名会话'}
+      </span>
+      {ctx.id && <span className="sc-id">{ctx.id.slice(0, 8)}</span>}
+    </div>
+  );
 }
 
 function Chip({

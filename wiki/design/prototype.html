@@ -34,6 +34,7 @@
   --blue:  oklch(0.72 0.11 245);
   --violet: oklch(0.73 0.11 300);
   --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
   /* 图表系列色:大面积填充专用,统一明度、降饱和,避免高亮块刺眼 */
   --chart-1: oklch(0.68 0.075 115);
   --chart-2: oklch(0.65 0.065 300);
@@ -42,6 +43,7 @@
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
   --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
   --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
 
@@ -162,9 +164,10 @@ select.input { appearance: none; padding-right: 28px;
 .pill-run  { color: var(--jade);  background: var(--tint-jade); }
 .pill-blk  { color: var(--amber); background: var(--tint-amber); }
 .pill-idle { color: var(--muted); background: var(--tint-muted); }
-.pill-done { color: var(--blue);  background: var(--tint-blue); }
+.pill-done { color: var(--green); background: var(--tint-green); }
 .pill-err  { color: var(--red);   background: var(--tint-red); }
-.pill-run .dot { animation: pulse 2s var(--ease) infinite; }
+.pill-sched{ color: var(--blue);  background: var(--tint-blue); }
+.pill-run .dot, .pill-blk .dot { animation: pulse 2s var(--ease) infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
 .tag {
@@ -219,6 +222,34 @@ select.input { appearance: none; padding-right: 28px;
 .drawer-foot { padding: 14px 24px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; }
 .x-btn { margin-left: auto; color: var(--muted); padding: 4px 8px; border-radius: var(--r-s); flex: none; }
 .x-btn:hover { background: var(--hover); color: var(--ink); }
+
+/* 居中模态(新建定时任务表单;区别于侧滑抽屉,复用 .backdrop) */
+.modal {
+  position: fixed; top: 50%; left: 50%; transform: translate(-50%, -46%);
+  width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease);
+  z-index: var(--z-drawer);
+}
+.modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--surface); }
+.modal-head h2 { font-size: 0.9375rem; }
+.modal-body { padding: 18px 20px 20px; }
+.modal-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--line-soft); }
+.mfield { margin-bottom: 16px; }
+.mfield > label { display: block; font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.mfield .hint { font-size: 0.6875rem; color: var(--faint); margin-top: 5px; }
+.mfield .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.time-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.time-chips button { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 0.75rem; transition: all 140ms var(--ease); }
+.time-chips button:hover { border-color: var(--muted); color: var(--ink); }
+.time-chips button.active { background: var(--tint-jade); border-color: var(--jade); color: var(--jade); font-weight: 600; }
+.seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.seg button { padding: 5px 16px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); }
+.seg button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+.msummary { font-size: 0.75rem; color: var(--muted); }
+.msummary b { color: var(--jade); font-weight: 600; }
 
 /* 空态 */
 .empty { text-align: center; padding: 48px 24px; color: var(--muted); }
@@ -391,6 +422,24 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
+/* 会话标识:当前窗口绑定会话的 名称 + id。名称按所属项目色「荧光」呈现——项目身份编码进颜色,
+   于是项目芯片不再单列(悬停 title 仍可见项目路径,term-line 也另有蓝色 cwd 兜底)。
+   未命名态转 faint 中性、去光晕,区分「待首轮命名」。与来路返回解耦:chat 挂着会话标识就在。
+   三处候选位置(顶部页头 / 输入框上 / 输入框下)由页头位置开关切换,便于对比取舍。 */
+.sess-ctx { display: flex; align-items: center; gap: 10px; min-width: 0; flex: none; }
+#sc-slot-top { padding-left: 14px; border-left: 1px solid var(--line); }
+.sess-ctx-bar { padding: 9px 6px; }
+/* "输入框上"是与用量条同行的行内标识,标题需给三条用量条与右侧 agent 状态让出空间,上限收窄 */
+#sc-slot-inline { max-width: 40%; }
+#sc-slot-inline .sc-title { max-width: 20ch; }
+.sess-ctx .sc-title { font-size: 0.9375rem; font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40ch; }
+/* 荧光名:项目色(--ph 由 JS 注入色相),叠一层同色低透光晕——「数据是唯一发光的东西」的北极星 */
+.sess-ctx .sc-title.named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
+.sess-ctx .sc-title.unnamed { color: var(--faint); font-weight: 400; text-shadow: none; }
+.sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
+/* 位置开关:原型对比取舍用,复用 filter-tabs 分段样式 */
+.place-switch { flex: none; }
+.place-switch button { font-size: 0.6875rem; padding: 4px 10px; }
 /* 会话状态条(紧贴输入框上方):左侧用量指示(对齐 claude-hud:Context / Usage / Weekly),右侧 agent 实时状态 */
 .chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
 .cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
@@ -438,6 +487,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
 .dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
 .dd-item.sel .tick { visibility: visible; }
+/* 模态内下拉:向下弹出(默认向上弹出是为贴屏底的 composer 设计) */
+.dd.down .dd-menu { bottom: auto; top: calc(100% + 6px); }
+.dd.down .dd-btn { width: 100%; justify-content: space-between; background: var(--surface); border: 1px solid var(--line); padding: 6px 12px; margin: 0; }
+.dd.down .dd-btn:hover { border-color: var(--muted); }
+.dd.down.open .dd-btn { border-color: var(--jade); }
+.dd.down .dd-menu { width: 100%; min-width: 0; }
+.dd-item .d { display: block; font-size: 0.6875rem; color: var(--faint); font-family: var(--sans); margin-top: 1px; }
 /* 切目录但会话仍在进行时的常驻提示(比 toast 更稳妥) */
 .cwd-note {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -557,9 +613,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cron-item:last-child { border-bottom: none; }
 .cron-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; cursor: pointer; transition: background 120ms var(--ease); }
 .cron-row:hover { background: var(--hover); }
-.cron-row .name { font-weight: 600; font-size: 0.8125rem; min-width: 0; }
-.cron-row .expr { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 8px; white-space: nowrap; }
-.cron-row .next { font-size: 0.75rem; color: var(--faint); margin-left: auto; white-space: nowrap; }
+.cron-row .kind { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+.cron-row .name { font-weight: 600; font-size: 0.8125rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cron-row .when { font-size: 0.75rem; margin-left: auto; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.cron-row .when .clock { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.cron-row .when .rel { color: var(--faint); }
 .cron-detail { display: none; padding: 4px 18px 16px 18px; }
 .cron-item.open .cron-detail { display: block; }
 .cron-detail .prompt {
@@ -571,12 +629,64 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cron-meta b { color: var(--ink); font-weight: 600; }
 .runs { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
 .runs th { text-align: left; color: var(--faint); font-weight: 600; padding: 5px 10px; border-bottom: 1px solid var(--line-soft); }
-.runs td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.runs td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); vertical-align: top; }
 .runs td:first-child { font-family: var(--mono); }
 .runs tr:last-child td { border-bottom: none; }
+.runs a.sid { font-family: var(--mono); color: var(--blue); text-decoration: none; }
+.runs a.sid:hover { text-decoration: underline; }
+.runs-more { display: block; font-size: 0.6875rem; color: var(--faint); padding: 8px 10px 0; }
+.runs-more:hover { color: var(--ink); }
 .fuse-note { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--red); background: var(--tint-red); border-radius: var(--r-s); padding: 7px 12px; margin-bottom: 12px; }
+.notice-amber { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--amber); background: var(--tint-amber); border-radius: var(--r-s); padding: 7px 12px; margin-bottom: 12px; }
+/* 折叠行上的近 7 期状态点(周期任务,不展开也能扫出好坏,左旧右新) */
+.runline { display: inline-flex; align-items: center; gap: 3px; }
+.runline i { width: 6px; height: 6px; border-radius: 50%; background: var(--tint-muted); }
+.runline i.g { background: var(--green); }
+.runline i.r { background: var(--red); }
+.runline i.a { background: var(--amber); }
 
 .sys-note { font-size: 0.75rem; color: var(--faint); padding: 10px 18px 4px; }
+
+/* ============ 回顾(周活动) ============ */
+/* 周切换器:上一周/下一周 + 当前窗口,mono 表格数字防抖版 */
+.week-nav { display: flex; align-items: center; gap: 4px; }
+.week-nav .range { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); font-variant-numeric: tabular-nums; padding: 0 6px; }
+.week-nav .wk-btn { padding: 3px 8px; border-radius: var(--r-s); color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+.week-nav .wk-btn:hover { background: var(--hover); color: var(--ink); }
+.week-nav .wk-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+
+.rv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+
+/* 项目分组:头行(项目芯片 + 计量)+ 会话行(可展开 prompt 原文) */
+.rv-proj { border-bottom: 1px solid var(--line-soft); }
+.rv-proj:last-child { border-bottom: none; }
+.rv-proj-head { display: flex; align-items: center; gap: 10px; padding: 11px 18px 9px; font-size: 0.8125rem; }
+.rv-proj-head .m { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.rv-proj-head .cost { margin-left: auto; font-family: var(--mono); font-size: 0.75rem; color: var(--faint); }
+.rv-sess { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 18px 7px 28px; font-size: 0.8125rem; text-align: left; border-radius: 0; transition: background 120ms var(--ease); }
+.rv-sess:hover { background: var(--hover); }
+.rv-sess .chev { color: var(--faint); font-size: 0.625rem; flex: none; transition: transform 150ms var(--ease); }
+.rv-item.open .rv-sess .chev { transform: rotate(90deg); }
+.rv-sess .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sess .n { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); flex: none; }
+.rv-sess .span { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; white-space: nowrap; }
+/* prompt 原文样本:引用式列表,mono 小字,当不可信数据纯文本渲染 */
+.rv-prompts { display: none; margin: 2px 18px 10px 40px; border-left: 2px solid var(--line); padding: 2px 0 2px 12px; }
+.rv-item.open .rv-prompts { display: block; }
+.rv-prompts li { list-style: none; font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-prompts li.more { color: var(--faint); font-family: var(--sans); }
+.rv-commits { padding: 0 18px 12px 28px; font-size: 0.75rem; color: var(--faint); }
+.rv-commits .mono { color: var(--muted); }
+
+/* 草稿面板:running 打字点 / done 渲染 markdown / 空态引导 */
+.draft-body { padding: 16px 20px; font-size: 0.8125rem; max-width: 68ch; }
+.draft-body h3 { font-size: 0.875rem; margin: 14px 0 6px; color: var(--ink); }
+.draft-body h3:first-child { margin-top: 0; }
+.draft-body ul { padding-left: 18px; }
+.draft-body li { margin-bottom: 5px; color: var(--muted); text-wrap: pretty; }
+.draft-body li b { color: var(--ink); font-weight: 600; }
+.draft-run { display: flex; align-items: center; gap: 10px; padding: 20px; font-size: 0.8125rem; color: var(--muted); }
+.draft-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 0.6875rem; color: var(--faint); padding: 10px 20px; border-top: 1px solid var(--line-soft); }
 
 /* toast */
 .toast {
@@ -588,6 +698,72 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .toast.show { transform: translate(-50%, 0); opacity: 1; }
 
+/* ============ 壁纸 · 外观设置 ============ */
+/* 壁纸开启时 body 背景转透明,底色由 html 承接;壁纸层夹在两者之间 */
+html { background: var(--bg); }
+#wall {
+  position: fixed; inset: -48px; z-index: -1; pointer-events: none;
+  background-size: cover; background-position: center;
+  opacity: 0; transition: opacity 300ms var(--ease);
+}
+body.wall-on { background: transparent; }
+body.wall-on #wall { opacity: var(--wall-opacity, 0.4); filter: blur(var(--wall-blur, 0px)); }
+
+/* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。
+   表面不透明度由 --wall-surface 驱动(设置面板可调),surface-2 恒比 surface 低一档 */
+body.wall-glass {
+  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
+  --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
+}
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
+  backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+  -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+}
+
+.wall-btn {
+  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
+  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
+  font-size: 0.75rem; color: var(--muted); text-align: left;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.wall-btn:hover { background: var(--hover); color: var(--ink); }
+.wall-btn svg { width: 14px; height: 14px; flex: none; }
+.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+.wall-pop {
+  position: fixed; left: 14px; bottom: 118px; width: 320px; /* 悬于 side-foot 之上,不遮入口按钮 */
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 14px 16px 12px; z-index: var(--z-drawer);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
+  animation: view-in 200ms var(--ease);
+}
+.wall-pop[hidden] { display: none; }
+.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
+.wp-head h3 { font-size: 0.8125rem; }
+.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
+.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
+.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp-thumbs { display: flex; gap: 8px; flex: 1; }
+.wp-thumb {
+  width: 64px; height: 40px; border-radius: var(--r-s);
+  border: 1px solid var(--line); background-size: cover; background-position: center;
+  transition: border-color 150ms var(--ease); flex: none;
+}
+.wp-thumb:hover { border-color: var(--muted); }
+.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
+.wp-row input[type=range] {
+  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
+  border-radius: 99px; background: var(--line); cursor: pointer;
+}
+.wp-row input[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--jade); border: none;
+}
+.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
+.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
+.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
+
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
   .app { grid-template-columns: 1fr; }
@@ -598,11 +774,15 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .nav .count { display: none; }
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
-  .dash-now, .dash-grid { grid-template-columns: 1fr; }
+  .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
+  #sc-slot-top { border-left: none; padding-left: 0; } /* 窄屏换行后分隔线沦为孤立短竖线,撤掉 */
+  .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
+  #sc-slot-inline { max-width: 100%; }
+  .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -611,6 +791,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 </style>
 </head>
 <body>
+<div id="wall" aria-hidden="true"></div>
 <div class="app">
 
   <!-- ================= 侧栏 ================= -->
@@ -618,6 +799,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <div class="brand"><span class="zh">璇玑</span><span class="en">xuanji</span><span class="version">v1.0.0</span></div>
     <nav class="nav" id="nav"></nav>
     <div class="side-foot">
+      <button class="wall-btn" id="wall-btn" aria-haspopup="dialog" aria-expanded="false">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"/><circle cx="5.5" cy="6" r="1.2"/><path d="M2 12l3.5-3.5 2.5 2.5 3-3.5 3 3.5" stroke-linejoin="round"/></svg>
+        壁纸<span class="wp-state" id="wall-state">关闭</span>
+      </button>
       <div class="row"><span class="ok"></span>claude CLI 2.1.202 · daemon 正常</div>
       <div class="row proto">原型 · mock 数据 · M0</div>
     </div>
@@ -649,7 +834,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
         <span>今日派发 <b>4</b> 次</span>
         <span>今日 token <b>96.7k</b> · 成本 <b>$7.31</b></span>
         <span>活跃项目 <b>3</b> 个</span>
-        <span>定时任务 <b>2</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断</span>
+        <span>定时任务 <b>3</b> 个正常 · <b style="color:var(--red)">1</b> 个熔断 · <b style="color:var(--amber)">1</b> 个错过</span>
       </div>
 
       <div class="dash-grid">
@@ -719,12 +904,20 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
       <div class="view-head">
         <h1>派发</h1>
         <button class="btn btn-sm" id="back-board" style="display:none" onclick="backToBoard()" title="快捷键 ← 或 Esc">‹ 会话看板</button>
+        <div class="sess-ctx" id="sc-slot-top" style="display:none"></div>
         <span class="spacer"></span>
+        <div class="place-switch filter-tabs" id="place-switch" title="原型对比:会话标识放在哪里">
+          <button data-place="top">顶部</button>
+          <button data-place="above" class="active">输入框上</button>
+          <button data-place="below">输入框下</button>
+        </div>
         <button class="btn" id="new-chat">新会话</button>
       </div>
       <div class="dispatch">
         <div class="chat" id="chat"></div>
         <div class="chat-status">
+          <!-- "输入框上"的会话标识与用量条同一行:标识占左端,用量条紧随其右,agent 状态仍靠 margin-left:auto 顶到最右 -->
+          <div class="sess-ctx" id="sc-slot-inline" style="display:none"></div>
           <!-- 用量三档取色:<50% 玉(健康)/ 50–75% 琥珀(注意)/ ≥75% 红(告警) -->
           <span class="u-chips">
             <span class="u-chip" title="Context 32%">
@@ -743,6 +936,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
             <button class="btn btn-primary" id="send-btn">发送</button>
           </div>
         </div>
+        <div class="sess-ctx sess-ctx-bar" id="sc-slot-below" style="display:none"></div>
         <div class="term-line">
           <div class="dd" id="cwd-dd" title="工作目录:决定下一个派发会话的 cwd 与加载的项目级 CLAUDE.md"></div>
           <span class="branch mono" id="cwd-branch" title="git 状态:! 已修改 · ? 未跟踪 · ↑ 领先远端未推送"></span>
@@ -811,26 +1005,66 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
     <section class="view" id="view-cron">
       <div class="view-head">
         <h1>定时任务</h1>
+        <span class="sub">安排未来 / 周期任务,到点由常驻后端自动开一个 Claude 会话执行</span>
         <span class="spacer"></span>
-        <button class="btn btn-primary">新建任务</button>
-      </div>
-
-      <div class="panel" style="margin-bottom:16px">
-        <div class="panel-head"><h2>应用内任务</h2><span class="sub">croner 调度 · run history 存 SQLite · 连续失败 3 次熔断</span></div>
-        <div id="cron-list"></div>
+        <div class="filter-tabs" id="cron-filter">
+          <button class="active" data-f="all">全部</button>
+          <button data-f="once">一次性</button>
+          <button data-f="cron">周期</button>
+        </div>
+        <button class="btn btn-primary" onclick="openJobModal()">＋ 新建任务</button>
       </div>
 
       <div class="panel">
-        <div class="panel-head"><h2>系统 crontab</h2><span class="sub">只读展示,不接管</span></div>
-        <div class="sys-note">以下任务由系统 crontab 管理。璇玑不修改、不执行、不记录其运行历史。</div>
-        <table class="table">
-          <thead><tr><th>表达式</th><th>命令</th><th>说明</th></tr></thead>
-          <tbody>
-            <tr><td class="mono">30 11 * * 1-5</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/lunch_bot.py</td><td style="color:var(--muted)">点饭提醒 bot</td></tr>
-            <tr><td class="mono">0 17 * * 5</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/weekly_report.py</td><td style="color:var(--muted)">周报 bot</td></tr>
-            <tr><td class="mono">0 10 * * *</td><td class="mono" style="color:var(--muted)">python3 ~/project/cronjob/wgame_bot.py</td><td style="color:var(--muted)">wgame bot</td></tr>
-          </tbody>
-        </table>
+        <div class="panel-head">
+          <h2>璇玑调度</h2>
+          <span class="sub">croner 调度 · 定义与运行历史存 SQLite · 预算超限 / 连续失败熔断</span>
+        </div>
+        <div class="sys-note">到点运行 = 创建一个真实派发会话:运行中 / 需审批 / 已完成的实例会同步出现在「会话」看板(带 <span class="tag">◷ 定时</span> 来源标),审批可直接在会话页处理;此处的「结果会话」链接跳转同一份只读回放,不新开会话查询。</div>
+        <div id="cron-list"></div>
+      </div>
+    </section>
+
+    <!-- ====== 回顾 ====== -->
+    <section class="view" id="view-review">
+      <div class="view-head">
+        <h1>回顾</h1>
+        <div class="week-nav">
+          <button class="wk-btn" id="rv-prev" title="上一周">‹</button>
+          <span class="range" id="rv-range">7/9 – 7/15</span>
+          <button class="wk-btn" id="rv-next" title="下一周" disabled>›</button>
+        </div>
+        <span class="pill pill-run" id="rv-now-pill"><span class="dot"></span>本周</span>
+        <span class="spacer"></span>
+        <button class="btn btn-primary" id="rv-draft-btn">✦ 生成周报草稿</button>
+      </div>
+
+      <div class="panel dash-strip" id="rv-strip">
+        <span>prompt <b>233</b> 条</span>
+        <span>会话 <b>33</b> 个</span>
+        <span>项目 <b>9</b> 个</span>
+        <span>活跃 <b>3</b> 天</span>
+        <span>成本 <b>$350.87</b></span>
+      </div>
+
+      <div class="panel" style="margin-bottom:16px">
+        <div class="panel-head"><h2>本周热力</h2><span class="sub">按项目 × 日 · 我发出的 prompt 数(history.jsonl ∪ 璇玑派发流水)</span></div>
+        <div class="heat" id="rv-heat"></div>
+      </div>
+
+      <div class="rv-grid">
+        <div class="panel">
+          <div class="panel-head"><h2>活跃会话</h2><span class="sub">按项目分组 · 点会话展开 prompt 原文</span></div>
+          <div id="rv-projects"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 style="white-space:nowrap">周报草稿</h2><span class="sub" id="rv-draft-sub">sonnet 生成</span>
+            <span class="spacer"></span>
+            <span id="rv-draft-actions" style="display:flex;gap:6px;flex:none"></span>
+          </div>
+          <div id="rv-draft"></div>
+        </div>
       </div>
     </section>
 
@@ -851,7 +1085,130 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   <div class="drawer-foot" id="drawer-foot"></div>
 </aside>
 
+<!-- 新建定时任务模态 -->
+<div class="backdrop" id="job-modal-backdrop" onclick="closeJobModal()"></div>
+<div class="modal" id="job-modal" role="dialog" aria-modal="true" aria-label="新建定时任务">
+  <div class="modal-head">
+    <h2>新建定时任务</h2>
+    <span class="spacer"></span>
+    <button class="x-btn" onclick="closeJobModal()" aria-label="关闭">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="mfield">
+      <label>任务类型</label>
+      <div class="seg" id="jm-seg-kind">
+        <button class="active" data-k="once">一次性</button>
+        <button data-k="cron">周期</button>
+      </div>
+    </div>
+
+    <div class="mfield">
+      <label>任务名称</label>
+      <input class="input" id="jm-name" placeholder="例:今晚汇总本周周报草稿">
+    </div>
+
+    <div class="mfield">
+      <label>Prompt(发给 Claude 的指令)</label>
+      <textarea class="input mono" id="jm-prompt" rows="4" style="resize:vertical;line-height:1.55;font-size:0.75rem" placeholder="汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。"></textarea>
+    </div>
+
+    <div class="mfield two-col">
+      <div><label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">工作目录(cwd)</label><div class="dd down" id="jm-cwd-dd"></div></div>
+      <div><label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">模型</label><div class="dd down" id="jm-model-dd"></div></div>
+    </div>
+
+    <div class="mfield" id="jm-once-time">
+      <label>执行时间</label>
+      <div class="time-chips" id="jm-time-chips">
+        <button class="active" data-t="20">今晚 20:00</button>
+        <button data-t="22">今晚 22:00</button>
+        <button data-t="tmr9">明早 09:00</button>
+        <button data-t="custom">自定义</button>
+      </div>
+      <input class="input" type="datetime-local" id="jm-datetime" style="display:none">
+      <div class="hint" id="jm-time-hint">将在 <b style="color:var(--jade)">今晚 20:00</b>(约 4 小时后)执行一次</div>
+    </div>
+
+    <div class="mfield" id="jm-cron-time" style="display:none">
+      <label>周期(cron 表达式)</label>
+      <div class="time-chips" id="jm-cron-chips">
+        <button class="active" data-c="0 9 * * *">每天 09:00</button>
+        <button data-c="0 18 * * 5">每周五 18:00</button>
+        <button data-c="0 8 * * 1">每周一 08:00</button>
+        <button data-c="custom">自定义</button>
+      </div>
+      <input class="input mono" id="jm-cron" value="0 9 * * *">
+      <div class="hint">croner 解析,支持时区(Asia/Shanghai)</div>
+    </div>
+
+    <div class="mfield two-col">
+      <div>
+        <label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">权限模式</label>
+        <div class="dd down" id="jm-perm-dd"></div>
+        <div class="hint">保守模式被卡时会弹审批横幅并挂起,你可以随时继续</div>
+      </div>
+      <div>
+        <label style="display:block;font-size:0.6875rem;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:0.04em;margin-bottom:6px">预算上限</label>
+        <div class="dd down" id="jm-budget-dd"></div>
+        <div class="hint">超限自动停,防无人值守跑飞</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <span class="msummary" id="jm-summary">一次性 · 今晚 20:00 · ~/xuanji · sonnet</span>
+    <span class="spacer"></span>
+    <button class="btn btn-quiet" onclick="closeJobModal()">取消</button>
+    <button class="btn btn-primary" onclick="saveJob()">保存任务</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
+
+<!-- ================= 壁纸设置 ================= -->
+<div class="wall-pop" id="wall-pop" role="dialog" aria-label="壁纸设置" hidden>
+  <div class="wp-head"><h3>壁纸</h3><button class="x-btn" id="wall-close" aria-label="关闭">✕</button></div>
+  <div class="wp-row">
+    <span class="wp-label">模式</span>
+    <div class="filter-tabs" id="wall-mode" role="group" aria-label="壁纸模式">
+      <button data-m="off">关闭</button>
+      <button data-m="wall">壁纸</button>
+      <button data-m="glass">玻璃</button>
+    </div>
+  </div>
+  <div id="wall-ctrls">
+    <div class="wp-row">
+      <span class="wp-label">图片</span>
+      <div class="wp-thumbs" id="wall-thumbs"></div>
+      <button class="btn btn-sm" id="wall-file-btn">本地…</button>
+      <input type="file" id="wall-file" accept="image/*" hidden>
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-url">URL</label>
+      <input class="input" id="wall-url" placeholder="https://… 回车应用" spellcheck="false">
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-opacity">不透明度</label>
+      <input type="range" id="wall-opacity" min="5" max="50" step="1" value="40">
+      <span class="wp-val" id="wall-opacity-v">40%</span>
+    </div>
+    <div class="wp-row">
+      <label class="wp-label" for="wall-blur">模糊</label>
+      <input type="range" id="wall-blur" min="0" max="24" step="1" value="0">
+      <span class="wp-val" id="wall-blur-v">0px</span>
+    </div>
+    <div class="wp-row" id="wall-surface-row">
+      <label class="wp-label" for="wall-surface">表面</label>
+      <input type="range" id="wall-surface" min="25" max="95" step="1" value="30">
+      <span class="wp-val" id="wall-surface-v">30%</span>
+    </div>
+    <div class="wp-row" id="wall-frost-row">
+      <label class="wp-label" for="wall-frost">磨砂</label>
+      <input type="range" id="wall-frost" min="0" max="24" step="1" value="0">
+      <span class="wp-val" id="wall-frost-v">0px</span>
+    </div>
+  </div>
+  <p class="wp-note">「表面」= 面板底色不透明度,「磨砂」= 面板毛玻璃模糊强度,均仅玻璃档生效;磨砂调低壁纸透得越清晰,文字可读性自行权衡。设置只存本机浏览器,不写 ~/.claude。</p>
+</div>
 
 <script>
 /* ============================================================
@@ -963,6 +1320,21 @@ const REPLAY = {
     { who: 'tool', fn: 'Read', arg: 'internal/engine/l3_signal.go', out: '(412 行 · 特征定义 × 9)' },
     { who: 'assistant', text: '需要执行测试来确认管道行为,已发起权限请求,等待审批:Bash(pnpm test -- --run)' },
   ],
+  /* 定时任务失败:排查靠只读回放里的真实转录,不是新开会话问 Claude */
+  '9d21c4': [
+    { who: 'user', text: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。' },
+    { who: 'assistant', text: '开始搜索未来一周的游戏发布档期,先调用搜索接口。' },
+    { who: 'tool', fn: 'WebSearch', arg: '"game release schedule" 2026-07-11..2026-07-17', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'assistant', text: '搜索接口限流(429),按重试策略等待 60s 后重试。' },
+    { who: 'tool', fn: 'WebSearch', arg: '"game release schedule" 2026-07-11..2026-07-17(重试 1/3)', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'raw', note: '进程异常退出 · exit code 1', text: 'Error: upstream search API rate-limited after 3 attempts. Aborting task.\n  at searchGameReleases (game-release/index.js:42:11)\n  at main (game-release/index.js:18:5)' },
+  ],
+  a3f9c0: [
+    { who: 'user', text: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。' },
+    { who: 'assistant', text: '先检查当前依赖版本,再执行升级。' },
+    { who: 'tool', fn: 'Bash', arg: 'pnpm outdated', out: 'baize-core   2.3.1 → 2.4.0\nzod          3.22.4 → 3.23.0' },
+    { who: 'assistant', text: '即将执行 `pnpm up -L` 升级到最新次版本,这是写操作,按当前权限模式需要你确认。' },
+  ],
 };
 
 const SKILLS = [
@@ -1020,32 +1392,43 @@ const MEMORIES = [
     body: '<p>工作环境是深色终端 + 夜间时段,亮色大面积白底刺眼。</p>' },
 ];
 
-const CRONS = [
-  { name: '每日舆情异动扫描', expr: '0 9 * * *', human: '每天 09:00', cwd: '~/baize',
+/* 一次性 + 周期统一模型:kind 区分,state 覆盖全部生命周期 */
+const JOBS = [
+  { kind: 'once', name: '今晚汇总本周周报草稿', when: '今晚 22:00', rel: '约 6 小时后', cwd: '~/project/cronjob', model: 'sonnet',
+    prompt: '汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'pending',
+    runs: [] },
+  { kind: 'once', name: '深夜依赖升级 + 冒烟', when: '运行中', rel: '22:03 起', cwd: '~/xuanji', model: 'sonnet',
+    prompt: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。',
+    perm: '保守', budget: '$50 / 次', state: 'blocked', blockedSid: 'a3f9c0',
+    notice: '已挂起等审批:想执行 `pnpm up -L`(写操作)。审批横幅已发,你处理后自动继续。',
+    runs: [ { t: '今天 22:03', dur: '进行中', tok: '8.1k', sid: 'a3f9c0', s: 'blk' } ] },
+  { kind: 'cron', name: '每日舆情异动扫描', when: '每天 09:00', rel: '下次 明天 09:00', cwd: '~/baize', model: 'sonnet',
     prompt: '用 using-talk 扫描全部在营游戏近 24h 舆情异动,负面为主的话题写入飞书多维表,并把摘要发到值班群。',
-    budget: '50k tokens/次', next: '明天 09:00', state: 'ok',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'done', total: 30,
     runs: [
-      { t: '07-07 09:00', dur: '4m 12s', tok: '31.2k', exit: 0, s: 'ok' },
-      { t: '07-06 09:00', dur: '3m 48s', tok: '28.9k', exit: 0, s: 'ok' },
-      { t: '07-05 09:00', dur: '5m 02s', tok: '35.1k', exit: 0, s: 'ok' },
+      { t: '今天 09:00', dur: '4m 12s', tok: '31.2k', sid: '7c1e88', s: 'ok' },
+      { t: '昨天 09:00', dur: '3m 48s', tok: '28.9k', sid: '5b0a12', s: 'ok' },
+      { t: '07-13 09:00', dur: '—', tok: '—', sid: '—', s: 'miss' },
+      { t: '07-12 09:00', dur: '5m 02s', tok: '35.1k', sid: '2fd7a9', s: 'ok' },
+      { t: '07-11 09:00', dur: '4m 40s', tok: '30.6k', sid: 'c07f5e', s: 'ok' },
+      { t: '07-10 09:00', dur: '3m 59s', tok: '27.8k', sid: 'e4a2b1', s: 'ok' },
+      { t: '07-09 09:00', dur: '4m 05s', tok: '29.4k', sid: 'd83a71', s: 'ok' },
     ] },
-  { name: '周报草稿生成', expr: '0 18 * * 5', human: '每周五 18:00', cwd: '~/project/cronjob',
-    prompt: '汇总本周个人周报素材(git log + 会话记录),按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
-    budget: '80k tokens/次', next: '07-11(周五)18:00', state: 'ok',
-    runs: [
-      { t: '07-04 18:00', dur: '6m 40s', tok: '52.3k', exit: 0, s: 'ok' },
-      { t: '06-27 18:00', dur: '7m 12s', tok: '61.0k', exit: 0, s: 'ok' },
-    ] },
-  { name: '竞品档期追踪', expr: '0 8 * * 1', human: '每周一 08:00', cwd: '~/data-analysis',
+  { kind: 'cron', name: '竞品档期追踪', when: '每周一 08:00', rel: '已暂停(熔断)', cwd: '~/data-analysis', model: 'haiku',
     prompt: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。',
-    budget: '40k tokens/次', next: '已暂停(熔断)', state: 'fused',
-    fuse: '连续失败 3 次已熔断:上游搜索接口 429(07-06 08:00 / 08:10 / 08:20)。修复后手动恢复。',
+    perm: '自动接受编辑', budget: '$20 / 次', state: 'fused', total: 12,
+    notice: '连续失败 3 次已熔断:上游搜索接口 429。修复后手动恢复调度。',
     runs: [
-      { t: '07-06 08:20', dur: '0m 41s', tok: '2.1k', exit: 1, s: 'err' },
-      { t: '07-06 08:10', dur: '0m 38s', tok: '2.0k', exit: 1, s: 'err' },
-      { t: '07-06 08:00', dur: '0m 44s', tok: '2.2k', exit: 1, s: 'err' },
-      { t: '06-30 08:00', dur: '3m 55s', tok: '18.7k', exit: 0, s: 'ok' },
+      { t: '07-14 08:20', dur: '0m 41s', tok: '2.1k', sid: '9d21c4', s: 'err', err: '上游搜索接口 429,重试 3 次后放弃' },
+      { t: '07-14 08:10', dur: '0m 38s', tok: '2.0k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-14 08:00', dur: '0m 44s', tok: '2.2k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-07 08:00', dur: '3m 55s', tok: '18.7k', sid: 'b83d09', s: 'ok' },
     ] },
+  { kind: 'once', name: '半夜生成竞品周报(已错过)', when: '02:00', rel: '昨夜错过', cwd: '~/data-analysis', model: 'sonnet',
+    prompt: '生成竞品动态周报初稿。', perm: '自动接受编辑', budget: '$20 / 次', state: 'missed',
+    notice: '电脑睡眠错过触发,且超出 30 分钟补跑宽限期,已标记为「已错过」并通知。可点「立即补跑」。',
+    runs: [] },
 ];
 
 const TIMELINE = [
@@ -1093,7 +1476,20 @@ const STATE_PILL = {
   idle:    '<span class="pill pill-idle"><span class="dot"></span>空闲</span>',
   done:    '<span class="pill pill-done"><span class="dot"></span>已完成</span>',
 };
-const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>' };
+const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>', cronjob: '<span class="tag">◷ 定时</span>' };
+
+/* 定时任务触发的会话:轻量描述符,不进主 SESSIONS 列表(那里是看板),openReplay 兜底查找 */
+const JOB_SESSIONS = {
+  a3f9c0: { id: 'a3f9c0', title: '深夜依赖升级 + 冒烟', kind: 'cronjob', state: 'blocked', cwd: '~/xuanji', needs: '等待权限审批:Bash(pnpm up -L)' },
+  '7c1e88': { id: '7c1e88', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '5b0a12': { id: '5b0a12', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '2fd7a9': { id: '2fd7a9', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  c07f5e: { id: 'c07f5e', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  e4a2b1: { id: 'e4a2b1', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  d83a71: { id: 'd83a71', title: '每日舆情异动扫描', kind: 'cronjob', state: 'done', cwd: '~/baize' },
+  '9d21c4': { id: '9d21c4', title: '竞品档期追踪', kind: 'cronjob', state: 'done', cwd: '~/data-analysis' },
+  b83d09: { id: 'b83d09', title: '竞品档期追踪', kind: 'cronjob', state: 'done', cwd: '~/data-analysis' },
+};
 
 /* ============================================================
    导航
@@ -1105,7 +1501,8 @@ const NAVS = [
   { id: 'dispatch',  label: '派发',   icon: 'M3 12l18-8-6 18-3-7z' },
   { id: 'skills',    label: '技能',   icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z', count: 13 },
   { id: 'memory',    label: '经验',   icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4', count: 10 },
-  { id: 'cron',      label: '定时',   icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2', count: 3 },
+  { id: 'cron',      label: '定时',   icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2', count: JOBS.length },
+  { id: 'review',    label: '回顾',   icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
 ];
 
 function renderNav() {
@@ -1408,7 +1805,7 @@ function renderBoard() {
 
 /* 回放抽屉 */
 function openReplay(id) {
-  const s = SESSIONS.find(x => x.id === id);
+  const s = SESSIONS.find(x => x.id === id) || JOB_SESSIONS[id];
   const events = REPLAY[id];
   $('#drawer-title').textContent = s.title;
   $('#drawer-meta').innerHTML = `
@@ -1433,7 +1830,7 @@ function openReplay(id) {
       </div>`;
   }).join('') : `
     <div class="empty"><div class="glyph">◌</div>
-      <p>历史回放从 session jsonl 只读解析(原型仅两个会话有 mock 事件)。</p>
+      <p>历史回放从 session jsonl 只读解析(原型仅部分会话有 mock 事件)。</p>
       <p style="color:var(--faint)">长会话增量加载,列表页只取 tail 与元数据。</p>
     </div>`;
   $('#drawer-foot').innerHTML =
@@ -1474,12 +1871,43 @@ function backToBoard() {
   kbApply();
 }
 
+/* 会话标识:派发页头部展示当前 chat 绑定会话的 名称 + 项目 + id。
+   生命周期跟随 chat 绑定的会话(resume / 新会话 / 跨目录交接 / 首轮自动命名),与 dispatchOrigin(来路)无关。
+   实际实现:名称来自 jobs/state.json 的 name 字段或 --resume 会话的 summary,首轮回复结束后由 daemon 回填。 */
+let placeMode = 'above'; /* 会话标识位置:top(顶部页头)/ above(输入框上,与用量条同行,当前倾向)/ below(输入框下),原型对比用 */
+const SC_SLOTS = { top: '#sc-slot-top', above: '#sc-slot-inline', below: '#sc-slot-below' };
+function applyPlace() {
+  const hasSess = $('#sc-slot-top').innerHTML.trim() !== '';
+  Object.entries(SC_SLOTS).forEach(([mode, sel]) => {
+    $(sel).style.display = (hasSess && mode === placeMode) ? '' : 'none';
+  });
+}
+function sessCtxHTML(s) {
+  if (!s) return '';
+  const h = projHue(s.cwd.split('/').pop()); /* 名称荧光色 = 该项目锁明度分类色的色相 */
+  const named = !!s.title;
+  const label = named ? s.title : '未命名会话';
+  const tip = (named ? s.title : '首轮回复结束后自动命名') + ' · 项目 ' + s.cwd; /* 项目芯片隐藏后,项目路径退到悬停 */
+  return `
+    <span class="sc-title ${named ? 'named' : 'unnamed'}" style="--ph:${h}" title="${esc(tip)}">${esc(label)}</span>
+    <span class="sc-id">${esc(s.id)}</span>`;
+}
+function setSessCtx(s) {
+  const html = sessCtxHTML(s);
+  Object.values(SC_SLOTS).forEach(sel => { $(sel).innerHTML = html; });
+  applyPlace();
+}
+function mockId() {
+  return Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 function resumeSession(id) {
-  const s = SESSIONS.find(x => x.id === id);
+  const s = SESSIONS.find(x => x.id === id) || JOB_SESSIONS[id];
   closeDrawer();
   showView('dispatch');
   dispatchOrigin = 'sessions';
   $('#back-board').style.display = '';
+  setSessCtx(s);
   renderChat(replayToChat(id) + chatResumed(s));
   const waitingApproval = s.needs && s.needs.includes('权限审批');
   setAgentStatus(waitingApproval ? `等待你审批:${s.needs.replace('等待权限审批:', '')}` : s.needs ? '等待你输入' : '会话已续接 · 空闲', s.needs ? 'wait' : '');
@@ -1518,6 +1946,7 @@ function updateCwdNote() {
 /* 跨目录交接:自动生成上一会话摘要,注入新会话首条消息(mock) */
 function handoffTo() {
   sessionCwd = currentCwd;
+  setSessCtx({ id: mockId(), title: null, cwd: currentCwd }); /* 新会话尚未命名,首轮结束后回填 */
   renderChat(`
     <div class="resume-note">⇢ 已在 <span class="mono">${esc(currentCwd)}</span> 开启新会话,注入上一会话的交接摘要(自动生成 · 1.1k tokens)。原会话完整记录仍可在「会话」看板回放。</div>
     <div class="chat-msg"><div class="who">Claude</div>
@@ -1573,6 +2002,7 @@ document.addEventListener('click', closeDDs);
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   if ($$('.dd.open').length) { closeDDs(); return; }
+  if ($('#job-modal').classList.contains('show')) { closeJobModal(); return; }
   if ($('#drawer').classList.contains('show')) { closeDrawer(); return; }
   if (document.activeElement.id === 'composer-input') { document.activeElement.blur(); return; } /* 先释放输入焦点,数字键切视图恢复可用 */
   if ($('#view-dispatch').classList.contains('active') && dispatchOrigin) backToBoard();
@@ -1727,6 +2157,9 @@ function sendMessage() {
     setAgentStatus('已转后台 · 本窗口空闲');
     toast('已派发后台任务');
   } else {
+    /* 白纸首条消息 = 新会话诞生:先挂未命名标识,首轮回复结束后回填自动命名(mock:截取首条消息) */
+    const born = empty ? { id: mockId(), title: null, cwd: sessionCwd } : null;
+    if (born) setSessCtx(born);
     setAgentStatus('思考中…', 'think');
     const cont = document.createElement('div');
     cont.className = 'chat-msg';
@@ -1737,6 +2170,7 @@ function sendMessage() {
       cont.querySelector('.body').textContent = '(原型示意:此处为 Agent SDK 的流式回复,文本按 token 增量打字机渲染,工具调用以折叠卡逐条出现,权限请求弹审批卡。)';
       $('#chat').scrollTop = $('#chat').scrollHeight;
       setAgentStatus('空闲 · 回合结束');
+      if (born) setSessCtx({ ...born, title: text.length > 18 ? text.slice(0, 18) + '…' : text });
     }, 1200);
   }
   $('#chat').scrollTop = $('#chat').scrollHeight;
@@ -1844,45 +2278,133 @@ function openMemory(name) {
 }
 
 /* ============================================================
-   定时
+   定时(一次性 + 周期统一;全生命周期状态;失败/审批直连回放抽屉)
    ============================================================ */
+const JOB_STATE_PILL = {
+  pending: { cls: 'pill-sched', txt: '待执行' },
+  running: { cls: 'pill-run',   txt: '运行中' },
+  blocked: { cls: 'pill-blk',   txt: '需审批' },
+  done:    { cls: 'pill-done',  txt: '已完成' },
+  fused:   { cls: 'pill-err',   txt: '已熔断' },
+  missed:  { cls: 'pill-blk',   txt: '已错过' },
+};
+let cronFilter = 'all';
 function renderCrons() {
-  $('#cron-list').innerHTML = CRONS.map((c, i) => `
+  const list = JOBS.filter(j => cronFilter === 'all' || j.kind === cronFilter);
+  if (!list.length) { $('#cron-list').innerHTML = `<div class="empty"><div class="glyph">◷</div><p>该分类下暂无任务。</p></div>`; return; }
+  $('#cron-list').innerHTML = list.map((j) => {
+    const i = JOBS.indexOf(j);
+    const m = JOB_STATE_PILL[j.state];
+    const whenColor = (j.state === 'fused' || j.state === 'missed') ? 'var(--faint)' : (j.state === 'blocked' ? 'var(--amber)' : 'var(--ink)');
+    return `
     <div class="cron-item" id="cron-${i}">
       <div class="cron-row" onclick="document.getElementById('cron-${i}').classList.toggle('open')">
-        ${c.state === 'fused'
-          ? '<span class="pill pill-err"><span class="dot"></span>熔断</span>'
-          : '<span class="pill pill-run"><span class="dot"></span>正常</span>'}
-        <span class="name">${esc(c.name)}</span>
-        <span class="expr">${c.expr}</span>
-        <span style="font-size:0.75rem;color:var(--muted)">${c.human}</span>
-        <span class="next">下次:${c.next}</span>
+        <span class="pill ${m.cls}"><span class="dot"></span>${m.txt}</span>
+        <span class="kind">${j.kind === 'once' ? '一次性' : '周期'}</span>
+        <span class="name">${esc(j.name)}</span>
+        <span class="when">
+          ${j.kind === 'cron' && j.runs.length ? `<span class="runline" title="近 ${Math.min(j.runs.length, 7)} 期运行状态(左旧右新)">${j.runs.slice(0, 7).reverse().map(r => `<i class="${r.s === 'ok' ? 'g' : r.s === 'err' ? 'r' : 'a'}"></i>`).join('')}</span>` : ''}
+          <span class="clock" style="color:${whenColor}">${esc(j.when)}</span><span class="rel">${esc(j.rel)}</span>
+        </span>
       </div>
       <div class="cron-detail">
-        ${c.fuse ? `<div class="fuse-note">⚠ ${esc(c.fuse)} <button class="btn btn-sm" style="margin-left:auto" onclick="toast('已恢复调度(原型示意)')">恢复</button></div>` : ''}
+        ${j.notice ? `<div class="${j.state === 'fused' ? 'fuse-note' : 'notice-amber'}">
+            <span>${j.state === 'fused' ? '⚠' : '◷'}</span><span>${esc(j.notice)}</span>
+            ${j.state === 'blocked' ? `<button class="btn btn-sm btn-primary" style="margin-left:auto" onclick="event.stopPropagation();openReplay('${j.blockedSid}')">去审批</button>` : ''}
+            ${j.state === 'fused' ? `<button class="btn btn-sm" style="margin-left:auto" onclick="event.stopPropagation();toast('已恢复调度(原型示意)')">恢复</button>` : ''}
+            ${j.state === 'missed' ? `<button class="btn btn-sm" style="margin-left:auto" onclick="event.stopPropagation();toast('已触发补跑(原型示意)')">立即补跑</button>` : ''}
+        </div>` : ''}
         <div class="cron-meta">
-          <span>目录 <b class="mono">${esc(c.cwd)}</b></span>
-          <span>预算 <b>${c.budget}</b></span>
-          <span>执行 <b class="mono">claude -p · stream-json</b></span>
-          <span>追赶策略 <b>错过跳过</b></span>
+          <span>目录 <b class="mono">${esc(j.cwd)}</b></span>
+          <span>模型 <b>${esc(j.model)}</b></span>
+          <span>权限 <b>${esc(j.perm)}</b></span>
+          <span>预算 <b>${esc(j.budget)}</b></span>
+          <span>执行 <b>Agent SDK 会话</b></span>
         </div>
-        <div class="prompt">${esc(c.prompt)}</div>
-        <table class="runs">
-          <thead><tr><th>时间</th><th>耗时</th><th>tokens</th><th>退出码</th><th>状态</th></tr></thead>
-          <tbody>
-            ${c.runs.map(r => `<tr>
-              <td>${r.t}</td><td>${r.dur}</td><td>${r.tok}</td><td>${r.exit}</td>
-              <td>${r.s === 'ok' ? '<span class="pill pill-done"><span class="dot"></span>成功</span>' : '<span class="pill pill-err"><span class="dot"></span>失败</span>'}</td>
-            </tr>`).join('')}
-          </tbody>
-        </table>
+        <div class="prompt">${esc(j.prompt)}</div>
+        ${j.runs.length ? `<table class="runs">
+          <thead><tr><th>${j.kind === 'cron' ? '周期(计划时间)' : '时间'}</th><th>耗时</th><th>tokens</th><th>结果会话 / 日志</th><th>状态</th></tr></thead>
+          <tbody>${j.runs.map(r => `<tr>
+            <td>${r.t}${r.err ? `<div style="color:var(--red);font-size:0.6875rem;margin-top:2px">${esc(r.err)}</div>` : ''}</td>
+            <td>${r.dur}</td><td>${r.tok}</td>
+            <td>${r.sid === '—' ? '—' : `<a class="sid" href="#" onclick="event.stopPropagation();openReplay('${r.sid}');return false">${r.sid} · 查看日志</a>`}</td>
+            <td>${r.s === 'ok' ? '<span class="pill pill-done"><span class="dot"></span>成功</span>' : r.s === 'blk' ? '<span class="pill pill-blk"><span class="dot"></span>审批中</span>' : r.s === 'miss' ? '<span class="pill pill-blk"><span class="dot"></span>错过</span>' : '<span class="pill pill-err"><span class="dot"></span>失败</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table>${j.total && j.total > j.runs.length ? `<button class="runs-more" onclick="event.stopPropagation();toast('展开全部 ${j.total} 期运行历史(原型示意)')">查看全部 ${j.total} 期运行 →</button>` : ''}` : '<div style="font-size:0.75rem;color:var(--faint);padding:4px 0">尚未运行,无历史记录。</div>'}
         <div style="display:flex;gap:8px;margin-top:12px">
-          <button class="btn btn-sm" onclick="toast('已触发一次立即运行(原型示意)')">立即运行</button>
-          <button class="btn btn-sm btn-quiet">编辑</button>
-          <button class="btn btn-sm btn-quiet">${c.state === 'fused' ? '删除' : '暂停'}</button>
+          <button class="btn btn-sm" onclick="event.stopPropagation();toast('已触发一次立即运行(原型示意)')">立即运行</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();openJobModal()">编辑</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();toast('已${j.kind === 'once' ? '取消' : '暂停'}(原型示意)')">${j.kind === 'once' ? '取消' : '暂停'}</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="event.stopPropagation();toast('已删除(原型示意)')">删除</button>
         </div>
       </div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
+}
+$('#cron-filter')?.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#cron-filter').children].forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); cronFilter = b.dataset.f; renderCrons();
+});
+
+/* ---------- 新建任务模态 ---------- */
+let jmKind = 'once', jmTime = '20';
+const JM_TIME_LABEL = { '20': '今晚 20:00', '22': '今晚 22:00', 'tmr9': '明早 09:00', 'custom': '自定义时间' };
+const JM_TIME_REL = { '20': '约 4 小时后', '22': '约 6 小时后', 'tmr9': '约 15 小时后', 'custom': '' };
+function openJobModal() {
+  makeDD('#jm-cwd-dd', ['~/xuanji', '~/baize', '~/antifraud_skills', '~/project/cronjob', '~/data-analysis'], { value: '~/xuanji', onChange: updateJmSummary });
+  makeDD('#jm-model-dd', ['sonnet', 'opus', 'haiku'], { value: 'sonnet', onChange: updateJmSummary });
+  makeDD('#jm-perm-dd', ['自动接受编辑', '保守', '计划模式', '完全放行'], { value: '自动接受编辑', onChange: updateJmSummary });
+  makeDD('#jm-budget-dd', ['$10 / 次', '$20 / 次', '$50 / 次', '$100 / 次', '不限'], { value: '$50 / 次', onChange: updateJmSummary });
+  updateJmSummary();
+  $('#job-modal-backdrop').classList.add('show');
+  $('#job-modal').classList.add('show');
+}
+function closeJobModal() {
+  $('#job-modal-backdrop').classList.remove('show');
+  $('#job-modal').classList.remove('show');
+}
+$('#jm-seg-kind').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-seg-kind').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  jmKind = b.dataset.k;
+  $('#jm-once-time').style.display = jmKind === 'once' ? '' : 'none';
+  $('#jm-cron-time').style.display = jmKind === 'cron' ? '' : 'none';
+  updateJmSummary();
+});
+$('#jm-time-chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-time-chips').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  jmTime = b.dataset.t;
+  const custom = jmTime === 'custom';
+  $('#jm-datetime').style.display = custom ? '' : 'none';
+  $('#jm-time-hint').innerHTML = custom ? '选择一个具体日期时间' : `将在 <b style="color:var(--jade)">${JM_TIME_LABEL[jmTime]}</b>(${JM_TIME_REL[jmTime]})执行一次`;
+  updateJmSummary();
+});
+$('#jm-cron-chips').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('#jm-cron-chips').children].forEach(x => x.classList.remove('active')); b.classList.add('active');
+  if (b.dataset.c !== 'custom') $('#jm-cron').value = b.dataset.c;
+  updateJmSummary();
+});
+function jmVal(sel) { const el = $(sel + ' .dd-val'); return el ? el.textContent : ''; }
+function updateJmSummary() {
+  const cwd = jmVal('#jm-cwd-dd'), model = jmVal('#jm-model-dd');
+  const when = jmKind === 'once' ? (jmTime === 'custom' ? '自定义时间' : JM_TIME_LABEL[jmTime]) : ('cron ' + $('#jm-cron').value);
+  $('#jm-summary').innerHTML = `${jmKind === 'once' ? '一次性' : '周期'} · <b>${esc(when)}</b> · ${esc(cwd)} · ${esc(model)}`;
+}
+function saveJob() {
+  const name = $('#jm-name').value.trim() || (jmKind === 'once' ? '未命名一次性任务' : '未命名周期任务');
+  const when = jmKind === 'once' ? JM_TIME_LABEL[jmTime] : ('cron ' + $('#jm-cron').value);
+  JOBS.unshift({
+    kind: jmKind, name, when, rel: jmKind === 'once' ? (JM_TIME_REL[jmTime] || '待执行') : '已排程',
+    cwd: jmVal('#jm-cwd-dd'), model: jmVal('#jm-model-dd'),
+    prompt: $('#jm-prompt').value.trim() || '(未填写 prompt)',
+    perm: jmVal('#jm-perm-dd'), budget: jmVal('#jm-budget-dd'),
+    state: 'pending', runs: [],
+  });
+  closeJobModal(); renderCrons();
+  toast('任务已保存,到点后端自动执行 ✓');
 }
 
 /* ============================================================
@@ -1908,10 +2430,191 @@ function tickClock() { $('#dash-clock').textContent = clockFmt.format(new Date()
 tickClock();
 setInterval(tickClock, 1000);
 
+/* ============================================================
+   回顾(周活动 + 周报草稿)—— mock 取自 2026-07-15 真实聚合输出
+   ============================================================ */
+const REVIEWS = {
+  cur: {
+    range: '7/9 – 7/15', now: true,
+    strip: { prompts: 233, sessions: 33, projects: 9, days: 3, cost: '$350.87' },
+    dayLabels: ['7/9', '7/10', '7/11', '7/12', '7/13', '7/14', '7/15'],
+    projects: [
+      { name: 'xuanji', path: '~/xuanji', prompts: 57, commits: 50, cost: '$121.00', heat: [0,0,0,0,18,25,14], sessions: [
+        { title: '开始 M0', n: 57, span: '7/13 – 7/15', src: 'terminal', prompts: ['开始M0', '原型里仪表盘的时钟走起来', '壁纸背景支持一下,要三档模式', '把 --wall-* 参数体系刷进 DESIGN.md', '看板已完成列做两行紧凑卡折叠'] },
+      ]},
+      { name: 'antifraud_skills', path: '~/antifraud_skills', prompts: 43, commits: 50, cost: '$63.84', heat: [0,0,0,0,12,20,11], sessions: [
+        { title: '深度评审 baize skill 的回归测试和 replay 框架', n: 10, span: '7/13 – 7/14', src: 'terminal', prompts: ['深度评审一下现在baize skill的回归测试和replay框架', '冻结场景的适用边界怎么划', 'snapshot 快照机制补齐 diff 说明'] },
+        { title: '修改 baize envelope 结构,新增两个字段', n: 8, span: '7/14', src: 'terminal', prompts: ['我希望修改现在的baize skill的envelope结构,主要新增两个字段', 'pred_value/upper/lower 预测区间加进去', '归因 reason 级 series 带上 target_share'] },
+        { title: 'daily-scan 飞书多维表推送', n: 7, span: '7/14 – 7/15', src: 'web', prompts: ['daily-scan 打通飞书多维表推送', '机器人换用阿数酱身份发送'] },
+      ]},
+      { name: 'baize_web', path: '~/baize_web', prompts: 31, commits: 50, cost: '$61.02', heat: [0,0,0,0,9,14,8], sessions: [
+        { title: '前端原型优化项逐项落地', n: 31, span: '7/13 – 7/15', src: 'terminal', prompts: ['前端原型还有一些要优化的项,我写在prototype_opt.md里,请你逐项处理', '热力图配色与悬浮日期调整', '归因弹窗随点击位置定位', '趋势图检测原理加白话注解'] },
+      ]},
+      { name: 'lilith_offline_etl', path: '~/lilith_offline_etl', prompts: 27, commits: 50, cost: '$34.85', heat: [0,0,0,0,10,9,8], sessions: [
+        { title: 'Pgame 画册卡片持仓标签', n: 15, span: '7/13 – 7/14', src: 'terminal', prompts: ['我想做一个标签,记录的是Pgame角色当前拥有的画册卡片,具体日志来源是hive', '写入飞书多维表,带角色昵称/等级/稀有度', '全量改增量更新'] },
+        { title: 'D1/D2/D3 封禁分级链路升级', n: 12, span: '7/14 – 7/15', src: 'web', prompts: ['可疑IP判定内联到D2', '正交信号版v2在farlight全量实测', 'studio_gang 多开占比加0.7阈值堵漏洞'] },
+      ]},
+      { name: 'project', path: '~/project', prompts: 25, commits: 0, cost: '$34.98', heat: [0,0,0,0,11,9,5], sessions: [
+        { title: 'multica YUI-143 卡片排查', n: 22, span: '7/13 – 7/15', src: 'terminal', prompts: ['multica issue YUI-143是否已经跑完?最后有发送飞书卡片吗?', '发送成功但群内未收到,查card_id链路', '设计发后校验+3次重试兜底方案'] },
+        { title: 'R7 分支规则讨论', n: 3, span: '7/14', src: 'terminal', prompts: ['对于现在的全局CLAUDE.md的第7条规则R7,同项目并行多需求怎么落地'] },
+      ]},
+    ],
+    draft: null, // 尚未生成 → 空态
+  },
+  prev: {
+    range: '7/2 – 7/8', now: false,
+    strip: { prompts: 187, sessions: 26, projects: 7, days: 5, cost: '$268.40' },
+    dayLabels: ['7/2', '7/3', '7/4', '7/5', '7/6', '7/7', '7/8'],
+    projects: [
+      { name: 'xuanji', path: '~/xuanji', prompts: 66, commits: 38, cost: '$98.20', heat: [8,12,9,0,0,17,20], sessions: [
+        { title: '产品规划与本机侦察', n: 36, span: '7/2 – 7/7', src: 'terminal', prompts: ['给我盘一下 ~/.claude 里都有什么可用数据', '六大功能的数据源逐个验证', '写产品规划文档'] },
+        { title: 'M0 原型评审迭代', n: 30, span: '7/7 – 7/8', src: 'terminal', prompts: ['原型里会话看板改四列', '跨目录交接用方案二'] },
+      ]},
+      { name: 'antifraud_skills', path: '~/antifraud_skills', prompts: 54, commits: 44, cost: '$88.10', heat: [10,9,12,0,0,11,12], sessions: [
+        { title: 'baize v2.7 envelope 迭代', n: 32, span: '7/2 – 7/7', src: 'terminal', prompts: ['envelope 加预测区间字段', '检测取数源切到订单流水表'] },
+        { title: 'jueming 原则化重构', n: 22, span: '7/3 – 7/8', src: 'web', prompts: ['删除发送者定性计数机制', '申诉社交协调型例外规则定稿'] },
+      ]},
+    ],
+    draft: {
+      status: 'done', model: 'sonnet', at: '7/8 17:03', session: '9f2c11ab',
+      html: `
+        <h3>xuanji(AI 生产驾驶舱)</h3>
+        <ul>
+          <li><b>完成产品规划</b>:六大功能数据源全部本机实测验证,产出 product-plan.md(定位/架构/选型/风险/M0-M4 路线图)。</li>
+          <li><b>M0 原型过审</b>:七视图单文件原型经两轮评审迭代获批,会话看板定为四列布局,跨目录交接采用摘要交接方案。</li>
+        </ul>
+        <h3>antifraud_skills(白泽 / 决明)</h3>
+        <ul>
+          <li><b>白泽 v2.7 发布</b>:envelope 新增预测区间,检测取数源切换至订单流水表。</li>
+          <li><b>决明原则化重构</b>:移除发送者定性计数,申诉例外规则定稿。</li>
+        </ul>
+        <h3>下周待办(推测)</h3>
+        <ul><li>璇玑 M1 只读驾驶舱开工;白泽回归测试框架评审。</li></ul>`,
+    },
+  },
+};
+let rvWeek = 'cur';
+let rvDraftTimer = null;
+
+function renderReview() {
+  const R = REVIEWS[rvWeek];
+  $('#rv-range').textContent = R.range;
+  $('#rv-now-pill').style.display = R.now ? '' : 'none';
+  $('#rv-prev').disabled = rvWeek === 'prev'; /* mock 只备两周 */
+  $('#rv-next').disabled = rvWeek === 'cur';
+  $('#rv-strip').innerHTML = `
+    <span>prompt <b>${R.strip.prompts}</b> 条</span>
+    <span>会话 <b>${R.strip.sessions}</b> 个</span>
+    <span>项目 <b>${R.strip.projects}</b> 个</span>
+    <span>活跃 <b>${R.strip.days}</b> 天</span>
+    <span>成本 <b>${R.strip.cost}</b></span>`;
+
+  /* 热力:复用仪表盘 sequential 单色玉,行 = 项目 */
+  const max = Math.max(1, ...R.projects.flatMap(p => p.heat));
+  $('#rv-heat').innerHTML = R.projects.map(p => `
+    <div class="heat-row">
+      <span class="lbl" style="color:oklch(0.78 0.12 ${projHue(p.name)})">${esc(p.name)}</span>
+      ${p.heat.map((v, i) => `<span class="heat-cell" title="${R.dayLabels[i]} · ${v} 条"
+        style="${v ? `background:oklch(0.72 0.11 115 / ${0.15 + 0.85 * v / max})` : ''}"></span>`).join('')}
+    </div>`).join('') + `
+    <div class="heat-days"><span></span>${R.dayLabels.map(d => `<span>${d}</span>`).join('')}</div>`;
+
+  /* 项目分组会话列表 */
+  $('#rv-projects').innerHTML = R.projects.map((p, pi) => `
+    <div class="rv-proj">
+      <div class="rv-proj-head">
+        ${projChip(p.path)}
+        <span class="m">${p.prompts} prompts · ${p.sessions.length} 会话${p.commits ? ` · ${p.commits} commits` : ''}</span>
+        <span class="cost">${p.cost}</span>
+      </div>
+      ${p.sessions.map((s, si) => `
+        <div class="rv-item" id="rv-${pi}-${si}">
+          <button class="rv-sess" onclick="rvToggle('${pi}-${si}')" aria-expanded="false">
+            <span class="chev">▶</span>
+            <span class="t">${esc(s.title)}</span>
+            ${s.src === 'web' ? '<span class="tag">璇玑</span>' : ''}
+            <span class="n">${s.n} 条</span>
+            <span class="span">${s.span}</span>
+          </button>
+          <ul class="rv-prompts">
+            ${s.prompts.map(t => `<li title="${esc(t)}">${esc(t)}</li>`).join('')}
+            ${s.n > s.prompts.length ? `<li class="more">…其余 ${s.n - s.prompts.length} 条(样本封顶)</li>` : ''}
+          </ul>
+        </div>`).join('')}
+    </div>`).join('');
+
+  renderDraft();
+}
+
+function rvToggle(id) {
+  const it = document.getElementById('rv-' + id);
+  it.classList.toggle('open');
+  $('.rv-sess', it).setAttribute('aria-expanded', it.classList.contains('open'));
+}
+
+function renderDraft(running) {
+  const R = REVIEWS[rvWeek];
+  const box = $('#rv-draft'), act = $('#rv-draft-actions');
+  $('#rv-draft-btn').disabled = !!running;
+  if (running) {
+    act.innerHTML = '<span class="pill pill-run"><span class="dot"></span>生成中</span>';
+    box.innerHTML = `<div class="draft-run"><span class="typing"><i></i><i></i><i></i></span>
+      正在从 ${R.strip.prompts} 条 prompt、${R.strip.sessions} 个会话的素材生成草稿…会话已入看板可跟踪</div>`;
+    return;
+  }
+  if (!R.draft) {
+    act.innerHTML = '';
+    box.innerHTML = `<div class="empty"><div class="glyph">✦</div>
+      <p>本周还没有草稿。点右上「生成周报草稿」,由 AI 从本页素材(prompt 流 + 会话名 + commits)写一份按项目分组的周报。</p>
+      <p style="color:var(--faint)">素材只喂 prompt 原文与提交题目,不读会话全文;生成会话入看板,完成后待验收提醒。</p></div>`;
+    return;
+  }
+  act.innerHTML = `<button class="btn btn-sm" onclick="toast('已复制 markdown 到剪贴板')">复制</button>
+    <button class="btn btn-sm" onclick="showView('sessions');toast('已定位到草稿会话,可继续对话修改')">在看板打开</button>
+    <button class="btn btn-sm btn-quiet" onclick="rvRegen()" title="重新生成">↻</button>`;
+  box.innerHTML = `<div class="draft-body">${R.draft.html}</div>
+    <div class="draft-meta"><span>模型 ${R.draft.model}</span><span>生成于 ${R.draft.at}</span>
+    <span>会话 <span class="mono">${R.draft.session}</span></span><span>素材口径:prompt 流 ∪ 璇玑派发流水 + git 题目</span></div>`;
+}
+
+function rvRegen() {
+  renderDraft(true);
+  clearTimeout(rvDraftTimer);
+  rvDraftTimer = setTimeout(() => {
+    REVIEWS[rvWeek].draft = REVIEWS.prev.draft ?? REVIEWS[rvWeek].draft;
+    if (rvWeek === 'cur') {
+      REVIEWS.cur.draft = { status: 'done', model: 'sonnet', at: '7/15 14:32', session: 'a1c1a412', html: `
+        <h3>xuanji(AI 生产驾驶舱)</h3>
+        <ul>
+          <li><b>发布 v1.0.0</b>:七视图驾驶舱 + 对话派发 + launchd 常驻全量落地;壁纸背景三档模式获批并固化进 DESIGN.md。</li>
+          <li><b>周回顾开工</b>:后端聚合 API 与草稿生成通道完成,原型区块送审中。</li>
+        </ul>
+        <h3>antifraud_skills(白泽 / 决明)</h3>
+        <ul>
+          <li><b>白泽 v2.7~v2.9 连发</b>:envelope 预测区间与归因 series 字段、取数源切订单流水、RCA 防幻觉硬门;baize-evals 回归体系(freeze/replay-diff)搭建完成。</li>
+          <li><b>daily-scan 打通飞书多维表</b>,机器人切换企业自建应用身份。</li>
+        </ul>
+        <h3>baize_web(白泽日报前端)</h3>
+        <ul><li><b>从零到生产</b>:原型获批 → 全页面落地 → Docker/CI 部署交付,多轮 impeccable 审阅打磨。</li></ul>
+        <h3>lilith_offline_etl(离线风控)</h3>
+        <ul><li><b>画册卡片持仓标签上线</b>(全量→增量);D1-D3 封禁分级升级,正交信号 v2 全量实测。</li></ul>
+        <h3>下周待办(推测)</h3>
+        <ul><li>璇玑周回顾前端落地与定时任务调度器(M3);白泽回归 case 补齐。</li></ul>` };
+    }
+    renderDraft();
+    toast('周报草稿已生成 · 看板中标记待验收');
+  }, 2600);
+}
+
+$('#rv-draft-btn').addEventListener('click', rvRegen);
+$('#rv-prev').addEventListener('click', () => { rvWeek = 'prev'; renderReview(); });
+$('#rv-next').addEventListener('click', () => { rvWeek = 'cur'; renderReview(); });
+
 renderDashboard();
 renderProjects();
 renderBoard();
 renderChat(chatDefault());
+setSessCtx({ id: '6b0e42d1', title: 'L3 弱信号规则文档整理', cwd: '~/go-antifraud' }); /* 初始演示会话 */
 setAgentStatus('等待你审批:Write(wiki/business/l3-weak-signals.md)', 'wait');
 makeDD('#cwd-dd', Object.keys(CWD_INFO), { value: currentCwd, onChange: v => { currentCwd = v; syncCwdBranch(); updateCwdNote(); } });
 makeDD('#model-dd', ['claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4.5'], { value: 'claude-fable-5' });
@@ -1920,6 +2623,7 @@ syncCwdBranch();
 renderSkills();
 renderMemories();
 renderCrons();
+renderReview();
 
 $('#proj-search').addEventListener('input', e => renderProjects(e.target.value));
 $('#skill-search').addEventListener('input', e => { skillQuery = e.target.value.trim().toLowerCase(); renderSkills(); });
@@ -1942,7 +2646,14 @@ $('#send-btn').addEventListener('click', sendMessage);
 $('#composer-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
-$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); sessionCwd = currentCwd; updateCwdNote(); });
+$('#new-chat').addEventListener('click', () => { renderChat(chatEmpty()); setAgentStatus('空闲'); setSessCtx(null); sessionCwd = currentCwd; updateCwdNote(); });
+$('#place-switch').addEventListener('click', e => {
+  const b = e.target.closest('button[data-place]');
+  if (!b) return;
+  placeMode = b.dataset.place;
+  $$('#place-switch button').forEach(x => x.classList.toggle('active', x === b));
+  applyPlace();
+});
 $('#bg-switch').addEventListener('click', function () {
   this.classList.toggle('on');
   this.setAttribute('aria-checked', this.classList.contains('on'));
@@ -1951,6 +2662,168 @@ $('#bg-switch').addEventListener('keydown', function (e) {
   if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); }
 });
 
+/* ===================== 壁纸 ===================== */
+function wallSvg(body) {
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000">${body}</svg>`);
+}
+/* 星野:观象台夜空。北斗七星微亮,天璇·天玑二星以玉色致意产品本名 */
+function presetXingye() {
+  const rnd = i => Math.sin(i * 127.1 + 311.7) * 0.5 + 0.5;
+  let stars = '';
+  for (let i = 0; i < 150; i++) {
+    const x = (rnd(i) * 1600).toFixed(0), y = (rnd(i + 500) * 1000).toFixed(0);
+    const r = (0.5 + rnd(i + 900) * 1.2).toFixed(1), o = (0.12 + rnd(i + 1300) * 0.45).toFixed(2);
+    stars += `<circle cx="${x}" cy="${y}" r="${r}" fill="#cdd8c2" opacity="${o}"/>`;
+  }
+  /* 北斗:天枢-天璇-天玑-天权 构斗,玉衡-开阳-摇光 为柄 */
+  const dipper = [[1108,318],[1180,268],[1262,282],[1330,338],[1296,428],[1392,470],[1472,404]];
+  const line = dipper.map(p => p.join(',')).join(' ');
+  const named = [1, 2]; /* 天璇、天玑 */
+  const ds = dipper.map(([x, y], i) =>
+    `<circle cx="${x}" cy="${y}" r="${named.includes(i) ? 3.2 : 2.2}" fill="${named.includes(i) ? '#b8cf8f' : '#cdd8c2'}" opacity="${named.includes(i) ? 0.95 : 0.7}"/>` +
+    (named.includes(i) ? `<circle cx="${x}" cy="${y}" r="8" fill="none" stroke="#b8cf8f" stroke-width="0.6" opacity="0.35"/>` : '')
+  ).join('');
+  return wallSvg(
+    `<defs><radialGradient id="sky" cx="35%" cy="18%" r="95%">
+      <stop offset="0" stop-color="#1a2116"/><stop offset="0.55" stop-color="#11150d"/><stop offset="1" stop-color="#0a0d08"/>
+    </radialGradient></defs>
+    <rect width="1600" height="1000" fill="url(#sky)"/>
+    <ellipse cx="480" cy="180" rx="520" ry="300" fill="#25301c" opacity="0.18"/>
+    ${stars}<polyline points="${line}" fill="none" stroke="#8fa878" stroke-width="0.8" opacity="0.28"/>${ds}`);
+}
+/* 山岚:层叠远山 + 谷间雾 */
+function presetShanlan() {
+  return wallSvg(
+    `<defs>
+      <linearGradient id="mist" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#161c11" stop-opacity="0"/><stop offset="1" stop-color="#1c2415" stop-opacity="0.5"/>
+      </linearGradient>
+      <linearGradient id="air" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#171d12"/><stop offset="1" stop-color="#0e120a"/>
+      </linearGradient>
+    </defs>
+    <rect width="1600" height="1000" fill="url(#air)"/>
+    <path d="M0 560 L240 380 L430 520 L640 330 L860 540 L1080 400 L1300 560 L1470 460 L1600 540 L1600 1000 L0 1000 Z" fill="#131a0e" opacity="0.9"/>
+    <rect y="480" width="1600" height="240" fill="url(#mist)"/>
+    <path d="M0 700 L300 540 L560 680 L840 520 L1120 700 L1380 590 L1600 690 L1600 1000 L0 1000 Z" fill="#0f150b"/>
+    <path d="M0 840 L360 700 L720 830 L1060 690 L1420 840 L1600 780 L1600 1000 L0 1000 Z" fill="#0b0f08"/>`);
+}
+const WALL_PRESETS = [
+  { id: 'xingye', name: '星野', url: presetXingye() },
+  { id: 'shanlan', name: '山岚', url: presetShanlan() },
+];
+const WALL_KEY = 'xuanji.wall';
+let wall = { mode: 'off', src: 'preset:xingye', opacity: 40, blur: 0, surface: 30, frost: 0, custom: '' };
+try { Object.assign(wall, JSON.parse(localStorage.getItem(WALL_KEY) || '{}')); } catch (_) { /* 忽略坏数据 */ }
+
+function wallSrcUrl() {
+  if (wall.src === 'custom') return wall.custom || '';
+  if (wall.src.startsWith('preset:')) {
+    const p = WALL_PRESETS.find(p => p.id === wall.src.slice(7));
+    return p ? p.url : WALL_PRESETS[0].url;
+  }
+  return wall.src || '';
+}
+function wallSrcName() {
+  if (wall.src === 'custom') return '本地图片';
+  if (wall.src.startsWith('preset:')) return (WALL_PRESETS.find(p => p.id === wall.src.slice(7)) || WALL_PRESETS[0]).name;
+  return 'URL';
+}
+function saveWall() {
+  try {
+    const persist = { ...wall };
+    if (persist.custom && persist.custom.length > 1_500_000) persist.custom = ''; /* 大图不落盘,仅本次会话生效 */
+    localStorage.setItem(WALL_KEY, JSON.stringify(persist));
+  } catch (_) { /* 配额不足时静默放弃持久化 */ }
+}
+function applyWall() {
+  const url = wallSrcUrl();
+  const on = wall.mode !== 'off' && !!url;
+  document.body.classList.toggle('wall-on', on);
+  document.body.classList.toggle('wall-glass', on && wall.mode === 'glass');
+  $('#wall').style.backgroundImage = url ? `url("${url}")` : 'none';
+  document.body.style.setProperty('--wall-opacity', wall.opacity / 100);
+  document.body.style.setProperty('--wall-blur', wall.blur + 'px');
+  document.body.style.setProperty('--wall-surface', wall.surface + '%');
+  document.body.style.setProperty('--wall-frost', wall.frost + 'px');
+  /* 控件同步 */
+  $$('#wall-mode button').forEach(b => b.classList.toggle('active', b.dataset.m === wall.mode));
+  $('#wall-ctrls').classList.toggle('is-off', wall.mode === 'off');
+  $('#wall-ctrls').setAttribute('aria-disabled', wall.mode === 'off');
+  $('#wall-opacity').value = wall.opacity; $('#wall-opacity-v').textContent = wall.opacity + '%';
+  $('#wall-blur').value = wall.blur; $('#wall-blur-v').textContent = wall.blur + 'px';
+  $('#wall-surface').value = wall.surface; $('#wall-surface-v').textContent = wall.surface + '%';
+  $('#wall-frost').value = wall.frost; $('#wall-frost-v').textContent = wall.frost + 'px';
+  /* 表面/磨砂仅玻璃档生效 */
+  $('#wall-surface-row').classList.toggle('is-off', wall.mode !== 'glass');
+  $('#wall-frost-row').classList.toggle('is-off', wall.mode !== 'glass');
+  $$('#wall-thumbs .wp-thumb').forEach(t => t.classList.toggle('active', 'preset:' + t.dataset.p === wall.src));
+  $('#wall-state').textContent = wall.mode === 'off' ? '关闭'
+    : `${wallSrcName()} · ${wall.mode === 'glass' ? '玻璃' : '壁纸'} ${wall.opacity}%`;
+  saveWall();
+}
+/* 预设缩略图 */
+$('#wall-thumbs').innerHTML = WALL_PRESETS.map(p =>
+  `<button class="wp-thumb" data-p="${p.id}" style="background-image:url('${p.url}')" title="${p.name}" aria-label="预设壁纸:${p.name}"></button>`).join('');
+
+$('#wall-btn').addEventListener('click', () => {
+  const pop = $('#wall-pop'), open = pop.hidden;
+  pop.hidden = !open;
+  $('#wall-btn').setAttribute('aria-expanded', open);
+  if (open) $('#wall-mode button.active')?.focus();
+});
+$('#wall-close').addEventListener('click', () => { $('#wall-pop').hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); });
+document.addEventListener('click', e => {
+  const pop = $('#wall-pop');
+  if (pop.hidden) return;
+  if (!pop.contains(e.target) && !$('#wall-btn').contains(e.target)) { pop.hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && !$('#wall-pop').hidden) { $('#wall-pop').hidden = true; $('#wall-btn').setAttribute('aria-expanded', 'false'); $('#wall-btn').focus(); }
+});
+$('#wall-mode').addEventListener('click', e => {
+  const b = e.target.closest('button[data-m]');
+  if (!b) return;
+  wall.mode = b.dataset.m;
+  applyWall();
+});
+$('#wall-thumbs').addEventListener('click', e => {
+  const t = e.target.closest('.wp-thumb');
+  if (!t) return;
+  wall.src = 'preset:' + t.dataset.p;
+  $('#wall-url').value = '';
+  applyWall();
+});
+$('#wall-url').addEventListener('keydown', e => {
+  if (e.key !== 'Enter') return;
+  const v = e.target.value.trim();
+  if (!v) return;
+  wall.src = v;
+  applyWall();
+  toast('已应用 URL 壁纸');
+});
+$('#wall-file-btn').addEventListener('click', () => $('#wall-file').click());
+$('#wall-file').addEventListener('change', e => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    wall.custom = r.result;
+    wall.src = 'custom';
+    $('#wall-url').value = '';
+    applyWall();
+    if (wall.custom.length > 1_500_000) toast('图片较大,仅本次会话生效(正式版由后端存缩略副本)');
+  };
+  r.readAsDataURL(f);
+  e.target.value = '';
+});
+$('#wall-opacity').addEventListener('input', e => { wall.opacity = +e.target.value; applyWall(); });
+$('#wall-blur').addEventListener('input', e => { wall.blur = +e.target.value; applyWall(); });
+$('#wall-surface').addEventListener('input', e => { wall.surface = +e.target.value; applyWall(); });
+$('#wall-frost').addEventListener('input', e => { wall.frost = +e.target.value; applyWall(); });
+applyWall();
+
 /* hash 路由 */
 function syncHash() {
   const id = location.hash.slice(1);
@@ -1958,6 +2831,7 @@ function syncHash() {
 }
 window.addEventListener('hashchange', syncHash);
 syncHash();
+if (!document.querySelector('.view.active')) showView('dashboard'); /* 无 hash 打开时默认进仪表盘 */
 </script>
 </body>
 </html>

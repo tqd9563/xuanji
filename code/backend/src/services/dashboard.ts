@@ -19,6 +19,8 @@ export interface Dashboard {
     todayCostUsd: number;
     activeProjects: number;
     systemCrons: number;
+    /** 应用内定时任务(M3):normal = pending/running/blocked/done 之和(排程健康),fused/missed 单列出来提醒处理 */
+    scheduledJobs: { normal: number; fused: number; missed: number };
   };
   timeline: { time: number; project: string; message: string }[];
   heat: { project: string; days: number[] }[];
@@ -86,6 +88,7 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
       todayCostUsd: usage.totalCostUsd,
       activeProjects,
       systemCrons: crontab.length,
+      scheduledJobs: countScheduledJobs(storage?.listScheduledJobs() ?? []),
     },
     timeline,
     heat,
@@ -97,6 +100,18 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
     },
     health: { cli, agentsOk: board.ok },
   };
+}
+
+function countScheduledJobs(jobs: { status: string }[]): { normal: number; fused: number; missed: number } {
+  let fused = 0;
+  let missed = 0;
+  let normal = 0;
+  for (const j of jobs) {
+    if (j.status === 'fused') fused++;
+    else if (j.status === 'missed') missed++;
+    else if (j.status !== 'canceled') normal++;
+  }
+  return { normal, fused, missed };
 }
 
 function toTimelineItem(e: HistoryEntry) {

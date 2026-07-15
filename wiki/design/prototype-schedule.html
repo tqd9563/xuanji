@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璇玑 · 定时任务(方案原型)</title>
+<style>
+/* ============================================================
+   复用璇玑主原型 token(DESIGN.md 唯一 source of truth)
+   仅补充「定时任务」新增交互所需的少量类
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --on-jade:   oklch(0.18 0.02 120);
+  --amber: oklch(0.78 0.14 80);
+  --blue:  oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
+  --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
+  --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+  --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
+  --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-s: 6px;
+  --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, select, textarea { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+
+/* 布局骨架 */
+.app { display: grid; grid-template-columns: 226px 1fr; min-height: 100vh; }
+.sidebar { background: var(--surface-2); border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.brand { display: flex; align-items: baseline; gap: 8px; padding: 20px 20px 18px; }
+.brand .zh { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.06em; color: var(--jade); }
+.brand .en { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.nav { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.nav button { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-s); color: var(--muted); text-align: left; font-size: 0.875rem; transition: background 150ms var(--ease), color 150ms var(--ease); }
+.nav button:hover { background: var(--hover); color: var(--ink); }
+.nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+.nav svg { width: 16px; height: 16px; flex: none; }
+.nav .count { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); background: var(--tint-muted); border-radius: 99px; padding: 0 7px; }
+.nav button.active .count { color: var(--jade); background: transparent; }
+.side-foot { margin-top: auto; padding: 14px 20px 18px; border-top: 1px solid var(--line-soft); font-size: 0.75rem; color: var(--muted); }
+.side-foot .row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.side-foot .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
+.side-foot .proto { color: var(--faint); }
+.main { min-width: 0; padding: 24px clamp(32px, 3.5vw, 80px) 48px; }
+
+.view-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.view-head h1 { font-size: 1.25rem; }
+.view-head .sub { color: var(--muted); font-size: 0.8125rem; }
+.view-head .spacer { flex: 1; }
+
+/* 按钮 */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--surface); font-size: 0.8125rem; color: var(--ink); transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.btn:hover { background: var(--hover); border-color: var(--muted); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--jade); border-color: var(--jade); color: var(--on-jade); font-weight: 600; }
+.btn-primary:hover { background: var(--jade-dim); border-color: var(--jade-dim); }
+.btn-quiet { border-color: transparent; background: transparent; color: var(--muted); }
+.btn-quiet:hover { background: var(--hover); color: var(--ink); }
+.btn-danger { border-color: color-mix(in oklab, var(--red) 45%, transparent); color: var(--red); background: transparent; }
+.btn-danger:hover { background: var(--tint-red); border-color: var(--red); }
+.btn-sm { padding: 3px 10px; font-size: 0.75rem; }
+
+/* 输入 */
+.input, select.input, textarea.input { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem; transition: border-color 150ms var(--ease); width: 100%; }
+.input:hover { border-color: var(--muted); }
+.input:focus { outline: none; border-color: var(--jade); }
+textarea.input { resize: vertical; line-height: 1.55; font-family: var(--mono); font-size: 0.75rem; }
+select.input { appearance: none; padding-right: 28px; background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" stroke="%23999f8e" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>'); background-repeat: no-repeat; background-position: right 10px center; }
+
+/* 胶囊 */
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; white-space: nowrap; }
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill-run  { color: var(--jade);  background: var(--tint-jade); }
+.pill-sched{ color: var(--blue);  background: var(--tint-blue); }
+.pill-blk  { color: var(--amber); background: var(--tint-amber); }
+.pill-done { color: var(--green); background: var(--tint-green); }
+.pill-miss { color: var(--amber); background: var(--tint-amber); }
+.pill-err  { color: var(--red);   background: var(--tint-red); }
+.pill-run .dot, .pill-blk .dot { animation: pulse 2s var(--ease) infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.6875rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.mono { font-family: var(--mono); font-size: 0.8em; }
+
+/* 面板/表格 */
+.panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+.panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.panel-head h2 { font-size: 0.875rem; }
+.panel-head .sub { font-size: 0.75rem; color: var(--muted); }
+.panel-head .spacer { flex: 1; }
+.table { width: 100%; border-collapse: collapse; }
+.table th { text-align: left; color: var(--faint); font-weight: 600; font-size: 0.6875rem; padding: 9px 18px; border-bottom: 1px solid var(--line-soft); }
+.table td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tbody tr:last-child td { border-bottom: none; }
+.empty { text-align: center; padding: 40px 24px; color: var(--muted); }
+.empty .glyph { font-size: 1.5rem; margin-bottom: 8px; color: var(--faint); }
+.empty p { font-size: 0.8125rem; max-width: 34em; margin: 0 auto 4px; }
+
+.filter-tabs { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.filter-tabs button { padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+.filter-tabs button:hover { color: var(--ink); }
+.filter-tabs button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+
+/* ============ 定时任务列表 ============ */
+.job-item { border-bottom: 1px solid var(--line-soft); }
+.job-item:last-child { border-bottom: none; }
+.job-row { display: flex; align-items: center; gap: 14px; padding: 13px 18px; cursor: pointer; transition: background 120ms var(--ease); }
+.job-row:hover { background: var(--hover); }
+.job-row .name { font-weight: 600; font-size: 0.8125rem; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.job-row .kind { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 4px; padding: 1px 7px; white-space: nowrap; }
+.job-row .when { font-size: 0.75rem; margin-left: auto; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.job-row .when .clock { color: var(--ink); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.job-row .when .rel { color: var(--faint); }
+.job-detail { display: none; padding: 4px 18px 16px 18px; }
+.job-item.open .job-detail { display: block; }
+.job-detail .prompt { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 10px 14px; margin-bottom: 12px; white-space: pre-wrap; }
+.job-meta { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-bottom: 12px; }
+.job-meta b { color: var(--ink); font-weight: 600; }
+.job-meta .mono { color: var(--blue); }
+.runs { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.runs th { text-align: left; color: var(--faint); font-weight: 600; padding: 5px 10px; border-bottom: 1px solid var(--line-soft); }
+.runs td { padding: 6px 10px; border-bottom: 1px solid var(--line-soft); color: var(--muted); }
+.runs td:first-child { font-family: var(--mono); }
+.runs tr:last-child td { border-bottom: none; }
+.runs a.sid { font-family: var(--mono); color: var(--blue); text-decoration: none; }
+.runs a.sid:hover { text-decoration: underline; }
+.runs-more { display: block; font-size: 0.6875rem; color: var(--faint); padding: 8px 10px 0; }
+.runs-more:hover { color: var(--ink); }
+
+/* 折叠行上的近 7 期状态点(周期任务) */
+.runline { display: inline-flex; align-items: center; gap: 3px; }
+.runline i { width: 6px; height: 6px; border-radius: 50%; background: var(--tint-muted); }
+.runline i.g { background: var(--green); }
+.runline i.r { background: var(--red); }
+.runline i.a { background: var(--amber); }
+
+/* 需审批告示条 */
+.notice { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; border-radius: var(--r-s); padding: 9px 12px; margin-bottom: 12px; }
+.notice-amber { color: var(--amber); background: var(--tint-amber); }
+.notice-red { color: var(--red); background: var(--tint-red); }
+.notice .spacer { flex: 1; }
+.sys-note { font-size: 0.75rem; color: var(--faint); padding: 10px 18px 4px; }
+
+/* ============ 新建任务模态 ============ */
+.backdrop { position: fixed; inset: 0; background: oklch(0.08 0 0 / 0.55); opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease); z-index: 30; }
+.backdrop.show { opacity: 1; pointer-events: auto; }
+.modal { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -46%); width: min(560px, calc(100vw - 40px)); max-height: calc(100vh - 60px); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); opacity: 0; pointer-events: none; transition: opacity 180ms var(--ease), transform 180ms var(--ease); z-index: 40; }
+.modal.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+.modal-head { display: flex; align-items: center; gap: 10px; padding: 16px 20px; border-bottom: 1px solid var(--line-soft); position: sticky; top: 0; background: var(--surface); }
+.modal-head h2 { font-size: 0.9375rem; }
+.modal-head .spacer { flex: 1; }
+.modal-head .x { color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 2px 6px; border-radius: 4px; }
+.modal-head .x:hover { background: var(--hover); color: var(--ink); }
+.modal-body { padding: 18px 20px 20px; }
+.field { margin-bottom: 16px; }
+.field > label { display: block; font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.field .hint { font-size: 0.6875rem; color: var(--faint); margin-top: 5px; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+.chip { padding: 4px 12px; border-radius: 99px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); font-size: 0.75rem; transition: all 140ms var(--ease); }
+.chip:hover { border-color: var(--muted); color: var(--ink); }
+.chip.active { background: var(--tint-jade); border-color: var(--jade); color: var(--jade); font-weight: 600; }
+.seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.seg button { padding: 5px 16px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); }
+.seg button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* 自绘下拉(DESIGN.md Signature Component:原生 select 弹层由 OS 绘制,禁止直接见人) */
+.dd { position: relative; }
+.dd-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem; text-align: left; transition: border-color 150ms var(--ease); }
+.dd-btn:hover { border-color: var(--muted); }
+.dd.open .dd-btn { border-color: var(--jade); }
+.dd-btn .caret { color: var(--muted); font-size: 0.625rem; flex: none; transition: transform 150ms var(--ease); }
+.dd.open .dd-btn .caret { transform: rotate(180deg); }
+.dd-menu { position: absolute; top: calc(100% + 4px); left: 0; right: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); padding: 4px; z-index: 45; display: none; max-height: 240px; overflow-y: auto; }
+.dd.open .dd-menu { display: block; }
+.dd-item { display: flex; align-items: flex-start; gap: 8px; width: 100%; text-align: left; padding: 6px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--ink); transition: background 120ms var(--ease); }
+.dd-item:hover { background: var(--hover); }
+.dd-item .check { width: 14px; color: var(--jade); visibility: hidden; flex: none; }
+.dd-item.active .check { visibility: visible; }
+.dd-item .lbl { min-width: 0; }
+.dd-item .lbl .d { display: block; font-size: 0.6875rem; color: var(--faint); }
+.modal-foot { display: flex; align-items: center; gap: 10px; padding: 14px 20px 18px; border-top: 1px solid var(--line-soft); }
+.modal-foot .spacer { flex: 1; }
+.summary { font-size: 0.75rem; color: var(--muted); }
+.summary b { color: var(--jade); font-weight: 600; }
+
+/* ============ 完成横幅预览(macOS 通知拟态) ============ */
+.banner-demo { margin-top: 8px; }
+.mac-banner { display: flex; gap: 12px; align-items: flex-start; width: 360px; background: oklch(0.24 0.006 120 / 0.96); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); padding: 12px 14px; }
+.mac-banner .ic { width: 34px; height: 34px; border-radius: 8px; background: var(--tint-jade); color: var(--jade); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex: none; }
+.mac-banner.blk .ic { background: var(--tint-amber); color: var(--amber); }
+.mac-banner .bd { min-width: 0; }
+.mac-banner .app-name { font-size: 0.6875rem; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; }
+.mac-banner .ttl { font-weight: 600; font-size: 0.8125rem; margin: 1px 0; }
+.mac-banner .msg { font-size: 0.75rem; color: var(--muted); }
+
+/* Toast */
+.toast { position: fixed; bottom: 28px; left: 50%; transform: translate(-50%, 12px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); padding: 10px 16px; font-size: 0.8125rem; opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease), transform 200ms var(--ease); z-index: 50; }
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ============ 会话回放抽屉(复用主原型组件,失败任务在此看真实转录) ============ */
+.rbackdrop { position: fixed; inset: 0; background: oklch(0.08 0 0 / 0.55); opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease); z-index: 30; }
+.rbackdrop.show { opacity: 1; pointer-events: auto; }
+.rdrawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 94vw); background: var(--surface-2); border-left: 1px solid var(--line); transform: translateX(102%); transition: transform 240ms var(--ease); z-index: 40; display: flex; flex-direction: column; box-shadow: -12px 0 32px oklch(0.05 0 0 / 0.45); }
+.rdrawer.show { transform: none; }
+.rdrawer-head { padding: 18px 24px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: flex-start; gap: 12px; }
+.rdrawer-head h2 { font-size: 1rem; }
+.rdrawer-head .meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.rdrawer-head .x-btn { margin-left: auto; color: var(--muted); padding: 4px 8px; border-radius: var(--r-s); flex: none; }
+.rdrawer-head .x-btn:hover { background: var(--hover); color: var(--ink); }
+.rdrawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.rdrawer-foot { padding: 14px 24px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; font-size: 0.75rem; color: var(--muted); }
+.replay-msg { margin-bottom: 18px; }
+.replay-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.replay-msg .who.u { color: var(--jade); }
+.replay-msg .body { font-size: 0.8125rem; color: var(--ink); max-width: 68ch; text-wrap: pretty; }
+.toolcard { border: 1px solid var(--line-soft); border-radius: var(--r-s); margin-bottom: 12px; overflow: hidden; }
+.toolcard .tc-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 12px; font-size: 0.75rem; background: var(--surface); }
+.toolcard .tc-head:hover { background: var(--hover); }
+.toolcard .tc-head .fn { color: var(--blue); font-family: var(--mono); }
+.toolcard .tc-head .chev { margin-left: auto; transition: transform 180ms var(--ease); color: var(--faint); }
+.toolcard.open .tc-head .chev { transform: rotate(180deg); }
+.toolcard .tc-body { display: none; padding: 10px 12px; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); white-space: pre-wrap; overflow-x: auto; }
+.toolcard.open .tc-body { display: block; }
+.raw-event { border: 1px solid color-mix(in oklab, var(--red) 40%, transparent); border-radius: var(--r-s); padding: 10px 12px; margin-bottom: 12px; font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); white-space: pre-wrap; }
+.raw-event .note { font-family: var(--sans); color: var(--red); font-size: 0.6875rem; margin-bottom: 4px; font-weight: 600; }
+
+@media (max-width: 720px) { .app { grid-template-columns: 1fr; } .sidebar { display: none; } .two-col { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- 侧栏(示意,仅「定时」可交互) -->
+  <aside class="sidebar">
+    <div class="brand"><span class="zh">璇玑</span><span class="en">xuanji</span></div>
+    <nav class="nav">
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 12h7V3H3zM14 21h7v-9h-7zM14 3v6h7V3zM3 21h7v-6H3z"/></svg>仪表盘</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 7l9-4 9 4-9 4-9-4zM3 12l9 4 9-4M3 17l9 4 9-4"/></svg>项目</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 5h16v11H8l-4 4z"/></svg>会话<span class="count">5</span></button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v18M3 12h18"/></svg>派发</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 2l3 7h7l-5.5 4 2 7L12 16l-6.5 4 2-7L2 9h7z"/></svg>技能</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v16H4zM8 8h8M8 12h8M8 16h5"/></svg>经验</button>
+      <button class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 8v5l3 2"/></svg>定时<span class="count">4</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="row"><span class="ok"></span>后端常驻 · launchd</div>
+      <div class="proto">方案原型 · 定时任务</div>
+    </div>
+  </aside>
+
+  <!-- 主区 -->
+  <main class="main">
+    <div class="view-head">
+      <h1>定时任务</h1>
+      <span class="sub">安排未来 / 周期任务,到点由常驻后端自动开一个 Claude 会话执行</span>
+      <span class="spacer"></span>
+      <div class="filter-tabs" id="filter">
+        <button class="active" data-f="all">全部</button>
+        <button data-f="once">一次性</button>
+        <button data-f="cron">周期</button>
+      </div>
+      <button class="btn btn-primary" onclick="openModal()">＋ 新建任务</button>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px">
+      <div class="panel-head">
+        <h2>璇玑调度</h2>
+        <span class="sub">croner 调度 · 定义与运行历史存 SQLite · 预算超限 / 连续失败熔断</span>
+      </div>
+      <div class="sys-note">到点运行 = 创建一个真实派发会话:运行中 / 需审批 / 已完成的实例会同步出现在「会话」看板(带 <span class="tag">◷ 定时</span> 来源标),审批也可以直接在会话页处理;此处的「结果会话」链接直达。</div>
+      <div id="job-list"></div>
+    </div>
+
+    <!-- 通知形态说明 -->
+    <div class="panel">
+      <div class="panel-head"><h2>到点通知形态</h2><span class="sub">后端直发 macOS 横幅(不依赖浏览器开着)</span></div>
+      <div style="padding:16px 18px; display:flex; gap:24px; flex-wrap:wrap">
+        <div class="banner-demo">
+          <div class="mac-banner">
+            <div class="ic">✓</div>
+            <div class="bd"><div class="app-name">璇玑 xuanji</div><div class="ttl">定时任务「周报草稿生成」已完成</div><div class="msg">6m 40s · 52.3k tokens · 点击查看会话</div></div>
+          </div>
+          <p style="font-size:0.6875rem;color:var(--faint);margin-top:6px">任务顺利跑完 → 蓝色完成横幅</p>
+        </div>
+        <div class="banner-demo">
+          <div class="mac-banner blk">
+            <div class="ic">!</div>
+            <div class="bd"><div class="app-name">璇玑 xuanji</div><div class="ttl">定时任务「深夜依赖升级」需要审批</div><div class="msg">想执行 Bash · 已挂起等你 · 点击处理</div></div>
+          </div>
+          <p style="font-size:0.6875rem;color:var(--faint);margin-top:6px">保守权限下被卡 → 琥珀审批横幅,任务挂起不失败</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============ 新建任务模态 ============ -->
+<div class="backdrop" id="backdrop" onclick="closeModal()"></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-label="新建定时任务">
+  <div class="modal-head">
+    <h2>新建定时任务</h2>
+    <span class="spacer"></span>
+    <button class="x" onclick="closeModal()" aria-label="关闭">✕</button>
+  </div>
+  <div class="modal-body">
+    <div class="field">
+      <label>任务类型</label>
+      <div class="seg" id="seg-kind">
+        <button class="active" data-k="once">一次性</button>
+        <button data-k="cron">周期</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>任务名称</label>
+      <input class="input" id="f-name" placeholder="例:今晚汇总本周周报草稿">
+    </div>
+
+    <div class="field">
+      <label>Prompt(发给 Claude 的指令)</label>
+      <textarea class="input" id="f-prompt" rows="4" placeholder="汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。"></textarea>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>工作目录(cwd)</label>
+        <div class="dd" id="dd-cwd" data-v="~/xuanji">
+          <button type="button" class="dd-btn"><span class="val mono" style="color:var(--blue)">~/xuanji</span><span class="caret">▾</span></button>
+          <div class="dd-menu">
+            <button type="button" class="dd-item active" data-v="~/xuanji"><span class="check">✓</span><span class="lbl mono">~/xuanji</span></button>
+            <button type="button" class="dd-item" data-v="~/baize"><span class="check">✓</span><span class="lbl mono">~/baize</span></button>
+            <button type="button" class="dd-item" data-v="~/antifraud_skills"><span class="check">✓</span><span class="lbl mono">~/antifraud_skills</span></button>
+            <button type="button" class="dd-item" data-v="~/project/cronjob"><span class="check">✓</span><span class="lbl mono">~/project/cronjob</span></button>
+            <button type="button" class="dd-item" data-v="~/data-analysis"><span class="check">✓</span><span class="lbl mono">~/data-analysis</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label>模型</label>
+        <div class="dd" id="dd-model" data-v="sonnet">
+          <button type="button" class="dd-btn"><span class="val mono" style="color:var(--violet)">sonnet</span><span class="caret">▾</span></button>
+          <div class="dd-menu">
+            <button type="button" class="dd-item active" data-v="sonnet"><span class="check">✓</span><span class="lbl mono">sonnet</span></button>
+            <button type="button" class="dd-item" data-v="opus"><span class="check">✓</span><span class="lbl mono">opus</span></button>
+            <button type="button" class="dd-item" data-v="haiku"><span class="check">✓</span><span class="lbl mono">haiku</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 一次性:时间选择 -->
+    <div class="field" id="once-time">
+      <label>执行时间</label>
+      <div class="chips" id="time-chips">
+        <button class="chip active" data-t="20">今晚 20:00</button>
+        <button class="chip" data-t="22">今晚 22:00</button>
+        <button class="chip" data-t="tmr9">明早 09:00</button>
+        <button class="chip" data-t="custom">自定义</button>
+      </div>
+      <input class="input" type="datetime-local" id="f-datetime">
+      <div class="hint" id="time-hint">将在 <b style="color:var(--jade)">今晚 20:00</b>(约 4 小时后)执行一次</div>
+    </div>
+
+    <!-- 周期:cron 表达式 -->
+    <div class="field" id="cron-time" style="display:none">
+      <label>周期(cron 表达式)</label>
+      <div class="chips" id="cron-chips">
+        <button class="chip active" data-c="0 9 * * *">每天 09:00</button>
+        <button class="chip" data-c="0 18 * * 5">每周五 18:00</button>
+        <button class="chip" data-c="0 8 * * 1">每周一 08:00</button>
+        <button class="chip" data-c="custom">自定义</button>
+      </div>
+      <input class="input mono" id="f-cron" value="0 9 * * *">
+      <div class="hint">croner 解析,支持时区(Asia/Shanghai)</div>
+    </div>
+
+    <div class="two-col">
+      <div class="field">
+        <label>权限模式</label>
+        <div class="dd" id="dd-perm" data-v="acceptEdits" data-label="自动接受编辑">
+          <button type="button" class="dd-btn"><span class="val">自动接受编辑</span><span class="caret">▾</span></button>
+          <div class="dd-menu">
+            <button type="button" class="dd-item active" data-v="acceptEdits" data-label="自动接受编辑"><span class="check">✓</span><span class="lbl">自动接受编辑<span class="d">推荐 · 无人值守首选,写操作直接放行</span></span></button>
+            <button type="button" class="dd-item" data-v="default" data-label="保守"><span class="check">✓</span><span class="lbl">保守<span class="d">遇写操作挂起等审批,弹横幅通知</span></span></button>
+            <button type="button" class="dd-item" data-v="plan" data-label="计划模式"><span class="check">✓</span><span class="lbl">计划模式<span class="d">只产出方案,不动手改任何东西</span></span></button>
+            <button type="button" class="dd-item" data-v="bypassPermissions" data-label="完全放行"><span class="check">✓</span><span class="lbl">完全放行<span class="d">高风险,慎用</span></span></button>
+          </div>
+        </div>
+        <div class="hint">保守模式被卡时会弹审批横幅并挂起,次日你可继续</div>
+      </div>
+      <div class="field">
+        <label>预算上限</label>
+        <div class="dd" id="dd-budget" data-v="$50 / 次" data-label="$50 / 次">
+          <button type="button" class="dd-btn"><span class="val mono">$50 / 次</span><span class="caret">▾</span></button>
+          <div class="dd-menu">
+            <button type="button" class="dd-item" data-v="$10 / 次"><span class="check">✓</span><span class="lbl mono">$10 / 次</span></button>
+            <button type="button" class="dd-item" data-v="$20 / 次"><span class="check">✓</span><span class="lbl mono">$20 / 次</span></button>
+            <button type="button" class="dd-item active" data-v="$50 / 次"><span class="check">✓</span><span class="lbl mono">$50 / 次</span></button>
+            <button type="button" class="dd-item" data-v="$100 / 次"><span class="check">✓</span><span class="lbl mono">$100 / 次</span></button>
+            <button type="button" class="dd-item" data-v="不限"><span class="check">✓</span><span class="lbl">不限</span></button>
+          </div>
+        </div>
+        <div class="hint">超限自动停,防无人值守跑飞</div>
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <span class="summary" id="modal-summary">一次性 · 今晚 20:00 · ~/xuanji · sonnet</span>
+    <span class="spacer"></span>
+    <button class="btn btn-quiet" onclick="closeModal()">取消</button>
+    <button class="btn btn-primary" onclick="saveJob()">保存任务</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ============ 会话回放抽屉 ============ -->
+<div class="rbackdrop" id="rbackdrop" onclick="closeReplay()"></div>
+<aside class="rdrawer" id="rdrawer" role="dialog" aria-modal="true">
+  <div class="rdrawer-head">
+    <div>
+      <h2 id="rd-title"></h2>
+      <div class="meta" id="rd-meta"></div>
+    </div>
+    <button class="x-btn" onclick="closeReplay()" aria-label="关闭">✕</button>
+  </div>
+  <div class="rdrawer-body" id="rd-body"></div>
+  <div class="rdrawer-foot" id="rd-foot"></div>
+</aside>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove('show'),2200); }
+
+/* ============ mock 任务数据(覆盖全部生命周期状态) ============ */
+const JOBS = [
+  { kind:'once', name:'今晚汇总本周周报草稿', when:'今晚 22:00', rel:'约 6 小时后', cwd:'~/project/cronjob', model:'sonnet',
+    prompt:'汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
+    perm:'自动接受编辑', budget:'$50 / 次', state:'pending',
+    runs:[] },
+  { kind:'once', name:'深夜依赖升级 + 冒烟', when:'运行中', rel:'22:03 起', cwd:'~/xuanji', model:'sonnet',
+    prompt:'升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。',
+    perm:'保守', budget:'$50 / 次', state:'blocked', blockedSid:'a3f9c0',
+    notice:'已挂起等审批:想执行 `pnpm up -L`(写操作)。审批横幅已发,你处理后自动继续。',
+    runs:[ { t:'今天 22:03', dur:'进行中', tok:'8.1k', sid:'a3f9c0', s:'blk' } ] },
+  { kind:'cron', name:'每日舆情异动扫描', when:'每天 09:00', rel:'下次 明天 09:00', cwd:'~/baize', model:'sonnet',
+    prompt:'用 using-talk 扫描全部在营游戏近 24h 舆情异动,负面为主的话题写入飞书多维表,并把摘要发到值班群。',
+    perm:'自动接受编辑', budget:'$50 / 次', state:'done', total:30,
+    runs:[
+      { t:'今天 09:00', dur:'4m 12s', tok:'31.2k', sid:'7c1e88', s:'ok' },
+      { t:'昨天 09:00', dur:'3m 48s', tok:'28.9k', sid:'5b0a12', s:'ok' },
+      { t:'07-13 09:00', dur:'—', tok:'—', sid:'—', s:'miss' },
+      { t:'07-12 09:00', dur:'5m 02s', tok:'35.1k', sid:'2fd7a9', s:'ok' },
+      { t:'07-11 09:00', dur:'0m 52s', tok:'3.4k', sid:'9d21c4', s:'err', err:'上游搜索接口 429,重试 3 次后放弃' },
+      { t:'07-10 09:00', dur:'4m 40s', tok:'30.6k', sid:'c07f5e', s:'ok' },
+      { t:'07-09 09:00', dur:'3m 59s', tok:'27.8k', sid:'e4a2b1', s:'ok' },
+    ] },
+  { kind:'cron', name:'竞品档期追踪', when:'每周一 08:00', rel:'已暂停(熔断)', cwd:'~/data-analysis', model:'haiku',
+    prompt:'用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。',
+    perm:'自动接受编辑', budget:'$20 / 次', state:'fused', total:12,
+    notice:'连续失败 3 次已熔断:上游搜索接口 429。修复后手动恢复调度。',
+    runs:[
+      { t:'07-14 08:20', dur:'0m 41s', tok:'2.1k', sid:'—', s:'err' },
+      { t:'07-14 08:10', dur:'0m 38s', tok:'2.0k', sid:'—', s:'err' },
+      { t:'07-14 08:00', dur:'0m 44s', tok:'2.2k', sid:'—', s:'err' },
+      { t:'07-07 08:00', dur:'3m 55s', tok:'18.7k', sid:'b83d09', s:'ok' },
+    ] },
+  { kind:'once', name:'半夜生成竞品周报(已错过)', when:'02:00', rel:'昨夜错过', cwd:'~/data-analysis', model:'sonnet',
+    prompt:'生成竞品动态周报初稿。', perm:'自动接受编辑', budget:'$10 / 次', state:'missed',
+    notice:'电脑睡眠错过触发,且超出 30 分钟补跑宽限期,已标记为「已错过」并通知。可点「立即运行」补跑。',
+    runs:[] },
+];
+
+/* ============ 回放 mock:失败/审批中会话的真实转录(source of truth = session jsonl) ============ */
+const REPLAY = {
+  '9d21c4': [
+    { who:'user', text:'用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。' },
+    { who:'assistant', text:'开始搜索未来一周的游戏发布档期,先调用竞品追踪的搜索接口。' },
+    { who:'tool', fn:'WebSearch', arg:'"game release schedule" 2026-07-11..2026-07-17', out:'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who:'assistant', text:'搜索接口限流(429),按重试策略等待 60s 后重试。' },
+    { who:'tool', fn:'WebSearch', arg:'"game release schedule" 2026-07-11..2026-07-17 (重试 1/3)', out:'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who:'raw', note:'进程异常退出 · exit code 1', text:'Error: upstream search API rate-limited after 3 attempts. Aborting task.\n  at searchGameReleases (game-release/index.js:42:11)\n  at main (game-release/index.js:18:5)' },
+  ],
+  'a3f9c0': [
+    { who:'user', text:'升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。' },
+    { who:'assistant', text:'先检查当前依赖版本,再执行升级。' },
+    { who:'tool', fn:'Bash', arg:'pnpm outdated', out:'baize-core   2.3.1 → 2.4.0\nzod          3.22.4 → 3.23.0' },
+    { who:'assistant', text:'即将执行 `pnpm up -L` 升级到最新次版本,这是写操作,按当前权限模式需要你确认。' },
+  ],
+};
+
+function openReplay(sid){
+  const events = REPLAY[sid];
+  $('#rd-title').textContent = '定时任务运行 · session ' + sid;
+  $('#rd-meta').innerHTML = `<span class="mono">${esc(sid)}</span><span class="tag">◷ 定时触发</span>`;
+  $('#rd-body').innerHTML = events ? events.map(ev=>{
+    if(ev.who==='tool') return `
+      <div class="toolcard">
+        <button class="tc-head" onclick="this.parentElement.classList.toggle('open')">
+          <span class="fn">${esc(ev.fn)}</span><span>${esc(ev.arg)}</span><span class="chev">▾</span>
+        </button>
+        <div class="tc-body">${esc(ev.out)}</div>
+      </div>`;
+    if(ev.who==='raw') return `<div class="raw-event"><div class="note">⚠ ${esc(ev.note)}</div>${esc(ev.text)}</div>`;
+    return `<div class="replay-msg"><div class="who ${ev.who==='user'?'u':''}">${ev.who==='user'?'你':'Claude'}</div><div class="body">${esc(ev.text)}</div></div>`;
+  }).join('') : `<div class="empty"><div class="glyph">◌</div><p>历史回放从 session jsonl 只读解析。</p></div>`;
+  $('#rd-foot').innerHTML = sid==='a3f9c0'
+    ? `<button class="btn btn-primary" onclick="event.stopPropagation();toast('续接此会话,审批后继续执行(原型示意)')">续接此会话(--resume)</button><span>审批后继续,不会从头重跑</span>`
+    : `<span>只读回放 · source of truth 在 ~/.claude,不新开会话查询</span>`;
+  $('#rbackdrop').classList.add('show'); $('#rdrawer').classList.add('show');
+}
+function closeReplay(){ $('#rbackdrop').classList.remove('show'); $('#rdrawer').classList.remove('show'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeReplay(); });
+
+const STATE = {
+  pending:{ cls:'pill-sched', txt:'待执行' },
+  running:{ cls:'pill-run',  txt:'运行中' },
+  blocked:{ cls:'pill-blk',  txt:'需审批' },
+  done:{ cls:'pill-done', txt:'已完成' },
+  fused:{ cls:'pill-err',  txt:'已熔断' },
+  missed:{ cls:'pill-miss', txt:'已错过' },
+};
+// blocked 归到「运行中」视觉族,但独立文案
+function pill(s){ const m=STATE[s]; return `<span class="pill ${m.cls}"><span class="dot"></span>${m.txt}</span>`; }
+
+let filter = 'all';
+function renderJobs(){
+  const list = JOBS.filter(j => filter==='all' || j.kind===filter);
+  if(!list.length){ $('#job-list').innerHTML = '<div class="empty"><div class="glyph">◷</div><p>该分类下暂无任务。</p></div>'; return; }
+  $('#job-list').innerHTML = list.map((j)=>{
+    const i = JOBS.indexOf(j);
+    const whenColor = (j.state==='fused'||j.state==='missed') ? 'var(--faint)' : (j.state==='blocked'?'var(--amber)':'var(--ink)');
+    return `
+    <div class="job-item" id="job-${i}">
+      <div class="job-row" onclick="document.getElementById('job-${i}').classList.toggle('open')">
+        ${pill(j.state)}
+        <span class="kind">${j.kind==='once'?'一次性':'周期'}</span>
+        <span class="name">${esc(j.name)}</span>
+        <span class="when">
+          ${j.kind==='cron' && j.runs.length ? `<span class="runline" title="近 ${Math.min(j.runs.length,7)} 期运行状态(左旧右新)">${j.runs.slice(0,7).reverse().map(r=>`<i class="${r.s==='ok'?'g':r.s==='err'?'r':r.s==='blk'||r.s==='miss'?'a':''}"></i>`).join('')}</span>` : ''}
+          <span class="clock" style="color:${whenColor}">${esc(j.when)}</span><span class="rel">${esc(j.rel)}</span>
+        </span>
+      </div>
+      <div class="job-detail">
+        ${j.notice ? `<div class="notice ${j.state==='fused'?'notice-red':'notice-amber'}">
+            <span>${j.state==='fused'?'⚠':'◷'}</span><span>${esc(j.notice)}</span><span class="spacer"></span>
+            ${j.state==='blocked'?`<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();openReplay('${j.blockedSid}')">去审批</button>`:''}
+            ${j.state==='fused'?'<button class="btn btn-sm" onclick="event.stopPropagation();toast(\'已恢复调度(原型示意)\')">恢复</button>':''}
+            ${j.state==='missed'?'<button class="btn btn-sm" onclick="event.stopPropagation();toast(\'已触发补跑(原型示意)\')">立即补跑</button>':''}
+        </div>`:''}
+        <div class="job-meta">
+          <span>目录 <b class="mono">${esc(j.cwd)}</b></span>
+          <span>模型 <b>${esc(j.model)}</b></span>
+          <span>权限 <b>${esc(j.perm)}</b></span>
+          <span>预算 <b>${esc(j.budget)}</b></span>
+          <span>执行 <b>Agent SDK 会话</b></span>
+        </div>
+        <div class="prompt">${esc(j.prompt)}</div>
+        ${j.runs.length ? `<table class="runs">
+          <thead><tr><th>${j.kind==='cron'?'周期(计划时间)':'时间'}</th><th>耗时</th><th>tokens</th><th>结果会话 / 日志</th><th>状态</th></tr></thead>
+          <tbody>${j.runs.map(r=>`<tr>
+            <td>${r.t}${r.err?`<div style="color:var(--red);font-size:0.6875rem;margin-top:2px">${esc(r.err)}</div>`:''}</td>
+            <td>${r.dur}</td><td>${r.tok}</td>
+            <td>${r.sid==='—'?'—':`<a class="sid" href="#" onclick="event.stopPropagation();openReplay('${r.sid}');return false">${r.sid} · 查看日志</a>`}</td>
+            <td>${r.s==='ok'?'<span class="pill pill-done"><span class="dot"></span>成功</span>':r.s==='blk'?'<span class="pill pill-blk"><span class="dot"></span>审批中</span>':r.s==='miss'?'<span class="pill pill-miss"><span class="dot"></span>错过</span>':'<span class="pill pill-err"><span class="dot"></span>失败</span>'}</td>
+          </tr>`).join('')}</tbody>
+        </table>${j.total && j.total>j.runs.length ? `<button class="runs-more" onclick="event.stopPropagation();toast('展开全部 ${j.total} 期运行历史(原型示意)')">查看全部 ${j.total} 期运行 →</button>`:''}` : '<div style="font-size:0.75rem;color:var(--faint);padding:4px 0">尚未运行,无历史记录。</div>'}
+        <div style="display:flex;gap:8px;margin-top:12px">
+          <button class="btn btn-sm" onclick="event.stopPropagation();toast('已触发一次立即运行(原型示意)')">立即运行</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();openModal()">编辑</button>
+          <button class="btn btn-sm btn-quiet" onclick="event.stopPropagation();toast('已${j.kind==='once'?'取消':'暂停'}(原型示意)')">${j.kind==='once'?'取消':'暂停'}</button>
+          <button class="btn btn-sm btn-danger" style="margin-left:auto" onclick="event.stopPropagation();toast('已删除(原型示意)')">删除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('#filter').addEventListener('click', e=>{
+  const b = e.target.closest('button'); if(!b) return;
+  [...$('#filter').children].forEach(x=>x.classList.remove('active'));
+  b.classList.add('active'); filter = b.dataset.f; renderJobs();
+});
+
+/* ============ 模态交互 ============ */
+let modalKind = 'once', pickedTime = '20';
+function openModal(){ $('#backdrop').classList.add('show'); $('#modal').classList.add('show'); updateSummary(); }
+function closeModal(){ $('#backdrop').classList.remove('show'); $('#modal').classList.remove('show'); }
+document.addEventListener('keydown', e=>{ if(e.key==='Escape'){ closeModal(); } });
+
+$('#seg-kind').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...$('#seg-kind').children].forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  modalKind = b.dataset.k;
+  $('#once-time').style.display = modalKind==='once' ? '' : 'none';
+  $('#cron-time').style.display = modalKind==='cron' ? '' : 'none';
+  updateSummary();
+});
+
+const TIME_LABEL = { '20':'今晚 20:00', '22':'今晚 22:00', 'tmr9':'明早 09:00', 'custom':'自定义时间' };
+const TIME_REL = { '20':'约 4 小时后', '22':'约 6 小时后', 'tmr9':'约 15 小时后', 'custom':'' };
+$('#time-chips').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...$('#time-chips').children].forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  pickedTime = b.dataset.t;
+  const custom = pickedTime==='custom';
+  $('#f-datetime').style.display = custom ? '' : 'none';
+  $('#time-hint').innerHTML = custom ? '选择一个具体日期时间' : `将在 <b style="color:var(--jade)">${TIME_LABEL[pickedTime]}</b>(${TIME_REL[pickedTime]})执行一次`;
+  updateSummary();
+});
+$('#f-datetime').style.display = 'none';
+
+$('#cron-chips').addEventListener('click', e=>{
+  const b=e.target.closest('button'); if(!b) return;
+  [...$('#cron-chips').children].forEach(x=>x.classList.remove('active')); b.classList.add('active');
+  if(b.dataset.c!=='custom'){ $('#f-cron').value = b.dataset.c; }
+  updateSummary();
+});
+/* ---------- 自绘下拉(替代原生 select,弹层遵循主题) ---------- */
+function closeAllDD(except){
+  document.querySelectorAll('.dd.open').forEach(d=>{ if(d!==except) d.classList.remove('open'); });
+}
+document.querySelectorAll('.dd').forEach(dd=>{
+  dd.querySelector('.dd-btn').addEventListener('click', e=>{
+    e.stopPropagation(); closeAllDD(dd); dd.classList.toggle('open');
+  });
+  dd.querySelectorAll('.dd-item').forEach(it=>{
+    it.addEventListener('click', e=>{
+      e.stopPropagation();
+      dd.dataset.v = it.dataset.v;
+      dd.dataset.label = it.dataset.label || it.dataset.v;
+      dd.querySelectorAll('.dd-item').forEach(x=>x.classList.remove('active'));
+      it.classList.add('active');
+      dd.querySelector('.dd-btn .val').textContent = dd.dataset.label;
+      dd.classList.remove('open');
+      updateSummary();
+    });
+  });
+});
+document.addEventListener('click', ()=>closeAllDD());
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeAllDD(); });
+const ddVal = id => document.getElementById(id).dataset.v;
+const ddLabel = id => document.getElementById(id).dataset.label || ddVal(id);
+
+function updateSummary(){
+  const cwd=ddVal('dd-cwd'), model=ddVal('dd-model');
+  const when = modalKind==='once' ? (pickedTime==='custom'?'自定义时间':TIME_LABEL[pickedTime]) : ('cron '+$('#f-cron').value);
+  $('#modal-summary').innerHTML = `${modalKind==='once'?'一次性':'周期'} · <b>${esc(when)}</b> · ${esc(cwd)} · ${esc(model)}`;
+}
+
+function saveJob(){
+  const name = $('#f-name').value.trim() || (modalKind==='once'?'未命名一次性任务':'未命名周期任务');
+  const when = modalKind==='once' ? TIME_LABEL[pickedTime] : ('cron '+$('#f-cron').value);
+  JOBS.unshift({
+    kind: modalKind, name, when, rel: modalKind==='once' ? (TIME_REL[pickedTime]||'待执行') : '已排程',
+    cwd: ddVal('dd-cwd'), model: ddVal('dd-model'),
+    prompt: $('#f-prompt').value.trim() || '(未填写 prompt)',
+    perm: ddLabel('dd-perm'), budget: ddVal('dd-budget'),
+    state: 'pending', runs: [],
+  });
+  closeModal(); renderJobs();
+  toast('任务已保存,到点后端自动执行 ✓');
+}
+
+renderJobs();
+</script>
+</body>
+</html>
