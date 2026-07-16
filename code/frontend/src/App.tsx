@@ -63,6 +63,21 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // 移动端派发页用 --vh 而非 100dvh/100vh 计算高度:部分 Android 内嵌 WebView(超级 App 内置
+  // 浏览器等,非 Safari/Chrome 独立浏览器)对 dvh 支持缺失或失真,会导致派发页内容撑爆容器、
+  // 发送按钮被推到底部导航条后面看不清(2026-07-23 真机反馈)。window.innerHeight 是比 CSS
+  // 视口单位更古老、跨内核一致性更好的度量,JS 测量后写成 CSS 变量是这类问题的标准解法。
+  useEffect(() => {
+    const setVh = () => document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+    setVh();
+    window.addEventListener('resize', setVh);
+    window.addEventListener('orientationchange', setVh);
+    return () => {
+      window.removeEventListener('resize', setVh);
+      window.removeEventListener('orientationchange', setVh);
+    };
+  }, []);
+
   useEffect(() => {
     api
       .dashboard()

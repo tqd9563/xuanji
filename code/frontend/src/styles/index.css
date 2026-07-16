@@ -583,7 +583,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
 .u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
-.chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+/* min-height:0 是经典 flexbox 坑的修复:flex 子项默认 min-height:auto,在部分内核
+   (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
+   形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到
+   底部导航条后面看不清,根因正是这里,而非某个具体尺寸算错)。 */
+.chat { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .chat-msg.user .who { color: var(--jade); }
@@ -1015,7 +1019,16 @@ body.wall-glass .dd-menu {
   .mcard:active { background: var(--hover); }
 
   /* ---- 派发页:底部输入栏触屏化 ---- */
-  .dispatch { height: calc(100dvh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); min-height: 340px; }
+  /* 三层兜底,一层比一层准,后面的覆盖前面的:
+     1) 100vh —— 所有引擎都认,但部分浏览器(含经典移动端 bug)算的是"地址栏收起后"的虚高;
+     2) 100dvh —— 更准,但部分 Android 内嵌 WebView(超级 App 内置浏览器等)不支持,
+        不支持时这条 calc() 整体失效被丢弃,回退到上一条,不会留白;
+     3) --vh(JS 用 window.innerHeight 实测写入,见 App.tsx)—— 最终权威值,内核一致性
+        比任何 CSS 视口单位都好。三层任何一层失真,上面 .chat 的 min-height:0 修复兜底
+        防止内容硬撑爆父容器(2026-07-23 真机反馈:发送按钮被推到底部导航条后面看不清)。 */
+  .dispatch { height: calc(100vh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); min-height: 340px; }
+  .dispatch { height: calc(100dvh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); }
+  .dispatch { height: calc(var(--vh, 1vh) * 100 - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); }
   .chat { padding: 14px 14px 6px; }
   /* 会话标识挪进消息区顶部(见 Dispatch.tsx),状态条腾出整行只放用量条 + agent 状态——
      2026-07-16 真机反馈修复:三段挤一行导致 Context/Usage/Weekly 用量条被推出可视区外,只能靠横滑才看得见 */
