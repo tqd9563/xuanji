@@ -45,10 +45,23 @@ export function WdPalette({
     [options, query, labelOf],
   );
 
-  // 打开即聚焦搜索框;query 变化时选中项回到第一条
+  // 打开即聚焦搜索框:WKWebView(Pake 壳)下,唤起弹窗的那次 Enter 仍处理在派发框 textarea 上,
+  // 同一 tick 内的同步 focus 常被顶回 textarea。故 autoFocus + 立即聚焦 + setTimeout(0) 再抢一次
+  // (让位给同一轮事件的后续处理后再夺焦;setTimeout 不受后台标签页 rAF 节流影响)。光标移到末尾以便接着输入。
   useEffect(() => {
-    inputRef.current?.focus();
+    const el = inputRef.current;
+    if (!el) return;
+    const put = () => {
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    };
+    put();
+    const t = setTimeout(put, 0);
+    return () => clearTimeout(t);
   }, []);
+  // query 变化时选中项回到第一条
+
   useEffect(() => {
     setSel(0);
   }, [query]);
@@ -103,6 +116,7 @@ export function WdPalette({
           <input
             ref={inputRef}
             className="input"
+            autoFocus
             placeholder="模糊搜索目录…(如 skill)"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
