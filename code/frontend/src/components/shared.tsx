@@ -222,12 +222,24 @@ export function ToastHost() {
 
 // ---------- 工具调用折叠卡 ----------
 
+/** 工具名 → 类别色,按行为分组(执行/读取/写入/编排/Skill),而非逐工具上色。
+ *  data-cat 由 CSS(.toolcard .tc-head .fn[data-cat=...])映射到 --tool-* / --blue / --violet。
+ *  mcp__* 与未匹配的工具一律归 'other'(muted 中性),不参与争色。 */
+function toolCategory(name: string): 'skill' | 'exec' | 'read' | 'write' | 'orch' | 'other' {
+  if (name === 'Skill' || name === 'SlashCommand') return 'skill';
+  if (name === 'Bash' || name === 'BashOutput' || name === 'KillShell') return 'exec';
+  if (name === 'Read' || name === 'Grep' || name === 'Glob' || name === 'LSP' || name === 'WebFetch' || name === 'WebSearch') return 'read';
+  if (name === 'Edit' || name === 'Write' || name === 'NotebookEdit') return 'write';
+  if (name === 'Task' || name === 'TodoWrite' || name === 'EnterPlanMode' || name === 'ExitPlanMode') return 'orch';
+  return 'other';
+}
+
 export function ToolCard({ name, input, output, isError }: { name: string; input: string; output?: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={cn('toolcard', open && 'open')}>
       <button className="tc-head" onClick={() => setOpen(!open)}>
-        <span className="fn" style={isError ? { color: 'var(--red)' } : undefined}>
+        <span className="fn" data-cat={toolCategory(name)} style={isError ? { color: 'var(--red)' } : undefined}>
           {name}
         </span>
         <span>{input}</span>

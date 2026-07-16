@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · ToolCard 工具类别色方案</title>
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --surface: oklch(0.185 0.008 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --amber: oklch(0.78 0.14 80);
+    --blue: oklch(0.72 0.11 245);
+    --red: oklch(0.68 0.19 25);
+    --violet: oklch(0.73 0.11 300);
+    /* 新增:工具类别色 —— 等明度分类公式 oklch(0.78 0.12 H) */
+    --tool-skill: oklch(0.78 0.12 345);  /* Skill 独立色 */
+    --tool-exec: oklch(0.78 0.13 180);   /* 执行:Bash / BashOutput */
+    --tool-read: oklch(0.78 0.12 245);   /* 读取/检索:Read / Grep / Glob / Web* */
+    --tool-write: oklch(0.78 0.12 55);   /* 写入/修改:Edit / Write */
+    --tool-orch: var(--violet);          /* 编排/规划:Task / TodoWrite / Plan —— 与模型紫同族 */
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-s: 6px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    font-size: 0.875rem; line-height: 1.6; padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 920px; margin: 0 auto; }
+  h1 { font-size: 1.25rem; font-weight: 600; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 6px 0 32px; }
+  h2 { font-size: 0.875rem; font-weight: 600; margin: 36px 0 4px; }
+  h2 .note { color: var(--faint); font-weight: 400; margin-left: 8px; font-size: 0.75rem; }
+  .cols { display: flex; gap: 28px; flex-wrap: wrap; margin-top: 12px; }
+  .col { flex: 1 1 380px; min-width: 340px; }
+  .col-label { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-bottom: 8px; letter-spacing: 0.04em; }
+
+  /* ---- 与 index.css 一致的 toolcard 结构 ---- */
+  .toolcard {
+    border: 1px solid var(--line-soft); border-radius: var(--r-s);
+    background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch;
+  }
+  .toolcard .tc-head {
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px;
+    font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+    cursor: pointer; width: 100%; background: none; border: none; text-align: left;
+  }
+  .toolcard .tc-head:hover { background: var(--hover); }
+  .toolcard .tc-head .in { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolcard .tc-head .chev { margin-left: auto; color: var(--faint); }
+
+  /* 现状:统一蓝 */
+  .before .fn { color: var(--blue); }
+  /* 方案:类别色 */
+  .after .fn[data-cat="skill"] { color: var(--tool-skill); }
+  .after .fn[data-cat="exec"]  { color: var(--tool-exec); }
+  .after .fn[data-cat="read"]  { color: var(--tool-read); }
+  .after .fn[data-cat="write"] { color: var(--tool-write); }
+  .after .fn[data-cat="orch"]  { color: var(--tool-orch); }
+  .after .fn[data-cat="other"] { color: var(--muted); }
+  .fn.err { color: var(--red) !important; }
+
+  /* 图例 */
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 12px 0 4px; padding: 12px 14px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: 10px; }
+  .lg { display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: var(--muted); }
+  .lg .dot { width: 8px; height: 8px; border-radius: 99px; }
+  .lg .nm { font-family: var(--mono); }
+  .lg small { color: var(--faint); }
+
+  .rule { color: var(--faint); font-size: 0.75rem; max-width: 68ch; }
+  .rule code { font-family: var(--mono); color: var(--muted); font-size: 0.9em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ToolCard 工具类别色</h1>
+  <p class="sub">工具名按「行为类别」着色,沿用等明度分类公式 <code style="font-family:var(--mono)">oklch(0.78 0.12 H)</code>;错误态红色覆盖不变。左右对比,右侧为方案。</p>
+
+  <div class="legend">
+    <span class="lg"><span class="dot" style="background:var(--tool-skill)"></span><span class="nm">Skill</span><small>Skill · SlashCommand</small></span>
+    <span class="lg"><span class="dot" style="background:var(--tool-exec)"></span><span class="nm">执行</span><small>Bash · BashOutput · KillShell</small></span>
+    <span class="lg"><span class="dot" style="background:var(--tool-read)"></span><span class="nm">读取/检索</span><small>Read · Grep · Glob · LSP · WebFetch · WebSearch</small></span>
+    <span class="lg"><span class="dot" style="background:var(--tool-write)"></span><span class="nm">写入/修改</span><small>Edit · Write · NotebookEdit</small></span>
+    <span class="lg"><span class="dot" style="background:var(--tool-orch)"></span><span class="nm">编排/规划</span><small>Task · TodoWrite · EnterPlanMode(与模型紫同族)</small></span>
+    <span class="lg"><span class="dot" style="background:var(--muted)"></span><span class="nm">MCP/未知</span><small>mcp__* · 其余</small></span>
+    <span class="lg"><span class="dot" style="background:var(--red)"></span><span class="nm">错误</span><small>isError 覆盖一切</small></span>
+  </div>
+
+  <h2>典型回放片段<span class="note">同一段转录,左=现状(统一蓝),右=方案(类别色)</span></h2>
+  <div class="cols">
+    <div class="col before">
+      <div class="col-label">BEFORE · 现状</div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Skill</span><span class="in">impeccable</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Read</span><span class="in">src/components/shared.tsx</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Grep</span><span class="in">toolcard · src/styles</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Edit</span><span class="in">src/styles/index.css</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Bash</span><span class="in">pnpm tsc --noEmit</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn err">Bash</span><span class="in">pnpm vitest run</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Task</span><span class="in">调查前端工具卡片颜色</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">WebFetch</span><span class="in">https://docs.anthropic.com/…</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">mcp__lark-im__send</span><span class="in">chat_id=oc_88…</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn">Write</span><span class="in">wiki/design/prototype.html</span><span class="chev">▾</span></button></div>
+    </div>
+    <div class="col after">
+      <div class="col-label">AFTER · 类别色方案</div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="skill">Skill</span><span class="in">impeccable</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="read">Read</span><span class="in">src/components/shared.tsx</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="read">Grep</span><span class="in">toolcard · src/styles</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="write">Edit</span><span class="in">src/styles/index.css</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="exec">Bash</span><span class="in">pnpm tsc --noEmit</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn err">Bash</span><span class="in">pnpm vitest run</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="orch">Task</span><span class="in">调查前端工具卡片颜色</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="read">WebFetch</span><span class="in">https://docs.anthropic.com/…</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="other">mcp__lark-im__send</span><span class="in">chat_id=oc_88…</span><span class="chev">▾</span></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="write">Write</span><span class="in">wiki/design/prototype.html</span><span class="chev">▾</span></button></div>
+    </div>
+  </div>
+
+  <h2>设计约束自查</h2>
+  <p class="rule">
+    ① 玉/琥珀/绿一律不用于工具类别——状态色只表状态,词汇不越界;紫由「模型专用」扩展为「模型/编排同族」(Task 派发的即是子 agent,与派发状态行的模型紫同源),需同步更新 DESIGN.md。<br>
+    ② 网络类(WebFetch/WebSearch)并入读取:与蓝 245 单列靛 270 在 0.75rem 等宽小字下不可分,属无效区分;执行青推至 H=180(与蓝相距 65°)保证小字可分。<br>
+    ③ 类别色只落在 <code>.fn</code> 工具名文字,卡片底/边框/参数保持中性——色是索引,不是装饰。<br>
+    ④ 对比度:<code>oklch(0.78 0.12 H)</code> 于 surface(L 0.185)上 ≥ 4.5:1,与既有胶囊字色同级。<br>
+    ⑤ <code>mcp__*</code> 长尾与未知工具取 muted 中性,不参与争色;isError 红色覆盖优先级不变。
+  </p>
+</div>
+</body>
+</html>

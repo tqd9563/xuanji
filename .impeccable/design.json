@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-15T00:00:00Z",
+  "generatedAt": "2026-07-16T00:00:00Z",
   "title": "Design System: 璇玑 xuanji",
   "extensions": {
     "colorMeta": {
@@ -66,7 +66,7 @@
       },
       "violet": {
         "role": "secondary",
-        "displayName": "紫 Violet(模型标识)",
+        "displayName": "紫 Violet(模型/编排同族)",
         "canonical": "oklch(0.73 0.11 300)",
         "tonalRamp": [
           "oklch(0.15 0.03 300)",
@@ -122,6 +122,51 @@
           "oklch(0.80 0.012 110)",
           "oklch(0.93 0.008 110)",
           "oklch(0.97 0.005 110)"
+        ]
+      },
+      "tool-skill": {
+        "role": "secondary",
+        "displayName": "ToolCard · Skill",
+        "canonical": "oklch(0.78 0.12 345)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 345)",
+          "oklch(0.27 0.05 345)",
+          "oklch(0.39 0.07 345)",
+          "oklch(0.51 0.09 345)",
+          "oklch(0.63 0.11 345)",
+          "oklch(0.75 0.12 345)",
+          "oklch(0.85 0.09 345)",
+          "oklch(0.95 0.04 345)"
+        ]
+      },
+      "tool-exec": {
+        "role": "secondary",
+        "displayName": "ToolCard · 执行(Bash)",
+        "canonical": "oklch(0.78 0.13 180)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 180)",
+          "oklch(0.27 0.05 180)",
+          "oklch(0.39 0.07 180)",
+          "oklch(0.51 0.09 180)",
+          "oklch(0.63 0.11 180)",
+          "oklch(0.75 0.13 180)",
+          "oklch(0.85 0.10 180)",
+          "oklch(0.95 0.04 180)"
+        ]
+      },
+      "tool-write": {
+        "role": "secondary",
+        "displayName": "ToolCard · 写入(Edit/Write)",
+        "canonical": "oklch(0.78 0.12 55)",
+        "tonalRamp": [
+          "oklch(0.15 0.03 55)",
+          "oklch(0.27 0.05 55)",
+          "oklch(0.39 0.07 55)",
+          "oklch(0.51 0.09 55)",
+          "oklch(0.63 0.11 55)",
+          "oklch(0.75 0.12 55)",
+          "oklch(0.85 0.09 55)",
+          "oklch(0.95 0.04 55)"
         ]
       }
     },
