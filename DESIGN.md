@@ -129,6 +129,10 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.md}"
     padding: "18px 20px 20px"
+  brand-mark:
+    textColor: "{colors.jade}"
+    width: "48px"
+    height: "48px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -247,8 +251,9 @@ components:
 - **全局焦点态:** `:focus-visible` 一律 2px 玉色 outline + 2px offset
 
 ### Navigation
+- **品牌标(`.brand-mark`):** 侧栏顶部「璇玑玉璧」图形标,48px,单色剪影 `fill: currentColor` 继承玉色(`{colors.jade}`),与 token 同源联动、改色即生效。文字改为两行 lockup:「璇玑」单独一行(玉色、原 headline 尺寸),`xuanji · v1.0.0` 合并作 mono 小字副标题另起一行(中点分隔沿用 side-foot 区「claude CLI 2.1.202 · daemon 正常」同款写法)。浏览器 favicon 复用同一剪影(内联 SVG data URI,因跨文档取不到 CSS 变量,固定写死玉色 hex `#bbc75f`)。
 - **侧栏:** 226px 固定列,surface-2 底;项 8px 12px、6px 圆角、muted 字;hover 提亮,active 玉 tint 底 + 玉字 + 600 字重;计数徽章 mono 全圆角
-- **窄屏(≤960px):** 侧栏转顶部横条,计数徽章隐藏
+- **窄屏(≤960px):** 侧栏转顶部横条,品牌标保留、计数徽章隐藏
 - **快捷键:** 数字 1–7 直切视图,按钮悬停提示对应键位
 
 ### 自绘下拉(Signature Component)
