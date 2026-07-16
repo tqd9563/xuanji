@@ -621,6 +621,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 .composer .bg-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); margin-left: auto; cursor: pointer; }
+/* 发送按钮:桌面文字常驻,移动端切图标(见「移动端」媒体查询块),二选一由 CSS 驱动而非 JS 条件渲染 */
+.send-btn-icon { display: none; }
+
+/* 移动端专属:会话标识挪进消息区顶部(见 Dispatch.tsx chat-sessctx-mobile),桌面恒隐藏 */
+.chat-sessctx-mobile { display: none; }
 
 .chat-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .chat-empty h2 { font-size: 1rem; margin-bottom: 6px; }
@@ -1012,14 +1017,26 @@ body.wall-glass .dd-menu {
   /* ---- 派发页:底部输入栏触屏化 ---- */
   .dispatch { height: calc(100dvh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); min-height: 340px; }
   .chat { padding: 14px 14px 6px; }
-  .chat-status { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 2px 0; }
+  /* 会话标识挪进消息区顶部(见 Dispatch.tsx),状态条腾出整行只放用量条 + agent 状态——
+     2026-07-16 真机反馈修复:三段挤一行导致 Context/Usage/Weekly 用量条被推出可视区外,只能靠横滑才看得见 */
+  .chat-sessctx-mobile { display: block; margin-bottom: 12px; }
+  .chat-sessctx-mobile .sess-ctx { max-width: 100%; }
+  .chat-status .sess-ctx { display: none; }
+  .chat-status { flex-wrap: nowrap; gap: 10px; padding: 10px 4px; overflow-x: auto; scrollbar-width: none; } /* 空间紧张时兜底横滑,正常宽度下不需要 */
   .chat-status::-webkit-scrollbar { display: none; }
-  .u-chips { flex: none; }
+  .u-chips { flex: 1; min-width: 0; justify-content: space-between; gap: 8px; }
+  .u-chip { flex: 1; min-width: 66px; justify-content: center; }
+  .u-bar { width: 36px; }
+  .cs-state { flex: none; }
   .composer textarea { font-size: 1rem; min-height: 44px; }
-  .composer .c-bar { flex-wrap: nowrap; gap: 8px; }
+  .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
   .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */
-  .composer .bg-opt { min-height: 44px; }
-  .composer .btn-primary { min-width: 44px; }
+  .composer .bg-opt { min-height: 44px; gap: 0; }
+  .composer .bg-opt-label { display: none; } /* 说明文字挪进 title/aria-label,腾出宽度给发送按钮 */
+  /* 发送按钮在移动端切图标(44×44 方形触控区),不再是会被挤扁的文字按钮 */
+  .send-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
+  .send-btn-label { display: none; }
+  .send-btn-icon { display: block; width: 20px; height: 20px; }
   .term-line { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
   .term-line::-webkit-scrollbar { display: none; }
   .term-line > .tag { display: none; } /* settingSources 标注对移动端低价值,省出横滑空间 */
