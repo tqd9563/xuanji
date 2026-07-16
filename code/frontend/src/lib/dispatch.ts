@@ -72,6 +72,36 @@ export function useDispatch() {
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
   const restoringRef = useRef(false);
+  // delta 合批:高频 text_delta 逐条 setState 会导致每个 delta 都重渲染整个消息列表并重新
+  // 跑一遍 Markdown 解析(ChatRow 见 Dispatch.tsx);渲染跟不上到达速度时,多条 delta 在事件循环
+  // 里排队,观感就是"一块块蹦出来"而非打字机。缓冲进 ref,每帧(rAF)合并一次 flush,
+  // 把 setState 频率(≤ 屏幕刷新率)与 delta 到达频率解耦。
+  const pendingDeltaRef = useRef('');
+  const rafIdRef = useRef<number | null>(null);
+
+  const flushDelta = useCallback(() => {
+    rafIdRef.current = null;
+    const text = pendingDeltaRef.current;
+    if (!text) return;
+    pendingDeltaRef.current = '';
+    setItems((prev) => {
+      const last = prev[prev.length - 1];
+      if (last?.t === 'assistant' && last.streaming) {
+        return [...prev.slice(0, -1), { ...last, text: last.text + text }];
+      }
+      return [...prev, { t: 'assistant', text, streaming: true }];
+    });
+  }, []);
+
+  /** 清空未 flush 的 delta 缓冲并取消已排的 rAF:reset/attach 重建 items 前必须调用,
+   *  否则残留缓冲会在新会话的 items 上多蹦出一条不相干的消息。 */
+  const clearPendingDelta = useCallback(() => {
+    pendingDeltaRef.current = '';
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+  }, []);
 
   const handle = useCallback((e: Record<string, unknown>) => {
     switch (e.ev) {
@@ -90,15 +120,13 @@ export function useDispatch() {
         setItems((prev) => [...prev, { t: 'user', text: String(e.text) }]);
         break;
       case 'delta':
-        setItems((prev) => {
-          const last = prev[prev.length - 1];
-          if (last?.t === 'assistant' && last.streaming) {
-            return [...prev.slice(0, -1), { ...last, text: last.text + String(e.text) }];
-          }
-          return [...prev, { t: 'assistant', text: String(e.text), streaming: true }];
-        });
+        pendingDeltaRef.current += String(e.text);
+        if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
       case 'assistant':
+        // 先把缓冲里未 flush 的 delta 并入,保证与最终文本的替换顺序不乱(最终文本本身是权威全文,
+        // 是否已并入缓冲不影响正确性,只影响这一帧内 setItems 的调用次数)
+        flushDelta();
         setItems((prev) => {
           const last = prev[prev.length - 1];
           if (last?.t === 'assistant' && last.streaming) {
@@ -207,7 +235,7 @@ export function useDispatch() {
         setStatus({ state: 'idle' });
         break;
     }
-  }, []);
+  }, [flushDelta]);
 
   const attachRef = useRef<((dispatchId: string) => Promise<void>) | null>(null);
 
@@ -242,12 +270,16 @@ export function useDispatch() {
     });
   }, [handle]);
 
-  useEffect(() => () => wsRef.current?.close(), []);
+  useEffect(() => () => {
+    wsRef.current?.close();
+    if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+  }, []);
 
   /** attach 到后端存活的派发会话(看板点击 / 刷新或断线自动接回),事件流全量回放重建 */
   const attach = useCallback(
     async (dispatchId: string) => {
       startedRef.current = true;
+      clearPendingDelta();
       // 服务端回放全部事件,先清空避免重复
       setItems([]);
       setStatus({ state: 'none' });
@@ -256,7 +288,7 @@ export function useDispatch() {
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
     },
-    [ensureWs],
+    [ensureWs, clearPendingDelta],
   );
   attachRef.current = attach;
 
@@ -322,6 +354,7 @@ export function useDispatch() {
     wsRef.current = null;
     startedRef.current = false;
     restoringRef.current = false;
+    clearPendingDelta();
     sessionStorage.removeItem(DISPATCH_KEY);
     setItems([]);
     setStatus({ state: 'none' });
@@ -329,7 +362,7 @@ export function useDispatch() {
     setModel(null);
     setCostUsd(0);
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
-  }, []);
+  }, [clearPendingDelta]);
 
   const pushNote = useCallback((text: string) => {
     setItems((prev) => [...prev, { t: 'note', text }]);
