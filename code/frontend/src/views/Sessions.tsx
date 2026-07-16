@@ -1,12 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
-import { Drawer, Empty, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
@@ -340,7 +338,7 @@ export function Sessions({
               <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>{ev.kind === 'user' ? '你' : 'Claude'}</div>
               {ev.kind === 'assistant' ? (
                 <div className="body md">
-                  <Markdown remarkPlugins={[remarkGfm]}>{ev.text}</Markdown>
+                  <Md>{ev.text}</Md>
                 </div>
               ) : (
                 <div className="body">{ev.text}</div>

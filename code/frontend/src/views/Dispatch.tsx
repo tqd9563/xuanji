@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
-import { ToolCard, toast } from '@/components/shared';
+import { Md, ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
@@ -746,7 +744,7 @@ function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
+          <Md>{item.text}</Md>
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>

@@ -4,13 +4,11 @@
  * 架构铁律:非公开格式(session jsonl)解析只在 Adapter 层,前端只消费后端已归一化的 Replay。
  */
 import { useEffect, useMemo, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import type { Replay, ScheduledJob, ScheduledRun } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { Drawer, Empty, ToolCard, confirmBox, toast } from '@/components/shared';
+import { Drawer, Empty, Md, ToolCard, confirmBox, toast } from '@/components/shared';
 import { DropUp } from '@/components/DropUp';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -848,7 +846,7 @@ export function Crons() {
               <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>{ev.kind === 'user' ? '你' : 'Claude'}</div>
               {ev.kind === 'assistant' ? (
                 <div className="body md">
-                  <Markdown remarkPlugins={[remarkGfm]}>{ev.text}</Markdown>
+                  <Md>{ev.text}</Md>
                 </div>
               ) : (
                 <div className="body">{ev.text}</div>
