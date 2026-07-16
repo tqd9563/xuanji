@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
-import { ToolCard, toast } from '@/components/shared';
+import { WdPalette } from '@/components/WdPalette';
+import { Md, ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
@@ -64,7 +63,14 @@ export function Dispatch({ active }: { active: boolean }) {
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [resumePalette, setResumePalette] = useState(false);
+  const [wdPalette, setWdPalette] = useState(false);
+  const [wdQuery, setWdQuery] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
+  // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
+  // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
+  // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
+  const historyIdxRef = useRef<number | null>(null);
+  const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
@@ -89,6 +95,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
     markSeen(info.sessionId);
     repin();
+    resetHistoryBrowse(); // 换会话:↑/↓ 回溯范围重新从这个(待续接)会话算起
     setSessionCwd(null);
     setResumeInfo(info);
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
@@ -132,6 +139,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
       repin();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(null);
       setSessCtx(null);
@@ -140,6 +148,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (intent?.attach) {
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
@@ -225,14 +234,60 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
+  /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
+  const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
+
+  /** 回到「未在浏览」:发消息(该 prompt 已进 d.items,自然成为历史最新一条)/ 换会话时调用 */
+  const resetHistoryBrowse = () => {
+    historyIdxRef.current = null;
+    historyDraftRef.current = '';
+  };
+
+  /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿。
+   *  历史条目本身可能含换行(真实任务描述常见),所以「是否劫持方向键」只在草稿态按内容判——
+   *  一旦已经在浏览历史(historyIdxRef !== null),后续 ↑/↓ 无条件继续翻,不会被途中某条多行历史卡住。 */
+  const recallPromptHistory = (dir: -1 | 1) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const hist = promptHistory();
+    if (hist.length === 0) return;
+    if (dir === -1) {
+      if (historyIdxRef.current === null) {
+        historyDraftRef.current = ta.value;
+        historyIdxRef.current = hist.length - 1;
+      } else if (historyIdxRef.current > 0) {
+        historyIdxRef.current -= 1;
+      }
+      // 已在最早一条:原地不动
+    } else {
+      if (historyIdxRef.current === null) return; // 本就在草稿态,没有更"新"的可去
+      if (historyIdxRef.current < hist.length - 1) {
+        historyIdxRef.current += 1;
+      } else {
+        historyIdxRef.current = null; // 越过最新一条,回到浏览前的草稿
+      }
+    }
+    ta.value = historyIdxRef.current === null ? historyDraftRef.current : hist[historyIdxRef.current]!;
+    const pos = ta.value.length;
+    ta.setSelectionRange(pos, pos);
+  };
+
   const submit = async () => {
     const ta = taRef.current;
     const text = ta?.value.trim();
     if (!text || !effectiveCwd) return;
     ta!.value = '';
+    resetHistoryBrowse();
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       setResumePalette(true);
+      return;
+    }
+    // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
+    // 支持 /wd <关键词> 直接带初始搜索词(如 /wd skill)。
+    if (/^\/wd\b/.test(text)) {
+      setWdQuery(text.replace(/^\/wd\b/, '').trim());
+      setWdPalette(true);
       return;
     }
     // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
@@ -294,6 +349,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const newSession = () => {
     d.reset();
     repin();
+    resetHistoryBrowse();
     setResumeInfo(null);
     setSessionCwd(null);
     setSessCtx(null);
@@ -319,6 +375,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const target = effectiveCwd;
       d.reset();
       repin();
+      resetHistoryBrowse();
       setResumeInfo(null);
       setSessionCwd(target);
       // 交接落地的新会话尚未发消息,还没有名称;项目已知(交接目标),先占位显示未命名
@@ -411,6 +468,17 @@ export function Dispatch({ active }: { active: boolean }) {
                 void submit();
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
+              // ↑/↓ 回溯历史 prompt(类 shell history)。草稿态(尚未开始浏览)只在草稿不含换行时
+              // 接管方向键,避免打断 Shift+Enter 多行草稿的行间移动;一旦已经在浏览历史(某条历史
+              // 本身可能带换行),后续 ↑/↓ 无条件继续翻,不会被中途某条多行历史卡住(2026-07-15 修复)。
+              if (
+                (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
+                !e.nativeEvent.isComposing &&
+                (historyIdxRef.current !== null || !(e.target as HTMLTextAreaElement).value.includes('\n'))
+              ) {
+                e.preventDefault();
+                recallPromptHistory(e.key === 'ArrowUp' ? -1 : 1);
+              }
               // 空输入 ← 返回看板:与 document 级监听冗余——WKWebView(Pake)上
               // 依赖冒泡+target 判定的链路不可靠,元素级处理内核无关
               if (
@@ -423,9 +491,13 @@ export function Dispatch({ active }: { active: boolean }) {
                 location.hash = 'sessions';
               }
             }}
+            onInput={() => {
+              // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
+              historyIdxRef.current = null;
+            }}
           />
           <div className="c-bar">
-            <span className="hint">Enter 发送 · Shift+Enter 换行</span>
+            <span className="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
             )}
@@ -496,6 +568,23 @@ export function Dispatch({ active }: { active: boolean }) {
             onPick={(s) => void pickClosed(s)}
             onClose={() => {
               setResumePalette(false);
+              taRef.current?.focus();
+            }}
+          />
+        )}
+        {wdPalette && (
+          <WdPalette
+            value={effectiveCwd}
+            options={cwdOptions}
+            initialQuery={wdQuery}
+            labelOf={(p) => projects.find((x) => x.path === p)?.name ?? p.split('/').filter(Boolean).pop() ?? p}
+            onPick={(p) => {
+              setCwd(p);
+              setWdPalette(false);
+              taRef.current?.focus();
+            }}
+            onClose={() => {
+              setWdPalette(false);
               taRef.current?.focus();
             }}
           />
@@ -660,7 +749,10 @@ function QuestionCard({
   );
 }
 
-function ChatRow({
+/** ChatRow 逐条独立 memo:d.items 每次增量都是新数组引用,不 memo 的话每个 delta 都会
+ *  连带把已经渲染完的历史消息全部重渲染一遍——包括重新跑一遍它们的 Markdown 解析,是长会话
+ *  流式卡顿的主因之一。item 引用不变的行(未在流式中的历史消息)据此完全跳过。 */
+const ChatRow = memo(function ChatRow({
   item,
   onDecide,
   onAnswer,
@@ -682,7 +774,9 @@ function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          <Markdown remarkPlugins={[remarkGfm]}>{item.text}</Markdown>
+          {/* 流式中:纯文本渲染,避免每帧对着还在增长的全文重新跑 remark 解析(O(n²));
+              回合结束(streaming=false)才切到共享 Md 组件(统一 gfm + 链接新窗口打开),那时文本已定长,只解析一次。 */}
+          {item.streaming ? <div className="md-plain">{item.text}</div> : <Md>{item.text}</Md>}
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>
@@ -718,4 +812,4 @@ function ChatRow({
       <div className="note">⚠ {item.text}</div>
     </div>
   );
-}
+});

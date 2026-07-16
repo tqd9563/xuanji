@@ -72,6 +72,9 @@ body {
   font-size: 0.875rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  /* 页面级禁止横向滚动:长单行内容(路径/命令摘要)只允许在组件内部截断/滚动,
+     不得把文档撑宽——移动端触屏横滑曾把整页滑出视口(2026-07-16) */
+  overflow-x: clip;
 }
 h1, h2, h3 { text-wrap: balance; font-weight: 600; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
@@ -245,7 +248,7 @@ select.input { appearance: none; padding-right: 28px;
 .need-item .what .n { font-size: 0.75rem; color: var(--amber); }
 .run-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; }
 .run-item:last-child { border-bottom: none; }
-.run-item .d { color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-item .d { color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 
 .dash-strip { display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 18px; font-size: 0.8125rem; color: var(--muted); margin-bottom: 16px; }
 .dash-strip b { color: var(--ink); font-weight: 600; }
@@ -387,6 +390,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
 
+/* 流式输出中的纯文本(不跑 Markdown 解析,详见 Dispatch.tsx ChatRow):
+   与 .md p 的字号/行高对齐,回合结束切回 Markdown 渲染时不跳动。 */
+.md-plain { white-space: pre-wrap; word-break: break-word; }
+
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
   position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
@@ -421,6 +428,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: var(--hover); }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
+
+/* /wd 弹窗:切换工作目录(复用 rp-box/rp-list/rp-item;仅补搜索框与路径列) */
+.wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.wd-search .input { width: 100%; }
+/* 短名不截断优先展示;完整路径吃掉剩余空间并末端省略,悬停(title)见全文 */
+.wd-box .rp-item .rp-name { flex: none; max-width: 45%; }
+.wd-path { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; color: var(--faint); }
+.wd-cur { color: var(--jade); }
+/* 选中态改用玉色描边环(与 Tab :focus-visible 同款),不用灰底;inset offset 防被滚动容器裁掉 */
+.wd-box .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }
@@ -495,19 +512,22 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 自绘下拉(原生 select 弹层由 OS 绘制,无法主题化;实现层用 shadcn/ui Select):状态行内向上弹出 */
 .dd { position: relative; }
 .dd-btn {
-  display: flex; align-items: center; gap: 5px;
+  display: flex; align-items: center; gap: 5px; min-width: 0;
   background: none; border: none; font-family: var(--mono); font-size: 0.75rem;
   padding: 3px 7px; margin: -3px 0; border-radius: var(--r-s); cursor: pointer;
   transition: background 150ms var(--ease);
 }
 .dd-btn:hover { background: var(--hover); }
 .dd-btn:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
-.dd-btn .caret { font-size: 0.5625rem; color: var(--faint); }
+.dd-btn .caret { font-size: 0.5625rem; color: var(--faint); flex: none; }
+/* 长路径(如工作目录)超出下拉框宽度时省略号截断,不再撑破右边界;完整值走 title 悬浮提示 */
+.dd-val { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #cwd-dd .dd-btn { color: var(--blue); }
 #model-dd .dd-btn { color: var(--violet); }
 .dd.dim .dd-btn { color: var(--muted); font-family: var(--sans); }
 .dd-menu {
   position: absolute; bottom: calc(100% + 6px); left: 0; min-width: 200px;
+  max-width: min(420px, calc(100vw - 32px));
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
   padding: 4px; z-index: var(--z-dropdown); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
   opacity: 0; transform: translateY(4px); pointer-events: none;
@@ -523,7 +543,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .dd.dim .dd-item { font-family: var(--sans); }
 .dd-item:hover { background: var(--hover); }
 .dd-item:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
-.dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; }
+.dd-item-label { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dd-item .tick { color: var(--jade); font-size: 0.6875rem; visibility: hidden; flex: none; }
 .dd-item.sel .tick { visibility: visible; }
 #jm-cwd-dd .dd-btn { color: var(--blue); }
 #jm-model-dd .dd-btn { color: var(--violet); }
@@ -770,9 +791,16 @@ body.wall-glass {
   --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
   --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
 }
-body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .dd-menu, .notice) {
+body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .notice) {
   backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
   -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
+}
+/* .dd-menu 是浮在任意前景内容之上的弹出菜单(非静态外壳面板),不应跟随玻璃档变半透明——
+   否则菜单会透出下方内容,干扰选项选择。固定用不透明的原始 surface 色,不随 --wall-surface 变化。 */
+body.wall-glass .dd-menu {
+  background: oklch(0.185 0.008 120);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .wall-btn {
@@ -820,7 +848,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
 
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: sticky; top: 0; height: auto; flex-direction: row; align-items: center; z-index: var(--z-sticky); border-right: none; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
   .brand { padding: 12px 16px; flex: none; }
   .nav { flex-direction: row; padding: 0 8px; }
@@ -828,7 +856,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .nav .count { display: none; }
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
-  .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
+  .dash-now, .dash-grid, .rv-grid { grid-template-columns: minmax(0, 1fr); }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }

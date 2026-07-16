@@ -1,0 +1,19 @@
+{
+  "name": "xuanji-mobile",
+  "version": "1.0.0",
+  "description": "璇玑 Android 原生壳工程(Capacitor,远程加载 Tailscale Serve 暴露的璇玑 Web UI)",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync android",
+    "build:apk": "cd android && ./gradlew assembleDebug"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.4.2"
+  }
+}

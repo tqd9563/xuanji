@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react';
-import Markdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import type { ReviewProject, WeeklyDraft } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { fmtCost, projColor } from '@/lib/utils';
-import { Empty, ProjChip, toast } from '@/components/shared';
+import { Empty, Md, ProjChip, toast } from '@/components/shared';
 
 const DAY = 86_400_000;
 
@@ -215,7 +213,7 @@ function DraftPanel({
   return (
     <>
       <div className="draft-body md">
-        <Markdown remarkPlugins={[remarkGfm]}>{draft.content}</Markdown>
+        <Md>{draft.content}</Md>
       </div>
       <div className="draft-meta">
         <span>模型 {draft.model}</span>

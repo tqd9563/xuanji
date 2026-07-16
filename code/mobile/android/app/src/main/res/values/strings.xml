@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">璇玑</string>
+    <string name="title_activity_main">璇玑</string>
+    <string name="package_name">com.xuanji.app</string>
+    <string name="custom_url_scheme">com.xuanji.app</string>
+</resources>
