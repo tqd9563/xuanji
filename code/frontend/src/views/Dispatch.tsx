@@ -162,7 +162,10 @@ export function Dispatch({ active }: { active: boolean }) {
       applyResume(intent.resume);
     }
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
-    setTimeout(() => taRef.current?.focus(), 0);
+    // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
+    // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
+    // 顶掉 /wd 等弹窗内输入框的焦点(2026-07-16 真机确认)
+    if (entered || intent) setTimeout(() => taRef.current?.focus(), 0);
   }, [active, d]);
 
   // 消息区自动滚底 —— 仅当用户钉在底部时跟随。
@@ -287,6 +290,9 @@ export function Dispatch({ active }: { active: boolean }) {
     // 支持 /wd <关键词> 直接带初始搜索词(如 /wd skill)。
     if (/^\/wd\b/.test(text)) {
       setWdQuery(text.replace(/^\/wd\b/, '').trim());
+      // WKWebView 下派发框不主动释放焦点会顶掉弹窗搜索框的抢焦(真机确认 2026-07-16),
+      // 先显式 blur 再开弹窗,配合 WdPalette 内的轮询聚焦兜底
+      ta?.blur();
       setWdPalette(true);
       return;
     }
