@@ -37,6 +37,10 @@ const MODEL_SHORT: Record<string, string> = {
   sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5-20251001',
 };
+/** 完整模型名 → 简写(弹窗左列短名),未收录的完整名原样显示 */
+const MODEL_ALIAS: Record<string, string> = Object.fromEntries(
+  Object.entries(MODEL_SHORT).map(([short, full]) => [full, short]),
+);
 /** 模型默认沿用最近一次用过的,兜底 opus */
 const LAST_MODEL_KEY = 'xuanji-last-model';
 const initialModel = (): string => {
@@ -65,6 +69,8 @@ export function Dispatch({ active }: { active: boolean }) {
   const [resumePalette, setResumePalette] = useState(false);
   const [wdPalette, setWdPalette] = useState(false);
   const [wdQuery, setWdQuery] = useState('');
+  const [modelPalette, setModelPalette] = useState(false);
+  const [modelQuery, setModelQuery] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
@@ -120,6 +126,18 @@ export function Dispatch({ active }: { active: boolean }) {
       toast(e instanceof Error ? e.message : String(e));
     } finally {
       taRef.current?.focus();
+    }
+  };
+
+  /** 切换模型落点(/model 文本快路径与弹窗共用):已开始 → 只对当前会话 SDK setModel(不改新会话默认);
+   *  未开始 → 设定新会话默认并记忆 */
+  const applyModel = (resolved: string) => {
+    if (d.started) {
+      d.changeModel(resolved); // 仅当前会话
+    } else {
+      setModelSel(resolved);
+      localStorage.setItem(LAST_MODEL_KEY, resolved);
+      d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
     }
   };
 
@@ -283,6 +301,8 @@ export function Dispatch({ active }: { active: boolean }) {
     resetHistoryBrowse();
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
+      // blur 派发框:弹窗期间不让输入框吃字符,也避免输入框焦点环与弹窗玉色选中环同屏双环
+      ta?.blur();
       setResumePalette(true);
       return;
     }
@@ -310,19 +330,19 @@ export function Dispatch({ active }: { active: boolean }) {
       }
       return;
     }
-    // /model 切换模型:已开始 → 只对当前会话 SDK setModel(不改新会话默认);未开始 → 设定新会话默认并记忆
+    // /model 切换模型:精确命中简写/完整名 → 直接切(保留快路径,如 /model fable);
+    // 无参数或没命中 → 弹窗模糊搜索(与 /wd 同款,/model fab 会以 fab 为初始搜索词进弹窗)
     if (/^\/model\b/.test(text)) {
       const arg = text.replace(/^\/model\b/, '').trim().toLowerCase();
-      if (!arg) return toast(`当前模型:${d.model ?? modelSel} · 用法:/model fable|opus|sonnet|haiku 或完整模型名`);
       const resolved = MODELS.find((m) => m.toLowerCase() === arg) ?? MODEL_SHORT[arg];
-      if (!resolved || resolved === MODELS[0]) return toast(`不认识的模型「${arg}」,可选:fable / opus / sonnet / haiku`);
-      if (d.started) {
-        d.changeModel(resolved); // 仅当前会话
-      } else {
-        setModelSel(resolved);
-        localStorage.setItem(LAST_MODEL_KEY, resolved);
-        d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
+      if (resolved && resolved !== MODELS[0]) {
+        applyModel(resolved);
+        return;
       }
+      setModelQuery(arg);
+      // WKWebView 焦点竞争:先显式 blur 派发框再开弹窗(同 /wd,详见 WdPalette 注释)
+      ta?.blur();
+      setModelPalette(true);
       return;
     }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
@@ -591,6 +611,26 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
             onClose={() => {
               setWdPalette(false);
+              taRef.current?.focus();
+            }}
+          />
+        )}
+        {modelPalette && (
+          <WdPalette
+            title="切换模型"
+            placeholder="模糊搜索模型…(如 fable)"
+            emptyNoun="模型"
+            value={d.started ? (d.model ?? modelSel) : modelSel}
+            options={MODELS.slice(1)}
+            labelOf={(m) => MODEL_ALIAS[m] ?? m}
+            initialQuery={modelQuery}
+            onPick={(m) => {
+              applyModel(m);
+              setModelPalette(false);
+              taRef.current?.focus();
+            }}
+            onClose={() => {
+              setModelPalette(false);
               taRef.current?.focus();
             }}
           />
