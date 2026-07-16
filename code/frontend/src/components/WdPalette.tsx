@@ -80,6 +80,15 @@ export function WdPalette({
         onClose();
         return;
       }
+      // Tab 不在弹窗的操作契约里(只有 ↑↓/Enter/Esc):.rp-item 本是原生 <button>,天然可被
+      // 原生 Tab 焦点遍历,若放行会把 DOM 焦点移到某个列表项按钮,触发全局 :focus-visible 描边,
+      // 与 ↑↓ 维护的 .sel 选中环各自独立、同屏出现两圈(2026-07-16 报告的 bug)。
+      // 一律吞掉 Tab,焦点固定留在搜索框,不做原生遍历,也不让焦点漏出模态框。
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        return;
+      }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         if (filtered.length === 0) return;
         e.preventDefault();
@@ -130,6 +139,9 @@ export function WdPalette({
               <button
                 key={o}
                 className={cn('rp-item', i === sel && 'sel')}
+                // 退出原生 Tab 序列:选中态只由 ↑↓/鼠标 hover 驱动(sel state),
+                // 不依赖/不响应原生 DOM focus,避免与 keydown 层的 Tab 拦截出现竞态双保险
+                tabIndex={-1}
                 onMouseEnter={() => setSel(i)}
                 onClick={() => onPick(o)}
                 title={o}
