@@ -425,6 +425,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: var(--hover); }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
+
+/* /wd 弹窗:切换工作目录(复用 rp-box/rp-list/rp-item;仅补搜索框与路径列) */
+.wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.wd-search .input { width: 100%; }
+/* 短名不截断优先展示;完整路径吃掉剩余空间并末端省略,悬停(title)见全文 */
+.wd-box .rp-item .rp-name { flex: none; max-width: 45%; }
+.wd-path { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; color: var(--faint); }
+.wd-cur { color: var(--jade); }
+/* 选中态改用玉色描边环(与 Tab :focus-visible 同款),不用灰底;inset offset 防被滚动容器裁掉 */
+.wd-box .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }

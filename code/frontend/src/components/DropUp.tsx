@@ -21,18 +21,27 @@ export function DropUp({
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+  // WKWebView(Pake 壳)+ 触摸板轻触:首次 tap 常被当成 hover,onClick 要点第二次才派发。
+  // 改由 onPointerDown 在物理按下时立即响应;keyboard(无 pointerdown)仍走 onClick。
+  // pointerdown 后浏览器会补发一次 click,用该 ref 吞掉以免双触发。
+  const pointerHandled = useRef(false);
+  const swallowClickAfterPointer = () => {
+    if (!pointerHandled.current) return false;
+    pointerHandled.current = false;
+    return true;
+  };
 
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
       if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      if (e instanceof MouseEvent && rootRef.current?.contains(e.target as Node)) return;
+      if (e instanceof PointerEvent && rootRef.current?.contains(e.target as Node)) return;
       setOpen(false);
     };
-    document.addEventListener('click', close);
+    document.addEventListener('pointerdown', close);
     document.addEventListener('keydown', close);
     return () => {
-      document.removeEventListener('click', close);
+      document.removeEventListener('pointerdown', close);
       document.removeEventListener('keydown', close);
     };
   }, [open]);
@@ -43,7 +52,14 @@ export function DropUp({
         className="dd-btn"
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen(!open)}
+        onPointerDown={() => {
+          pointerHandled.current = true;
+          setOpen((o) => !o);
+        }}
+        onClick={() => {
+          if (swallowClickAfterPointer()) return;
+          setOpen((o) => !o);
+        }}
       >
         <span className="dd-val" title={labelOf?.(value) ?? value}>
           {labelOf?.(value) ?? value}
@@ -58,7 +74,13 @@ export function DropUp({
             role="option"
             aria-selected={o === value}
             title={labelOf?.(o) ?? o}
+            onPointerDown={() => {
+              pointerHandled.current = true;
+              onChange(o);
+              setOpen(false);
+            }}
             onClick={() => {
+              if (swallowClickAfterPointer()) return;
               onChange(o);
               setOpen(false);
             }}
