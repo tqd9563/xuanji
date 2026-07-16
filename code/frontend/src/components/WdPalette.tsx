@@ -80,13 +80,21 @@ export function WdPalette({
         onClose();
         return;
       }
-      // Tab 不在弹窗的操作契约里(只有 ↑↓/Enter/Esc):.rp-item 本是原生 <button>,天然可被
-      // 原生 Tab 焦点遍历,若放行会把 DOM 焦点移到某个列表项按钮,触发全局 :focus-visible 描边,
-      // 与 ↑↓ 维护的 .sel 选中环各自独立、同屏出现两圈(2026-07-16 报告的 bug)。
-      // 一律吞掉 Tab,焦点固定留在搜索框,不做原生遍历,也不让焦点漏出模态框。
+      // Tab / Shift+Tab = 循环切换选中项(与 ↑↓ 同为导航键,到尾部回绕)。
+      // 必须拦截原生行为:.rp-item 本是原生 <button>,放行 Tab 会做 DOM 焦点遍历,
+      // 触发全局 :focus-visible 描边,与 sel 选中环同屏出现两圈(2026-07-16 报告的 bug)。
+      // 拦截后焦点固定留在搜索框,选中态统一由 sel state 单轨驱动。
       if (e.key === 'Tab') {
         e.preventDefault();
         e.stopImmediatePropagation();
+        if (filtered.length === 0) return;
+        setSel((cur) => {
+          const next = e.shiftKey
+            ? (cur - 1 + filtered.length) % filtered.length
+            : (cur + 1) % filtered.length;
+          listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
         return;
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -119,7 +127,7 @@ export function WdPalette({
       >
         <div className="rp-head">
           切换工作目录
-          <span className="rp-hint">↑↓ 选择 · Enter 切换 · Esc 关闭</span>
+          <span className="rp-hint">↑↓/Tab 选择 · Enter 切换 · Esc 关闭</span>
         </div>
         <div className="wd-search">
           <input
