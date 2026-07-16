@@ -7,6 +7,7 @@ import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } fro
 import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
+import { WdPalette } from '@/components/WdPalette';
 import { ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
@@ -64,6 +65,8 @@ export function Dispatch({ active }: { active: boolean }) {
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [resumePalette, setResumePalette] = useState(false);
+  const [wdPalette, setWdPalette] = useState(false);
+  const [wdQuery, setWdQuery] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
@@ -280,6 +283,13 @@ export function Dispatch({ active }: { active: boolean }) {
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       setResumePalette(true);
+      return;
+    }
+    // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
+    // 支持 /wd <关键词> 直接带初始搜索词(如 /wd skill)。
+    if (/^\/wd\b/.test(text)) {
+      setWdQuery(text.replace(/^\/wd\b/, '').trim());
+      setWdPalette(true);
       return;
     }
     // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
@@ -560,6 +570,23 @@ export function Dispatch({ active }: { active: boolean }) {
             onPick={(s) => void pickClosed(s)}
             onClose={() => {
               setResumePalette(false);
+              taRef.current?.focus();
+            }}
+          />
+        )}
+        {wdPalette && (
+          <WdPalette
+            value={effectiveCwd}
+            options={cwdOptions}
+            initialQuery={wdQuery}
+            labelOf={(p) => projects.find((x) => x.path === p)?.name ?? p.split('/').filter(Boolean).pop() ?? p}
+            onPick={(p) => {
+              setCwd(p);
+              setWdPalette(false);
+              taRef.current?.focus();
+            }}
+            onClose={() => {
+              setWdPalette(false);
               taRef.current?.focus();
             }}
           />
