@@ -7,22 +7,24 @@ import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
 
-/** 桌面壳(Pake/Tauri WKWebView)检测:其 UA 没有浏览器的 `Safari/`/`Chrome/` 后缀。
- *  仅本机访问(壳固定加载 127.0.0.1:7777)才启用后端兜底——远程浏览器访问不误伤。 */
-const IN_SHELL_WEBVIEW =
-  typeof navigator !== 'undefined' &&
-  /AppleWebKit/.test(navigator.userAgent) &&
-  !/Safari\/|Chrome\/|Chromium\//.test(navigator.userAgent) &&
-  ['127.0.0.1', 'localhost'].includes(window.location.hostname);
-
-/** 壳内外链兜底:壳的 Tauri IPC 注入成功时由壳自身接管 target=_blank(不拦截,避免双开);
- *  IPC 缺失时 WKWebView 会吞掉新窗口请求,改走后端 /api/open-url 在宿主 mac 唤起系统浏览器。 */
+/** 外链点击:能力检测而非环境嗅探(Pake 壳 UA 伪装成完整 Safari,UA 嗅探不可靠)。
+ *  统一 window.open:真浏览器返回窗口句柄(成功);Pake/Tauri 的 WKWebView 没有
+ *  新窗口代理时返回 null(新窗口请求被吞),此时且为本机访问(壳固定加载
+ *  127.0.0.1:7777)才走后端 /api/open-url 在宿主 mac 唤起系统默认浏览器。
+ *  stopPropagation 阻断壳注入的 body 级 target=_blank 监听,避免其 IPC 可用时双开。 */
 function onMdLinkClick(e: MouseEvent<HTMLAnchorElement>) {
   const href = e.currentTarget.href;
-  if (!IN_SHELL_WEBVIEW || !href) return;
-  if ('__TAURI_INTERNALS__' in window) return;
+  if (!href) return;
+  // 修饰键点击(⌘/Ctrl/Shift/中键)交给浏览器默认行为
+  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
   e.preventDefault();
-  void api.openUrl(href).catch(() => {});
+  e.stopPropagation();
+  const w = window.open(href, '_blank');
+  if (w) {
+    w.opener = null; // 防 reverse tabnabbing(会话内容按不可信数据处理)
+  } else if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+    void api.openUrl(href).catch(() => {});
+  }
 }
 
 // 链接一律新窗口打开:浏览器里避免同窗导航把 SPA 整页带走;
