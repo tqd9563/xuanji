@@ -72,6 +72,9 @@ body {
   font-size: 0.875rem;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  /* 页面级禁止横向滚动:长单行内容(路径/命令摘要)只允许在组件内部截断/滚动,
+     不得把文档撑宽——移动端触屏横滑曾把整页滑出视口(2026-07-16) */
+  overflow-x: clip;
 }
 h1, h2, h3 { text-wrap: balance; font-weight: 600; }
 button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
@@ -245,7 +248,7 @@ select.input { appearance: none; padding-right: 28px;
 .need-item .what .n { font-size: 0.75rem; color: var(--amber); }
 .run-item { display: flex; align-items: center; gap: 10px; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; }
 .run-item:last-child { border-bottom: none; }
-.run-item .d { color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.run-item .d { color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
 
 .dash-strip { display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 18px; font-size: 0.8125rem; color: var(--muted); margin-bottom: 16px; }
 .dash-strip b { color: var(--ink); font-weight: 600; }
@@ -845,7 +848,7 @@ body.wall-glass .dd-menu {
 
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
-  .app { grid-template-columns: 1fr; }
+  .app { grid-template-columns: minmax(0, 1fr); }
   .sidebar { position: sticky; top: 0; height: auto; flex-direction: row; align-items: center; z-index: var(--z-sticky); border-right: none; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
   .brand { padding: 12px 16px; flex: none; }
   .nav { flex-direction: row; padding: 0 8px; }
@@ -853,7 +856,7 @@ body.wall-glass .dd-menu {
   .nav .count { display: none; }
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
-  .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
+  .dash-now, .dash-grid, .rv-grid { grid-template-columns: minmax(0, 1fr); }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
