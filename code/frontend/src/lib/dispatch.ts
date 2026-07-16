@@ -215,7 +215,8 @@ export function useDispatch() {
     const cur = wsRef.current;
     if (cur && cur.readyState === WebSocket.OPEN) return Promise.resolve(cur);
     return new Promise((resolve, reject) => {
-      const ws = new WebSocket(`ws://${location.host}/ws/dispatch`);
+      const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+      const ws = new WebSocket(`${wsProto}://${location.host}/ws/dispatch`);
       wsRef.current = ws;
       ws.onopen = () => resolve(ws);
       ws.onerror = () => reject(new Error('派发通道连接失败'));

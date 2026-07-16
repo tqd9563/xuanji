@@ -104,7 +104,8 @@ export function subscribeChanges(onChange: (scope: string) => void): () => void 
   let closed = false;
   const connect = () => {
     if (closed) return;
-    ws = new WebSocket(`ws://${location.host}/ws`);
+    const wsProto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${wsProto}://${location.host}/ws`);
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
