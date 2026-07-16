@@ -128,6 +128,11 @@ input, select, textarea { font: inherit; color: var(--ink); }
 .view.active { display: block; animation: view-in 200ms var(--ease); }
 @keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 
+/* 移动端外壳(顶部标识条 + 底部 tab 栏):桌面隐藏,≤430px 现身,详见「移动端」媒体查询块 */
+.mobile-topbar, .tabbar { display: none; }
+/* 会话看板/密集表格的移动端结构级替身:桌面隐藏(对应 .tsx 只在 useIsMobile() 时挂载,这里是防御性兜底) */
+.board-mobile, .mcard-list, .seg-scroll { display: none; }
+
 .view-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
 .view-head h1 { font-size: 1.25rem; }
 .view-head .sub { color: var(--muted); font-size: 0.8125rem; }
@@ -546,6 +551,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   transition: opacity 150ms var(--ease), transform 150ms var(--ease);
 }
 .dd.open .dd-menu { opacity: 1; transform: none; pointer-events: auto; }
+/* 移动端 sheet 化专用背景(见「移动端」媒体查询块);桌面始终隐藏 */
+.dd-backdrop { display: none; }
 .dd-item {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%;
   background: none; border: none; text-align: left; cursor: pointer;
@@ -876,6 +883,191 @@ body.wall-glass .dd-menu {
   .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
   .sess-ctx { max-width: 100%; }
   .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
+}
+
+/* ============================================================
+   移动端「手持罗盘」形态(≤430px,与 DESIGN.md 移动端章节同源)
+   重新组织信息架构,而非把桌面布局等比缩小:
+   侧栏 → 底部 5-tab 拇指区导航 + 顶部标识条;
+   看板/表格 → 状态 tab + 单列卡片流(结构级改动见 Sessions/Projects/Skills.tsx + TabBar/MoreMenu);
+   抽屉/下拉/模态 → 统一收敛为底部上滑 sheet;
+   一切可点元素 ≥44px 命中区,hover 语义转 :active。
+   ============================================================ */
+@media (max-width: 430px) {
+  :root {
+    --mobile-top-h: 52px;
+    --mobile-tab-h: 58px;
+  }
+
+  /* ---- 应用外壳:侧栏隐藏,换底部 tab + 顶部标识条 ---- */
+  .app { display: block; }
+  .sidebar { display: none; }
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 10px;
+    position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-sticky);
+    height: calc(var(--mobile-top-h) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 8px 0 14px;
+    background: color-mix(in oklab, var(--bg) 94%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); /* 吸顶滚动垫层,功能性而非装饰,不受玻璃拟态禁令约束 */
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .mobile-topbar h1 { font-size: 1.0625rem; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-topbar .daemon { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--faint); font-size: 0.625rem; font-family: var(--mono); flex: none; }
+  .mobile-topbar .daemon .ok { width: 6px; height: 6px; border-radius: 50%; background: var(--jade); flex: none; }
+  .mobile-topbar .back {
+    display: flex; align-items: center; gap: 2px; min-height: 44px; padding: 0 8px 0 2px;
+    margin-left: -6px; color: var(--muted); font-size: 0.9375rem; flex: none;
+  }
+  .mobile-topbar .back b { color: var(--ink); font-weight: 600; margin-left: 2px; }
+
+  .tabbar {
+    display: flex;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: var(--z-sticky);
+    height: calc(var(--mobile-tab-h) + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: color-mix(in oklab, var(--surface-2) 96%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    border-top: 1px solid var(--line-soft);
+  }
+  .tabbar button {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    color: var(--faint); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.02em; position: relative;
+    transition: color 150ms var(--ease);
+  }
+  .tabbar button svg { width: 22px; height: 22px; }
+  .tabbar button.active { color: var(--jade); }
+  .tabbar button:active { color: var(--muted); }
+  .tabbar .bdg {
+    position: absolute; top: 5px; left: calc(50% + 7px);
+    min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px;
+    background: var(--amber); color: var(--on-jade); font-size: 0.625rem; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums;
+  }
+
+  .main { padding: calc(var(--mobile-top-h) + env(safe-area-inset-top) + 12px) 12px calc(var(--mobile-tab-h) + env(safe-area-inset-bottom) + 16px); }
+
+  /* view-head 的标题已被顶栏承接;其余内容(搜索/筛选/操作按钮)保留但改为可换行的触屏尺寸 */
+  .view-head { gap: 8px 10px; margin-bottom: 14px; }
+  .view-head h1 { display: none; }
+  .view-head .sub { flex-basis: 100%; font-size: 0.75rem; }
+  .view-head .input, .view-head input.input { width: 100% !important; }
+  .view-head .btn { min-height: 44px; }
+
+  /* 更多菜单(项目/技能/经验/回顾聚合入口,见 MoreMenu.tsx) */
+  .more-list { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); overflow: hidden; margin-bottom: 12px; }
+  .more-row {
+    display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+    min-height: 52px; padding: 8px 14px; border-top: 1px solid var(--line-soft);
+    transition: background 150ms var(--ease);
+  }
+  .more-row:first-child { border-top: none; }
+  .more-row:active { background: var(--hover); }
+  .more-row svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+  .more-row .lbl { font-weight: 600; font-size: 0.9375rem; flex: 1; }
+  .more-row .hint-v { color: var(--faint); font-size: 0.75rem; font-family: var(--mono); }
+  .more-row .chev { color: var(--faint); }
+  .more-foot { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); text-align: center; padding: 16px 0 6px; line-height: 1.8; }
+
+  /* ---- 四四触控规则:一切可点元素命中区 ≥44px ---- */
+  .btn { min-height: 44px; padding: 8px 16px; }
+  .btn-sm { min-height: 40px; padding: 6px 14px; }
+  .input, select.input { min-height: 44px; font-size: 1rem; } /* ≥16px 防 iOS 聚焦自动缩放 */
+  .x-btn { min-width: 44px; min-height: 44px; }
+  .dd-btn { min-height: 44px; padding: 8px 10px; }
+  .filter-tabs { flex-wrap: wrap; }
+  .filter-tabs button { min-height: 40px; padding: 8px 14px; }
+  .switch { width: 46px; height: 28px; }
+  .switch::after { width: 22px; height: 22px; }
+  .switch::before { content: ''; position: absolute; inset: -8px; } /* 扩大触控区,不改变视觉尺寸 */
+  .mem-item, .cron-row, .rv-sess, .more-row { min-height: 48px; }
+  .need-item, .run-item { min-height: 44px; }
+  .col-more, .runs-more { min-height: 44px; display: flex; align-items: center; justify-content: center; }
+
+  /* ---- 会话看板/项目/技能:结构级重排(见对应 .tsx 的 useIsMobile 分支) ---- */
+  .board { display: none; } /* 桌面 4 列横滚版隐藏,移动端渲染 .board-mobile */
+  .board-mobile { display: block; }
+  .table { display: none; } /* 桌面表格隐藏,移动端渲染 .mcard 卡片流 */
+  .mcard-list { display: block; }
+
+  .seg-scroll {
+    display: block;
+    position: sticky; top: calc(var(--mobile-top-h) + env(safe-area-inset-top));
+    z-index: 5; margin: -2px -12px 12px; padding: 10px 12px;
+    background: color-mix(in oklab, var(--bg) 94%, transparent);
+    -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .seg-scroll::-webkit-scrollbar { display: none; }
+  .seg-scroll .seg { display: inline-flex; white-space: nowrap; }
+  .seg-scroll .seg button { min-height: 36px; padding: 6px 14px; display: inline-flex; align-items: center; gap: 6px; }
+  .seg-scroll .seg button .warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); animation: pulse 2s var(--ease) infinite; }
+
+  .mcard {
+    display: block; width: 100%; text-align: left;
+    background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m);
+    padding: 12px 14px; margin-bottom: 10px; transition: background 150ms var(--ease);
+  }
+  .mcard:active { background: var(--hover); }
+
+  /* ---- 派发页:底部输入栏触屏化 ---- */
+  .dispatch { height: calc(100dvh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); min-height: 340px; }
+  .chat { padding: 14px 14px 6px; }
+  .chat-status { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding: 6px 2px 0; }
+  .chat-status::-webkit-scrollbar { display: none; }
+  .u-chips { flex: none; }
+  .composer textarea { font-size: 1rem; min-height: 44px; }
+  .composer .c-bar { flex-wrap: nowrap; gap: 8px; }
+  .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */
+  .composer .bg-opt { min-height: 44px; }
+  .composer .btn-primary { min-width: 44px; }
+  .term-line { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .term-line::-webkit-scrollbar { display: none; }
+  .term-line > .tag { display: none; } /* settingSources 标注对移动端低价值,省出横滑空间 */
+  .term-line .branch { flex: none; }
+
+  /* ---- 抽屉 / 模态 / 自绘下拉:统一收敛为底部上滑 sheet ---- */
+  .drawer {
+    top: auto; right: 0; left: 0; bottom: 0; width: auto; height: auto; max-height: 88dvh;
+    border-left: none; border-top: 1px solid var(--line);
+    border-radius: 16px 16px 0 0;
+    transform: translateY(102%);
+    box-shadow: 0 -8px 32px oklch(0.05 0 0 / 0.5);
+  }
+  .drawer::before { content: ''; flex: none; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto 0; }
+  .drawer.show { transform: translateY(0); }
+  .drawer-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+
+  .modal {
+    top: auto; left: 0; right: 0; bottom: 0; transform: translateY(102%);
+    width: auto; max-width: none; max-height: 88dvh; border-radius: 16px 16px 0 0;
+  }
+  .modal::before { content: ''; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line); margin: 8px auto -4px; }
+  .modal.show { transform: translateY(0); }
+  .modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); flex-wrap: wrap; }
+  .two-col { grid-template-columns: 1fr; }
+
+  .dd.open .dd-backdrop {
+    display: block; position: fixed; inset: 0; z-index: var(--z-backdrop);
+    background: oklch(0.05 0 0 / 0.55);
+  }
+  .dd-menu {
+    position: fixed; top: auto; bottom: 0; left: 0; right: 0; width: auto; max-width: none;
+    border-radius: 16px 16px 0 0; z-index: var(--z-drawer); max-height: 70dvh; overflow-y: auto;
+    padding: 8px; padding-bottom: calc(8px + env(safe-area-inset-bottom));
+    transform: translateY(102%);
+  }
+  .dd.open .dd-menu { transform: translateY(0); }
+  .dd-item { min-height: 44px; font-size: 0.875rem; }
+  .dd.down .dd-menu { top: auto; bottom: 0; }
+
+  /* confirm/命令弹窗保持居中(短促二元决策,不必转 sheet),仅放大触控区 */
+  .confirm-actions .btn, .rp-item { min-height: 44px; }
+
+  /* ---- 仪表盘/回顾:栅格已在 960px 断点收为单列,这里只补触控与间距 ---- */
+  .dash-strip { gap: 12px 18px; }
+  .heat-row { grid-template-columns: 72px repeat(7, 1fr); }
+  .heat-days { grid-template-columns: 72px repeat(7, 1fr); }
+  .week-nav .wk-btn { min-width: 44px; min-height: 44px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

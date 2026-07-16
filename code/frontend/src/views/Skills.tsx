@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '@/api/client';
 import type { Skill } from '@/api/types';
-import { usePoll } from '@/lib/hooks';
+import { usePoll, useIsMobile } from '@/lib/hooks';
 import { Drawer, Empty, Tag, confirmBox, toast } from '@/components/shared';
 import { Input } from '@/components/ui/input';
 
@@ -12,6 +12,7 @@ export function Skills() {
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Skill | null>(null);
+  const isMobile = useIsMobile();
 
   /** 铁律例外②:显式触发 + 二次确认的可逆管理操作 */
   const toggle = async (s: Skill) => {
@@ -59,42 +60,78 @@ export function Skills() {
         <span className="ok" />
         关闭开关 = 把技能目录移入 <span className="mono">~/.claude/skills-disabled/</span>,新会话不再加载(可逆,二次确认后执行;插件技能不支持)
       </div>
-      <div className="panel">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>名称</th><th>描述</th><th>版本</th><th>可调用</th><th>来源</th><th>启用</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((s) => (
-              <tr key={s.name} className="rowlink" onClick={() => setSel(s)}>
-                <td className="mono" style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{s.name}</td>
-                <td><div className="skill-desc">{s.description}</div></td>
-                <td className="mono" style={{ color: 'var(--muted)' }}>{s.version ?? '—'}</td>
-                <td>{s.userInvocable ? <span className="check">✓</span> : <span className="uncheck">—</span>}</td>
-                <td><Tag>{s.source}</Tag></td>
-                <td>
-                  <span
-                    className={`switch ${s.enabled ? 'on' : ''}`}
-                    role="switch"
-                    aria-checked={s.enabled}
-                    aria-disabled={s.source === 'plugin'}
-                    title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
-                    style={s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (s.source === 'plugin') return;
-                      void toggle(s);
-                    }}
-                  />
-                </td>
+      {isMobile ? (
+        <div className="mcard-list">
+          {rows.map((s) => (
+            <div key={s.name} className="mcard" onClick={() => setSel(s)} role="button" tabIndex={0}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span className="mono" style={{ fontSize: '0.8125rem', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                    <span className="mono" style={{ color: 'var(--faint)', fontSize: '0.6875rem', flex: 'none' }}>v{s.version ?? '—'}</span>
+                    {s.source === 'plugin' && <Tag>插件</Tag>}
+                  </div>
+                  <div style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                    {s.description}
+                  </div>
+                </div>
+                <span
+                  className={`switch ${s.enabled ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={s.enabled}
+                  aria-disabled={s.source === 'plugin'}
+                  aria-label={`启用 ${s.name}`}
+                  title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
+                  style={{ marginTop: 2, ...(s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined) }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (s.source === 'plugin') return;
+                    void toggle(s);
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+          {rows.length === 0 && <Empty><p>没有匹配的技能。</p></Empty>}
+        </div>
+      ) : (
+        <div className="panel">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>名称</th><th>描述</th><th>版本</th><th>可调用</th><th>来源</th><th>启用</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        {rows.length === 0 && <Empty><p>没有匹配的技能。</p></Empty>}
-      </div>
+            </thead>
+            <tbody>
+              {rows.map((s) => (
+                <tr key={s.name} className="rowlink" onClick={() => setSel(s)}>
+                  <td className="mono" style={{ fontSize: '0.8125rem', fontWeight: 600 }}>{s.name}</td>
+                  <td><div className="skill-desc">{s.description}</div></td>
+                  <td className="mono" style={{ color: 'var(--muted)' }}>{s.version ?? '—'}</td>
+                  <td>{s.userInvocable ? <span className="check">✓</span> : <span className="uncheck">—</span>}</td>
+                  <td><Tag>{s.source}</Tag></td>
+                  <td>
+                    <span
+                      className={`switch ${s.enabled ? 'on' : ''}`}
+                      role="switch"
+                      aria-checked={s.enabled}
+                      aria-disabled={s.source === 'plugin'}
+                      title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
+                      style={s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (s.source === 'plugin') return;
+                        void toggle(s);
+                      }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {rows.length === 0 && <Empty><p>没有匹配的技能。</p></Empty>}
+        </div>
+      )}
 
       <Drawer
         open={sel !== null}

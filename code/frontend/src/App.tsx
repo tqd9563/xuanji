@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
-import { useHashRoute, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
-import { setPalette } from '@/lib/utils';
+import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
+import { setPalette, cn } from '@/lib/utils';
 import { ConfirmHost, ToastHost } from '@/components/shared';
 import { WallpaperSettings } from '@/components/WallpaperSettings';
 import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
+import { TabBar, mobileTabOf, type MobileTab } from '@/components/TabBar';
+import { MoreMenu } from '@/components/MoreMenu';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
 import { Sessions, type SessionsHandle } from '@/views/Sessions';
@@ -25,6 +27,13 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
 ];
 
+/** 移动端(≤430px)导航是 5-tab + 更多 二级菜单;这四个视图归入更多,详见 TabBar.mobileTabOf */
+const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review'];
+const MOBILE_TITLE: Record<ViewId, string> = {
+  dashboard: '首页', sessions: '会话', dispatch: '派发', cron: '定时任务',
+  projects: '项目', skills: '技能', memory: '经验', review: '回顾',
+};
+
 export default function App() {
   const [view, nav] = useHashRoute();
   const [health, setHealth] = useState<{ cli: string | null } | null>(null);
@@ -33,6 +42,15 @@ export default function App() {
   const [wall, patchWall] = useWallpaper();
   const [wallOpen, setWallOpen] = useState(false);
   const wallUrl = wallSrcUrl(wall);
+
+  // 移动端「更多」二级菜单开关:项目/技能/经验/回顾在窄屏归入此菜单(见 MOBILE_SECONDARY)。
+  // 任何真实导航(hash 变化,无论来自 tab 点击、更多菜单选择、深链或浏览器前进后退)都应该
+  // 让位给目标视图本身,菜单开合只由「更多」tab 或次要视图的返回按钮显式触发(两者都不改 hash)。
+  const [mobileMore, setMobileMore] = useState(false);
+  useEffect(() => setMobileMore(false), [view]);
+  // 会话 tab 徽章:与 Sessions.tsx 共享同一 fetcher 引用,命中 pollCache,不重复拉取
+  const { data: sessData } = usePoll(api.sessions, 5_000);
+  const blockedCount = sessData?.columns.blocked.length ?? 0;
 
   // 项目分类色调色板(后端 SQLite 首次出现顺序):加载后重渲染;旧后端无此端点时静默用哈希兜底
   useEffect(() => {
@@ -89,6 +107,17 @@ export default function App() {
     [nav],
   );
 
+  // 移动端顶栏文案与「更多」菜单开合(见上方 mobileMore 注释);桌面完全不读这三个值。
+  const mobileTitle = mobileMore ? '更多' : MOBILE_TITLE[view];
+  const mobileBack = !mobileMore && MOBILE_SECONDARY.includes(view);
+  const pickMobileTab = (tab: MobileTab) => {
+    if (tab === 'more') { setMobileMore(true); return; }
+    setMobileMore(false);
+    nav(tab);
+  };
+  // 各视图内容是否应显示:桌面恒为 `view === id`;移动端「更多」菜单打开时,一律让位给菜单
+  const isShown = (id: ViewId) => view === id && !mobileMore;
+
   return (
     <div className="app">
       <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
@@ -122,32 +151,53 @@ export default function App() {
         </div>
       </aside>
 
+      {/* 移动端专属外壳:桌面 CSS 隐藏(见 index.css)。顶栏承接标题/返回,内容仍是下面同一套 <section> */}
+      <header className="mobile-topbar">
+        {mobileBack ? (
+          <button className="back" onClick={() => setMobileMore(true)}>
+            ‹ <b>更多</b>
+          </button>
+        ) : (
+          <h1>{mobileTitle}</h1>
+        )}
+        <span className="daemon">
+          <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
+          daemon
+        </span>
+      </header>
+
       <main className="main">
-        <section className={`view ${view === 'dashboard' ? 'active' : ''}`}>
-          {view === 'dashboard' && <Dashboard onGoSession={goSession} />}
+        <section className={cn('view', isShown('dashboard') && 'active')}>
+          {isShown('dashboard') && <Dashboard onGoSession={goSession} />}
         </section>
-        <section className={`view ${view === 'projects' ? 'active' : ''}`}>
-          {view === 'projects' && <Projects />}
+        <section className={cn('view', isShown('projects') && 'active')}>
+          {isShown('projects') && <Projects />}
         </section>
-        <section className={`view ${view === 'sessions' ? 'active' : ''}`}>
-          <Sessions active={view === 'sessions'} registerHandle={(h) => (sessionsHandle.current = h)} />
+        <section className={cn('view', isShown('sessions') && 'active')}>
+          <Sessions active={isShown('sessions')} registerHandle={(h) => (sessionsHandle.current = h)} />
         </section>
-        <section className={`view ${view === 'dispatch' ? 'active' : ''}`}>
-          <Dispatch active={view === 'dispatch'} />
+        <section className={cn('view', isShown('dispatch') && 'active')}>
+          <Dispatch active={isShown('dispatch')} />
         </section>
-        <section className={`view ${view === 'skills' ? 'active' : ''}`}>
-          {view === 'skills' && <Skills />}
+        <section className={cn('view', isShown('skills') && 'active')}>
+          {isShown('skills') && <Skills />}
         </section>
-        <section className={`view ${view === 'memory' ? 'active' : ''}`}>
-          {view === 'memory' && <Memories />}
+        <section className={cn('view', isShown('memory') && 'active')}>
+          {isShown('memory') && <Memories />}
         </section>
-        <section className={`view ${view === 'cron' ? 'active' : ''}`}>
-          {view === 'cron' && <Crons />}
+        <section className={cn('view', isShown('cron') && 'active')}>
+          {isShown('cron') && <Crons />}
         </section>
-        <section className={`view ${view === 'review' ? 'active' : ''}`}>
-          {view === 'review' && <Review />}
+        <section className={cn('view', isShown('review') && 'active')}>
+          {isShown('review') && <Review />}
+        </section>
+        {/* 移动端「更多」菜单:桌面 mobileMore 恒为 false,这个 section 永远不 active */}
+        <section className={cn('view', mobileMore && 'active')}>
+          {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} />}
         </section>
       </main>
+
+      <TabBar active={mobileTabOf(view, mobileMore)} blockedCount={blockedCount} onPick={pickMobileTab} />
 
       <ToastHost />
       <ConfirmHost />
