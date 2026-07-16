@@ -117,6 +117,14 @@ export class DispatchSession {
   activity: string | undefined;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
+  /** 顶层轮次是否已收到 result:决定 background_tasks_changed 到达时要不要压制/恢复 idle */
+  private turnEnded = false;
+  /**
+   * SDK 权威信号(system/background_tasks_changed,replace 语义)里存活的后台任务
+   * (Agent run_in_background 探索子代理、Ctrl+B 转后台的 Bash 等)。顶层轮次结束时若这里非空,
+   * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
+   */
+  private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
 
   constructor(
     storage: Storage,
@@ -197,6 +205,11 @@ export class DispatchSession {
               }
               this.emit({ ev: 'status', state: 'working' });
               this.refreshChips();
+            } else if (msg.subtype === 'background_tasks_changed') {
+              // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle
+              this.backgroundTasks =
+                (msg as { tasks?: { task_id: string; task_type: string; description: string }[] }).tasks ?? [];
+              this.applyBackgroundState();
             }
             break;
           case 'stream_event': {
@@ -249,9 +262,15 @@ export class DispatchSession {
               contextPct: Math.min(100, Math.round((contextTokens / CONTEXT_WINDOW) * 100)),
               durationMs: (msg as { duration_ms?: number }).duration_ms ?? 0,
             });
-            this.emit({ ev: 'status', state: 'idle' });
+            this.turnEnded = true;
+            this.applyBackgroundState();
             this.refreshChips();
-            notifyMac(this.name, '回合完成,等待你的下一步指示');
+            notifyMac(
+              this.name,
+              this.backgroundTasks.length > 0
+                ? `回合完成,${this.backgroundTasks.length} 个后台任务仍在执行`
+                : '回合完成,等待你的下一步指示',
+            );
             break;
           }
           case 'rate_limit_event': {
@@ -281,6 +300,26 @@ export class DispatchSession {
       }
       this.emit({ ev: 'error', message });
       this.emit({ ev: 'status', state: 'ended' });
+    }
+  }
+
+  /**
+   * result 之后的真实状态:仍有存活后台任务(如 run_in_background 探索子代理)时不打纯 idle,
+   * 保持看板「运行中」并把 activity 换成后台任务摘要;全部结束后(下一次 background_tasks_changed
+   * 携带空集合)才真正转 idle。只在顶层轮次已结束时生效,避免打断本轮内正常的 working/审批流转。
+   */
+  private applyBackgroundState() {
+    if (!this.turnEnded) return;
+    if (this.backgroundTasks.length > 0) {
+      const label = this.backgroundTasks
+        .map((t) => t.description)
+        .filter(Boolean)
+        .slice(0, 2)
+        .join('、');
+      this.activity = label ? `后台任务:${label}` : `后台任务执行中(${this.backgroundTasks.length})`;
+      this.emit({ ev: 'status', state: 'working' });
+    } else {
+      this.emit({ ev: 'status', state: 'idle' });
     }
   }
 
@@ -395,6 +434,7 @@ export class DispatchSession {
   send(text: string) {
     // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
     this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
+    this.turnEnded = false; // 新一轮开始:之前 result 后的后台任务压制状态作废,交回正常事件流
     this.emit({ ev: 'user-echo', text });
     this.emit({ ev: 'status', state: 'working' });
     this.input.push({
