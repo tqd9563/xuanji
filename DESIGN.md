@@ -57,6 +57,7 @@ rounded:
   md: "10px"
   chip: "4px"
   pill: "99px"
+  sheet: "16px"
 spacing:
   xs: "6px"
   sm: "10px"
@@ -136,6 +137,24 @@ components:
     textColor: "{colors.jade}"
     width: "48px"
     height: "48px"
+  tab-bar:
+    backgroundColor: "{colors.surface-2}"
+    height: "58px"
+  bottom-sheet:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.sheet}"
+    padding: "14px"
+  send-button:
+    backgroundColor: "{colors.jade}"
+    textColor: "{colors.on-jade}"
+    rounded: "12px"
+    width: "44px"
+    height: "44px"
+  switch-on:
+    backgroundColor: "{colors.jade}"
+    rounded: "{rounded.pill}"
+    width: "46px"
+    height: "28px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -155,6 +174,7 @@ components:
 - 平面优先,深度靠色调分层;阴影只属于悬浮层(抽屉/菜单/toast)
 - 动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion
 - 壁纸为可选个性化层:默认关闭,开启后仍以暗色预设与低不透明度服从「数据是唯一主角」的底线
+- 移动端(≤430px)是「手持罗盘」形态:重新组织交互而非缩放像素——底部 5-tab 拇指区导航、看板改状态 tab + 单列卡片流、抽屉/下拉/模态统一收敛为 bottom sheet、一切触控目标 ≥44px、hover 语义全部转点按;信息架构与桌面一致,密度让位于可点性
 
 ## 2. Colors
 
@@ -210,7 +230,7 @@ components:
 - **Display / 时钟** (500, 1.0625rem, mono, letter-spacing 0.02em, `font-variant-numeric: tabular-nums`):仪表盘右上角实时时钟,表格数字保证秒跳不抖版。
 - **Headline** (600, 1.25rem):每视图一个 h1,`text-wrap: balance`。
 - **Title** (600, 0.875rem):面板头 h2 与卡片标题(0.8125rem)。
-- **Body** (400, 0.875rem, line-height 1.6):正文与聊天内容,长文 `text-wrap: pretty`,行长 ≤68ch。
+- **Body** (400, 0.875rem, line-height 1.6):正文与聊天内容,长文 `text-wrap: pretty`,行长 ≤68ch。移动端(≤430px)正文升半档至 0.9375rem(15px),输入控件一律 ≥1rem(16px)防 iOS 聚焦自动缩放。
 - **Label** (600, 0.6875rem):状态胶囊、tag、图例、提示文字。
 - **Data** (400, 0.75–0.8125rem, mono):内联 `.mono` 取 0.8em 相对缩放。
 
@@ -226,6 +246,7 @@ components:
 ### Shadow Vocabulary
 - **抽屉影** (`box-shadow: -12px 0 32px oklch(0.05 0 0 / 0.45)`):右侧回放抽屉。
 - **悬浮影** (`box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5)`):下拉菜单与 toast。
+- **上滑影** (`box-shadow: 0 -8px 32px oklch(0.05 0 0 / 0.5)`):移动端 bottom sheet——抽屉影的竖屏镜像,同属悬浮层特权。
 
 ### 壁纸玻璃档(可选深度材质)
 玻璃档为面板与悬浮层(sidebar / panel / drawer / composer / chat / toast / scard / dd-menu / notice / wall-pop)叠加 `backdrop-filter: blur(var(--wall-frost)) saturate(1.1)`,让壁纸透过面板并被柔化。这是全站唯一被批准的 backdrop 模糊用途,默认 `--wall-frost: 0`(纯透明、无磨砂),仅用户主动调高(0–24px)才出现。壁纸图层本身(`#wall`)固定于 `z-index: -1`,以 `--wall-opacity`(默认 0.4)透出、`--wall-blur`(默认 0px)柔化,永不参与文档流。
@@ -238,6 +259,8 @@ components:
 ## 5. Components
 
 组件性格:精密仪器的克制——形态安静,状态清晰,反馈即时(150ms)。
+
+**四四触控规则。** 移动端(pointer: coarse)一切可点元素的命中区 ≥44×44px——视觉尺寸可以更小(如 6px 状态点、28px 开关),但触控区必须用 padding 或伪元素扩到 44px。hover 不是交互前提:凡桌面依赖 hover 的信息(悬停提示、hover 现身按钮)在移动端必须有点按等价物(下钻 sheet、常驻显示或省略),按压反馈用 `:active` 提亮(hover 色)。
 
 ### Buttons
 - **Shape:** 轻圆角(6px)
@@ -267,7 +290,8 @@ components:
 - **品牌标(`.brand-mark`):** 侧栏顶部「璇玑玉璧」图形标,48px,单色剪影 `fill: currentColor` 继承玉色(`{colors.jade}`),与 token 同源联动、改色即生效。文字改为两行 lockup:「璇玑」单独一行(玉色、原 headline 尺寸),`xuanji · v1.0.0` 合并作 mono 小字副标题另起一行(中点分隔沿用 side-foot 区「claude CLI 2.1.202 · daemon 正常」同款写法)。浏览器 favicon 复用同一剪影(内联 SVG data URI,因跨文档取不到 CSS 变量,固定写死玉色 hex `#bbc75f`)。
 - **侧栏:** 226px 固定列,surface-2 底;项 8px 12px、6px 圆角、muted 字;hover 提亮,active 玉 tint 底 + 玉字 + 600 字重;计数徽章 mono 全圆角
 - **窄屏(≤960px):** 侧栏转顶部横条,品牌标保留、计数徽章隐藏
-- **快捷键:** 数字 1–7 直切视图,按钮悬停提示对应键位
+- **移动端(≤430px):** 导航沉底为 5-tab 拇指区栏(`.tabbar`:首页/会话/派发/定时/更多,surface-2 底 + 1px line-soft 上边线,高 58px + safe-area,active 玉字玉标);「会话」tab 挂琥珀徽章显示 blocked 数;项目/技能/经验/回顾收进「更多」二级页,顶栏出 ‹ 返回。顶栏与 tab 栏吸附时允许 backdrop blur 作滚动垫层——这是功能性模糊,不属玻璃拟态禁区
+- **快捷键:** 数字 1–7 直切视图,按钮悬停提示对应键位;移动端无物理键盘,快捷键语义由 tab 栏与卡片大点击区承接
 
 ### 自绘下拉(Signature Component)
 原生 select 弹层由 OS 绘制无法主题化,故一律自绘(实现层用 shadcn/ui Select):无边触发钮(mono 字,按语义着色——目录蓝/模型紫)+ 悬浮菜单(surface 底、1px line 边、10px 圆角、悬浮影),选中项玉色对勾,Esc/外点关闭,贴近屏底的向上弹出。**模态内变体**(`.dd.down`):表单字段贴顶部而非屏底时,菜单改为向下弹出、触发钮补满字段宽度并现出 surface 底 + line 边框(而非无边贴文本),其余选中态/对勾/关闭逻辑与默认下拉完全一致——仅弹出方向与触发钮外观随上下文调整,组件词汇不分叉。
@@ -294,6 +318,14 @@ components:
 
 **图源:** 内置两个暗色 SVG 预设(星野=北斗缀夜空、山岚=层叠远山雾),支持本地图片与任意 URL;缩略图选中态玉色描边。**默认参数 40/0/30/0 是用户实测确认的舒适档,不得擅自更改。**
 
+### Bottom Sheet(Signature Component · 移动端统一悬浮层)
+移动端把桌面三种悬浮词汇(右侧抽屉、自绘下拉、居中模态)统一收敛为一种:底部上滑 sheet(`.sheet`:surface 底、1px line-soft 边、顶部 16px 圆角、上滑影、顶部 36×4px 抓手条、max-height 88dvh、底部 padding 含 safe-area)。回放/经验详情用普通高度,新建任务表单用全高;背景统一 `.backdrop`(55% 黑度),外点/Esc/✕ 关闭,220ms 指数缓出上滑。桌面自绘下拉在 sheet 内退化为**选项大行**(`.opt-row`:48px 高、mono 值按语义着色——目录蓝/模型紫、行尾玉色对勾单选),组件语义不变、形态随输入方式切换。**何时用 sheet、何时用页面**:临时上下文(回放、设置、确认、表单)用 sheet,持续任务空间(视图本身)用页面——sheet 关掉后你仍在原地。
+
+### 移动端触屏形态(Signature Component)
+- **会话看板:** 4 状态列改为吸顶分段控件(`.seg`:需要你/运行中/空闲/已完成,带 mono 计数,「需要你」非选中时挂琥珀脉冲点)+ 单列全宽卡片流;已完成默认收起近 5 条,「更早 n 条」虚线按钮展开。
+- **派发页:** 触屏优先——底部输入栏(textarea 16px + 44×44px 玉色发送键)、审批卡大按钮化(允许/拒绝双列 + 总是允许整行,各 ≥44px)、桌面终端式状态行改为可横滑 `.ctx-chip` 胶囊行(目录蓝 ⎇ 分支玉 / 模型紫 / 权限 / 前后台),点任一胶囊开「会话设置」sheet;用量三仪表保留微缩形态,agent 状态钉住行尾永不被挤出。
+- **项目/技能/经验:** 多列网格与表格一律改单列卡片流;技能启停用 46×28px 开关(`::before` 扩触控区至 44px),禁用走确认 sheet。
+
 ### 定时任务列表(Signature Component)
 一次性与周期任务共用同一份折叠列表(`.cron-item`/`.cron-row`):行首状态胶囊覆盖全生命周期(待执行=蓝 `pill-scheduled`、运行中=玉脉冲、需审批/已错过=琥珀脉冲、已完成=绿、已熔断=红),行尾时钟(mono、tabular-nums)与相对时间(faint)。周期任务在折叠态额外插入**近 7 期状态点**(`.runline`,6px 圆点,绿/红/琥珀,左旧右新,悬停提示范围),不展开也能扫出好坏。展开后运行历史表(`.runs`)逐期一行,「结果会话」列直连只读回放抽屉——失败/审批中的任务在此看真实转录(工具调用、报错原文),而不是新开一个会话去问 Claude 发生了什么;source of truth 恒在 `~/.claude` 的 session jsonl。
 
@@ -307,6 +339,7 @@ components:
 - **Do** 所有过渡 150–250ms、`cubic-bezier(0.22, 1, 0.36, 1)` 缓出,且只在状态变化时发生;提供 `prefers-reduced-motion` 瞬时降级。
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
 - **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
+- **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
 
 ### Don't:
 - **Don't** 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效——这是工作台,不是落地页(PRODUCT.md 反例原文)。
@@ -318,3 +351,4 @@ components:
 - **Don't** 用原生 select 弹层/系统默认控件样式直接见人——组件词汇全站唯一,同一动作在两处长得不一样,其中一处就是错的。
 - **Don't** 把蓝色用作「已完成」的状态色——蓝色现在专指纯信息(路径/计数/目录),完成态一律绿色(`{colors.green}`);两者语义不同,不得因为都"看着积极"就混用同一色相。
 - **Don't** 为失败/需审批的定时任务新开一个会话去问 Claude「发生了什么」——真实转录已经在 session jsonl 里,只读回放抽屉是唯一入口。
+- **Don't** 在移动端用 hover 承载任何功能或信息,也不要把桌面多列网格/横滚看板直接缩放到窄屏——移动端形态是重新组织(状态 tab、单列流、sheet),不是等比缩小;凡一屏只能看到「一列半」的布局即是缺陷。

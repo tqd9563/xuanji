@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-16T00:00:00Z",
+  "generatedAt": "2026-07-16T18:00:00+08:00",
   "title": "Design System: 璇玑 xuanji",
   "extensions": {
     "colorMeta": {
@@ -228,6 +228,11 @@
         "name": "float",
         "value": "0 8px 24px oklch(0.05 0 0 / 0.5)",
         "purpose": "自绘下拉菜单与 toast。"
+      },
+      {
+        "name": "sheet-shadow",
+        "value": "0 -8px 32px oklch(0.05 0 0 / 0.5)",
+        "purpose": "移动端 bottom sheet 上滑影,抽屉影的竖屏镜像。"
       }
     ],
     "motion": [
@@ -262,6 +267,11 @@
         "name": "narrow",
         "value": "960px",
         "purpose": "侧栏转顶部横条,面板栈单列,看板横向滚动。"
+      },
+      {
+        "name": "mobile",
+        "value": "430px",
+        "purpose": "手持罗盘形态:底部 5-tab 导航、状态 tab + 单列卡片流、bottom sheet 统一悬浮层、≥44px 触控目标、hover 转点按。"
       }
     ],
     "zIndexScale": {
@@ -460,6 +470,38 @@
       "description": "侧栏顶部品牌标:璇玑玉璧剪影(48px,fill 继承玉色)+「璇玑 / xuanji · v1.0.0」两行文字 lockup。favicon 复用同一剪影。",
       "html": "<div class=\"ds-brand\"><svg class=\"brand-mark\" viewBox=\"-66.9 -53.29 1438.85 1438.85\" aria-hidden=\"true\" focusable=\"false\"><g transform=\"translate(129.962149,1193.807683) scale(0.100000,-0.100000)\" fill=\"currentColor\" stroke=\"none\"> <path d=\"M4950 8329 c-153 -11 -376 -50 -531 -93 -344 -95 -676 -262 -946 -476 -730 -579 -1116 -1564 -957 -2443 14 -74 19 -87 33 -82 9 4 49 15 90 26 207 53 421 -8 576 -165 81 -82 123 -149 159 -256 80 -240 9 -478 -169 -565 -180 -89 -415 16 -415 185 0 124 117 201 236 155 25 -9 48 -14 52 -10 4 3 6 33 6 65 -2 111 -86 228 -191 264 -61 21 -186 21 -249 -1 -157 -53 -283 -199 -328 -384 -21 -84 -21 -261 -1 -368 94 -492 577 -1127 1150 -1511 347 -232 711 -373 1132 -437 156 -24 537 -24 698 0 399 59 803 210 1130 424 138 91 356 265 345 276 -3 3 -30 17 -60 32 -160 80 -306 216 -366 341 -89 185 -82 424 18 604 100 179 244 290 424 327 222 45 425 -89 441 -291 6 -66 -16 -136 -55 -180 -41 -46 -138 -69 -199 -45 -57 21 -113 93 -113 144 0 14 -6 25 -13 25 -22 0 -100 -55 -136 -95 -58 -67 -76 -118 -76 -220 0 -80 3 -97 31 -155 53 -113 168 -204 309 -246 79 -24 236 -23 324 0 83 22 201 83 273 140 277 221 504 788 568 1420 27 259 2 625 -60 906 -209 942 -807 1756 -1567 2134 -72 37 -138 66 -146 66 -12 0 -13 -7 -6 -37 24 -103 2 -240 -54 -348 -38 -73 -143 -180 -217 -222 -81 -46 -188 -73 -291 -73 -389 0 -662 327 -476 571 41 54 124 99 182 99 56 0 123 -36 146 -80 32 -58 19 -153 -24 -189 -25 -20 -21 -29 21 -47 24 -11 65 -17 117 -18 70 0 86 3 134 29 89 49 131 118 147 241 7 61 -15 155 -53 226 -15 28 -60 80 -99 117 -142 133 -320 197 -609 221 -141 11 -167 11 -335 -1z m371 -2228 c270 -69 498 -296 570 -567 28 -105 30 -289 5 -389 -76 -292 -306 -522 -593 -592 -96 -23 -267 -23 -363 1 -294 73 -525 302 -597 593 -24 99 -22 285 5 384 79 295 329 527 629 584 98 18 241 13 344 -14z\"/> </g></svg><div class=\"ds-brand-text\"><span class=\"ds-brand-zh\">璇玑</span><span class=\"ds-brand-meta\">xuanji <span class=\"ds-brand-sep\">·</span> v1.0.0</span></div></div>",
       "css": ".ds-brand { display: flex; align-items: center; gap: 10px; } .ds-brand .brand-mark { width: 48px; height: 48px; flex: none; color: oklch(0.80 0.13 115); } .ds-brand-text { display: flex; align-items: baseline; gap: 8px; } .ds-brand-zh { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.06em; color: oklch(0.80 0.13 115); white-space: nowrap; line-height: 1; } .ds-brand-meta { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.6875rem; color: oklch(0.60 0.012 110); white-space: nowrap; } .ds-brand-meta .ds-brand-sep { color: oklch(0.60 0.012 110); margin: 0 1px; }"
+    },
+    {
+      "name": "Bottom Tab Bar",
+      "kind": "nav",
+      "refersTo": "tab-bar",
+      "description": "移动端拇指区主导航:5 tab(首页/会话/派发/定时/更多),active 玉色,会话 tab 挂琥珀 blocked 徽章。",
+      "html": "<nav class=\"ds-tabbar\"><button class=\"ds-tab active\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M3 11.5 12 4l9 7.5\"/><path d=\"M5 10v10h14V10\"/></svg><span>首页</span></button><button class=\"ds-tab\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\"><rect x=\"3\" y=\"4\" width=\"18\" height=\"6\" rx=\"1.5\"/><rect x=\"3\" y=\"14\" width=\"18\" height=\"6\" rx=\"1.5\"/></svg><span>会话</span><b class=\"ds-bdg\">6</b></button><button class=\"ds-tab\"><svg viewBox=\"0 0 24 24\" width=\"22\" height=\"22\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.7\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 2 11 13\"/><path d=\"M22 2 15 22l-4-9-9-4z\"/></svg><span>派发</span></button></nav>",
+      "css": ".ds-tabbar { display: flex; height: 58px; background: var(--surface-2, oklch(0.165 0.007 120)); border-top: 1px solid var(--line-soft, oklch(0.225 0.009 120)); } .ds-tab { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; background: none; border: none; color: oklch(0.60 0.012 110); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.02em; cursor: pointer; transition: color 150ms cubic-bezier(0.22,1,0.36,1); } .ds-tab.active { color: oklch(0.80 0.13 115); } .ds-tab:active { color: oklch(0.71 0.015 110); } .ds-bdg { position: absolute; top: 5px; left: calc(50% + 6px); min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px; background: oklch(0.78 0.14 80); color: oklch(0.18 0.02 120); font-size: 0.625rem; font-weight: 700; display: flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Bottom Sheet",
+      "kind": "custom",
+      "refersTo": "bottom-sheet",
+      "description": "移动端统一悬浮层:抓手条 + 顶部 16px 圆角 + 上滑影,替代桌面抽屉/下拉/模态。",
+      "html": "<div class=\"ds-sheet\"><div class=\"ds-grab\"><i></i></div><div class=\"ds-sheet-head\"><h2>会话设置</h2><button class=\"ds-x\" aria-label=\"关闭\">✕</button></div><div class=\"ds-sheet-body\"><button class=\"ds-opt\"><span class=\"ds-opt-v\">~/go-antifraud</span><span class=\"ds-check\">✓</span></button><button class=\"ds-opt\"><span class=\"ds-opt-v\">~/xuanji</span><span class=\"ds-check\"></span></button></div></div>",
+      "css": ".ds-sheet { background: oklch(0.185 0.008 120); border: 1px solid oklch(0.225 0.009 120); border-bottom: none; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 32px oklch(0.05 0 0 / 0.5); max-width: 430px; } .ds-grab { display: flex; justify-content: center; padding: 8px 0 2px; } .ds-grab i { width: 36px; height: 4px; border-radius: 2px; background: oklch(0.27 0.010 120); } .ds-sheet-head { display: flex; align-items: center; gap: 10px; padding: 6px 14px 10px; border-bottom: 1px solid oklch(0.225 0.009 120); } .ds-sheet-head h2 { flex: 1; margin: 0; font-size: 1rem; font-weight: 600; color: oklch(0.93 0.008 110); } .ds-x { width: 44px; height: 44px; border: none; background: none; border-radius: 6px; color: oklch(0.71 0.015 110); font-size: 1rem; cursor: pointer; } .ds-x:active { background: oklch(0.215 0.009 120); } .ds-sheet-body { padding: 14px; } .ds-opt { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 8px 12px; background: none; border: none; border-radius: 6px; cursor: pointer; text-align: left; } .ds-opt:active { background: oklch(0.215 0.009 120); } .ds-opt-v { flex: 1; font-family: ui-monospace, \"SF Mono\", Menlo, monospace; font-size: 0.8125rem; color: oklch(0.72 0.11 245); } .ds-check { color: oklch(0.80 0.13 115); font-weight: 700; width: 20px; text-align: center; }"
+    },
+    {
+      "name": "Send Button",
+      "kind": "button",
+      "refersTo": "send-button",
+      "description": "移动端派发页 44×44px 玉色发送键,与底部输入栏并排。",
+      "html": "<button class=\"ds-send\" aria-label=\"发送\"><svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M22 2 11 13\"/><path d=\"M22 2 15 22l-4-9-9-4z\"/></svg></button>",
+      "css": ".ds-send { width: 44px; height: 44px; border: none; border-radius: 12px; background: oklch(0.80 0.13 115); color: oklch(0.18 0.02 120); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background 150ms cubic-bezier(0.22,1,0.36,1); } .ds-send:active { background: oklch(0.68 0.10 115); } .ds-send:disabled { opacity: 0.45; }"
+    },
+    {
+      "name": "Touch Switch",
+      "kind": "custom",
+      "refersTo": "switch-on",
+      "description": "移动端技能启停开关(46×28px,伪元素扩触控区至 44px),开=玉色。",
+      "html": "<button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\"></button>",
+      "css": ".ds-switch { position: relative; width: 46px; height: 28px; border: none; border-radius: 99px; background: oklch(0.27 0.010 120); cursor: pointer; padding: 0; transition: background 180ms cubic-bezier(0.22,1,0.36,1); } .ds-switch::before { content: \"\"; position: absolute; inset: -8px; } .ds-switch::after { content: \"\"; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: oklch(0.93 0.008 110); transition: transform 180ms cubic-bezier(0.22,1,0.36,1); } .ds-switch[aria-checked=\"true\"] { background: oklch(0.80 0.13 115); } .ds-switch[aria-checked=\"true\"]::after { transform: translateX(18px); background: oklch(0.18 0.02 120); }"
     }
   ],
   "narrative": {
@@ -470,7 +512,8 @@
       "状态色即语义(玉/琥珀/蓝/红),项目分类色锁明度转色相,两套色彩词汇互不越界",
       "单一无衬线 UI 字族 + 等宽数据字族,实时数字一律表格数字",
       "平面优先,深度靠色调分层;阴影只属于悬浮层",
-      "动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion"
+      "动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion",
+      "移动端(≤430px)是「手持罗盘」形态:底部 5-tab 拇指区导航、状态 tab + 单列卡片流、bottom sheet 统一悬浮层、≥44px 触控目标、hover 语义全部转点按"
     ],
     "rules": [
       {
@@ -512,6 +555,11 @@
         "name": "磨砂即选项规则",
         "body": "backdrop 模糊只属于用户显式开启的壁纸玻璃档,默认值恒为 0;任何非壁纸场景把 backdrop-filter 当装饰使用都被禁止。",
         "section": "elevation"
+      },
+      {
+        "name": "四四触控规则",
+        "body": "移动端(pointer: coarse)一切可点元素的命中区 ≥44×44px——视觉尺寸可以更小,但触控区必须用 padding 或伪元素扩到 44px。hover 不是交互前提:凡桌面依赖 hover 的信息在移动端必须有点按等价物,按压反馈用 :active 提亮。",
+        "section": "components"
       }
     ],
     "dos": [
@@ -521,7 +569,8 @@
       "Do 新增项目分类色时沿用 oklch(0.78 0.12 H) 锁明度公式,从八色环顺序取色。",
       "Do 所有过渡 150–250ms、cubic-bezier(0.22,1,0.36,1) 缓出,只在状态变化时发生;提供 prefers-reduced-motion 瞬时降级。",
       "Do 可变长度文案一律限行截断,全文放下钻层或悬停提示。",
-      "Do 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 --wall-* 参数用户可调、存 localStorage,永不写 ~/.claude;预设一律暗色低饱和以守夜间底线。"
+      "Do 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 --wall-* 参数用户可调、存 localStorage,永不写 ~/.claude;预设一律暗色低饱和以守夜间底线。",
+      "Do 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、safe-area 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。"
     ],
     "donts": [
       "Don't 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效。",
@@ -533,7 +582,8 @@
       "Don't 用原生 select 弹层/系统默认控件样式直接见人;同一动作在两处长得不一样,其中一处就是错的。",
       "Don't 把玻璃模糊当默认外观:玻璃拟态仅作为用户显式开启、默认关闭的壁纸玻璃档存在,--wall-frost 默认恒为 0,绝不把 backdrop 模糊塞进任何非壁纸场景当装饰。",
       "Don't 把蓝色用作「已完成」的状态色;完成态一律绿色,蓝色专指纯信息。",
-      "Don't 为失败/需审批的定时任务新开一个会话去问 Claude「发生了什么」;真实转录已在 session jsonl 里,只读回放抽屉是唯一入口。"
+      "Don't 为失败/需审批的定时任务新开一个会话去问 Claude「发生了什么」;真实转录已在 session jsonl 里,只读回放抽屉是唯一入口。",
+      "Don't 在移动端用 hover 承载任何功能或信息,也不要把桌面多列网格/横滚看板直接缩放到窄屏——移动端形态是重新组织(状态 tab、单列流、sheet),不是等比缩小。"
     ]
   }
 }
