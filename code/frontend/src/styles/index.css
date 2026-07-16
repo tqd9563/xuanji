@@ -40,6 +40,12 @@
   --chart-2: oklch(0.65 0.065 300);
   --chart-3: oklch(0.65 0.065 245);
 
+  /* ToolCard 工具类别色:等明度分类公式 oklch(0.78 0.12 H),锁明度只转色相 */
+  --tool-skill: oklch(0.78 0.12 345);  /* Skill / SlashCommand */
+  --tool-exec:  oklch(0.78 0.13 180);  /* Bash / BashOutput / KillShell */
+  --tool-write: oklch(0.78 0.12 55);   /* Edit / Write / NotebookEdit */
+  /* 读取/检索复用 --blue,编排/规划复用 --violet(与派发状态行的模型紫同族) */
+
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
   --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
@@ -475,6 +481,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .toolcard .tc-head:hover { background: var(--hover); }
 .toolcard .tc-head .fn { color: var(--blue); }
+.toolcard .tc-head .fn[data-cat="skill"] { color: var(--tool-skill); }
+.toolcard .tc-head .fn[data-cat="exec"]  { color: var(--tool-exec); }
+.toolcard .tc-head .fn[data-cat="read"]  { color: var(--blue); }
+.toolcard .tc-head .fn[data-cat="write"] { color: var(--tool-write); }
+.toolcard .tc-head .fn[data-cat="orch"]  { color: var(--violet); }
+.toolcard .tc-head .fn[data-cat="other"] { color: var(--muted); }
 .toolcard .tc-head .chev { margin-left: auto; transition: transform 180ms var(--ease); color: var(--faint); }
 .toolcard.open .tc-head .chev { transform: rotate(180deg); }
 .toolcard .tc-body { display: none; padding: 10px 12px; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); white-space: pre-wrap; overflow-x: auto; }

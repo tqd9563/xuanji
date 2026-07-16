@@ -22,6 +22,9 @@ colors:
   chart-1: "oklch(0.68 0.075 115)"
   chart-2: "oklch(0.65 0.065 300)"
   chart-3: "oklch(0.65 0.065 245)"
+  tool-skill: "oklch(0.78 0.12 345)"
+  tool-exec: "oklch(0.78 0.13 180)"
+  tool-write: "oklch(0.78 0.12 55)"
 typography:
   display:
     fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace"
@@ -165,7 +168,7 @@ components:
 - **琥珀 Amber** (oklch(0.78 0.14 80)):「等待输入/审批」专用。blocked 状态、needs 文案、审批卡边框、git 脏区计数、超阈值用量、定时任务的「需审批/已错过」胶囊。它出现即意味着"需要你"。
 - **翠 Green** (oklch(0.74 0.12 155)):「已完成」专属状态色。会话看板/派发结果/定时任务运行历史的完成状态胶囊(`.pill-done`),以及成功退出的运行记录。绿色出现即意味着"这件事彻底完事了,不需要你再看"。
 - **信使蓝 Blue** (oklch(0.72 0.11 245)):纯「信息」,不再表完成。未推送计数(↑n)、工作目录文字色、自绘下拉里目录值的字色、定时任务「待执行」排程胶囊(`.pill-scheduled`)——它标注事实,不宣告状态已终结。
-- **紫 Violet** (oklch(0.73 0.11 300)):模型标识专用色(派发状态行的模型名、自绘下拉里模型值的字色)。
+- **紫 Violet** (oklch(0.73 0.11 300)):模型/编排同族色(派发状态行的模型名、自绘下拉里模型值的字色;亦作 ToolCard 编排类工具的类别色——Task 派发的即是子 agent,与模型标识同源)。
 - **赤 Red** (oklch(0.68 0.19 25)):错误与熔断,以及危险操作按钮。全站最稀有的颜色,出现即事故。
 
 ### Neutral
@@ -175,6 +178,16 @@ components:
 
 ### Chart Series
 - **chart-1/2/3** (oklch(0.68 0.075 115) / oklch(0.65 0.065 300) / oklch(0.65 0.065 245)):堆叠图大面积填充专用(fable/opus/sonnet),比状态色低两档饱和,防大色块刺眼。图表永不直接使用状态色作系列色。
+
+### ToolCard 工具类别色
+回放/派发页里工具调用折叠卡(`.toolcard .tc-head .fn`)按「行为类别」而非逐工具上色,回答扫视时的真问题——agent 在做哪类事:
+- **tool-skill** (oklch(0.78 0.12 345)):Skill / SlashCommand 独立记忆色,与其余类别拉开色相距离。
+- **tool-exec** (oklch(0.78 0.13 180)):Bash / BashOutput / KillShell。刻意推至 H=180,与 --blue(245)相距 65°,0.75rem 等宽小字下仍可分——早期取 H=195 与蓝混淆不清,已废弃。
+- **读取/检索**:Read / Grep / Glob / LSP / WebFetch / WebSearch 复用 **--blue**,不新增 token(WebFetch/WebSearch 若单列会与蓝在小字下不可分,并入读取类)。
+- **tool-write** (oklch(0.78 0.12 55)):Edit / Write / NotebookEdit。
+- **编排/规划**:Task / TodoWrite / EnterPlanMode / ExitPlanMode 复用 **--violet**(与模型标识同族,见上文 Named Rules 更新)。
+- **其余(含 `mcp__*` 长尾与未知工具)**:muted 中性,不参与争色。
+- `isError` 时一律红色内联覆盖,优先级高于类别色,与状态色语义一致。
 
 ### Named Rules
 **状态色即语义规则。** 玉=运行、琥珀=等待、绿=完成、蓝=纯信息、红=错误/熔断。「已完成」与「信息」是两件事:前者是终结状态,必须绿色;后者是事实标注(路径、计数、目录),永远蓝色,两者不得混用同一色相。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。
