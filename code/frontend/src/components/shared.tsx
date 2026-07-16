@@ -1,15 +1,36 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { api } from '@/api/client';
 import { cn, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
 
+/** 桌面壳(Pake/Tauri WKWebView)检测:其 UA 没有浏览器的 `Safari/`/`Chrome/` 后缀。
+ *  仅本机访问(壳固定加载 127.0.0.1:7777)才启用后端兜底——远程浏览器访问不误伤。 */
+const IN_SHELL_WEBVIEW =
+  typeof navigator !== 'undefined' &&
+  /AppleWebKit/.test(navigator.userAgent) &&
+  !/Safari\/|Chrome\/|Chromium\//.test(navigator.userAgent) &&
+  ['127.0.0.1', 'localhost'].includes(window.location.hostname);
+
+/** 壳内外链兜底:壳的 Tauri IPC 注入成功时由壳自身接管 target=_blank(不拦截,避免双开);
+ *  IPC 缺失时 WKWebView 会吞掉新窗口请求,改走后端 /api/open-url 在宿主 mac 唤起系统浏览器。 */
+function onMdLinkClick(e: MouseEvent<HTMLAnchorElement>) {
+  const href = e.currentTarget.href;
+  if (!IN_SHELL_WEBVIEW || !href) return;
+  if ('__TAURI_INTERNALS__' in window) return;
+  e.preventDefault();
+  void api.openUrl(href).catch(() => {});
+}
+
 // 链接一律新窗口打开:浏览器里避免同窗导航把 SPA 整页带走;
 // Pake/Tauri WKWebView 里同窗跨域导航会被吞,new-window 请求才会转交系统浏览器。
 const MD_COMPONENTS: Components = {
-  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  a: ({ node: _node, ...props }) => (
+    <a {...props} target="_blank" rel="noopener noreferrer" onClick={onMdLinkClick} />
+  ),
 };
 
 /** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 外链新窗口打开 */

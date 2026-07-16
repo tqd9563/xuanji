@@ -51,6 +51,7 @@ export const api = {
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/name`, 'PUT', { name }),
   handoff: (sessionId: string) =>
     mutate<{ summary: string; from: string }>('/api/dispatch/handoff', 'POST', { sessionId }),
+  openUrl: (url: string) => mutate<{ ok: boolean }>('/api/open-url', 'POST', { url }),
   closeSession: (sessionId: string) =>
     mutate<{ ok: boolean; ended: boolean }>(`/api/sessions/${sessionId}/close`, 'POST', { confirm: true }),
   closedSessions: (cwd?: string) =>
