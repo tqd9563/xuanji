@@ -1,7 +1,8 @@
 /**
- * /wd 弹窗:模糊搜索并切换工作目录,↑↓ 选择 · Enter 切换 · Esc 关闭。
- * 数据源就是派发页已有的 cwdOptions(扫描 ~/.claude/projects 得到的历史项目路径),
- * 选中后调用 onPick(setCwd) 即可,不新增后端接口。
+ * 模糊搜索选择弹窗:↑↓ 选择 · Enter 确认 · Esc 关闭。
+ * 最初为 /wd(切换工作目录)而建,后经 title/placeholder/emptyNoun 参数化,
+ * /model(切换模型)复用同一实现;二者数据源都来自派发页已有 state,不新增后端接口。
+ * 行布局:左列短名(labelOf)+ 右列完整值(option 本身,mono 淡色),当前值标「当前」。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,9 @@ export function WdPalette({
   options,
   labelOf,
   initialQuery = '',
+  title = '切换工作目录',
+  placeholder = '模糊搜索目录…(如 skill)',
+  emptyNoun = '工作目录',
   onPick,
   onClose,
 }: {
@@ -31,6 +35,11 @@ export function WdPalette({
   options: string[];
   labelOf?: (v: string) => string;
   initialQuery?: string;
+  /** 弹窗标题(兼作 aria-label) */
+  title?: string;
+  placeholder?: string;
+  /** 无匹配提示里的名词:「没有匹配「x」的{emptyNoun}」 */
+  emptyNoun?: string;
   onPick: (path: string) => void;
   onClose: () => void;
 }) {
@@ -130,11 +139,11 @@ export function WdPalette({
         className="rp-box wd-box"
         role="dialog"
         aria-modal="true"
-        aria-label="切换工作目录"
+        aria-label={title}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="rp-head">
-          切换工作目录
+          {title}
           <span className="rp-hint">↑↓/Tab 选择 · Enter 切换 · Esc 关闭</span>
         </div>
         <div className="wd-search">
@@ -142,13 +151,13 @@ export function WdPalette({
             ref={inputRef}
             className="input"
             autoFocus
-            placeholder="模糊搜索目录…(如 skill)"
+            placeholder={placeholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
         {filtered.length === 0 ? (
-          <div className="rp-empty">没有匹配「{query}」的工作目录</div>
+          <div className="rp-empty">没有匹配「{query}」的{emptyNoun}</div>
         ) : (
           <div className="rp-list" ref={listRef}>
             {filtered.map((o, i) => (

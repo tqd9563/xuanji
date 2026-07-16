@@ -1,5 +1,5 @@
 /**
- * /resume 弹窗:列出当前项目下已关闭(隐藏)的会话,↑↓ 选择 · Enter 续接 · Esc 关闭。
+ * /resume 弹窗:列出当前项目下已关闭(隐藏)的会话,↑↓/Tab 选择 · Enter 续接 · Esc 关闭。
  * 数据源 GET /api/sessions/closed?cwd=,选中后由派发页完成 unhide + 续接。
  */
 import { useEffect, useRef, useState } from 'react';
@@ -42,6 +42,18 @@ export function ResumePalette({
         return;
       }
       if (!sessions || sessions.length === 0) return;
+      // Tab / Shift+Tab = 循环切换选中项(与 WdPalette 同款):选中态改玉色描边环后,
+      // 放行原生 Tab 会做 DOM 焦点遍历,触发全局 :focus-visible 描边,与 sel 选中环同屏双环
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        setSel((cur) => {
+          const next = e.shiftKey ? (cur - 1 + sessions.length) % sessions.length : (cur + 1) % sessions.length;
+          listRef.current?.children[next]?.scrollIntoView({ block: 'nearest' });
+          return next;
+        });
+        return;
+      }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
         e.preventDefault();
         e.stopImmediatePropagation();
@@ -65,7 +77,7 @@ export function ResumePalette({
       <div className="rp-box" role="dialog" aria-modal="true" aria-label="恢复已关闭会话" onClick={(e) => e.stopPropagation()}>
         <div className="rp-head">
           恢复已关闭会话
-          <span className="rp-hint">↑↓ 选择 · Enter 续接 · Esc 关闭</span>
+          <span className="rp-hint">↑↓/Tab 选择 · Enter 续接 · Esc 关闭</span>
         </div>
         {error && <div className="rp-empty">加载失败:{error}</div>}
         {!error && sessions === null && <div className="rp-empty">加载中…</div>}
@@ -78,6 +90,8 @@ export function ResumePalette({
               <button
                 key={s.sessionId}
                 className={cn('rp-item', i === sel && 'sel')}
+                // 退出原生 Tab 序列:选中态只由 sel state 单轨驱动(同 WdPalette)
+                tabIndex={-1}
                 onMouseEnter={() => setSel(i)}
                 onClick={() => onPick(s)}
               >
