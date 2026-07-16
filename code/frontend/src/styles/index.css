@@ -1029,7 +1029,12 @@ body.wall-glass .dd-menu {
   .dispatch { height: calc(100vh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); min-height: 340px; }
   .dispatch { height: calc(100dvh - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); }
   .dispatch { height: calc(var(--vh, 1vh) * 100 - var(--mobile-top-h) - env(safe-area-inset-top) - var(--mobile-tab-h) - env(safe-area-inset-bottom) - 96px); }
-  .chat { padding: 14px 14px 6px; }
+  /* 中和 960px 断点的 .chat { min-height:380px; max-height:60vh }——那是为旧窄屏布局
+     (dispatch height:auto、整页滚动)设计的,在 ≤430 的固定高度布局里会顶住不收缩,把
+     composer/term-line 硬挤到 tabbar 后面(2026-07-23 真机第二轮反馈的真根因:视口 ~657px
+     时容器 451px < 内容 380+status+composer+term-line ≈ 580px;之前 844px 高的模拟视口
+     恰好容得下,没暴露)。恢复 min-height:0 后 chat 随容器收缩、内部滚动,底部三件套恒可见。 */
+  .chat { padding: 14px 14px 6px; min-height: 0; max-height: none; }
   /* 会话标识挪进消息区顶部(见 Dispatch.tsx),状态条腾出整行只放用量条 + agent 状态——
      2026-07-16 真机反馈修复:三段挤一行导致 Context/Usage/Weekly 用量条被推出可视区外,只能靠横滑才看得见 */
   .chat-sessctx-mobile { display: block; margin-bottom: 12px; }
