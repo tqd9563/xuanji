@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
@@ -722,7 +722,10 @@ function QuestionCard({
   );
 }
 
-function ChatRow({
+/** ChatRow 逐条独立 memo:d.items 每次增量都是新数组引用,不 memo 的话每个 delta 都会
+ *  连带把已经渲染完的历史消息全部重渲染一遍——包括重新跑一遍它们的 Markdown 解析,是长会话
+ *  流式卡顿的主因之一。item 引用不变的行(未在流式中的历史消息)据此完全跳过。 */
+const ChatRow = memo(function ChatRow({
   item,
   onDecide,
   onAnswer,
@@ -744,7 +747,9 @@ function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          <Md>{item.text}</Md>
+          {/* 流式中:纯文本渲染,避免每帧对着还在增长的全文重新跑 remark 解析(O(n²));
+              回合结束(streaming=false)才切到共享 Md 组件(统一 gfm + 链接新窗口打开),那时文本已定长,只解析一次。 */}
+          {item.streaming ? <div className="md-plain">{item.text}</div> : <Md>{item.text}</Md>}
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>
@@ -780,4 +785,4 @@ function ChatRow({
       <div className="note">⚠ {item.text}</div>
     </div>
   );
-}
+});
