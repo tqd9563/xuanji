@@ -46,8 +46,9 @@ export function WdPalette({
   );
 
   // 打开即聚焦搜索框:WKWebView(Pake 壳)下,唤起弹窗的那次 Enter 仍处理在派发框 textarea 上,
-  // 同一 tick 内的同步 focus 常被顶回 textarea。故 autoFocus + 立即聚焦 + setTimeout(0) 再抢一次
-  // (让位给同一轮事件的后续处理后再夺焦;setTimeout 不受后台标签页 rAF 节流影响)。光标移到末尾以便接着输入。
+  // 同 tick focus 与 setTimeout(0) 补抢均被真机证实可能失效(2026-07-16;派发页还有「进入自动聚焦
+  // 输入框」逻辑加剧竞争,派发页拦截 /wd 时也已先 blur 派发框配合本处)。改为轮询重试直到焦点
+  // 真正落座(50ms×20 上限 ~1s);Chromium 首次即成功、零额外开销。光标移到末尾以便接着输入。
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
@@ -57,8 +58,15 @@ export function WdPalette({
       el.setSelectionRange(len, len);
     };
     put();
-    const t = setTimeout(put, 0);
-    return () => clearTimeout(t);
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (document.activeElement === el || ++tries > 20) {
+        clearInterval(timer);
+        return;
+      }
+      put();
+    }, 50);
+    return () => clearInterval(timer);
   }, []);
   // query 变化时选中项回到第一条
 
