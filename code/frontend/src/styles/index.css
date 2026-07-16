@@ -1103,6 +1103,30 @@ body.wall-glass .dd-menu {
   .heat-row { grid-template-columns: 72px repeat(7, 1fr); }
   .heat-days { grid-template-columns: 72px repeat(7, 1fr); }
   .week-nav .wk-btn { min-width: 44px; min-height: 44px; }
+
+  /* ---- 回顾:顶部统计改原型 stat-grid 2×2 卡片(见 prototype-mobile.html #v-review/#v-home),
+     渲染分支见 Review.tsx isMobile ---- */
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .stat-grid .cell { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); padding: 10px 12px; }
+  .stat-grid .k { color: var(--faint); font-size: 0.6875rem; font-weight: 600; }
+  .stat-grid .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.9375rem; margin-top: 2px; color: var(--ink); }
+  .stat-grid .v small { color: var(--faint); font-size: 0.6875rem; }
+
+  /* 回顾:项目行(chip + 元信息 + 成本)桌面版三段挤一行,窄屏不换行会把整页撑宽出现横向滚动
+     (agent-browser 390×844 实测 scrollWidth 464 > 390);拆成两行——chip+成本一行,元信息独占一行 */
+  .rv-proj-head { flex-wrap: wrap; gap: 4px 10px; }
+  .rv-proj-head .m { flex-basis: 100%; white-space: normal; order: 3; }
+
+  /* ---- 定时:运行历史桌面表格在窄屏改紧凑单行卡片,不再是固定表头列宽的 table ---- */
+  .runs { display: block; }
+  .runs thead { display: none; }
+  .runs tbody { display: block; }
+  .runs tr { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 2px; border-bottom: 1px solid var(--line-soft); }
+  .runs tr:last-child { border-bottom: none; }
+  .runs td { display: inline-flex; align-items: center; border-bottom: none; padding: 0; font-size: 0.75rem; }
+
+  /* 派发页空态快捷建议 chip:未在原型中出现过的桌面遗留元素,补齐四四触控规则 */
+  .sugg button { min-height: 44px; padding: 10px 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

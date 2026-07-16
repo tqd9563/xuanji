@@ -4,6 +4,8 @@
 import { api } from '@/api/client';
 import { usePoll } from '@/lib/hooks';
 import type { ViewId } from '@/lib/hooks';
+import { toast } from '@/components/shared';
+import { wallStateLabel, type WallState } from '@/lib/wallpaper';
 
 const ICONS: Record<string, string> = {
   projects: 'M3 7l3-4h5l2 3h8v13H3z',
@@ -26,7 +28,15 @@ function Row({ id, label, hint, onClick }: { id: keyof typeof ICONS; label: stri
   );
 }
 
-export function MoreMenu({ onNav, health }: { onNav: (v: ViewId) => void; health: { cli: string | null } | null }) {
+export function MoreMenu({
+  onNav,
+  health,
+  wall,
+}: {
+  onNav: (v: ViewId) => void;
+  health: { cli: string | null } | null;
+  wall: WallState;
+}) {
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const { data: skillsData } = usePoll(api.skills, 60_000);
   const { data: memData } = usePoll(api.memories, 60_000);
@@ -43,6 +53,11 @@ export function MoreMenu({ onNav, health }: { onNav: (v: ViewId) => void; health
         <Row id="skills" label="技能" hint={skillsData ? `${skillsOn} 启用 · ${skillsData.skills.length} 共` : undefined} onClick={() => onNav('skills')} />
         <Row id="memory" label="经验" hint={memData ? `${memData.memories.length} 条` : undefined} onClick={() => onNav('memory')} />
         <Row id="review" label="回顾" onClick={() => onNav('review')} />
+      </div>
+      <div className="more-list">
+        {/* 壁纸设置沿用桌面版词汇(面板/预设缩略图/多组滑杆),移动端触屏交互留待后续迭代;
+            此处先落地入口行 + 当前状态展示,与原型 stub 行为一致 */}
+        <Row id="wallpaper" label="壁纸" hint={wallStateLabel(wall)} onClick={() => toast('壁纸设置沿桌面版词汇,移动端后续迭代')} />
       </div>
       <div className="more-foot">
         <div>

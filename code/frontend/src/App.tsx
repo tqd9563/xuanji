@@ -208,7 +208,7 @@ export default function App() {
         </section>
         {/* 移动端「更多」菜单:桌面 mobileMore 恒为 false,这个 section 永远不 active */}
         <section className={cn('view', mobileMore && 'active')}>
-          {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} />}
+          {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} wall={wall} />}
         </section>
       </main>
 

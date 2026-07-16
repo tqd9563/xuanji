@@ -228,6 +228,11 @@ export function wallSrcName(w: WallState): string {
   return 'URL';
 }
 
+/** 当前壁纸状态的一句话摘要,桌面壁纸入口按钮与移动端「更多」菜单行共用同一份文案 */
+export function wallStateLabel(w: WallState): string {
+  return w.mode === 'off' ? '关闭' : `${wallSrcName(w)} · ${w.mode === 'glass' ? '玻璃' : '壁纸'} ${w.opacity}%`;
+}
+
 function loadWall(): WallState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);

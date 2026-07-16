@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { api } from '@/api/client';
 import type { ReviewProject, WeeklyDraft } from '@/api/types';
-import { usePoll } from '@/lib/hooks';
+import { usePoll, useIsMobile } from '@/lib/hooks';
 import { fmtCost, projColor } from '@/lib/utils';
 import { Empty, Md, ProjChip, toast } from '@/components/shared';
 
@@ -30,6 +30,7 @@ function dayLabels(start: number, dayCount: number): string[] {
 }
 
 export function Review() {
+  const isMobile = useIsMobile();
   const [offset, setOffset] = useState(0);
   const { start, end } = useMemo(() => weekWindow(offset), [offset]);
   const { data } = usePoll(() => api.weeklyReview(start, end), 0, [start, end]);
@@ -80,13 +81,24 @@ export function Review() {
         <button className="btn btn-primary" onClick={genDraft} disabled={generating || !data}>✦ 生成周报草稿</button>
       </div>
 
-      <div className="panel dash-strip" title={data?.caliber.active}>
-        <span>prompt <b>{data?.totals.prompts ?? '—'}</b> 条</span>
-        <span>会话 <b>{data?.totals.sessions ?? '—'}</b> 个</span>
-        <span>项目 <b>{data?.totals.projects ?? '—'}</b> 个</span>
-        <span>活跃 <b>{data?.totals.activeDays ?? '—'}</b> 天</span>
-        <span>成本 <b>{data ? fmtCost(data.totals.costUsd) : '—'}</b></span>
-      </div>
+      {isMobile ? (
+        // 移动端:原型 stat-grid 2×2 卡片(见 wiki/design/prototype-mobile.html #v-review),
+        // 桌面版一行文字条信息密度更高、更适合宽屏,故不改
+        <div className="stat-grid" title={data?.caliber.active}>
+          <div className="cell"><div className="k">prompt</div><div className="v">{data?.totals.prompts ?? '—'} <small>条</small></div></div>
+          <div className="cell"><div className="k">会话</div><div className="v">{data?.totals.sessions ?? '—'} <small>个 · {data?.totals.projects ?? '—'} 项目</small></div></div>
+          <div className="cell"><div className="k">活跃天数</div><div className="v">{data?.totals.activeDays ?? '—'} <small>天</small></div></div>
+          <div className="cell"><div className="k">成本</div><div className="v">{data ? fmtCost(data.totals.costUsd) : '—'}</div></div>
+        </div>
+      ) : (
+        <div className="panel dash-strip" title={data?.caliber.active}>
+          <span>prompt <b>{data?.totals.prompts ?? '—'}</b> 条</span>
+          <span>会话 <b>{data?.totals.sessions ?? '—'}</b> 个</span>
+          <span>项目 <b>{data?.totals.projects ?? '—'}</b> 个</span>
+          <span>活跃 <b>{data?.totals.activeDays ?? '—'}</b> 天</span>
+          <span>成本 <b>{data ? fmtCost(data.totals.costUsd) : '—'}</b></span>
+        </div>
+      )}
 
       <div className="panel" style={{ marginBottom: 16 }}>
         <div className="panel-head">
