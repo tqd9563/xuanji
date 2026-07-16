@@ -1,6 +1,25 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
+import Markdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { cn, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
+
+// ---------- Markdown 渲染(统一出口) ----------
+
+// 链接一律新窗口打开:浏览器里避免同窗导航把 SPA 整页带走;
+// Pake/Tauri WKWebView 里同窗跨域导航会被吞,new-window 请求才会转交系统浏览器。
+const MD_COMPONENTS: Components = {
+  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+};
+
+/** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 外链新窗口打开 */
+export function Md({ children }: { children: string }) {
+  return (
+    <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+      {children}
+    </Markdown>
+  );
+}
 
 // ---------- 状态胶囊 ----------
 
