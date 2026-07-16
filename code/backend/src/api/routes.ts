@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs';
+import { promisify } from 'node:util';
 import { config } from '../config.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
@@ -16,6 +18,7 @@ import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js'
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
+const execFileP = promisify(execFile);
 
 /** query/body 数值参数:仅接受有限正数 */
 function num(v: unknown): number | undefined {
@@ -85,6 +88,28 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   });
 
   // ---------- M2 写操作与派发辅助 ----------
+
+  /** 桌面壳外链兜底:Pake/Tauri 壳内 Tauri IPC 未注入时,target=_blank 的新窗口请求会被
+   *  WKWebView 吞掉(点了没反应)。后端与壳同机,由后端 `open <url>` 唤起系统默认浏览器。
+   *  仅放行 http/https;execFile 参数数组传参,无 shell 注入面。不触碰 ~/.claude,只读铁律不涉及。 */
+  api.post('/open-url', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    let url: URL;
+    try {
+      url = new URL(String(body.url ?? ''));
+    } catch {
+      return c.json({ error: 'url 非法' }, 400);
+    }
+    if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+      return c.json({ error: '仅允许 http/https 链接' }, 400);
+    }
+    try {
+      await execFileP('open', [url.href], { timeout: 10_000 });
+      return c.json({ ok: true });
+    } catch (e) {
+      return c.json({ error: `唤起系统浏览器失败: ${e instanceof Error ? e.message : String(e)}` }, 500);
+    }
+  });
 
   /** 技能启停:铁律例外②——显式触发 + confirm 双确认,目录移动可逆 */
   api.post('/skills/:name/toggle', async (c) => {
