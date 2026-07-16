@@ -1,0 +1,9 @@
+{
+  "appId": "com.xuanji.app",
+  "appName": "璇玑",
+  "webDir": "www",
+  "server": {
+    "url": "https://lilithgamesmacbook-pro-28.tail93b6bb.ts.net",
+    "cleartext": false
+  }
+}
