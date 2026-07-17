@@ -37,6 +37,27 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
 export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review';
 export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron', 'review'];
 
+/** 移动端断点(与 DESIGN.md「手持罗盘」形态同源:重新组织信息架构而非缩放像素) */
+export const MOBILE_QUERY = '(max-width: 430px)';
+
+/** 响应式媒体查询订阅:用于需要真正不同 DOM 结构的场景(会话看板/密集表格),
+ *  简单的重排交给纯 CSS 媒体查询,这里只在信息架构本身要变时才用。 */
+export function useMediaQuery(query: string): boolean {
+  const [match, setMatch] = useState(() => typeof window !== 'undefined' && window.matchMedia(query).matches);
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatch(mql.matches);
+    onChange();
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, [query]);
+  return match;
+}
+
+export function useIsMobile(): boolean {
+  return useMediaQuery(MOBILE_QUERY);
+}
+
 /** hash 路由(与原型一致:#dashboard…#cron),浏览器前进后退可用 */
 export function useHashRoute(): [ViewId, (v: ViewId) => void] {
   const read = (): ViewId => {

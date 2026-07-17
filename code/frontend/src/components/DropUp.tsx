@@ -66,6 +66,9 @@ export function DropUp({
         </span>
         <span className="caret">▾</span>
       </button>
+      {/* 移动端(≤430px)专用背景:桌面恒隐藏,详见 index.css「移动端」媒体查询块——
+          自绘下拉在窄屏收敛为底部上滑 sheet,需要一层可点关闭的背景 */}
+      <div className="dd-backdrop" onClick={() => setOpen(false)} aria-hidden="true" />
       <div className="dd-menu" role="listbox">
         {options.map((o) => (
           <button

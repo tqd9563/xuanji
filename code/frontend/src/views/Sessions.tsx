@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
-import { usePoll, isTypingTarget } from '@/lib/hooks';
+import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
 import { Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
@@ -26,6 +26,15 @@ const COLS: { key: SessionState; label: string }[] = [
   { key: 'idle', label: '空闲' },
   { key: 'running', label: '运行中' },
   { key: 'blocked', label: '等待输入' },
+  { key: 'done', label: '已完成' },
+];
+
+/** 移动端状态 tab 顺序与文案:「需要你」优先(与 DESIGN.md 移动端章节同源),
+ *  取代桌面 4×272px 横向滚动看板——重新组织信息架构而非缩放同一个网格。 */
+const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
+  { key: 'blocked', label: '需要你', warn: true },
+  { key: 'running', label: '运行中' },
+  { key: 'idle', label: '空闲' },
   { key: 'done', label: '已完成' },
 ];
 
@@ -64,6 +73,9 @@ export function Sessions({
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
+  const isMobile = useIsMobile();
+  const [mobileTab, setMobileTab] = useState<SessionState>('blocked');
+  const [mobileDoneOpen, setMobileDoneOpen] = useState(false);
 
   // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序)
   const columns = useMemo(() => {
@@ -161,6 +173,85 @@ export function Sessions({
     return () => document.removeEventListener('keydown', onKey);
   }, [active, openReplay, refresh]);
 
+  // 卡片渲染:桌面(键盘选中态按列/行坐标)与移动端(单列,无键盘选中)共用同一套标记结构
+  const xClose = (s: AgentSession) =>
+    !s.readonly && (
+      <button
+        className="x-close"
+        title="关闭会话(Ctrl+X)"
+        aria-label={`关闭会话 ${s.name}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          void closeSession(s, refresh);
+        }}
+      >
+        ×
+      </button>
+    );
+
+  /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
+  const compactCard = (s: AgentSession, sel: boolean) => (
+    <div
+      key={s.id}
+      className={`scard compact ${sel ? 'kb-sel' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+      onClick={() => void openReplay(s.sessionId, s)}
+    >
+      <div className="top">
+        {isUnread(s) && <span className="u-dot" />}
+        <span className="title">{s.name}</span>
+        {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        {xClose(s)}
+      </div>
+      <div className="cwd">
+        <ProjChip name={s.project} path={s.cwd} />
+        <span className="ctime">{timeAgo(s.startedAt)}</span>
+      </div>
+    </div>
+  );
+
+  const fullCard = (s: AgentSession, sel: boolean) => (
+    <div
+      key={s.id}
+      className={`scard ${sel ? 'kb-sel' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+      onClick={() => void openReplay(s.sessionId, s)}
+    >
+      <div className="top">
+        {isUnread(s) && <span className="u-dot" />}
+        <span className="title">{s.name}</span>
+        {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
+        {s.readonly && <Tag>只读</Tag>}
+        {xClose(s)}
+      </div>
+      <div className="cwd">
+        <ProjChip name={s.project} path={s.cwd} />
+        <span className="sid">{s.id}</span>
+      </div>
+      {s.detail && <div className="detail">{s.detail}</div>}
+      {s.needs && <div className="needs">⏸ {s.needs}</div>}
+      <div className="foot">
+        {s.state === 'blocked' && !s.readonly && (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              smartOpen(s, (id, sess) => void openReplay(id, sess));
+            }}
+          >
+            去回复
+          </button>
+        )}
+        <span className="time">{clock(s.startedAt)} 开始</span>
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div className="view-head">
@@ -170,123 +261,90 @@ export function Sessions({
       <div className="notice">
         <span className="ok" style={data && !data.ok ? { background: 'var(--red)' } : undefined} />
         {data ? (
-          <>
-            经 <span className="mono">claude agents --json --all</span> 刷新于{' '}
-            {Math.max(0, Math.round((Date.now() - data.refreshedAt) / 1000))} 秒前 · 终端存活的交互会话仅只读展示 ·{' '}
-            <span className="mono">← ↑ ↓ →</span> 选卡,<span className="mono">Space</span> 进入,
-            <span className="mono">Ctrl+X</span> 关闭会话,<span className="mono">Esc</span> 关抽屉
-          </>
+          isMobile ? (
+            <>
+              刷新于 {Math.max(0, Math.round((Date.now() - data.refreshedAt) / 1000))} 秒前 · 终端存活的交互会话仅只读展示
+            </>
+          ) : (
+            <>
+              经 <span className="mono">claude agents --json --all</span> 刷新于{' '}
+              {Math.max(0, Math.round((Date.now() - data.refreshedAt) / 1000))} 秒前 · 终端存活的交互会话仅只读展示 ·{' '}
+              <span className="mono">← ↑ ↓ →</span> 选卡,<span className="mono">Space</span> 进入,
+              <span className="mono">Ctrl+X</span> 关闭会话,<span className="mono">Esc</span> 关抽屉
+            </>
+          )
         ) : (
           '加载中…'
         )}
       </div>
-      <div className="board">
-        {COLS.map((col, ci) => {
-          const items = columns?.[col.key] ?? [];
-          const isDone = col.key === 'done';
-          const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
-
-          const xClose = (s: AgentSession) =>
-            !s.readonly && (
-              <button
-                className="x-close"
-                title="关闭会话(Ctrl+X)"
-                aria-label={`关闭会话 ${s.name}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void closeSession(s, refresh);
-                }}
-              >
-                ×
-              </button>
+      {!isMobile && (
+        <div className="board">
+          {COLS.map((col, ci) => {
+            const items = columns?.[col.key] ?? [];
+            const isDone = col.key === 'done';
+            const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
+            const card = (s: AgentSession, ri: number) =>
+              isDone ? compactCard(s, kbPos?.c === ci && kbPos?.r === ri) : fullCard(s, kbPos?.c === ci && kbPos?.r === ri);
+            return (
+              <div key={col.key}>
+                <div className="col-head">
+                  <Pill state={col.key} />
+                  <span className="n">{items.length}</span>
+                </div>
+                <div className="col-body">
+                  {items.slice(0, isDone ? DONE_RECENT : undefined).map((s, ri) => card(s, ri))}
+                  {olderCount > 0 && (
+                    <button className="col-more" onClick={() => setDoneOpen(!doneOpen)}>
+                      {doneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
+                    </button>
+                  )}
+                  {isDone && doneOpen && items.slice(DONE_RECENT).map((s, i) => card(s, DONE_RECENT + i))}
+                  {items.length === 0 && (
+                    <div className="empty" style={{ padding: '24px 12px' }}><p>暂无</p></div>
+                  )}
+                </div>
+              </div>
             );
+          })}
+        </div>
+      )}
 
-          /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
-          const compactCard = (s: AgentSession, ri: number) => (
-            <div
-              key={s.id}
-              className={`scard compact ${kbPos?.c === ci && kbPos?.r === ri ? 'kb-sel' : ''}`}
-              role="button"
-              tabIndex={0}
-              title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
-              onClick={() => void openReplay(s.sessionId, s)}
-            >
-              <div className="top">
-                {isUnread(s) && <span className="u-dot" />}
-                <span className="title">{s.name}</span>
-                {isUnread(s) && <span className="tag t-unread">待验收</span>}
-                {xClose(s)}
-              </div>
-              <div className="cwd">
-                <ProjChip name={s.project} path={s.cwd} />
-                <span className="ctime">{timeAgo(s.startedAt)}</span>
-              </div>
-            </div>
-          );
-
-          const fullCard = (s: AgentSession, ri: number) => (
-            <div
-              key={s.id}
-              className={`scard ${kbPos?.c === ci && kbPos?.r === ri ? 'kb-sel' : ''}`}
-              role="button"
-              tabIndex={0}
-              title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
-              onClick={() => void openReplay(s.sessionId, s)}
-            >
-              <div className="top">
-                {isUnread(s) && <span className="u-dot" />}
-                <span className="title">{s.name}</span>
-                {isUnread(s) && <span className="tag t-unread">待验收</span>}
-                <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
-                {s.readonly && <Tag>只读</Tag>}
-                {xClose(s)}
-              </div>
-              <div className="cwd">
-                <ProjChip name={s.project} path={s.cwd} />
-                <span className="sid">{s.id}</span>
-              </div>
-              {s.detail && <div className="detail">{s.detail}</div>}
-              {s.needs && <div className="needs">⏸ {s.needs}</div>}
-              <div className="foot">
-                {s.state === 'blocked' && !s.readonly && (
-                  <button
-                    className="btn btn-sm btn-primary"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      smartOpen(s, (id, sess) => void openReplay(id, sess));
-                    }}
-                  >
-                    去回复
+      {/* 移动端:状态 tab(需要你优先)+ 单列卡片流,取代桌面 4×272px 横向滚动看板 */}
+      {isMobile && (
+        <div className="board-mobile">
+          <div className="seg-scroll">
+            <div className="seg">
+              {MOBILE_TABS.map((t) => {
+                const n = columns?.[t.key]?.length ?? 0;
+                return (
+                  <button key={t.key} className={mobileTab === t.key ? 'active' : ''} onClick={() => { setMobileTab(t.key); setMobileDoneOpen(false); }}>
+                    {t.warn && mobileTab !== t.key && n > 0 && <span className="warn-dot" />}
+                    {t.label}<span className="n mono">{n}</span>
                   </button>
-                )}
-                <span className="time">{clock(s.startedAt)} 开始</span>
-              </div>
+                );
+              })}
             </div>
-          );
-
-          const card = isDone ? compactCard : fullCard;
-          return (
-            <div key={col.key}>
-              <div className="col-head">
-                <Pill state={col.key} />
-                <span className="n">{items.length}</span>
-              </div>
-              <div className="col-body">
-                {items.slice(0, isDone ? DONE_RECENT : undefined).map((s, ri) => card(s, ri))}
+          </div>
+          {(() => {
+            const items = columns?.[mobileTab] ?? [];
+            const isDone = mobileTab === 'done';
+            const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
+            const card = (s: AgentSession) => (isDone ? compactCard(s, false) : fullCard(s, false));
+            if (items.length === 0) return <div className="empty" style={{ padding: '32px 12px' }}><p>这个状态下暂无会话。</p></div>;
+            return (
+              <>
+                {items.slice(0, isDone ? DONE_RECENT : undefined).map((s) => card(s))}
                 {olderCount > 0 && (
-                  <button className="col-more" onClick={() => setDoneOpen(!doneOpen)}>
-                    {doneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
+                  <button className="col-more" onClick={() => setMobileDoneOpen(!mobileDoneOpen)}>
+                    {mobileDoneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
                   </button>
                 )}
-                {isDone && doneOpen && items.slice(DONE_RECENT).map((s, i) => card(s, DONE_RECENT + i))}
-                {items.length === 0 && (
-                  <div className="empty" style={{ padding: '24px 12px' }}><p>暂无</p></div>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                {isDone && mobileDoneOpen && items.slice(DONE_RECENT).map((s) => card(s))}
+              </>
+            );
+          })()}
+        </div>
+      )}
 
       <Drawer
         open={drawerOpen}

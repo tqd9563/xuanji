@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
-import { usePoll, isTypingTarget } from '@/lib/hooks';
+import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
@@ -59,6 +59,7 @@ interface SessCtx {
 
 export function Dispatch({ active }: { active: boolean }) {
   const d = useDispatch();
+  const isMobile = useIsMobile();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
   const [modelSel, setModelSel] = useState(initialModel);
@@ -451,6 +452,14 @@ export function Dispatch({ active }: { active: boolean }) {
       </div>
       <div className="dispatch">
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
+          {/* 移动端:会话标识挪进消息区顶部随内容滚动,让出状态条的横向空间给用量条(见下方 .chat-status)——
+              桌面维持原样(标识常驻状态条最左端),两端各显示一份,靠 CSS 二选一(2026-07-16 真机反馈修复:
+              状态条三段挤在一行导致 Context/Usage/Weekly 用量条被推出可视区、只能横滑才看得见)。 */}
+          {isMobile && sessCtx && (
+            <div className="chat-sessctx-mobile">
+              <SessCtxBadge ctx={sessCtx} />
+            </div>
+          )}
           {d.items.length === 0 && (
             <div className="chat-empty">
               <h2>派发一个新任务</h2>
@@ -471,7 +480,7 @@ export function Dispatch({ active }: { active: boolean }) {
         </div>
 
         <div className="chat-status">
-          {sessCtx && <SessCtxBadge ctx={sessCtx} />}
+          {!isMobile && sessCtx && <SessCtxBadge ctx={sessCtx} />}
           <span className="u-chips">
             <Chip label="Context" pct={d.chips.contextPct} />
             <Chip label="Usage" pct={d.chips.fiveHourPct} resetsAt={d.chips.fiveHourResetsAt} />
@@ -527,18 +536,27 @@ export function Dispatch({ active }: { active: boolean }) {
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
             )}
-            <label className="bg-opt">
+            <label className="bg-opt" title="转后台(--bg):交给 daemon 托管,回会话看板跟踪">
               <span
                 className={cn('switch', bg && 'on')}
                 role="switch"
                 aria-checked={bg}
+                aria-label="转后台(--bg)"
                 tabIndex={0}
                 onClick={() => setBg(!bg)}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setBg(!bg); } }}
               />
-              转后台(--bg)
+              {/* 移动端只留开关本体(title/aria-label 承载说明文字),给发送按钮腾出宽度——
+                  桌面文字常驻(2026-07-16 真机反馈修复:发送按钮被挤到显示不全) */}
+              <span className="bg-opt-label">转后台(--bg)</span>
             </label>
-            <button className="btn btn-primary" onClick={() => void submit()}>发送</button>
+            <button className="btn btn-primary send-btn" onClick={() => void submit()} aria-label="发送">
+              <span className="send-btn-label">发送</span>
+              <svg className="send-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M22 2 11 13" />
+                <path d="M22 2 15 22l-4-9-9-4z" />
+              </svg>
+            </button>
           </div>
         </div>
 

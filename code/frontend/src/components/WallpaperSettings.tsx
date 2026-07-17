@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 import { toast } from '@/components/shared';
 import {
   saveLocalImage,
-  wallSrcName,
+  wallStateLabel,
   WALL_PRESETS,
   type WallMode,
   type WallState,
@@ -66,10 +66,7 @@ export function WallpaperSettings({
       .catch(() => toast('图片读取失败'));
   };
 
-  const stateLabel =
-    wall.mode === 'off'
-      ? '关闭'
-      : `${wallSrcName(wall)} · ${wall.mode === 'glass' ? '玻璃' : '壁纸'} ${wall.opacity}%`;
+  const stateLabel = wallStateLabel(wall);
 
   return (
     <>

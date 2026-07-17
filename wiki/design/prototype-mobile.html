@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>璇玑 · xuanji — 移动端原型</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%22-66.9%20-53.29%201438.85%201438.85%22%3E%3Cg%20transform%3D%22translate%28129.962149%2C1193.807683%29%20scale%280.100000%2C-0.100000%29%22%20fill%3D%22%23bbc75f%22%20stroke%3D%22none%22%3E%20%3Cpath%20d%3D%22M4950%208329%20c-153%20-11%20-376%20-50%20-531%20-93%20-344%20-95%20-676%20-262%20-946%20-476%20-730%20-579%20-1116%20-1564%20-957%20-2443%2014%20-74%2019%20-87%2033%20-82%209%204%2049%2015%2090%2026%20207%2053%20421%20-8%20576%20-165%2081%20-82%20123%20-149%20159%20-256%2080%20-240%209%20-478%20-169%20-565%20-180%20-89%20-415%2016%20-415%20185%200%20124%20117%20201%20236%20155%2025%20-9%2048%20-14%2052%20-10%204%203%206%2033%206%2065%20-2%20111%20-86%20228%20-191%20264%20-61%2021%20-186%2021%20-249%20-1%20-157%20-53%20-283%20-199%20-328%20-384%20-21%20-84%20-21%20-261%20-1%20-368%2094%20-492%20577%20-1127%201150%20-1511%20347%20-232%20711%20-373%201132%20-437%20156%20-24%20537%20-24%20698%200%20399%2059%20803%20210%201130%20424%20138%2091%20356%20265%20345%20276%20-3%203%20-30%2017%20-60%2032%20-160%2080%20-306%20216%20-366%20341%20-89%20185%20-82%20424%2018%20604%20100%20179%20244%20290%20424%20327%20222%2045%20425%20-89%20441%20-291%206%20-66%20-16%20-136%20-55%20-180%20-41%20-46%20-138%20-69%20-199%20-45%20-57%2021%20-113%2093%20-113%20144%200%2014%20-6%2025%20-13%2025%20-22%200%20-100%20-55%20-136%20-95%20-58%20-67%20-76%20-118%20-76%20-220%200%20-80%203%20-97%2031%20-155%2053%20-113%20168%20-204%20309%20-246%2079%20-24%20236%20-23%20324%200%2083%2022%20201%2083%20273%20140%20277%20221%20504%20788%20568%201420%2027%20259%202%20625%20-60%20906%20-209%20942%20-807%201756%20-1567%202134%20-72%2037%20-138%2066%20-146%2066%20-12%200%20-13%20-7%20-6%20-37%2024%20-103%202%20-240%20-54%20-348%20-38%20-73%20-143%20-180%20-217%20-222%20-81%20-46%20-188%20-73%20-291%20-73%20-389%200%20-662%20327%20-476%20571%2041%2054%20124%2099%20182%2099%2056%200%20123%20-36%20146%20-80%2032%20-58%2019%20-153%20-24%20-189%20-25%20-20%20-21%20-29%2021%20-47%2024%20-11%2065%20-17%20117%20-18%2070%200%2086%203%20134%2029%2089%2049%20131%20118%20147%20241%207%2061%20-15%20155%20-53%20226%20-15%2028%20-60%2080%20-99%20117%20-142%20133%20-320%20197%20-609%20221%20-141%2011%20-167%2011%20-335%20-1z%20m371%20-2228%20c270%20-69%20498%20-296%20570%20-567%2028%20-105%2030%20-289%205%20-389%20-76%20-292%20-306%20-522%20-593%20-592%20-96%20-23%20-267%20-23%20-363%201%20-294%2073%20-525%20302%20-597%20593%20-24%2099%20-22%20285%205%20384%2079%20295%20329%20527%20629%20584%2098%2018%20241%2013%20344%20-14z%22%2F%3E%20%3C%2Fg%3E%3C%2Fsvg%3E">
+<style>
+/* ============================================================
+   璇玑 · 移动端原型 — 设计 token 与桌面版同源(DESIGN.md frontmatter)
+   适配策略:重新思考交互而非缩放像素——
+   看板→状态 tab + 单列流 / 终端操作台→触屏 sheet / hover→点按
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+
+  --jade:     oklch(0.80 0.13 115);
+  --jade-dim: oklch(0.68 0.10 115);
+  --on-jade:  oklch(0.18 0.02 120);
+
+  --amber:  oklch(0.78 0.14 80);
+  --blue:   oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
+  --red:    oklch(0.68 0.19 25);
+  --green:  oklch(0.74 0.12 155);
+  --chart-1: oklch(0.68 0.075 115);
+  --chart-2: oklch(0.65 0.065 300);
+  --chart-3: oklch(0.65 0.065 245);
+  --tool-exec: oklch(0.78 0.13 180);
+
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+  --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
+  --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
+  --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --z-sticky: 20;
+  --z-backdrop: 30;
+  --z-sheet: 40;
+  --z-toast: 50;
+
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-sheet: 16px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* 移动端框架 */
+  --tab-h: 58px;
+  --top-h: 52px;
+  --frame-w: 430px;
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: 0.9375rem;       /* 移动端正文 15px,比桌面 14px 高半档 */
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; touch-action: manipulation; }
+input, select, textarea { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+.mono { font-family: var(--mono); font-size: 0.8em; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* ============ 手机框架(桌面浏览器审阅时居中呈现) ============ */
+.phone { max-width: var(--frame-w); margin: 0 auto; min-height: 100dvh; position: relative; }
+@media (min-width: 431px) {
+  body { background: oklch(0.11 0.005 120); }
+  .phone { border-left: 1px solid var(--line-soft); border-right: 1px solid var(--line-soft); background: var(--bg); }
+}
+
+/* ============ 顶栏 ============ */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; margin: 0 auto; max-width: var(--frame-w);
+  z-index: var(--z-sticky);
+  height: calc(var(--top-h) + var(--sat));
+  padding: var(--sat) 8px 0 14px;
+  display: flex; align-items: center; gap: 10px;
+  background: color-mix(in oklab, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); /* 吸顶栏滚动垫层,非装饰 */
+  border-bottom: 1px solid var(--line-soft);
+}
+.topbar .brand-mark { width: 26px; height: 26px; color: var(--jade); flex: none; }
+.topbar h1 { font-size: 1.0625rem; font-weight: 600; letter-spacing: 0.01em; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .spacer { flex: 1; }
+.topbar .daemon { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); padding-right: 8px; }
+.topbar .daemon .ok { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
+.top-btn {
+  min-width: 44px; height: 44px; padding: 0 12px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  border-radius: var(--r-s); color: var(--jade); font-weight: 600; font-size: 0.875rem;
+  transition: background 150ms var(--ease);
+}
+.top-btn:active { background: var(--hover); }
+.top-btn.back { color: var(--muted); font-weight: 400; padding: 0 10px; margin-left: -8px; }
+.top-btn.back b { font-weight: 600; color: var(--ink); }
+
+/* ============ 主区 ============ */
+main { padding: calc(var(--top-h) + var(--sat)) 0 calc(var(--tab-h) + var(--sab) + 12px); }
+.view { display: none; padding: 14px 14px 8px; animation: viewIn 180ms var(--ease); }
+.view.active { display: block; }
+@keyframes viewIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ============ 底部 tab 栏(拇指区导航) ============ */
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; margin: 0 auto; max-width: var(--frame-w);
+  z-index: var(--z-sticky);
+  height: calc(var(--tab-h) + var(--sab));
+  padding-bottom: var(--sab);
+  display: flex;
+  background: color-mix(in oklab, var(--surface-2) 96%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--line-soft);
+}
+.tabbar button {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  color: var(--faint); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.02em;
+  position: relative; transition: color 150ms var(--ease);
+}
+.tabbar button svg { width: 22px; height: 22px; }
+.tabbar button.active { color: var(--jade); }
+.tabbar button:active { color: var(--muted); }
+.tabbar button.active:active { color: var(--jade-dim); }
+.tabbar .bdg {
+  position: absolute; top: 5px; left: calc(50% + 6px);
+  min-width: 16px; height: 16px; padding: 0 4px; border-radius: 99px;
+  background: var(--amber); color: var(--on-jade);
+  font-size: 0.625rem; font-weight: 700; font-family: var(--mono); font-variant-numeric: tabular-nums;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ============ 面板 / 卡片 ============ */
+.panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); margin-bottom: 12px; overflow: hidden; }
+.panel-head { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 10px; border-bottom: 1px solid var(--line-soft); }
+.panel-head h2 { font-size: 0.875rem; }
+.panel-head .sub { color: var(--faint); font-size: 0.6875rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-head .spacer { flex: 1; }
+
+.mcard {
+  display: block; width: 100%; text-align: left;
+  background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  padding: 12px 14px; margin-bottom: 10px;
+  transition: background 150ms var(--ease);
+}
+.mcard:active { background: var(--hover); }
+.mcard .t-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mcard .t-row .title { font-weight: 600; font-size: 0.9375rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.mcard .detail { color: var(--muted); font-size: 0.8125rem; line-height: 1.55; margin-top: 6px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mcard .needs { color: var(--amber); }
+.mcard .foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); font-variant-numeric: tabular-nums; min-width: 0; flex-wrap: wrap; }
+.mcard .foot .spacer { flex: 1; }
+
+/* 未读点:蓝=有新回执 */
+.unread-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--blue); flex: none; }
+
+/* ============ 状态胶囊 / 标签 / 项目芯片 ============ */
+.pill { display: inline-flex; align-items: center; gap: 5px; border-radius: 99px; padding: 2px 10px;
+  font-size: 0.6875rem; font-weight: 600; flex: none; }
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill-run  { color: var(--jade);  background: var(--tint-jade); }
+.pill-blk  { color: var(--amber); background: var(--tint-amber); }
+.pill-idle { color: var(--muted); background: var(--tint-muted); }
+.pill-done { color: var(--green); background: var(--tint-green); }
+.pill-sch  { color: var(--blue);  background: var(--tint-blue); }
+.pill-err  { color: var(--red);   background: var(--tint-red); }
+.pill-run .dot, .pill-blk .dot { animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.tag { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 4px;
+  padding: 0 6px; color: var(--muted); font-size: 0.6875rem; font-weight: 600; flex: none; }
+.proj-chip { display: inline-flex; align-items: center; border-radius: 4px; padding: 1.5px 8px;
+  font-family: var(--mono); font-size: 0.6875rem; flex: none; max-width: 46vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ============ 分段控件(状态 tab / 筛选) ============ */
+.seg-scroll { position: sticky; top: calc(var(--top-h) + var(--sat)); z-index: 5;
+  margin: -14px -14px 12px; padding: 10px 14px;
+  background: color-mix(in oklab, var(--bg) 94%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  overflow-x: auto; scrollbar-width: none; }
+.seg-scroll::-webkit-scrollbar { display: none; }
+.seg { display: inline-flex; gap: 4px; background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: var(--r-m); padding: 4px; white-space: nowrap; }
+.seg button { min-height: 36px; padding: 4px 14px; border-radius: 7px; color: var(--muted);
+  font-size: 0.8125rem; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;
+  transition: background 150ms var(--ease), color 150ms var(--ease); }
+.seg button:active { background: var(--hover); }
+.seg button.active { background: var(--hover); color: var(--ink); }
+.seg button .n { font-family: var(--mono); font-size: 0.6875rem; font-variant-numeric: tabular-nums; color: var(--faint); }
+.seg button.active .n { color: var(--muted); }
+.seg button .warn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); animation: pulse 2s infinite; }
+
+/* 筛选 chips(横向滚动) */
+.chip-row { display: flex; gap: 8px; overflow-x: auto; padding: 2px 0 10px; scrollbar-width: none; }
+.chip-row::-webkit-scrollbar { display: none; }
+.chip-row button { min-height: 36px; padding: 4px 14px; border-radius: 99px;
+  border: 1px solid var(--line); color: var(--muted); font-size: 0.8125rem; font-weight: 600; flex: none;
+  transition: background 150ms var(--ease); }
+.chip-row button:active { background: var(--hover); }
+.chip-row button.active { background: var(--tint-jade); border-color: transparent; color: var(--jade); }
+
+/* ============ 输入 ============ */
+.input {
+  width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-s);
+  padding: 10px 14px; font-size: 1rem; /* ≥16px 防 iOS 聚焦缩放 */
+  min-height: 44px; transition: border-color 150ms var(--ease);
+}
+.input:focus { outline: none; border-color: var(--jade); }
+.search-wrap { margin-bottom: 12px; }
+
+/* ============ 首页 ============ */
+.home-clock { display: flex; align-items: baseline; gap: 8px; margin: 2px 2px 12px; }
+.home-clock .date { color: var(--faint); font-size: 0.75rem; }
+.home-clock .time { font-family: var(--mono); font-weight: 500; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.9375rem; }
+
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.stat-grid .cell { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); padding: 10px 12px; }
+.stat-grid .k { color: var(--faint); font-size: 0.6875rem; font-weight: 600; }
+.stat-grid .v { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.9375rem; margin-top: 2px; color: var(--ink); }
+.stat-grid .v small { color: var(--faint); font-size: 0.6875rem; }
+
+.need-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left;
+  padding: 12px 14px; min-height: 44px; border-top: 1px solid var(--line-soft); transition: background 150ms var(--ease); }
+.need-item:first-child { border-top: none; }
+.need-item:active { background: var(--hover); }
+.need-item .body { flex: 1; min-width: 0; }
+.need-item .name { font-weight: 600; font-size: 0.875rem; display: flex; align-items: center; gap: 8px; }
+.need-item .name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.need-item .why { color: var(--amber); font-size: 0.8125rem; margin-top: 2px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.need-item .why.info { color: var(--muted); }
+.need-item .go { color: var(--faint); flex: none; align-self: center; font-size: 1.05rem; }
+
+.run-item { display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-top: 1px solid var(--line-soft); }
+.run-item:first-child { border-top: none; }
+.run-item .rdot { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); animation: pulse 2s infinite; flex: none; }
+.run-item .body { flex: 1; min-width: 0; }
+.run-item .name { font-weight: 600; font-size: 0.875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-item .sub { color: var(--muted); font-size: 0.75rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-item .t { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); font-size: 0.6875rem; flex: none; }
+
+.tl { list-style: none; }
+.tl li { display: flex; gap: 10px; padding: 9px 14px; border-top: 1px solid var(--line-soft); align-items: baseline; }
+.tl li:first-child { border-top: none; }
+.tl .t { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); font-size: 0.6875rem; flex: none; width: 52px; }
+.tl .m { color: var(--muted); font-size: 0.8125rem; min-width: 0; }
+.tl .m b { color: var(--ink); font-weight: 600; }
+
+/* 7 日热力 */
+.heat { padding: 12px 14px; overflow-x: auto; }
+.heat table { border-collapse: separate; border-spacing: 4px; }
+.heat .pn { color: var(--muted); font-size: 0.6875rem; font-family: var(--mono); padding-right: 6px; text-align: right; white-space: nowrap; }
+.heat .d { width: 22px; height: 22px; border-radius: 4px; background: var(--surface-2); position: relative; }
+.heat .d i { position: absolute; inset: 0; border-radius: 4px; background: var(--jade); }
+.heat .dh { color: var(--faint); font-size: 0.625rem; text-align: center; padding-bottom: 2px; }
+
+/* token 成本 */
+.tok-row { width: 100%; text-align: left; padding: 10px 14px; border-top: 1px solid var(--line-soft); transition: background 150ms var(--ease); }
+.tok-row:first-child { border-top: none; }
+.tok-row:active { background: var(--hover); }
+.tok-top { display: flex; align-items: center; gap: 8px; }
+.tok-top .pn { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); flex: none; width: 96px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tok-top .bar { flex: 1; height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; display: flex; }
+.tok-top .bar i { height: 100%; }
+.tok-top .amt { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--muted); flex: none; width: 48px; text-align: right; }
+.tok-sess { margin-top: 8px; display: none; }
+.tok-row.open .tok-sess { display: block; }
+.tok-sess .sr { display: flex; justify-content: space-between; gap: 10px; padding: 4px 0 4px 8px; color: var(--muted); font-size: 0.75rem; }
+.tok-sess .sr .sn { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tok-sess .sr .sc { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); flex: none; }
+.tok-legend { display: flex; gap: 12px; padding: 0 14px 10px; color: var(--faint); font-size: 0.6875rem; }
+.tok-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; }
+
+/* ============ 会话卡片流 ============ */
+.notice-line { color: var(--faint); font-size: 0.6875rem; margin: 0 2px 10px; line-height: 1.5; }
+.notice-line .ok { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: 1px; }
+.more-btn { display: block; width: 100%; min-height: 44px; text-align: center; color: var(--muted);
+  font-size: 0.8125rem; font-weight: 600; border: 1px dashed var(--line); border-radius: var(--r-m);
+  margin-bottom: 10px; transition: background 150ms var(--ease); }
+.more-btn:active { background: var(--hover); }
+
+/* ============ 派发 ============ */
+#v-dispatch { display: none; padding: 0; }
+#v-dispatch.active { display: flex; flex-direction: column; height: calc(100dvh - var(--top-h) - var(--sat) - var(--tab-h) - var(--sab)); }
+.chat { flex: 1; overflow-y: auto; padding: 14px 14px 6px; background: var(--surface-2); }
+.sess-ctx-chip { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.sess-ctx-chip .sess-name { display: inline-flex; align-items: center; gap: 6px; max-width: 70vw;
+  padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); font-size: 0.75rem; color: var(--ink);
+  overflow: hidden; white-space: nowrap; }
+.sess-ctx-chip .sess-name .glow { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.sess-ctx-chip .path { color: var(--faint); font-family: var(--mono); font-size: 0.6875rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.msg { margin-bottom: 14px; max-width: 92%; }
+.msg.user { margin-left: auto; background: var(--surface); border: 1px solid var(--line-soft);
+  border-radius: 12px 12px 4px 12px; padding: 10px 14px; font-size: 0.9375rem; }
+.msg.assistant { color: var(--ink); font-size: 0.9375rem; line-height: 1.65; }
+.msg .who { color: var(--faint); font-size: 0.625rem; font-weight: 600; letter-spacing: 0.04em; margin-bottom: 4px; }
+
+.toolcard { border: 1px solid var(--line-soft); border-radius: var(--r-s); background: var(--surface); margin-bottom: 14px; max-width: 92%; overflow: hidden; }
+.toolcard .tc-head { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  min-height: 44px; padding: 8px 12px; font-family: var(--mono); font-size: 0.75rem; }
+.toolcard .tc-head:active { background: var(--hover); }
+.toolcard .fn { font-weight: 600; flex: none; }
+.toolcard .arg { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.toolcard .chev { color: var(--faint); flex: none; transition: transform 180ms var(--ease); }
+.toolcard.open .chev { transform: rotate(90deg); }
+.toolcard .tc-out { display: none; border-top: 1px solid var(--line-soft); padding: 10px 12px;
+  font-family: var(--mono); font-size: 0.6875rem; line-height: 1.6; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.toolcard.open .tc-out { display: block; }
+
+/* 审批卡:移动端主角,大按钮 */
+.approval { border: 1px solid color-mix(in oklab, var(--amber) 45%, transparent); border-radius: var(--r-m);
+  background: var(--surface); margin-bottom: 14px; overflow: hidden; }
+.approval .ap-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px 0; }
+.approval .ap-title { font-weight: 600; font-size: 0.875rem; color: var(--amber); }
+.approval .ap-body { padding: 8px 14px 12px; color: var(--muted); font-size: 0.8125rem; line-height: 1.6; }
+.approval .ap-cmd { font-family: var(--mono); font-size: 0.75rem; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  padding: 8px 10px; margin-top: 8px; word-break: break-all; }
+.approval .ap-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 14px 12px; }
+.approval .ap-actions .full { grid-column: 1 / -1; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  min-height: 44px; padding: 8px 16px; border-radius: var(--r-s);
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink);
+  font-size: 0.9375rem; font-weight: 600; transition: background 150ms var(--ease); }
+.btn:active { background: var(--hover); }
+.btn-primary { background: var(--jade); border-color: transparent; color: var(--on-jade); }
+.btn-primary:active { background: var(--jade-dim); }
+.btn-danger { background: transparent; border-color: color-mix(in oklab, var(--red) 45%, transparent); color: var(--red); }
+.btn-danger:active { background: var(--tint-red); }
+.btn-quiet { background: transparent; border-color: transparent; color: var(--muted); }
+.btn-quiet:active { background: var(--hover); }
+.btn-block { display: flex; width: 100%; }
+
+/* 派发底部操作区 */
+.dispatch-foot { flex: none; border-top: 1px solid var(--line-soft); background: var(--bg); padding: 8px 14px 10px; }
+.u-row { display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
+.u-chips-scroll { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.u-chips-scroll::-webkit-scrollbar { display: none; }
+.u-chip { display: inline-flex; align-items: center; gap: 6px; color: var(--faint); font-size: 0.6875rem; font-weight: 600; flex: none; }
+.u-chip .u-bar { width: 44px; height: 4px; border-radius: 2px; background: var(--surface); overflow: hidden; }
+.u-chip .u-bar i { display: block; height: 100%; border-radius: 2px; }
+.u-chip b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--muted); }
+.cs-state { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--faint); font-size: 0.6875rem; font-weight: 600; flex: none; }
+.cs-state .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.cs-state.working .cs-dot { background: var(--jade); animation: pulse 2s infinite; }
+.cs-state.waiting .cs-dot { background: var(--amber); animation: pulse 2s infinite; }
+.cs-state.waiting { color: var(--amber); }
+
+.composer { display: flex; align-items: flex-end; gap: 8px; }
+.composer textarea {
+  flex: 1; background: var(--surface); border: 1px solid var(--line); border-radius: 12px;
+  padding: 11px 14px; font-size: 1rem; line-height: 1.5; resize: none; min-height: 44px; max-height: 120px;
+  transition: border-color 150ms var(--ease);
+}
+.composer textarea:focus { outline: none; border-color: var(--jade); }
+.send-btn { width: 44px; height: 44px; border-radius: 12px; background: var(--jade); color: var(--on-jade);
+  display: flex; align-items: center; justify-content: center; flex: none; transition: background 150ms var(--ease); }
+.send-btn:active { background: var(--jade-dim); }
+.send-btn svg { width: 20px; height: 20px; }
+.send-btn:disabled { opacity: 0.45; }
+
+.ctx-row { display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 0; scrollbar-width: none; }
+.ctx-row::-webkit-scrollbar { display: none; }
+.ctx-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 3px 12px;
+  border-radius: 99px; border: 1px solid var(--line); font-family: var(--mono); font-size: 0.6875rem;
+  color: var(--muted); flex: none; transition: background 150ms var(--ease); }
+.ctx-chip:active { background: var(--hover); }
+.ctx-chip .v-cwd { color: var(--blue); }
+.ctx-chip .v-branch { color: var(--jade); }
+.ctx-chip .v-model { color: var(--violet); }
+.ctx-chip .v-dim { color: var(--faint); }
+.ctx-chip .chev-d { color: var(--faint); font-size: 0.625rem; }
+
+/* ============ 定时任务 ============ */
+.cron-item { border-top: 1px solid var(--line-soft); }
+.cron-item:first-child { border-top: none; }
+.cron-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left;
+  min-height: 52px; padding: 10px 14px; transition: background 150ms var(--ease); }
+.cron-row:active { background: var(--hover); }
+.cron-row .name { font-weight: 600; font-size: 0.875rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.cron-row .when { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.6875rem; flex: none; }
+.runline { display: inline-flex; gap: 3px; flex: none; }
+.runline i { width: 6px; height: 6px; border-radius: 50%; }
+.runline i.ok { background: var(--green); }
+.runline i.err { background: var(--red); }
+.runline i.miss { background: var(--amber); }
+.cron-body { display: none; padding: 0 14px 14px; }
+.cron-item.open .cron-body { display: block; }
+.cron-item.open .cron-row .name { white-space: normal; }
+.cron-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); margin-bottom: 8px; }
+.cron-prompt { color: var(--muted); font-size: 0.8125rem; line-height: 1.6; background: var(--surface-2);
+  border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 10px 12px; margin-bottom: 10px; }
+.cron-note { color: var(--amber); font-size: 0.8125rem; line-height: 1.6; margin-bottom: 10px; }
+.cron-note.err { color: var(--red); }
+.runs-h { color: var(--faint); font-size: 0.6875rem; font-weight: 600; margin: 4px 0 2px; }
+.run-row { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 6px 0; border-top: 1px solid var(--line-soft); font-size: 0.75rem; }
+.run-row:first-of-type { border-top: none; }
+.run-row .rt { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); flex: none; width: 88px; }
+.run-row .rd { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); flex: none; width: 56px; }
+.run-row .rtk { font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--faint); flex: none; width: 48px; }
+.run-row .sid-link { margin-left: auto; font-family: var(--mono); color: var(--blue); min-height: 44px; display: inline-flex; align-items: center; padding: 0 4px; }
+.run-row .rerr { color: var(--red); font-size: 0.6875rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-row .sid-link { white-space: nowrap; flex: none; }
+.cron-actions { display: flex; gap: 8px; margin-top: 10px; }
+.cron-actions .btn { flex: 1; font-size: 0.875rem; }
+.sys-note { color: var(--faint); font-size: 0.6875rem; line-height: 1.6; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
+
+/* ============ 更多 ============ */
+.more-list { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); overflow: hidden; margin-bottom: 12px; }
+.more-row { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  min-height: 52px; padding: 8px 14px; border-top: 1px solid var(--line-soft); transition: background 150ms var(--ease); }
+.more-row:first-child { border-top: none; }
+.more-row:active { background: var(--hover); }
+.more-row svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.more-row .lbl { font-weight: 600; font-size: 0.9375rem; flex: 1; }
+.more-row .hint-v { color: var(--faint); font-size: 0.75rem; font-family: var(--mono); }
+.more-row .chev { color: var(--faint); }
+.more-foot { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); text-align: center; padding: 16px 0 6px; line-height: 1.8; }
+.more-foot .ok { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--green); margin-right: 5px; vertical-align: 1px; }
+
+/* ============ 项目卡片流 ============ */
+.proj-card .path { color: var(--blue); font-family: var(--mono); font-size: 0.6875rem; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-card .stats { display: flex; align-items: center; gap: 12px; margin-top: 8px; color: var(--muted); font-size: 0.75rem; flex-wrap: wrap; }
+.proj-card .stats b { font-family: var(--mono); font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+.proj-card .stats .dirty { color: var(--amber); }
+.proj-card .spark { display: inline-flex; gap: 3px; align-items: flex-end; height: 16px; margin-left: auto; }
+.proj-card .spark i { width: 5px; border-radius: 1.5px; background: var(--jade-dim); min-height: 2px; opacity: 0.9; }
+.proj-card .spark i.z { background: var(--surface-2); }
+
+/* ============ 技能卡片流 ============ */
+.skill-card { display: flex; align-items: flex-start; gap: 12px; }
+.skill-card .body { flex: 1; min-width: 0; }
+.skill-card .n-row { display: flex; align-items: center; gap: 8px; }
+.skill-card .sname { font-family: var(--mono); font-size: 0.8125rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.skill-card .ver { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); flex: none; }
+.skill-card .desc { color: var(--muted); font-size: 0.8125rem; line-height: 1.55; margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 开关:44px 触控区 */
+.switch { position: relative; width: 46px; height: 28px; border-radius: 99px; background: var(--line);
+  flex: none; transition: background 180ms var(--ease); padding: 0; margin-top: 2px; }
+.switch::before { content: ''; position: absolute; inset: 0; margin: -8px; } /* 扩大触控区至 44px */
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--ink); transition: transform 180ms var(--ease); }
+.switch[aria-checked="true"] { background: var(--jade); }
+.switch[aria-checked="true"]::after { transform: translateX(18px); background: var(--on-jade); }
+
+/* ============ 经验 ============ */
+.mem-group-h { display: flex; align-items: center; gap: 8px; margin: 14px 2px 8px; }
+.mem-group-h:first-of-type { margin-top: 2px; }
+.mem-group-h .cnt { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); }
+.mem-card .mname { font-family: var(--mono); font-size: 0.8125rem; font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.type-tag { font-size: 0.625rem; font-weight: 700; letter-spacing: 0.03em; border-radius: 4px; padding: 1px 6px; flex: none; }
+.type-feedback { color: var(--amber); background: var(--tint-amber); }
+.type-project { color: var(--blue); background: var(--tint-blue); }
+.type-user { color: var(--violet); background: color-mix(in oklab, var(--violet) 14%, transparent); }
+.type-reference { color: var(--muted); background: var(--tint-muted); }
+
+/* ============ 回顾 ============ */
+.week-nav { display: flex; align-items: center; gap: 4px; }
+.wk-btn { width: 44px; height: 44px; display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--r-s); color: var(--muted); font-size: 1.125rem; transition: background 150ms var(--ease); }
+.wk-btn:active { background: var(--hover); }
+.wk-btn:disabled { opacity: 0.35; }
+.week-nav .range { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 0.875rem; color: var(--ink); }
+.rv-sess { width: 100%; text-align: left; display: flex; align-items: baseline; gap: 8px; min-height: 44px; padding: 8px 14px; border-top: 1px solid var(--line-soft); transition: background 150ms var(--ease); }
+.rv-sess:active { background: var(--hover); }
+.rv-sess .sn { color: var(--ink); font-size: 0.8125rem; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rv-sess .pc { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); flex: none; }
+.draft-body { padding: 12px 14px; color: var(--muted); font-size: 0.8125rem; line-height: 1.7; }
+.draft-body h4 { color: var(--ink); font-size: 0.8125rem; margin: 10px 0 4px; }
+.draft-body h4:first-child { margin-top: 0; }
+.draft-body ul { padding-left: 18px; }
+.draft-actions { display: flex; gap: 8px; padding: 0 14px 14px; }
+.draft-actions .btn { flex: 1; font-size: 0.875rem; }
+
+/* ============ 空状态 ============ */
+.empty { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 0.875rem; }
+.empty .glyph { font-size: 1.75rem; color: var(--faint); margin-bottom: 8px; }
+
+/* ============ Bottom Sheet(替代抽屉/下拉/模态) ============ */
+.backdrop { position: fixed; inset: 0; z-index: var(--z-backdrop); background: oklch(0 0 0 / 0.55);
+  opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease); }
+.backdrop.show { opacity: 1; pointer-events: auto; }
+.sheet {
+  position: fixed; bottom: 0; left: 0; right: 0; margin: 0 auto; max-width: var(--frame-w);
+  z-index: var(--z-sheet);
+  background: var(--surface); border: 1px solid var(--line-soft); border-bottom: none;
+  border-radius: var(--r-sheet) var(--r-sheet) 0 0;
+  box-shadow: 0 -8px 32px oklch(0.05 0 0 / 0.5); /* 悬浮层专属影 */
+  transform: translateY(102%); transition: transform 220ms var(--ease);
+  display: flex; flex-direction: column;
+  max-height: 88dvh;
+}
+.sheet.show { transform: translateY(0); }
+.sheet .grab { flex: none; padding: 8px 0 2px; display: flex; justify-content: center; }
+.sheet .grab i { width: 36px; height: 4px; border-radius: 2px; background: var(--line); }
+.sheet-head { flex: none; display: flex; align-items: center; gap: 10px; padding: 6px 14px 10px; border-bottom: 1px solid var(--line-soft); }
+.sheet-head .tt { min-width: 0; flex: 1; }
+.sheet-head h2 { font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sheet-head .meta { color: var(--faint); font-size: 0.6875rem; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 1px; }
+.x-btn { width: 44px; height: 44px; border-radius: var(--r-s); display: inline-flex; align-items: center; justify-content: center;
+  color: var(--muted); font-size: 1rem; flex: none; transition: background 150ms var(--ease); }
+.x-btn:active { background: var(--hover); }
+.sheet-body { overflow-y: auto; padding: 14px; overscroll-behavior: contain; }
+.sheet-foot { flex: none; display: flex; gap: 8px; padding: 10px 14px calc(10px + var(--sab)); border-top: 1px solid var(--line-soft); }
+.sheet-foot .btn { flex: 1; }
+.sheet-body-pad { padding-bottom: calc(14px + var(--sab)); }
+
+/* sheet 内:选项行(替代自绘下拉) */
+.opt-group-h { color: var(--faint); font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.04em; margin: 14px 2px 6px; text-transform: uppercase; }
+.opt-group-h:first-child { margin-top: 0; }
+.opt-row { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  min-height: 48px; padding: 8px 12px; border-radius: var(--r-s); transition: background 150ms var(--ease); }
+.opt-row:active { background: var(--hover); }
+.opt-row .v { flex: 1; min-width: 0; font-family: var(--mono); font-size: 0.8125rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.opt-row .v.c-cwd { color: var(--blue); }
+.opt-row .v.c-model { color: var(--violet); }
+.opt-row .v.c-dim { color: var(--muted); }
+.opt-row .sub-v { color: var(--faint); font-size: 0.6875rem; flex: none; }
+.opt-row .check { color: var(--jade); font-weight: 700; flex: none; width: 20px; text-align: center; }
+.opt-toggle-row { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; }
+.opt-toggle-row .lbl2 { flex: 1; font-size: 0.875rem; }
+.opt-toggle-row .hint2 { color: var(--faint); font-size: 0.6875rem; }
+
+/* sheet 内:回放 */
+.replay-note { color: var(--faint); font-size: 0.6875rem; line-height: 1.6; margin-bottom: 12px; }
+.raw-ev { border: 1px dashed var(--line); border-radius: var(--r-s); padding: 10px 12px; margin-bottom: 14px; }
+.raw-ev .rn { color: var(--faint); font-size: 0.625rem; font-weight: 600; margin-bottom: 4px; }
+.raw-ev pre { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); white-space: pre-wrap; word-break: break-word; }
+.raw-ev.err { border-color: color-mix(in oklab, var(--red) 45%, transparent); }
+.raw-ev.err .rn { color: var(--red); }
+
+/* sheet 内:新建任务表单 */
+.mfield { margin-bottom: 16px; }
+.mfield > label { display: block; font-size: 0.6875rem; font-weight: 600; color: var(--faint);
+  text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.mfield textarea.input { min-height: 88px; resize: vertical; line-height: 1.55; font-family: var(--mono); font-size: 0.875rem; }
+.mfield .hint { color: var(--faint); font-size: 0.75rem; margin-top: 6px; }
+.mfield .hint b { color: var(--jade); font-weight: 600; }
+.time-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.time-chips button { min-height: 40px; padding: 6px 14px; border-radius: 99px; border: 1px solid var(--line);
+  color: var(--muted); font-size: 0.8125rem; font-weight: 600; transition: background 150ms var(--ease); }
+.time-chips button:active { background: var(--hover); }
+.time-chips button.active { background: var(--tint-jade); border-color: transparent; color: var(--jade); }
+.field-btn { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px;
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-s); padding: 8px 12px;
+  font-family: var(--mono); font-size: 0.8125rem; text-align: left; transition: border-color 150ms var(--ease); }
+.field-btn:active { border-color: var(--jade); }
+.field-btn .fv { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-btn .chev-d { color: var(--faint); font-size: 0.6875rem; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 360px) { .two-col { grid-template-columns: 1fr; } }
+
+/* ============ Toast ============ */
+.toast { position: fixed; left: 0; right: 0; margin: 0 auto; width: fit-content; max-width: 88vw;
+  bottom: calc(var(--tab-h) + var(--sab) + 16px); z-index: var(--z-toast);
+  background: var(--surface); border: 1px solid var(--line); border-radius: 99px;
+  box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  padding: 9px 18px; font-size: 0.8125rem; color: var(--ink);
+  opacity: 0; transform: translateY(8px); pointer-events: none;
+  transition: opacity 200ms var(--ease), transform 200ms var(--ease); }
+.toast.show { opacity: 1; transform: none; }
+
+/* ============ 动效降级 ============ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- ================= 顶栏(内容随视图切换) ================= -->
+  <header class="topbar" id="topbar"></header>
+
+  <main id="main">
+
+    <!-- ====== 首页 ====== -->
+    <section class="view" id="v-home">
+      <div class="home-clock">
+        <span class="time num" id="hm-clock">--:--</span>
+        <span class="date">2026-07-16 周四 · 北京时间</span>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>需要你处理</h2><span class="spacer"></span><span class="pill pill-blk"><span class="dot"></span><span class="num" id="hm-needs-n">2</span></span></div>
+        <div id="hm-needs"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>运行中</h2><span class="spacer"></span><span class="pill pill-run"><span class="dot"></span>2</span></div>
+        <div id="hm-running"></div>
+      </div>
+
+      <div class="stat-grid">
+        <div class="cell"><div class="k">今日派发</div><div class="v">4 <small>次</small></div></div>
+        <div class="cell"><div class="k">今日 token</div><div class="v">96.7k <small>· $7.31</small></div></div>
+        <div class="cell"><div class="k">活跃项目</div><div class="v">3 <small>个</small></div></div>
+        <div class="cell"><div class="k">定时任务</div><div class="v">3 <small>正常</small> <small style="color:var(--red)">1 熔断</small> <small style="color:var(--amber)">1 错过</small></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>最近活动</h2><span class="sub">history.jsonl</span></div>
+        <ul class="tl" id="hm-timeline"></ul>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Token 成本</h2><span class="sub">今日 · 点行展开会话</span></div>
+        <div id="hm-tokens"></div>
+        <div class="tok-legend">
+          <span><i style="background:var(--chart-1)"></i>fable</span>
+          <span><i style="background:var(--chart-2)"></i>opus</span>
+          <span><i style="background:var(--chart-3)"></i>sonnet</span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>7 日活动</h2><span class="sub">按项目 · 每日 prompt 数</span></div>
+        <div class="heat" id="hm-heat"></div>
+      </div>
+    </section>
+
+    <!-- ====== 会话(状态 tab + 单列卡片流) ====== -->
+    <section class="view" id="v-sessions">
+      <div class="seg-scroll">
+        <div class="seg" id="sess-seg"></div>
+      </div>
+      <p class="notice-line"><span class="ok"></span><span class="mono">claude agents --json --all</span> · 刷新于 3 秒前 · 终端存活的交互会话仅只读展示</p>
+      <div id="sess-list"></div>
+    </section>
+
+    <!-- ====== 派发 ====== -->
+    <section class="view" id="v-dispatch">
+      <div class="chat" id="chat"></div>
+      <div class="dispatch-foot">
+        <div class="u-row">
+          <span class="u-chips-scroll">
+            <span class="u-chip">Context <span class="u-bar"><i style="width:32%;background:var(--jade-dim)"></i></span><b class="num">32%</b></span>
+            <span class="u-chip">Usage <span class="u-bar"><i style="width:63%;background:var(--amber)"></i></span><b class="num" style="color:var(--amber)">63%</b></span>
+            <span class="u-chip">Weekly <span class="u-bar"><i style="width:88%;background:var(--red)"></i></span><b class="num" style="color:var(--red)">88%</b></span>
+          </span>
+          <span class="cs-state waiting" id="agent-status"><span class="cs-dot"></span>等待审批</span>
+        </div>
+        <div class="composer">
+          <textarea id="composer-input" rows="1" placeholder="描述要派发的任务…" enterkeyhint="send"></textarea>
+          <button class="send-btn" id="send-btn" aria-label="发送">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+          </button>
+        </div>
+        <div class="ctx-row">
+          <button class="ctx-chip" onclick="openDispatchSettings()"><span class="v-cwd">~/go-antifraud</span><span class="v-branch">⎇ main</span><span class="v-dim">!2</span><span class="chev-d">▾</span></button>
+          <button class="ctx-chip" onclick="openDispatchSettings()"><span class="v-model">opus</span><span class="chev-d">▾</span></button>
+          <button class="ctx-chip" onclick="openDispatchSettings()"><span class="v-dim">默认权限</span><span class="chev-d">▾</span></button>
+          <button class="ctx-chip" onclick="openDispatchSettings()"><span class="v-dim">前台会话</span><span class="chev-d">▾</span></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== 定时 ====== -->
+    <section class="view" id="v-cron">
+      <div class="chip-row" id="cron-filter">
+        <button class="active" data-f="all">全部</button>
+        <button data-f="once">一次性</button>
+        <button data-f="cron">周期</button>
+      </div>
+      <div class="panel">
+        <div class="sys-note">到点运行 = 创建一个真实派发会话:运行中 / 需审批 / 已完成的实例会同步出现在「会话」看板(带 <span class="tag">◷ 定时</span> 来源标),审批可直接在会话页处理。</div>
+        <div id="cron-list"></div>
+      </div>
+    </section>
+
+    <!-- ====== 更多 ====== -->
+    <section class="view" id="v-more">
+      <div class="more-list">
+        <button class="more-row" onclick="showView('v-projects')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v13h18V7"/><path d="M1 4h22v3H1z"/><path d="M10 11h4"/></svg>
+          <span class="lbl">项目</span><span class="hint-v">8 个</span><span class="chev">›</span>
+        </button>
+        <button class="more-row" onclick="showView('v-skills')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          <span class="lbl">技能</span><span class="hint-v">44 启用 · 2 禁用</span><span class="chev">›</span>
+        </button>
+        <button class="more-row" onclick="showView('v-memory')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+          <span class="lbl">经验</span><span class="hint-v">10 条 · 5 项目</span><span class="chev">›</span>
+        </button>
+        <button class="more-row" onclick="showView('v-review')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 9h18"/><path d="M8 14h4M8 17h7"/></svg>
+          <span class="lbl">回顾</span><span class="hint-v">本周 233 prompt</span><span class="chev">›</span>
+        </button>
+      </div>
+      <div class="more-list">
+        <button class="more-row" onclick="toast('壁纸设置沿桌面版词汇,移动端后续迭代')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><circle cx="8" cy="9" r="1.5"/><path d="M3 18l5.5-5.5 3.5 3.5 4.5-5 4.5 5.5"/></svg>
+          <span class="lbl">壁纸</span><span class="hint-v">关闭</span><span class="chev">›</span>
+        </button>
+      </div>
+      <div class="more-foot">
+        <div><span class="ok"></span>claude CLI 2.1.202 · daemon 正常</div>
+        <div>璇玑 xuanji v1.0.0 · 移动端原型 · mock 数据</div>
+      </div>
+    </section>
+
+    <!-- ====== 项目(单列卡片流) ====== -->
+    <section class="view" id="v-projects">
+      <div class="search-wrap"><input class="input" id="proj-search" type="search" placeholder="搜索项目名或路径…"></div>
+      <p class="notice-line">8 个有效项目 · 已过滤 142 个 multica-workspaces-* 临时目录与 21 个失效路径</p>
+      <div id="proj-list"></div>
+      <div class="empty" id="proj-empty" style="display:none"><div class="glyph">◌</div><p>没有匹配的项目。</p></div>
+    </section>
+
+    <!-- ====== 技能(单列卡片流) ====== -->
+    <section class="view" id="v-skills">
+      <div class="search-wrap"><input class="input" id="skill-search" type="search" placeholder="搜索技能…"></div>
+      <div class="chip-row" id="skill-tabs">
+        <button class="active" data-f="all">全部</button>
+        <button data-f="on">已启用</button>
+        <button data-f="off">已禁用</button>
+        <button data-f="plugin">插件</button>
+      </div>
+      <p class="notice-line">关闭开关 = 移入 <span class="mono">skills-disabled/</span>,新会话不再加载(显式写操作,二次确认)</p>
+      <div id="skill-list"></div>
+      <div class="empty" id="skill-empty" style="display:none"><div class="glyph">◌</div><p>没有匹配的技能。</p></div>
+    </section>
+
+    <!-- ====== 经验 ====== -->
+    <section class="view" id="v-memory">
+      <div class="search-wrap"><input class="input" id="mem-search" type="search" placeholder="全文搜索:这个坑以前踩过没…"></div>
+      <div class="chip-row" id="mem-tabs">
+        <button class="active" data-f="all">全部</button>
+        <button data-f="feedback">feedback</button>
+        <button data-f="project">project</button>
+        <button data-f="user">user</button>
+        <button data-f="reference">reference</button>
+      </div>
+      <div id="mem-groups"></div>
+      <div class="empty" id="mem-empty" style="display:none"><div class="glyph">◌</div><p>没有命中的经验。</p><p style="color:var(--faint)">试试换个关键词,或切换 type 筛选。</p></div>
+    </section>
+
+    <!-- ====== 回顾 ====== -->
+    <section class="view" id="v-review">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <div class="week-nav">
+          <button class="wk-btn" onclick="toast('切换到上一周(原型)')">‹</button>
+          <span class="range num">7/9 – 7/15</span>
+          <button class="wk-btn" disabled>›</button>
+        </div>
+        <span class="pill pill-run"><span class="dot"></span>本周</span>
+      </div>
+
+      <div class="stat-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="cell"><div class="k">prompt</div><div class="v">233 <small>条</small></div></div>
+        <div class="cell"><div class="k">会话</div><div class="v">33 <small>个 · 9 项目</small></div></div>
+        <div class="cell"><div class="k">活跃天数</div><div class="v">3 <small>天</small></div></div>
+        <div class="cell"><div class="k">成本</div><div class="v">$350.87</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>本周热力</h2><span class="sub">项目 × 日 · prompt 数</span></div>
+        <div class="heat" id="rv-heat"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>活跃会话</h2><span class="sub">点会话看 prompt 原文</span></div>
+        <div id="rv-projects"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>周报草稿</h2><span class="sub">sonnet 生成</span></div>
+        <div class="draft-body">
+          <h4>本周成果</h4>
+          <ul>
+            <li><b>璇玑 M0</b>:桌面原型获批,DESIGN.md 固化,移动端重设计中</li>
+            <li><b>白泽</b>:横截面诊断引擎跑通 34 campaign 批量扫描</li>
+            <li><b>反作弊</b>:L3 弱信号引擎评估中(等待审批)</li>
+          </ul>
+          <h4>下周计划</h4>
+          <ul><li>M1 只读驾驶舱后端 adapter 开工</li></ul>
+        </div>
+        <div class="draft-actions">
+          <button class="btn" onclick="toast('已复制草稿')">复制</button>
+          <button class="btn btn-primary" onclick="toast('重新生成中…(原型)')">✦ 重新生成</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= 底部 tab ================= -->
+  <nav class="tabbar" id="tabbar"></nav>
+</div>
+
+<!-- ================= Bottom Sheet ================= -->
+<div class="backdrop" id="backdrop" onclick="closeSheet()"></div>
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="grab"><i></i></div>
+  <div class="sheet-head">
+    <div class="tt"><h2 id="sheet-title"></h2><div class="meta" id="sheet-meta"></div></div>
+    <button class="x-btn" onclick="closeSheet()" aria-label="关闭">✕</button>
+  </div>
+  <div class="sheet-body" id="sheet-body"></div>
+  <div class="sheet-foot" id="sheet-foot" style="display:none"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============================================================
+   Mock 数据(与桌面版 prototype.html 同源)
+   ============================================================ */
+const PROJECTS = [
+  { name: 'xuanji',        path: '~/xuanji',           branch: 'feature/m0-prototype', dirty: 0, sessions: 3,  memories: 0,  last: '10 分钟前', heat: [0,0,1,0,2,5,12] },
+  { name: 'go-antifraud',  path: '~/go-antifraud',     branch: 'main',                 dirty: 2, sessions: 41, memories: 12, last: '2 小时前',  heat: [6,4,7,3,9,2,4] },
+  { name: 'baize',         path: '~/baize',            branch: 'feature/cross-section',dirty: 0, sessions: 28, memories: 9,  last: '昨天',      heat: [3,5,2,6,4,1,0] },
+  { name: 'data-analysis', path: '~/data-analysis',    branch: 'main',                 dirty: 1, sessions: 22, memories: 7,  last: '昨天',      heat: [1,3,2,5,2,3,1] },
+  { name: 'baize-web',     path: '~/baize-web',        branch: 'develop',              dirty: 3, sessions: 15, memories: 3,  last: '前天',      heat: [0,4,2,1,0,0,0] },
+  { name: 'antifraud-skills', path: '~/antifraud-skills', branch: 'main',              dirty: 0, sessions: 12, memories: 4,  last: '2 天前',    heat: [2,1,0,3,1,0,0] },
+  { name: 'cronjob',       path: '~/project/cronjob',  branch: 'main',                 dirty: 0, sessions: 17, memories: 5,  last: '3 天前',    heat: [0,2,4,0,1,0,0] },
+  { name: 'wiki-cards',    path: '~/wiki-cards',       branch: 'main',                 dirty: 0, sessions: 6,  memories: 2,  last: '上周',      heat: [2,0,0,1,0,0,0] },
+];
+
+const SESSIONS = [
+  { id: 'a91f3c2e', title: '白泽横截面诊断', kind: 'background', state: 'running', cwd: '~/baize',
+    detail: '正在扫描 34 个 campaign 的国家 × 素材切片,已完成 21/34', started: '14:02', owner: 'web' },
+  { id: '0b3c88d1', title: 'M0 原型构建', kind: 'interactive', state: 'running', cwd: '~/xuanji',
+    detail: '终端交互会话(pid 48213 存活)', started: '13:47', readonly: true },
+  { id: '77e2f0a9', title: '弱信号引擎评估', kind: 'background', state: 'blocked', cwd: '~/go-antifraud',
+    needs: '等待权限审批:Bash(pnpm test -- --run)', started: '11:20', owner: 'web' },
+  { id: 'c410be77', title: '周报汇总草稿', kind: 'background', state: 'blocked', cwd: '~/project/cronjob',
+    needs: 'send a prompt to start', started: '09:00' },
+  { id: 'b2f61a0d', title: 'mvp-2 评审与开发', kind: 'background', state: 'blocked', cwd: '~/jianghu-idle',
+    needs: 'approve or modify: (1) mechanics finalization (2) sect names (3) naming rules', started: '昨天 16:16' },
+  { id: '4e0c97ab', title: 'claude 工作模式梳理', kind: 'background', state: 'blocked', cwd: '~/project',
+    needs: 'send a prompt to start', started: '昨天 23:40' },
+  { id: '8c25d3f7', title: '知识小卡评审', kind: 'background', state: 'blocked', cwd: '~/project',
+    needs: 'review the 4 output groups, submit feedback via Submit All Reviews', started: '前天 19:11' },
+  { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'blocked', cwd: '~/baize',
+    needs: '要不要接着把 self_history 正式落地到引擎?', started: '前天 15:47' },
+  { id: 'f3ab12cd', title: 'baize 指标口径答疑', kind: 'background', state: 'idle', cwd: '~/deep-baize',
+    detail: '回合结束 · 已回答口径差异的三个来源', started: '13:58', owner: 'web', unread: true },
+  { id: '5fd8a3b0', title: '知识小卡设计', kind: 'interactive', state: 'idle', cwd: '~/wiki-cards',
+    detail: '空闲 42 分钟(终端存活,只读)', started: '12:10', readonly: true },
+  { id: '77aa34ef', title: '周报文案润色', kind: 'background', state: 'idle', cwd: '~/project',
+    detail: '回合结束 · 终稿已产出(你已查看)', started: '11:32', owner: 'web' },
+  { id: 'e2a79c14', title: 'ip-risk 批量扫描', kind: 'background', state: 'done', cwd: '~/go-antifraud',
+    detail: '退出码 0 · 扫描 156 个 IP,3 个高风险', started: '08:30', ended: '08:47' },
+  { id: '9d016e5f', title: 'CHANGELOG 整理', kind: 'background', state: 'done', cwd: '~/xuanji',
+    detail: '退出码 0 · 2 个文件变更已提交', started: '昨天 18:12', ended: '昨天 18:15' },
+  { id: '1a7e5c92', title: 'PGame 换卡自助 skill', kind: 'background', state: 'done', cwd: '~/yuiko-skills',
+    detail: 'cross-rarity swaps enabled by default', started: '昨天 16:56', ended: '昨天 17:20', owner: 'web', unread: true },
+  { id: '3c9b04d8', title: '添加归因 series 到 envelope', kind: 'background', state: 'done', cwd: '~/antifraud-skills',
+    detail: 'game_name NULL 已修复', started: '昨天 13:09', ended: '昨天 13:41' },
+  { id: '6e88f217', title: '白泽 web 开发', kind: 'background', state: 'done', cwd: '~/baize-web',
+    detail: '主题色从陶土红切换到深海蓝', started: '昨天 12:33', ended: '昨天 14:02' },
+  { id: '0f4d7a63', title: 'baize 算法大白话版', kind: 'background', state: 'done', cwd: '~/deep-baize',
+    detail: 'short_term_trend 用三个算法投票', started: '昨天 10:34', ended: '昨天 11:15' },
+  { id: 'd1c39e85', title: '白泽回归测试', kind: 'background', state: 'done', cwd: '~/antifraud-skills',
+    detail: '7 条具体建议 + 3 步迁移路径', started: '前天 17:42', ended: '前天 18:30' },
+  { id: '72b5f0ca', title: '衣橱管理', kind: 'background', state: 'done', cwd: '~/wardrobe',
+    detail: 'full-body photo try-on complete', started: '前天 15:53', ended: '前天 16:40' },
+  { id: 'a4e8d126', title: '黑 ip 打标分析', kind: 'background', state: 'done', cwd: '~/project',
+    detail: '批量打标完成,命中率 92%', started: '前天 11:08', ended: '前天 11:50' },
+  { id: 'c7f2a95b', title: '收入异动归因', kind: 'background', state: 'done', cwd: '~/baize',
+    detail: '定位到 US iOS 大 R 流失', started: '3 天前', ended: '3 天前', owner: 'web' },
+  { id: '85d0b3e4', title: '舆情异动扫描', kind: 'background', state: 'done', cwd: '~/baize',
+    detail: '无异常', started: '3 天前', ended: '3 天前' },
+  { id: '2b96c1f8', title: 'DAG 调度调整', kind: 'background', state: 'done', cwd: '~/lilith_offline_etl',
+    detail: 'hourly 20min mark, max_active_runs=1', started: '4 天前', ended: '4 天前' },
+  { id: 'e0a35d7c', title: '经验沉淀草稿', kind: 'background', state: 'done', cwd: '~/xuanji',
+    detail: '3 条 memory 草稿待确认', started: '5 天前', ended: '5 天前', owner: 'web' },
+  { id: '48c7e2b9', title: '竞品调研摘要', kind: 'background', state: 'done', cwd: '~/project',
+    detail: '5 家竞品对比表已产出', started: '6 天前', ended: '6 天前' },
+];
+
+const TOKEN_PROJECTS = [
+  { name: 'baize', sessions: [
+    { title: '白泽横截面诊断',   cost: { fable: 2.84 } },
+    { title: '收入异动归因',     cost: { opus: 0.62 } },
+    { title: '每日舆情异动扫描', cost: { sonnet: 0.24 } },
+  ] },
+  { name: 'xuanji', sessions: [
+    { title: 'M0 原型构建',      cost: { fable: 1.95 } },
+    { title: 'CHANGELOG 整理',   cost: { sonnet: 0.18 } },
+  ] },
+  { name: 'go-antifraud', sessions: [
+    { title: '弱信号引擎评估',   cost: { opus: 0.74, sonnet: 0.11 } },
+    { title: 'ip-risk 批量扫描', cost: { sonnet: 0.21 } },
+  ] },
+  { name: 'cronjob', sessions: [
+    { title: '周报汇总草稿',     cost: { sonnet: 0.42 } },
+  ] },
+];
+const MODEL_ORDER = ['fable', 'opus', 'sonnet'];
+const MODEL_COLOR = { fable: 'var(--chart-1)', opus: 'var(--chart-2)', sonnet: 'var(--chart-3)' };
+
+const REPLAY = {
+  a91f3c2e: [
+    { who: 'user', text: '对 FarlightGames 上周的 34 个 campaign 做横截面诊断,找出拖后腿的国家×素材切片,输出结构化 envelope。' },
+    { who: 'assistant', text: '好的。先取 campaign 清单和对照大盘基线,再逐一做切片体检。' },
+    { who: 'tool', fn: 'mcp__deep-baize__group_analyze', cat: 'other', arg: 'game=farlight84, dims=[country,creative]',
+      out: 'batch 1/4 · 9 campaigns · 已返回 3 个显著负向切片\n  - BR × video_0612: CPI +37% vs 大盘\n  - TH × playable_a: CVR -22%\n  …' },
+    { who: 'assistant', text: '前 9 个 campaign 中 3 个切片显著跑输大盘,巴西的 video_0612 素材 CPI 高出 37%。继续扫描剩余批次…' },
+    { who: 'raw', note: '未知事件类型,已按原始文本降级展示(adapter 兜底)',
+      text: '{"type":"x-progress-hint","pct":62,"detail":"batch 3/4 running"}' },
+  ],
+  '77e2f0a9': [
+    { who: 'user', text: '评估 L3 弱信号引擎在近 30 天数据上的准召,输出评估报告到 wiki/business/。' },
+    { who: 'assistant', text: '取样完成,共 12.8 万条信号。准备跑单测验证特征管道后再出报告。' },
+    { who: 'tool', fn: 'Read', cat: 'read', arg: 'internal/engine/l3_signal.go', out: '(412 行 · 特征定义 × 9)' },
+    { who: 'assistant', text: '需要执行测试来确认管道行为,已发起权限请求,等待审批:Bash(pnpm test -- --run)' },
+  ],
+  '9d21c4': [
+    { who: 'user', text: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。' },
+    { who: 'assistant', text: '开始搜索未来一周的游戏发布档期,先调用搜索接口。' },
+    { who: 'tool', fn: 'WebSearch', cat: 'read', arg: '"game release schedule" 2026-07-11..17', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'assistant', text: '搜索接口限流(429),按重试策略等待 60s 后重试。' },
+    { who: 'tool', fn: 'WebSearch', cat: 'read', arg: '重试 1/3', out: 'HTTP 429 Too Many Requests\nRetry-After: 60' },
+    { who: 'raw', err: true, note: '进程异常退出 · exit code 1', text: 'Error: upstream search API rate-limited after 3 attempts. Aborting task.\n  at searchGameReleases (game-release/index.js:42:11)\n  at main (game-release/index.js:18:5)' },
+  ],
+  a3f9c0: [
+    { who: 'user', text: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。' },
+    { who: 'assistant', text: '先检查当前依赖版本,再执行升级。' },
+    { who: 'tool', fn: 'Bash', cat: 'exec', arg: 'pnpm outdated', out: 'baize-core   2.3.1 → 2.4.0\nzod          3.22.4 → 3.23.0' },
+    { who: 'assistant', text: '即将执行 `pnpm up -L` 升级到最新次版本,这是写操作,按当前权限模式需要你确认。' },
+  ],
+};
+const TOOL_CAT_COLOR = { exec: 'var(--tool-exec)', read: 'var(--blue)', other: 'var(--muted)' };
+
+const SKILLS = [
+  { name: 'baize', desc: '指标异动检测与归因分析,调用 Baize MCP 做异常检测和根因分析', ver: '2.3.0', src: 'user', on: true },
+  { name: 'baize-card-sender', desc: '把 baize 输出的 envelope 渲染成飞书交互卡片并发送', ver: '1.4.2', src: 'user', on: true },
+  { name: 'ip-risk', desc: '综合多家 IP 情报接口,输出风险等级 + 数据支撑', ver: '1.1.0', src: 'user', on: true },
+  { name: 'jueming', desc: '决明风险查询:角色/账号单点或批量风险扫描', ver: '3.0.1', src: 'user', on: true },
+  { name: 'rca', desc: '根因分析:指标树拆解、维度归因、Adtributor、MDRCA', ver: '1.8.0', src: 'user', on: true },
+  { name: 'lark-base', desc: 'lark-cli 操作飞书多维表格:建表、字段、记录读写、视图', ver: '4.2.0', src: 'user', on: true },
+  { name: 'using-talk', desc: '舆情分析工具集:日报、异动、预警、玩家反馈、声量', ver: '2.0.3', src: 'user', on: true },
+  { name: 'send-dc-msg', desc: '通过 Discord bot 向固定频道发送消息', ver: '1.0.4', src: 'user', on: true },
+  { name: 'data', desc: '远端智能数据分析:多轮 session、SQL 与分析报告', ver: '3.1.0', src: 'user', on: true },
+  { name: 'impeccable', desc: '设计与迭代生产级前端界面', ver: '5.2.0', src: 'plugin', on: true },
+  { name: 'web-access', desc: '联网操作:搜索、抓取、登录后操作(真实浏览器环境)', ver: '2.4.1', src: 'user', on: true },
+  { name: 'caveman', desc: '超压缩输出模式,省 65% token', ver: '1.2.0', src: 'user', on: false },
+  { name: 'doc-to-cards', desc: '把文档转成分享知识卡片(HTML → PNG → PDF)', ver: '1.6.0', src: 'user', on: false },
+];
+
+const MEMORIES = [
+  { name: 'bbx-cluster-selection', project: 'go-antifraud', type: 'feedback',
+    desc: '查数返空先自查集群与分区,再报「无数据」',
+    body: '<p>BBX 查询返空的第一原因是集群/库选错,不是真没数据。</p><p><b style="color:var(--jade)">Why:</b> 曾把国际服数据当国服查,误报「无数据」,结论被用户当场推翻。</p><p><b style="color:var(--jade)">How to apply:</b> 任何「无数据」结论前,先跑 <span class="mono">get_qe_clusters</span> 确认集群,再核对分区与口径。关联 [[metric-caliber-first]]</p>' },
+  { name: 'metric-caliber-first', project: 'go-antifraud', type: 'feedback',
+    desc: '统计数字必须标口径,与平台对不上先查口径差',
+    body: '<p>所有统计数字要带数据来源与口径定义。</p><p><b style="color:var(--jade)">Why:</b> 平台看板与自查 SQL 的「活跃」定义不同(登录 vs 有对局),差异 18% 被误判成掉量。</p><p><b style="color:var(--jade)">How to apply:</b> 报数时附口径一句话;对不上时先做口径对齐表。</p>' },
+  { name: 'sla-callback-dedup', project: 'go-antifraud', type: 'project',
+    desc: 'SLA 回调有重复推送,消费端必须按 event_id 幂等',
+    body: '<p>上游 SLA 回调在网络抖动时会重复推送同一事件。</p><p><b style="color:var(--jade)">Why:</b> 曾造成同一违规被处罚两次。</p><p><b style="color:var(--jade)">How to apply:</b> 消费端以 event_id 建唯一索引,重复直接丢弃并记数。</p>' },
+  { name: 'l3-weak-signal-threshold', project: 'go-antifraud', type: 'project',
+    desc: 'L3 弱信号阈值 0.72 是 A/B 验证过的,改动需重跑评估',
+    body: '<p>当前阈值 0.72 来自 5 月 A/B(准确率 91% / 召回 63%)。</p><p><b style="color:var(--jade)">How to apply:</b> 任何调阈值的提议先跑 [[offline-eval-pipeline]] 再上线。</p>' },
+  { name: 'offline-eval-pipeline', project: 'go-antifraud', type: 'reference',
+    desc: '离线评估管道入口与用法',
+    body: '<p>评估脚本:<span class="mono">scripts/eval/run_offline.sh</span>,数据快照按周落在 OSS。</p>' },
+  { name: 'baize-envelope-schema', project: 'baize', type: 'project',
+    desc: 'envelope JSON 的 schema 版本演进与兼容策略',
+    body: '<p>v2 起 <span class="mono">abnormal_reasons</span> 为数组;卡片渲染端要向后兼容 v1 标量。</p><p><b style="color:var(--jade)">How to apply:</b> 消费端统一走 normalize 函数,不直接读原始字段。</p>' },
+  { name: 'adtributor-ep-limit', project: 'baize', type: 'feedback',
+    desc: 'Adtributor 的 EP 在维度基数 >200 时失真,先聚类再归因',
+    body: '<p><b style="color:var(--jade)">Why:</b> 国家×素材的长尾切片让 surprise 值被稀释,头部结论漂移。</p><p><b style="color:var(--jade)">How to apply:</b> 高基数维度先按贡献聚成 Top-N + Other 再跑 Adtributor。</p>' },
+  { name: 'trino-tmp-table-ttl', project: 'data-analysis', type: 'reference',
+    desc: 'hive.tmp 临时表 72h 自动回收,重要中间结果要落正式库',
+    body: '<p>上传 CSV 生成的临时表 TTL 为 72 小时。</p>' },
+  { name: 'lunch-bot-holiday', project: 'cronjob', type: 'project',
+    desc: '点饭 bot 需要跳过法定节假日,日历接口有 QPS 限制',
+    body: '<p>节假日判断走本地缓存的年度日历,不实时调接口。</p>' },
+  { name: 'prefers-dark-terminal', project: '(全局)', type: 'user',
+    desc: '用户常年深色终端环境,监控类界面倾向深色主题',
+    body: '<p>工作环境是深色终端 + 夜间时段,亮色大面积白底刺眼。</p>' },
+];
+
+const JOBS = [
+  { kind: 'once', name: '今晚汇总本周周报草稿', when: '今晚 22:00', rel: '约 6 小时后', cwd: '~/project/cronjob', model: 'sonnet',
+    prompt: '汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'pending', runs: [] },
+  { kind: 'once', name: '深夜依赖升级 + 冒烟', when: '运行中', rel: '22:03 起', cwd: '~/xuanji', model: 'sonnet',
+    prompt: '升级 baize skill 依赖到最新,跑一遍冒烟测试,失败则回滚并记录原因。',
+    perm: '保守', budget: '$50 / 次', state: 'blocked', blockedSid: 'a3f9c0',
+    notice: '已挂起等审批:想执行 `pnpm up -L`(写操作)。你处理后自动继续。',
+    runs: [ { t: '今天 22:03', dur: '进行中', tok: '8.1k', sid: 'a3f9c0', s: 'blk' } ] },
+  { kind: 'cron', name: '每日舆情异动扫描', when: '每天 09:00', rel: '下次 明天 09:00', cwd: '~/baize', model: 'sonnet',
+    prompt: '用 using-talk 扫描全部在营游戏近 24h 舆情异动,负面为主的话题写入飞书多维表,并把摘要发到值班群。',
+    perm: '自动接受编辑', budget: '$50 / 次', state: 'done', total: 30,
+    runs: [
+      { t: '今天 09:00', dur: '4m 12s', tok: '31.2k', sid: '7c1e88', s: 'ok' },
+      { t: '昨天 09:00', dur: '3m 48s', tok: '28.9k', sid: '5b0a12', s: 'ok' },
+      { t: '07-13 09:00', dur: '—', tok: '—', sid: '—', s: 'miss' },
+      { t: '07-12 09:00', dur: '5m 02s', tok: '35.1k', sid: '2fd7a9', s: 'ok' },
+      { t: '07-11 09:00', dur: '4m 40s', tok: '30.6k', sid: 'c07f5e', s: 'ok' },
+      { t: '07-10 09:00', dur: '3m 59s', tok: '27.8k', sid: 'e4a2b1', s: 'ok' },
+      { t: '07-09 09:00', dur: '4m 05s', tok: '29.4k', sid: 'd83a71', s: 'ok' },
+    ] },
+  { kind: 'cron', name: '竞品档期追踪', when: '每周一 08:00', rel: '已暂停(熔断)', cwd: '~/data-analysis', model: 'haiku',
+    prompt: '用 game-release 搜索未来一周重点游戏上线与版本更新,写入飞书多维表。',
+    perm: '自动接受编辑', budget: '$20 / 次', state: 'fused', total: 12,
+    notice: '连续失败 3 次已熔断:上游搜索接口 429。修复后手动恢复调度。',
+    runs: [
+      { t: '07-14 08:20', dur: '0m 41s', tok: '2.1k', sid: '9d21c4', s: 'err', err: '上游 429,重试 3 次后放弃' },
+      { t: '07-14 08:10', dur: '0m 38s', tok: '2.0k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-14 08:00', dur: '0m 44s', tok: '2.2k', sid: '—', s: 'err', err: 'HTTP 429' },
+      { t: '07-07 08:00', dur: '3m 55s', tok: '18.7k', sid: 'b83d09', s: 'ok' },
+    ] },
+  { kind: 'once', name: '半夜生成竞品周报(已错过)', when: '02:00', rel: '昨夜错过', cwd: '~/data-analysis', model: 'sonnet',
+    prompt: '生成竞品动态周报初稿。', perm: '自动接受编辑', budget: '$20 / 次', state: 'missed',
+    notice: '电脑睡眠错过触发,超出 30 分钟补跑宽限期。可点「立即补跑」。', runs: [] },
+];
+
+const TIMELINE = [
+  { t: '14:02', p: 'baize', m: '派发后台任务「白泽横截面诊断」(--bg)' },
+  { t: '13:47', p: 'xuanji', m: '开始 M0 原型构建(终端会话)' },
+  { t: '11:20', p: 'go-antifraud', m: '弱信号引擎评估 → 等待权限审批' },
+  { t: '09:00', p: 'cronjob', m: '定时任务:每日舆情异动扫描 ✓ 4m12s' },
+  { t: '08:30', p: 'go-antifraud', m: 'ip-risk 批量扫描 156 个 IP → 3 个高风险' },
+  { t: '昨 18:12', p: 'xuanji', m: 'CHANGELOG 整理并提交' },
+];
+
+/* ============================================================
+   工具函数
+   ============================================================ */
+const $ = (s, el) => (el || document).querySelector(s);
+const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
+const esc = (s) => String(s).replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._h);
+  t._h = setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+const PROJ_HUES = [115, 245, 300, 195, 345, 55, 160, 270];
+const _hueMap = new Map();
+function projHue(name) {
+  if (!_hueMap.has(name)) _hueMap.set(name, PROJ_HUES[_hueMap.size % PROJ_HUES.length]);
+  return _hueMap.get(name);
+}
+function projChip(cwd) {
+  const name = cwd.split('/').pop();
+  const h = projHue(name);
+  return `<span class="proj-chip" style="color:oklch(0.78 0.12 ${h});background:color-mix(in oklab, oklch(0.78 0.12 ${h}) 16%, transparent)">${esc(name)}</span>`;
+}
+const STATE_PILL = {
+  running: '<span class="pill pill-run"><span class="dot"></span>运行中</span>',
+  blocked: '<span class="pill pill-blk"><span class="dot"></span>等输入</span>',
+  idle:    '<span class="pill pill-idle"><span class="dot"></span>空闲</span>',
+  done:    '<span class="pill pill-done"><span class="dot"></span>已完成</span>',
+};
+const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>', cronjob: '<span class="tag">◷ 定时</span>' };
+
+/* ============================================================
+   框架:顶栏 / 底部 tab / 视图路由
+   ============================================================ */
+const brandSvg = document.querySelector('link[rel="icon"]').href;
+const BRAND_MARK = `<svg class="brand-mark" viewBox="-66.9 -53.29 1438.85 1438.85" aria-hidden="true"><g transform="translate(129.962149,1193.807683) scale(0.100000,-0.100000)" fill="currentColor" stroke="none"><path d="M4950 8329 c-153 -11 -376 -50 -531 -93 -344 -95 -676 -262 -946 -476 -730 -579 -1116 -1564 -957 -2443 14 -74 19 -87 33 -82 9 4 49 15 90 26 207 53 421 -8 576 -165 81 -82 123 -149 159 -256 80 -240 9 -478 -169 -565 -180 -89 -415 16 -415 185 0 124 117 201 236 155 25 -9 48 -14 52 -10 4 3 6 33 6 65 -2 111 -86 228 -191 264 -61 21 -186 21 -249 -1 -157 -53 -283 -199 -328 -384 -21 -84 -21 -261 -1 -368 94 -492 577 -1127 1150 -1511 347 -232 711 -373 1132 -437 156 -24 537 -24 698 0 399 59 803 210 1130 424 138 91 356 265 345 276 -3 3 -30 17 -60 32 -160 80 -306 216 -366 341 -89 185 -82 424 18 604 100 179 244 290 424 327 222 45 425 -89 441 -291 6 -66 -16 -136 -55 -180 -41 -46 -138 -69 -199 -45 -57 21 -113 93 -113 144 0 14 -6 25 -13 25 -22 0 -100 -55 -136 -95 -58 -67 -76 -118 -76 -220 0 -80 3 -97 31 -155 53 -113 168 -204 309 -246 79 -24 236 -23 324 0 83 22 201 83 273 140 277 221 504 788 568 1420 27 259 2 625 -60 906 -209 942 -807 1756 -1567 2134 -72 37 -138 66 -146 66 -12 0 -13 -7 -6 -37 24 -103 2 -240 -54 -348 -38 -73 -143 -180 -217 -222 -81 -46 -188 -73 -291 -73 -389 0 -662 327 -476 571 41 54 124 99 182 99 56 0 123 -36 146 -80 32 -58 19 -153 -24 -189 -25 -20 -21 -29 21 -47 24 -11 65 -17 117 -18 70 0 86 3 134 29 89 49 131 118 147 241 7 61 -15 155 -53 226 -15 28 -60 80 -99 117 -142 133 -320 197 -609 221 -141 11 -167 11 -335 -1z m371 -2228 c270 -69 498 -296 570 -567 28 -105 30 -289 5 -389 -76 -292 -306 -522 -593 -592 -96 -23 -267 -23 -363 1 -294 73 -525 302 -597 593 -24 99 -22 285 5 384 79 295 329 527 629 584 98 18 241 13 344 -14z"/></g></svg>`;
+
+const TABS = [
+  { id: 'v-home', label: '首页', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>' },
+  { id: 'v-sessions', label: '会话', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/></svg>' },
+  { id: 'v-dispatch', label: '派发', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>' },
+  { id: 'v-cron', label: '定时', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>' },
+  { id: 'v-more', label: '更多', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></svg>' },
+];
+
+/* 视图元信息:标题、顶栏动作、返回目标 */
+const VIEW_META = {
+  'v-home':     { title: '璇玑', brand: true, clock: true },
+  'v-sessions': { title: '会话' },
+  'v-dispatch': { title: '派发', action: { label: '＋ 新会话', fn: 'newChat()' } },
+  'v-cron':     { title: '定时任务', action: { label: '＋ 新建', fn: 'openJobSheet()' } },
+  'v-more':     { title: '更多' },
+  'v-projects': { title: '项目', back: 'v-more' },
+  'v-skills':   { title: '技能', back: 'v-more' },
+  'v-memory':   { title: '经验', back: 'v-more' },
+  'v-review':   { title: '回顾', back: 'v-more' },
+};
+
+function renderTabbar() {
+  const blockedN = SESSIONS.filter(s => s.state === 'blocked').length;
+  $('#tabbar').innerHTML = TABS.map(t => `
+    <button data-v="${t.id}" aria-label="${t.label}">
+      ${t.icon}<span>${t.label}</span>
+      ${t.id === 'v-sessions' && blockedN ? `<span class="bdg">${blockedN}</span>` : ''}
+    </button>`).join('');
+  $('#tabbar').addEventListener('click', e => {
+    const b = e.target.closest('button[data-v]');
+    if (b) showView(b.dataset.v);
+  });
+}
+
+let currentView = 'v-home';
+function showView(id) {
+  currentView = id;
+  $$('.view').forEach(v => v.classList.toggle('active', v.id === id));
+  const tabId = VIEW_META[id].back ? 'v-more' : id;
+  $$('#tabbar button').forEach(b => b.classList.toggle('active', b.dataset.v === tabId));
+  renderTopbar();
+  window.scrollTo(0, 0);
+}
+
+function renderTopbar() {
+  const m = VIEW_META[currentView];
+  let html = '';
+  if (m.back) {
+    html += `<button class="top-btn back" onclick="showView('${m.back}')">‹ <b>${m.title}</b></button>`;
+  } else {
+    if (m.brand) html += BRAND_MARK;
+    html += `<h1>${m.title}</h1>`;
+  }
+  html += '<span class="spacer"></span>';
+  if (m.action) html += `<button class="top-btn" onclick="${m.action.fn}">${m.action.label}</button>`;
+  else html += `<span class="daemon"><span class="ok"></span>daemon</span>`;
+  $('#topbar').innerHTML = html;
+}
+
+/* ============================================================
+   首页
+   ============================================================ */
+function renderHome() {
+  /* 时钟 */
+  const tick = () => { $('#hm-clock').textContent = new Date().toTimeString().slice(0, 5); };
+  tick(); setInterval(tick, 10000);
+
+  /* 需要你处理:blocked + 未读 */
+  const attention = SESSIONS.filter(s => s.state === 'blocked' && (s.owner === 'web' || s.needs !== 'send a prompt to start')).slice(0, 3);
+  const unread = SESSIONS.filter(s => s.unread);
+  $('#hm-needs-n').textContent = attention.length + unread.length;
+  $('#hm-needs').innerHTML = attention.map(s => `
+    <button class="need-item" onclick="openReplay('${s.id}')">
+      <div class="body">
+        <div class="name">${projChip(s.cwd)}<span>${esc(s.title)}</span></div>
+        <div class="why">${esc(s.needs)}</div>
+      </div>
+      <span class="go">›</span>
+    </button>`).join('') + unread.map(s => `
+    <button class="need-item" onclick="openReplay('${s.id}')">
+      <div class="body">
+        <div class="name"><span class="unread-dot"></span>${projChip(s.cwd)}<span>${esc(s.title)}</span></div>
+        <div class="why info">有新回执未读 · ${esc(s.detail)}</div>
+      </div>
+      <span class="go">›</span>
+    </button>`).join('');
+
+  /* 运行中 */
+  const running = SESSIONS.filter(s => s.state === 'running');
+  $('#hm-running').innerHTML = running.map(s => `
+    <div class="run-item">
+      <span class="rdot"></span>
+      <div class="body">
+        <div class="name">${esc(s.title)}</div>
+        <div class="sub">${esc(s.detail)}</div>
+      </div>
+      <span class="t num">${esc(s.started)}</span>
+    </div>`).join('');
+
+  /* 时间线 */
+  $('#hm-timeline').innerHTML = TIMELINE.map(e => `
+    <li><span class="t num">${esc(e.t)}</span><span class="m"><b>${esc(e.p)}</b> · ${esc(e.m)}</span></li>`).join('');
+
+  /* token 成本 */
+  const costSum = c => Object.values(c).reduce((a, b) => a + b, 0);
+  const projCost = p => { const agg = {}; p.sessions.forEach(s => Object.entries(s.cost).forEach(([m, v]) => agg[m] = (agg[m] || 0) + v)); return agg; };
+  const costs = TOKEN_PROJECTS.map(projCost);
+  const max = Math.max(...costs.map(costSum));
+  $('#hm-tokens').innerHTML = TOKEN_PROJECTS.map((p, i) => {
+    const agg = costs[i], total = costSum(agg);
+    const segs = MODEL_ORDER.filter(m => agg[m]).map(m =>
+      `<i style="width:${(agg[m] / max) * 100}%;background:${MODEL_COLOR[m]}"></i>`).join('');
+    const sess = p.sessions.map(s => {
+      const c = costSum(s.cost);
+      const models = MODEL_ORDER.filter(m => s.cost[m]).join('+');
+      return `<div class="sr"><span class="sn">${esc(s.title)}</span><span class="sc">${models} · $${c.toFixed(2)}</span></div>`;
+    }).join('');
+    return `<button class="tok-row" onclick="this.classList.toggle('open')">
+      <div class="tok-top"><span class="pn">${esc(p.name)}</span><span class="bar">${segs}</span><span class="amt num">$${total.toFixed(2)}</span></div>
+      <div class="tok-sess">${sess}</div>
+    </button>`;
+  }).join('');
+
+  /* 7 日热力 */
+  renderHeat('#hm-heat');
+}
+
+function renderHeat(sel) {
+  const max = Math.max(...PROJECTS.flatMap(p => p.heat));
+  const days = ['四','五','六','日','一','昨','今'];
+  const rows = PROJECTS.filter(p => p.heat.some(v => v)).map(p => `
+    <tr><td class="pn">${esc(p.name)}</td>${p.heat.map(v => {
+      const pct = v === 0 ? 0 : 18 + Math.round((v / max) * 72);
+      return `<td class="d" title="${v} prompts"><i style="opacity:${pct / 100}"></i></td>`;
+    }).join('')}</tr>`).join('');
+  $(sel).innerHTML = `<table><tr><td></td>${days.map(d => `<td class="dh">${d}</td>`).join('')}</tr>${rows}</table>`;
+}
+
+/* ============================================================
+   会话:状态 tab + 单列卡片流
+   ============================================================ */
+const SESS_TABS = [
+  { key: 'blocked', label: '需要你', warn: true },
+  { key: 'running', label: '运行中' },
+  { key: 'idle',    label: '空闲' },
+  { key: 'done',    label: '已完成' },
+];
+let sessTab = 'blocked';
+const DONE_RECENT = 5;
+let doneExpanded = false;
+
+function renderSessSeg() {
+  $('#sess-seg').innerHTML = SESS_TABS.map(t => {
+    const n = SESSIONS.filter(s => s.state === t.key).length;
+    return `<button data-k="${t.key}" class="${t.key === sessTab ? 'active' : ''}">
+      ${t.warn && t.key !== sessTab ? '<span class="warn-dot"></span>' : ''}${t.label}<span class="n num">${n}</span>
+    </button>`;
+  }).join('');
+  $('#sess-seg').onclick = e => {
+    const b = e.target.closest('button[data-k]');
+    if (!b) return;
+    sessTab = b.dataset.k; doneExpanded = false;
+    renderSessSeg(); renderSessList();
+  };
+}
+
+function sessCard(s) {
+  const pills = [STATE_PILL[s.state], KIND_TAG[s.kind] || ''].join('');
+  const body = s.needs
+    ? `<div class="detail needs">${esc(s.needs)}</div>`
+    : `<div class="detail">${esc(s.detail || '')}</div>`;
+  return `<button class="mcard" onclick="openReplay('${s.id}')">
+    <div class="t-row">${s.unread ? '<span class="unread-dot"></span>' : ''}<span class="title">${esc(s.title)}</span>${pills}</div>
+    ${body}
+    <div class="foot">${projChip(s.cwd)}<span class="num">${esc(s.started)}${s.ended ? ' → ' + esc(s.ended) : ''}</span><span class="spacer"></span><span>#${s.id.slice(0, 6)}</span></div>
+  </button>`;
+}
+
+function renderSessList() {
+  let items = SESSIONS.filter(s => s.state === sessTab);
+  if (sessTab === 'blocked' || sessTab === 'idle') items = items.sort((a, b) => (b.unread ? 1 : 0) - (a.unread ? 1 : 0));
+  let html = '';
+  if (sessTab === 'done' && !doneExpanded && items.length > DONE_RECENT) {
+    html = items.slice(0, DONE_RECENT).map(sessCard).join('')
+      + `<button class="more-btn" onclick="doneExpanded=true;renderSessList()">更早 ${items.length - DONE_RECENT} 条 ▾</button>`;
+  } else {
+    html = items.map(sessCard).join('');
+  }
+  $('#sess-list').innerHTML = html || '<div class="empty"><div class="glyph">◌</div><p>这个状态下没有会话。</p></div>';
+}
+
+/* ============================================================
+   Bottom Sheet 管理
+   ============================================================ */
+function openSheet({ title, meta, body, foot, full }) {
+  $('#sheet-title').textContent = title || '';
+  $('#sheet-meta').textContent = meta || '';
+  $('#sheet-body').innerHTML = body || '';
+  const f = $('#sheet-foot');
+  if (foot) { f.innerHTML = foot; f.style.display = 'flex'; $('#sheet-body').classList.remove('sheet-body-pad'); }
+  else { f.innerHTML = ''; f.style.display = 'none'; $('#sheet-body').classList.add('sheet-body-pad'); }
+  $('#sheet').style.height = full ? '88dvh' : '';
+  $('#backdrop').classList.add('show');
+  $('#sheet').classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+function closeSheet() {
+  $('#backdrop').classList.remove('show');
+  $('#sheet').classList.remove('show');
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheet(); });
+
+/* ============================================================
+   回放 sheet
+   ============================================================ */
+function replayHTML(events) {
+  return (events || []).map(e => {
+    if (e.who === 'user') return `<div class="msg user">${esc(e.text)}</div>`;
+    if (e.who === 'assistant') return `<div class="msg assistant"><div class="who">CLAUDE</div>${esc(e.text)}</div>`;
+    if (e.who === 'tool') return `<div class="toolcard"><button class="tc-head" onclick="this.parentElement.classList.toggle('open')">
+        <span class="fn" style="color:${TOOL_CAT_COLOR[e.cat] || 'var(--muted)'}">${esc(e.fn)}</span><span class="arg">${esc(e.arg)}</span><span class="chev">›</span>
+      </button><div class="tc-out">${esc(e.out)}</div></div>`;
+    return `<div class="raw-ev${e.err ? ' err' : ''}"><div class="rn">${esc(e.note)}</div><pre>${esc(e.text)}</pre></div>`;
+  }).join('');
+}
+
+function openReplay(id) {
+  const s = SESSIONS.find(x => x.id === id) || { title: '定时任务会话', cwd: '~', id, state: 'done' };
+  const events = REPLAY[id];
+  const body = events
+    ? `<p class="replay-note">只读回放 · source of truth: <span class="mono">~/.claude/projects/…/${esc(id)}.jsonl</span></p>` + replayHTML(events)
+    : `<div class="empty"><div class="glyph">◌</div><p>原型仅为部分会话准备了回放数据。</p><p style="color:var(--faint)">实际实现中,此处流式渲染 session jsonl。</p></div>`;
+  let foot = '';
+  if (s.state === 'blocked' && s.id === '77e2f0a9') {
+    foot = `<button class="btn" onclick="closeSheet()">稍后处理</button>
+            <button class="btn btn-primary" onclick="closeSheet();showView('v-dispatch');toast('已续接会话,审批卡在对话中')">进入会话处理 ›</button>`;
+  } else if (s.state === 'blocked') {
+    foot = `<button class="btn btn-primary btn-block" onclick="closeSheet();showView('v-dispatch');toast('已续接会话(--resume)')">续接会话回复 ›</button>`;
+  } else if (s.readonly) {
+    foot = `<button class="btn btn-block" disabled style="opacity:0.55">终端存活 · 只读,不可接管</button>`;
+  } else if (s.state === 'idle' || s.state === 'done') {
+    foot = `<button class="btn btn-block" onclick="closeSheet();showView('v-dispatch');toast('已续接会话(--resume)')">续接此会话 ›</button>`;
+  }
+  openSheet({
+    title: s.title,
+    meta: `${s.cwd} · #${id.slice(0, 6)}${s.readonly ? ' · 终端只读' : ''}`,
+    body, foot,
+  });
+  if (s.unread) { s.unread = false; renderSessList(); renderTabbar(); renderHome(); }
+}
+
+/* ============================================================
+   派发
+   ============================================================ */
+function renderChat() {
+  const ev = REPLAY['77e2f0a9'];
+  $('#chat').innerHTML = `
+    <div class="sess-ctx-chip">
+      <span class="sess-name"><span class="glow" style="background:oklch(0.78 0.12 ${projHue('go-antifraud')})"></span>弱信号引擎评估</span>
+      <span class="path">~/go-antifraud</span>
+    </div>
+    ${replayHTML(ev)}
+    <div class="approval">
+      <div class="ap-head"><span class="pill pill-blk"><span class="dot"></span>等待审批</span><span class="ap-title">权限请求</span></div>
+      <div class="ap-body">
+        Claude 想要执行命令(工具:Bash)
+        <div class="ap-cmd">pnpm test -- --run</div>
+      </div>
+      <div class="ap-actions">
+        <button class="btn btn-primary" onclick="approve(true)">允许</button>
+        <button class="btn btn-danger" onclick="approve(false)">拒绝</button>
+        <button class="btn full" onclick="approve('always')">本次会话总是允许 Bash(pnpm …)</button>
+      </div>
+    </div>`;
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+
+function approve(v) {
+  const st = $('#agent-status');
+  if (v === false) { toast('已拒绝,已通知 Claude 换路径'); }
+  else { toast(v === 'always' ? '已允许并记住(仅本会话)' : '已允许,继续执行'); }
+  $$('.approval').forEach(a => a.remove());
+  const d = document.createElement('div');
+  d.className = 'msg assistant';
+  d.innerHTML = `<div class="who">CLAUDE</div>${v === false ? '收到,我改用只读方式分析测试文件,不执行命令。' : '审批通过,开始执行 pnpm test…'}`;
+  $('#chat').appendChild(d);
+  st.className = 'cs-state working';
+  st.innerHTML = '<span class="cs-dot"></span>工作中';
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+}
+
+function newChat() {
+  $('#chat').innerHTML = `
+    <div class="sess-ctx-chip"><span class="sess-name"><span class="glow" style="background:var(--faint)"></span>未命名会话</span><span class="path">首轮回复后自动命名</span></div>
+    <div class="empty" style="padding-top:20vh"><div class="glyph">✦</div><p>新会话就绪。</p><p style="color:var(--faint)">底部选择目录 / 模型 / 权限,输入任务即派发。</p></div>`;
+  const st = $('#agent-status');
+  st.className = 'cs-state';
+  st.innerHTML = '<span class="cs-dot"></span>空闲';
+  toast('已开新会话');
+}
+
+/* composer 自适应高度 + 发送 */
+const ta = $('#composer-input');
+ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; });
+$('#send-btn').addEventListener('click', () => {
+  const v = ta.value.trim();
+  if (!v) { toast('先输入任务描述'); return; }
+  const empty = $('#chat .empty'); if (empty) empty.remove();
+  const d = document.createElement('div');
+  d.className = 'msg user'; d.textContent = v;
+  $('#chat').appendChild(d);
+  ta.value = ''; ta.style.height = '';
+  const st = $('#agent-status');
+  st.className = 'cs-state working';
+  st.innerHTML = '<span class="cs-dot"></span>工作中';
+  $('#chat').scrollTop = $('#chat').scrollHeight;
+  toast('已派发(原型)');
+});
+
+/* 会话设置 sheet(替代终端式下拉行) */
+function openDispatchSettings() {
+  const cwds = ['~/go-antifraud', '~/xuanji', '~/baize', '~/data-analysis', '~/project/cronjob'];
+  const models = [['opus', '深度推理'], ['sonnet', '默认 · 均衡'], ['haiku', '轻量快速']];
+  const perms = [['默认权限', '写操作逐一审批'], ['自动接受编辑', '文件编辑免审批'], ['计划模式', '先出计划再执行']];
+  const body = `
+    <div class="opt-group-h">工作目录(下一个会话生效)</div>
+    ${cwds.map((c, i) => `<button class="opt-row" onclick="pickOpt(this)"><span class="v c-cwd">${c}</span><span class="check">${i === 0 ? '✓' : ''}</span></button>`).join('')}
+    <div class="opt-group-h">模型</div>
+    ${models.map(([m, d], i) => `<button class="opt-row" onclick="pickOpt(this)"><span class="v c-model">${m}</span><span class="sub-v">${d}</span><span class="check">${i === 0 ? '✓' : ''}</span></button>`).join('')}
+    <div class="opt-group-h">权限模式</div>
+    ${perms.map(([p, d], i) => `<button class="opt-row" onclick="pickOpt(this)"><span class="v c-dim">${p}</span><span class="sub-v">${d}</span><span class="check">${i === 0 ? '✓' : ''}</span></button>`).join('')}
+    <div class="opt-group-h">派发方式</div>
+    <div class="opt-toggle-row">
+      <div style="flex:1"><div class="lbl2">转后台(--bg)</div><div class="hint2">交给 daemon 托管,回看板跟踪;建议放宽权限避免深夜卡审批</div></div>
+      <button class="switch" role="switch" aria-checked="false" onclick="this.setAttribute('aria-checked', this.getAttribute('aria-checked')==='true'?'false':'true')"></button>
+    </div>
+    <p class="replay-note" style="margin-top:10px">settingSources: user — 派发会话与终端加载同一份 skills / MCP / CLAUDE.md</p>`;
+  openSheet({ title: '会话设置', meta: '对下一个派发的会话生效', body,
+    foot: '<button class="btn btn-primary btn-block" onclick="closeSheet();toast(\'设置已应用\')">完成</button>' });
+}
+function pickOpt(btn) {
+  /* 同组单选:向上找到最近的 group 标题之间的兄弟 */
+  let el = btn.previousElementSibling;
+  const group = [btn];
+  while (el && !el.classList.contains('opt-group-h')) { if (el.classList.contains('opt-row')) group.push(el); el = el.previousElementSibling; }
+  el = btn.nextElementSibling;
+  while (el && !el.classList.contains('opt-group-h') && !el.classList.contains('opt-toggle-row')) { if (el.classList.contains('opt-row')) group.push(el); el = el.nextElementSibling; }
+  group.forEach(r => r.querySelector('.check').textContent = r === btn ? '✓' : '');
+}
+
+/* ============================================================
+   定时任务
+   ============================================================ */
+const JOB_PILL = {
+  pending: '<span class="pill pill-sch"><span class="dot"></span>待执行</span>',
+  blocked: '<span class="pill pill-blk"><span class="dot"></span>需审批</span>',
+  done:    '<span class="pill pill-done"><span class="dot"></span>正常</span>',
+  fused:   '<span class="pill pill-err"><span class="dot"></span>已熔断</span>',
+  missed:  '<span class="pill pill-blk"><span class="dot"></span>已错过</span>',
+};
+let cronFilter = 'all';
+
+function runlineHTML(job) {
+  if (job.kind !== 'cron' || !job.runs.length) return '';
+  const dots = job.runs.slice(0, 7).reverse().map(r =>
+    `<i class="${r.s === 'ok' ? 'ok' : r.s === 'err' ? 'err' : 'miss'}"></i>`).join('');
+  return `<span class="runline">${dots}</span>`;
+}
+
+function renderCron() {
+  const jobs = JOBS.filter(j => cronFilter === 'all' || j.kind === cronFilter);
+  $('#cron-list').innerHTML = jobs.map((j, i) => {
+    const runs = j.runs.map(r => `
+      <div class="run-row">
+        <span class="rt">${esc(r.t)}</span><span class="rd">${esc(r.dur)}</span><span class="rtk">${esc(r.tok)}</span>
+        ${r.err ? `<span class="rerr">${esc(r.err)}</span>` : ''}
+        ${r.sid && r.sid !== '—' ? `<button class="sid-link" onclick="event.stopPropagation();openReplay('${r.sid}')">#${r.sid} ›</button>` : ''}
+      </div>`).join('');
+    let actions = '';
+    if (j.state === 'blocked') actions = `<div class="cron-actions"><button class="btn btn-primary" onclick="openReplay('${j.blockedSid}')">查看并审批 ›</button></div>`;
+    if (j.state === 'fused') actions = `<div class="cron-actions"><button class="btn" onclick="openReplay('9d21c4')">看失败回放</button><button class="btn btn-primary" onclick="toast('已恢复调度(原型)')">恢复调度</button></div>`;
+    if (j.state === 'missed') actions = `<div class="cron-actions"><button class="btn btn-primary" onclick="toast('已补跑(原型)')">立即补跑</button></div>`;
+    return `<div class="cron-item" id="cron-${i}">
+      <button class="cron-row" onclick="document.getElementById('cron-${i}').classList.toggle('open')">
+        ${JOB_PILL[j.state]}
+        <span class="name">${esc(j.name)}</span>
+        ${runlineHTML(j)}
+        <span class="when num">${esc(j.when)}</span>
+      </button>
+      <div class="cron-body">
+        <div class="cron-meta"><span>${esc(j.rel)}</span><span>${esc(j.cwd)}</span><span style="color:var(--violet)">${esc(j.model)}</span><span>${esc(j.perm)}</span><span>${esc(j.budget)}</span>${j.total ? `<span>共 ${j.total} 期</span>` : ''}</div>
+        ${j.notice ? `<div class="cron-note${j.state === 'fused' ? ' err' : ''}">${esc(j.notice)}</div>` : ''}
+        <div class="cron-prompt mono">${esc(j.prompt)}</div>
+        ${j.runs.length ? `<div class="runs-h">运行历史</div>${runs}` : ''}
+        ${actions}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('#cron-filter').addEventListener('click', e => {
+  const b = e.target.closest('button[data-f]');
+  if (!b) return;
+  cronFilter = b.dataset.f;
+  $$('#cron-filter button').forEach(x => x.classList.toggle('active', x === b));
+  renderCron();
+});
+
+/* 新建任务 sheet */
+function openJobSheet() {
+  const body = `
+    <div class="mfield">
+      <label>任务类型</label>
+      <div class="time-chips" id="jm-kind">
+        <button class="active" onclick="jmKind(this,'once')">一次性</button>
+        <button onclick="jmKind(this,'cron')">周期</button>
+      </div>
+    </div>
+    <div class="mfield">
+      <label>任务名称</label>
+      <input class="input" placeholder="例:今晚汇总本周周报草稿">
+    </div>
+    <div class="mfield">
+      <label>Prompt(发给 Claude 的指令)</label>
+      <textarea class="input" placeholder="汇总本周会话产出与 git log,按组周报模板生成草稿,存到 drafts/ 等待人工审阅。"></textarea>
+    </div>
+    <div class="mfield two-col">
+      <div><label>工作目录</label><button class="field-btn" onclick="toast('目录选择(原型)')"><span class="fv" style="color:var(--blue)">~/project/cronjob</span><span class="chev-d">▾</span></button></div>
+      <div><label>模型</label><button class="field-btn" onclick="toast('模型选择(原型)')"><span class="fv" style="color:var(--violet)">sonnet</span><span class="chev-d">▾</span></button></div>
+    </div>
+    <div class="mfield" id="jm-once">
+      <label>执行时间</label>
+      <div class="time-chips">
+        <button class="active" onclick="pickChip(this)">今晚 20:00</button>
+        <button onclick="pickChip(this)">今晚 22:00</button>
+        <button onclick="pickChip(this)">明早 09:00</button>
+        <button onclick="pickChip(this)">自定义</button>
+      </div>
+      <div class="hint">将在 <b>今晚 20:00</b>(约 4 小时后)执行一次</div>
+    </div>
+    <div class="mfield" id="jm-cron" style="display:none">
+      <label>周期(cron 表达式)</label>
+      <div class="time-chips">
+        <button class="active" onclick="pickChip(this)">每天 09:00</button>
+        <button onclick="pickChip(this)">每周五 18:00</button>
+        <button onclick="pickChip(this)">自定义</button>
+      </div>
+      <input class="input" style="font-family:var(--mono);margin-top:8px" value="0 9 * * *">
+      <div class="hint">croner 解析,支持时区(Asia/Shanghai)</div>
+    </div>
+    <div class="mfield two-col">
+      <div><label>权限模式</label><button class="field-btn" onclick="toast('权限选择(原型)')"><span class="fv">自动接受编辑</span><span class="chev-d">▾</span></button></div>
+      <div><label>预算上限</label><button class="field-btn" onclick="toast('预算选择(原型)')"><span class="fv">$50 / 次</span><span class="chev-d">▾</span></button></div>
+    </div>
+    <div class="hint" style="color:var(--faint);font-size:0.75rem">保守模式被卡时会弹审批横幅并挂起;预算超限自动停,防无人值守跑飞。</div>`;
+  openSheet({
+    title: '新建定时任务', meta: '一次性 · 今晚 20:00 · ~/project/cronjob · sonnet', body, full: true,
+    foot: `<button class="btn btn-quiet" onclick="closeSheet()">取消</button>
+           <button class="btn btn-primary" onclick="closeSheet();toast('任务已保存(原型)')">保存任务</button>`,
+  });
+}
+function jmKind(btn, k) {
+  $$('#jm-kind button').forEach(b => b.classList.toggle('active', b === btn));
+  $('#jm-once').style.display = k === 'once' ? '' : 'none';
+  $('#jm-cron').style.display = k === 'cron' ? '' : 'none';
+  $('#sheet-meta').textContent = (k === 'once' ? '一次性 · 今晚 20:00' : '周期 · 每天 09:00') + ' · ~/project/cronjob · sonnet';
+}
+function pickChip(btn) { $$('.time-chips button', btn.parentElement).forEach(b => b.classList.toggle('active', b === btn)); }
+
+/* ============================================================
+   项目(单列卡片流)
+   ============================================================ */
+function renderProjects(q) {
+  const rows = PROJECTS.filter(p => !q || p.name.includes(q) || p.path.includes(q));
+  $('#proj-empty').style.display = rows.length ? 'none' : '';
+  const max = Math.max(...PROJECTS.flatMap(p => p.heat), 1);
+  $('#proj-list').innerHTML = rows.map(p => `
+    <button class="mcard proj-card" onclick="toast('项目详情:${esc(p.name)}(原型)')">
+      <div class="t-row"><span style="width:8px;height:8px;border-radius:50%;flex:none;background:oklch(0.78 0.12 ${projHue(p.name)})"></span><span class="title">${esc(p.name)}</span><span class="tag">⎇ ${esc(p.branch)}</span></div>
+      <div class="path">${esc(p.path)}</div>
+      <div class="stats">
+        <span>会话 <b>${p.sessions}</b></span>
+        <span>经验 <b>${p.memories}</b></span>
+        ${p.dirty ? `<span class="dirty">!${p.dirty} 未提交</span>` : ''}
+        <span style="color:var(--faint)">${esc(p.last)}</span>
+        <span class="spark">${p.heat.map(v => v ? `<i style="height:${Math.max(2, (v / max) * 16)}px"></i>` : '<i class="z" style="height:3px"></i>').join('')}</span>
+      </div>
+    </button>`).join('');
+}
+$('#proj-search').addEventListener('input', e => renderProjects(e.target.value.trim()));
+
+/* ============================================================
+   技能(单列卡片流 + 开关确认)
+   ============================================================ */
+let skillFilter = 'all', skillQ = '';
+function renderSkills() {
+  const rows = SKILLS.filter(s => {
+    if (skillFilter === 'on' && !s.on) return false;
+    if (skillFilter === 'off' && s.on) return false;
+    if (skillFilter === 'plugin' && s.src !== 'plugin') return false;
+    return !skillQ || s.name.includes(skillQ) || s.desc.includes(skillQ);
+  });
+  $('#skill-empty').style.display = rows.length ? 'none' : '';
+  $('#skill-list').innerHTML = rows.map(s => `
+    <div class="mcard skill-card">
+      <div class="body">
+        <div class="n-row"><span class="sname">${esc(s.name)}</span><span class="ver num">v${esc(s.ver)}</span>${s.src === 'plugin' ? '<span class="tag">插件</span>' : ''}</div>
+        <div class="desc">${esc(s.desc)}</div>
+      </div>
+      <button class="switch" role="switch" aria-checked="${s.on}" aria-label="启用 ${esc(s.name)}" onclick="toggleSkill('${esc(s.name)}')"></button>
+    </div>`).join('');
+}
+function toggleSkill(name) {
+  const s = SKILLS.find(x => x.name === name);
+  if (s.on) {
+    openSheet({
+      title: `禁用「${name}」?`, meta: '显式写操作 · 可逆',
+      body: `<p style="color:var(--muted);font-size:0.875rem;line-height:1.7">将把 <span class="mono">~/.claude/skills/${esc(name)}/</span> 移入 <span class="mono">skills-disabled/</span>。目录内容不变、随时可恢复;新派发的会话不再加载该技能,已运行的会话不受影响。</p>`,
+      foot: `<button class="btn" onclick="closeSheet()">取消</button>
+             <button class="btn btn-danger" onclick="closeSheet();confirmToggle('${esc(name)}')">确认禁用</button>`,
+    });
+  } else {
+    s.on = true; renderSkills(); toast(`已启用 ${name}`);
+  }
+}
+function confirmToggle(name) {
+  const s = SKILLS.find(x => x.name === name);
+  s.on = false; renderSkills(); toast(`已禁用 ${name}(移入 skills-disabled/)`);
+}
+$('#skill-search').addEventListener('input', e => { skillQ = e.target.value.trim(); renderSkills(); });
+$('#skill-tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-f]');
+  if (!b) return;
+  skillFilter = b.dataset.f;
+  $$('#skill-tabs button').forEach(x => x.classList.toggle('active', x === b));
+  renderSkills();
+});
+
+/* ============================================================
+   经验
+   ============================================================ */
+let memFilter = 'all', memQ = '';
+function renderMemories() {
+  const rows = MEMORIES.filter(m => (memFilter === 'all' || m.type === memFilter)
+    && (!memQ || m.name.includes(memQ) || m.desc.includes(memQ) || m.body.includes(memQ)));
+  $('#mem-empty').style.display = rows.length ? 'none' : '';
+  const groups = {};
+  rows.forEach(m => (groups[m.project] = groups[m.project] || []).push(m));
+  $('#mem-groups').innerHTML = Object.entries(groups).map(([proj, ms]) => `
+    <div class="mem-group-h">${proj === '(全局)' ? '<span class="tag">全局</span>' : projChip('x/' + proj)}<span class="cnt num">${ms.length} 条</span></div>
+    ${ms.map(m => `
+      <button class="mcard mem-card" onclick="openMemory('${esc(m.name)}')">
+        <div class="t-row"><span class="mname">${esc(m.name)}</span><span class="type-tag type-${m.type}">${m.type}</span></div>
+        <div class="detail">${esc(m.desc)}</div>
+      </button>`).join('')}`).join('');
+}
+function openMemory(name) {
+  const m = MEMORIES.find(x => x.name === name);
+  const body = m.body.replace(/\[\[([^\]]+)\]\]/g, (_, n) =>
+    `<button class="ctx-chip" style="vertical-align:1px" onclick="closeSheet();setTimeout(()=>openMemory('${n}'),240)">⧉ ${n}</button>`);
+  openSheet({
+    title: m.name, meta: `${m.project} · ${m.type} · memory/`,
+    body: `<div style="color:var(--muted);font-size:0.875rem;line-height:1.75;display:flex;flex-direction:column;gap:10px">${body}</div>`,
+    foot: `<button class="btn" onclick="toast('编辑走 frontmatter 约定(原型)')">编辑</button>
+           <button class="btn btn-quiet" onclick="closeSheet()">关闭</button>`,
+  });
+}
+$('#mem-search').addEventListener('input', e => { memQ = e.target.value.trim(); renderMemories(); });
+$('#mem-tabs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-f]');
+  if (!b) return;
+  memFilter = b.dataset.f;
+  $$('#mem-tabs button').forEach(x => x.classList.toggle('active', x === b));
+  renderMemories();
+});
+
+/* ============================================================
+   回顾
+   ============================================================ */
+function renderReview() {
+  renderHeat('#rv-heat');
+  const byProj = {};
+  SESSIONS.slice(0, 12).forEach(s => {
+    const p = s.cwd.split('/').pop();
+    (byProj[p] = byProj[p] || []).push(s);
+  });
+  $('#rv-projects').innerHTML = Object.entries(byProj).slice(0, 5).map(([p, ss]) =>
+    ss.slice(0, 2).map(s => `
+      <button class="rv-sess" onclick="openReplay('${s.id}')">
+        ${projChip(s.cwd)}<span class="sn">${esc(s.title)}</span><span class="pc num">${esc(s.started)}</span>
+      </button>`).join('')).join('');
+}
+
+/* ============================================================
+   init
+   ============================================================ */
+renderTabbar();
+renderTopbar();
+renderHome();
+renderSessSeg();
+renderSessList();
+renderChat();
+renderCron();
+renderProjects();
+renderSkills();
+renderMemories();
+renderReview();
+showView('v-home');
+</script>
+</body>
+</html>
