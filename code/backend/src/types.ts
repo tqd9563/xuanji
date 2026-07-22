@@ -83,7 +83,7 @@ export interface Skill {
 export interface Memory {
   name: string;
   description: string;
-  type: 'user' | 'feedback' | 'project' | 'reference' | 'unknown';
+  type: 'user' | 'feedback' | 'project' | 'reference' | 'cross-project' | 'unknown';
   /** 所属项目展示名 */
   project: string;
   projectPath: string;
