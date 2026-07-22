@@ -224,7 +224,10 @@ export class DispatchSession {
             for (const b of blocks) {
               if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
                 this.emit({ ev: 'assistant', text: b.text });
-              } else if (b.type === 'tool_use') {
+              } else if (b.type === 'tool_use' && b.name !== 'AskUserQuestion') {
+                // AskUserQuestion 单独走 onPermission → 'question' 事件渲染成提问卡(见下),
+                // 这里若照常 emit 通用 'tool' 事件,会在提问卡上方多出一张重复的原始 JSON 工具卡
+                // (compact() 500 字符截断还会把 JSON 切成语法不完整的半截),观感像"坏了/context 丢了"。
                 this.emit({
                   ev: 'tool',
                   id: String(b.id),
