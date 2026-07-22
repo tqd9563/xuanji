@@ -67,7 +67,7 @@ export interface Skill {
 export interface Memory {
   name: string;
   description: string;
-  type: 'user' | 'feedback' | 'project' | 'reference' | 'unknown';
+  type: 'user' | 'feedback' | 'project' | 'reference' | 'cross-project' | 'unknown';
   project: string;
   projectPath: string;
   file: string;

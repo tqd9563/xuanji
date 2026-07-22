@@ -52,6 +52,7 @@
   --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
   --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+  --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
 
   /* 字 */
   --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
@@ -684,6 +685,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .type-feedback  { color: var(--amber); background: var(--tint-amber); }
 .type-project   { color: var(--jade);  background: var(--tint-jade); }
 .type-reference { color: var(--muted); background: var(--tint-muted); }
+.type-cross-project { color: var(--violet); background: var(--tint-violet); }
 
 .mem-body { font-size: 0.8125rem; max-width: 68ch; text-wrap: pretty; }
 .mem-body p { margin-bottom: 10px; }

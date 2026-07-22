@@ -5,12 +5,13 @@ import { usePoll } from '@/lib/hooks';
 import { Drawer, Empty } from '@/components/shared';
 import { Input } from '@/components/ui/input';
 
-type TypeFilter = 'all' | 'user' | 'feedback' | 'project' | 'reference';
+type TypeFilter = 'all' | 'user' | 'feedback' | 'project' | 'reference' | 'cross-project';
 const TYPE_LABEL: Record<string, string> = {
   user: 'user',
   feedback: 'feedback',
   project: 'project',
   reference: 'reference',
+  'cross-project': 'cross-project',
   unknown: '?',
 };
 
@@ -66,7 +67,7 @@ export function Memories() {
           onChange={(e) => setQ(e.target.value)}
         />
         <div className="filter-tabs">
-          {(['all', 'user', 'feedback', 'project', 'reference'] as TypeFilter[]).map((f) => (
+          {(['all', 'user', 'feedback', 'project', 'reference', 'cross-project'] as TypeFilter[]).map((f) => (
             <button key={f} className={type === f ? 'active' : ''} onClick={() => setType(f)}>
               {f === 'all' ? '全部' : f}
             </button>

@@ -83,12 +83,19 @@ describe('scanProjectDirs / scanMemories', () => {
   it('统计会话与 memory 数,解析 frontmatter 与 [[链接]]', async () => {
     const dirs = await scanProjectDirs(FIX);
     expect(dirs).toHaveLength(1);
-    expect(dirs[0]).toMatchObject({ sessionCount: 1, memoryCount: 1, path: '/Users/me/demo-app' });
+    expect(dirs[0]).toMatchObject({ sessionCount: 1, memoryCount: 2, path: '/Users/me/demo-app' });
 
     const mems = await scanMemories(FIX, new Map([['-Users-me-demo-app', '/Users/me/demo-app']]));
-    expect(mems).toHaveLength(1);
-    expect(mems[0]).toMatchObject({ name: 'demo-fact', type: 'feedback', project: 'demo-app' });
-    expect(mems[0]!.links).toEqual(['metric-caliber-first', 'offline-eval']);
+    expect(mems).toHaveLength(2);
+    const fact = mems.find((m) => m.name === 'demo-fact')!;
+    expect(fact).toMatchObject({ type: 'feedback', project: 'demo-app' });
+    expect(fact.links).toEqual(['metric-caliber-first', 'offline-eval']);
+  });
+
+  it('共享库 memory 的 type: cross-project 不再落入 unknown(白名单已收编)', async () => {
+    const mems = await scanMemories(FIX, new Map([['-Users-me-demo-app', '/Users/me/demo-app']]));
+    const shared = mems.find((m) => m.name === 'shared-fact')!;
+    expect(shared).toMatchObject({ type: 'cross-project', project: 'demo-app' });
   });
 });
 
