@@ -256,6 +256,28 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
+  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车(见 submit() 同名分支),
+  // 直接开对应弹窗而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        taRef.current?.blur();
+        setModelQuery('');
+        setModelPalette(true);
+      } else if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        taRef.current?.blur();
+        setWdQuery('');
+        setWdPalette(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active]);
+
   /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
   const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
 
