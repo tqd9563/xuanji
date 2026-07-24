@@ -74,6 +74,7 @@ export type DispatchEvent =
   | { ev: 'user-echo'; text: string }
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'model-changed'; model: string }
+  | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
   | { ev: 'error'; message: string };
 
 const CONTEXT_WINDOW = 200_000;
@@ -210,6 +211,20 @@ export class DispatchSession {
               this.backgroundTasks =
                 (msg as { tasks?: { task_id: string; task_type: string; description: string }[] }).tasks ?? [];
               this.applyBackgroundState();
+            } else if (msg.subtype === 'status' && msg.status === 'compacting') {
+              // /compact(用户手动输入,或 SDK 到阈值自动触发):压缩期间无 delta/assistant 事件,
+              // 靠 status detail 让看板"working"态不显得像卡死
+              this.emit({ ev: 'status', state: 'working', detail: '正在压缩上下文…' });
+            } else if (msg.subtype === 'compact_boundary') {
+              // 压缩成功才会有这条(见 compact_metadata.trigger);失败(如"消息数不足")走的是
+              // 合成 assistant 文本回复(下面 case 'assistant' 已覆盖),这里不重复提示避免报两遍
+              const meta = msg.compact_metadata;
+              this.emit({
+                ev: 'compact',
+                trigger: meta.trigger,
+                preTokens: meta.pre_tokens,
+                postTokens: meta.post_tokens,
+              });
             }
             break;
           case 'stream_event': {

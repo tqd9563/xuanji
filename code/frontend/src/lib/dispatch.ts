@@ -212,6 +212,14 @@ export function useDispatch() {
           },
         ]);
         break;
+      case 'compact': {
+        const pre = Number(e.preTokens ?? 0);
+        const post = typeof e.postTokens === 'number' ? Number(e.postTokens) : undefined;
+        const label = e.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
+        const stat = post != null ? `:${pre.toLocaleString()} → ${post.toLocaleString()} tokens` : '';
+        setItems((prev) => [...prev, { t: 'note', text: `🗜 ${label}${stat}` }]);
+        break;
+      }
       case 'bg-dispatched':
         setItems((prev) => [
           ...prev,
