@@ -66,7 +66,7 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
   });
 }
 
-const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
+const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
@@ -79,7 +79,7 @@ const DEFAULT_PERM = PERMS[2]!;
 /** /model 简写 → 完整模型名 */
 const MODEL_SHORT: Record<string, string> = {
   fable: 'claude-fable-5',
-  opus: 'claude-opus-4-8',
+  opus: 'claude-opus-5',
   sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -91,7 +91,7 @@ const MODEL_ALIAS: Record<string, string> = Object.fromEntries(
 const LAST_MODEL_KEY = 'xuanji-last-model';
 const initialModel = (): string => {
   const saved = localStorage.getItem(LAST_MODEL_KEY);
-  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-4-8';
+  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
 /** 会话标识(输入框上方,与用量条同行):名称按所属项目色荧光呈现,id 到手后补显。
