@@ -58,6 +58,8 @@ export interface StartOpts {
   cwd: string;
   permissionMode: string;
   model?: string;
+  /** 思考深度(low/medium/high/xhigh/max)。只在建会话时生效,SDK 无运行时切换 */
+  effort?: string;
   resume?: string;
   name?: string;
 }
@@ -329,6 +331,7 @@ export function useDispatch() {
             cwd: opts.cwd,
             permissionMode: opts.permissionMode,
             model: opts.model,
+            effort: opts.effort,
             resume: opts.resume,
             name: opts.name,
             prompt: text,

@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   query,
+  type EffortLevel,
   type PermissionResult,
   type PermissionUpdate,
   type Query,
@@ -87,6 +88,25 @@ export interface QuestionSpec {
   options: { label: string; description?: string }[];
 }
 
+/** 派发会话创建参数(WS start / 定时任务 / 周报草稿共用) */
+export interface DispatchOpts {
+  cwd: string;
+  permissionMode?: string;
+  model?: string;
+  /** 思考深度(SDK effort)。省略 = 用模型自身默认(通常 high) */
+  effort?: EffortLevel;
+  resume?: string;
+  fork?: boolean;
+  name?: string;
+}
+
+const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** 外部输入(WS 消息 / REST body)转 EffortLevel:非法值一律当未指定,不让脏值传进 SDK */
+export function parseEffort(v: unknown): EffortLevel | undefined {
+  return typeof v === 'string' && EFFORT_LEVELS.includes(v) ? (v as EffortLevel) : undefined;
+}
+
 interface Pending {
   resolve: (r: PermissionResult) => void;
   toolName: string;
@@ -127,10 +147,7 @@ export class DispatchSession {
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
 
-  constructor(
-    storage: Storage,
-    opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
-  ) {
+  constructor(storage: Storage, opts: DispatchOpts) {
     this.storage = storage;
     this.cwd = opts.cwd;
     this.name = opts.name ?? '新会话';
@@ -141,6 +158,8 @@ export class DispatchSession {
       options: {
         cwd: opts.cwd,
         model: opts.model,
+        // 思考深度:与 model 一样是会话级设定,SDK 无运行时 setEffort,只能建会话时定
+        effort: opts.effort,
         permissionMode: (opts.permissionMode as never) ?? 'default',
         resume: opts.resume,
         // bg 后台代理会话归 daemon 所有,CLI 拒绝直接 --resume,只能分叉副本续接
@@ -482,10 +501,7 @@ export class DispatchSession {
 
 const sessions = new Map<string, DispatchSession>();
 
-export function createDispatch(
-  storage: Storage,
-  opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
-): DispatchSession {
+export function createDispatch(storage: Storage, opts: DispatchOpts): DispatchSession {
   const s = new DispatchSession(storage, opts);
   sessions.set(s.id, s);
   return s;
