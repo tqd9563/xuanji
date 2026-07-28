@@ -94,6 +94,17 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
+/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
+const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
+/** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
+ *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
+const MODEL_DEFAULT_EFFORT: Record<string, string> = { 'claude-opus-5': 'low' };
+const LAST_EFFORT_KEY = 'xuanji-last-effort';
+const initialEffort = (): string => {
+  const saved = localStorage.getItem(LAST_EFFORT_KEY);
+  return saved && EFFORTS.includes(saved) ? saved : EFFORTS[0]!;
+};
+
 /** 会话标识(输入框上方,与用量条同行):名称按所属项目色荧光呈现,id 到手后补显。
  *  id 为 null 表示「已知名称/项目,SDK 会话尚未分配 id」(如刚发出首条消息);name 为 null 表示「未命名占位」。 */
 interface SessCtx {
@@ -109,6 +120,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
   const [modelSel, setModelSel] = useState(initialModel);
+  const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
@@ -187,6 +199,22 @@ export function Dispatch({ active }: { active: boolean }) {
       localStorage.setItem(LAST_MODEL_KEY, resolved);
       d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
     }
+  };
+
+  /** 实际下发给 SDK 的思考深度:显式选过就用选的,否则回落到该模型的默认档(未列出的模型 = 不下发) */
+  const resolvedEffort = effortSel === EFFORTS[0] ? MODEL_DEFAULT_EFFORT[modelSel] : effortSel;
+
+  /** 设定思考深度(/effort 与下拉共用)。SDK 只支持建会话时定 effort、无运行时切换,
+   *  所以已开始的会话不受影响,改动对下一个新会话生效 */
+  const applyEffort = (v: string) => {
+    setEffortSel(v);
+    localStorage.setItem(LAST_EFFORT_KEY, v);
+    const shown = v === EFFORTS[0] ? `自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : v;
+    d.pushNote(
+      d.started
+        ? `◈ 思考深度已设为 ${shown};当前会话无法中途改,对下一个新会话生效。`
+        : `◈ 思考深度已设为 ${shown},本会话生效。`,
+    );
   };
 
   // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏。
@@ -420,6 +448,22 @@ export function Dispatch({ active }: { active: boolean }) {
       setModelPalette(true);
       return;
     }
+    // /effort 设定思考深度:auto 回到按模型取默认档;无参数只回报当前值(档位就 5 个,不值得再开弹窗)
+    if (/^\/effort\b/.test(text)) {
+      const arg = text.replace(/^\/effort\b/, '').trim().toLowerCase();
+      if (!arg) {
+        const shown = effortSel === EFFORTS[0] ? `自动 → ${resolvedEffort ?? '模型默认'}` : effortSel;
+        d.pushNote(`◈ 当前思考深度:${shown}。用法:/effort ${EFFORTS.slice(1).join('|')}|auto`);
+        return;
+      }
+      if (arg === 'auto') {
+        applyEffort(EFFORTS[0]!);
+        return;
+      }
+      if (!EFFORTS.includes(arg)) return toast(`未知档位「${arg}」,可选:${EFFORTS.slice(1).join(' / ')} / auto`);
+      applyEffort(arg);
+      return;
+    }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
@@ -439,6 +483,7 @@ export function Dispatch({ active }: { active: boolean }) {
         cwd: effectiveCwd,
         permissionMode: PERM_VALUE[permSel]!,
         model: modelSel === MODELS[0] ? undefined : modelSel,
+        effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
         name: resumeInfo?.name ?? text.slice(0, 40),
       });
@@ -670,6 +715,18 @@ export function Dispatch({ active }: { active: boolean }) {
               }
             }}
             title={d.started ? '当前会话模型(切换只对本会话生效)' : '新会话默认模型(记忆最近一次)'}
+          />
+          <DropUp
+            className="dim"
+            id="effort-dd"
+            value={effortSel}
+            options={EFFORTS}
+            // 首项标注解析结果(如「思考 自动(low)」),否则它与显式 low 在列表里同名、无法区分
+            labelOf={(v) =>
+              v === EFFORTS[0] ? `思考 自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : `思考 ${v}`
+            }
+            onChange={applyEffort}
+            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus-5 → low),其余模型不下发、用模型自身默认(通常 high)`}
           />
           <DropUp
             className="dim"
