@@ -236,6 +236,62 @@ function toolCategory(name: string): 'skill' | 'exec' | 'read' | 'write' | 'orch
   return 'other';
 }
 
+/** 思考耗时:秒级足够,超过一分钟才进位(思考很少到分钟级,但 adaptive 深思会) */
+function fmtThinkDur(ms?: number): string {
+  if (ms === undefined) return '';
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(1)}s`;
+  return `${Math.floor(s / 60)}m${Math.round(s % 60)}s`;
+}
+
+/**
+ * 思考文本超过这个字数就截断加渐隐,给「展开全文」;避免单段思考顶掉整屏。
+ * 用字数而非测 scrollHeight:后者要等布局完成再 setState,会在展开瞬间抖一下。
+ * 68ch 宽下约 60 字符/行,1200 字符 ≈ 20 行 ≈ CSS 里的 max-height:320px。
+ */
+const THINK_CLAMP_CHARS = 1200;
+
+/**
+ * 思考卡(方案 B):思考中默认展开逐字流出且不可折叠,thinking-end 后收起为一行 + 耗时,可点开回看。
+ * 视觉上刻意全中性(faint/muted)——彩色留给工具卡函数名,思考永远是助手正文之后的第二层级。
+ * 文本按空行分段直出,不走 markdown:summarized 返回的是模型自写的英文散文摘要,
+ * 没有 markdown 结构可言,流式逐帧解析纯属浪费。
+ */
+export function ThinkingCard({ text, streaming, durationMs }: { text: string; streaming: boolean; durationMs?: number }) {
+  const [open, setOpen] = useState(false);
+  const [full, setFull] = useState(false);
+  const paras = text.split(/\n{2,}/).filter((p) => p.trim());
+  const expanded = streaming || open;
+  // 流式中不截断(正看着它想),收起后再展开才限高
+  const clamped = !streaming && !full && text.length > THINK_CLAMP_CHARS;
+  return (
+    <div className={cn('thinkcard', streaming && 'live', !streaming && open && 'open')}>
+      <button
+        className="tk-head"
+        aria-expanded={expanded}
+        disabled={streaming}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <svg className="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <circle cx="6" cy="6" r="4.6" stroke="currentColor" strokeWidth="1.1" strokeDasharray="2.3 2.1" />
+        </svg>
+        <span className="tk-label">思考</span>
+        <span className="tk-meta">{streaming ? '进行中' : fmtThinkDur(durationMs)}</span>
+        {!streaming && <span className="chev">▾</span>}
+      </button>
+      <div className={cn('tk-body', clamped && 'clamped')}>
+        {paras.map((p, i) => (
+          <p key={i}>{p}</p>
+        ))}
+        {streaming && <span className="caret" />}
+        {clamped && (
+          <button className="tk-more" onClick={() => setFull(true)}>展开全文</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ToolCard({ name, input, output, isError }: { name: string; input: string; output?: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
   return (

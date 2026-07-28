@@ -54,6 +54,13 @@ export type DispatchEvent =
   | { ev: 'init'; sessionId: string; model: string }
   | { ev: 'status'; state: 'working' | 'awaiting-permission' | 'idle' | 'ended'; detail?: string }
   | { ev: 'delta'; text: string }
+  /**
+   * 思考流:仅在 thinking.display='summarized' 下才有明文(模型自写的英文摘要,非逐字原文)。
+   * 明文为空时后端不发本事件,所以前端「收到 thinking-delta」即等价于「确有可展示的思考」。
+   */
+  | { ev: 'thinking-delta'; text: string }
+  /** 当前思考块结束(含耗时),前端据此把 live 思考卡收起为一行 */
+  | { ev: 'thinking-end'; durationMs: number }
   | { ev: 'assistant'; text: string }
   | { ev: 'tool'; id: string; name: string; input: string }
   | { ev: 'tool-result'; id: string; output: string; isError: boolean }
@@ -126,6 +133,10 @@ export class DispatchSession {
    * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
+  /** 当前未闭合思考块的 content_block 下标(null = 不在思考中) */
+  private thinkingIndex: number | null = null;
+  /** 当前思考块的起始时刻,用于给 thinking-end 计算耗时 */
+  private thinkingStartAt: number | null = null;
 
   constructor(
     storage: Storage,
@@ -146,6 +157,13 @@ export class DispatchSession {
         // bg 后台代理会话归 daemon 所有,CLI 拒绝直接 --resume,只能分叉副本续接
         forkSession: opts.fork || undefined,
         includePartialMessages: true,
+        /**
+         * 思考过程展示开关。不传时 SDK 默认等价于 display:'omitted' —— thinking_delta 事件照发,
+         * 但明文被服务端剥成空串只剩 signature 密文(实测:40 个最新会话 2158 个思考块,2119 个明文为空)。
+         * 必须显式 summarized 才拿得到明文。adaptive = 由模型自行决定是否思考及思考多少,
+         * 简单任务零思考、复杂任务可在一轮内产生多段思考(实测桥问题 4 段,与工具调用交替)。
+         */
+        thinking: { type: 'adaptive', display: 'summarized' },
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
         // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
@@ -228,9 +246,32 @@ export class DispatchSession {
             }
             break;
           case 'stream_event': {
-            const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
-            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+            const ev = msg.event as {
+              type?: string;
+              index?: number;
+              content_block?: { type?: string };
+              delta?: { type?: string; text?: string; thinking?: string };
+            };
+            if (ev.type === 'content_block_start') {
+              // index 在每条 assistant 消息内从 0 重新计数(实测 thinking@0 → tool_use@1 → thinking@0),
+              // 故只记「当前未闭合的思考块」下标,不做跨消息的全局映射。
+              // 非 thinking 块开始时清账:思考块若因中断没等到 stop,残留下标会让后续同号
+              // 块的 stop 误判成思考结束。
+              if (ev.content_block?.type === 'thinking') {
+                this.thinkingIndex = ev.index ?? null;
+                this.thinkingStartAt = Date.now();
+              } else {
+                this.thinkingIndex = null;
+                this.thinkingStartAt = null;
+              }
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
               this.emit({ ev: 'delta', text: ev.delta.text });
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'thinking_delta' && ev.delta.thinking) {
+              this.emit({ ev: 'thinking-delta', text: ev.delta.thinking });
+            } else if (ev.type === 'content_block_stop' && this.thinkingIndex !== null && ev.index === this.thinkingIndex) {
+              this.emit({ ev: 'thinking-end', durationMs: Date.now() - (this.thinkingStartAt ?? Date.now()) });
+              this.thinkingIndex = null;
+              this.thinkingStartAt = null;
             }
             break;
           }
