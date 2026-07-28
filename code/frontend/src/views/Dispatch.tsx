@@ -6,7 +6,7 @@ import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { Md, ToolCard, toast } from '@/components/shared';
+import { Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /**
@@ -1050,6 +1050,8 @@ const ChatRow = memo(function ChatRow({
         </div>
       </div>
     );
+  if (item.t === 'thinking')
+    return <ThinkingCard text={item.text} streaming={item.streaming} durationMs={item.durationMs} />;
   if (item.t === 'tool') return <ToolCard name={item.name} input={item.input} output={item.output} isError={item.isError} />;
   if (item.t === 'approval') {
     const label =

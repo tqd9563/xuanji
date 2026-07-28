@@ -495,6 +495,60 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .toolcard.open .tc-head .chev { transform: rotate(180deg); }
 .toolcard .tc-body { display: none; padding: 10px 12px; border-top: 1px solid var(--line-soft); font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); white-space: pre-wrap; overflow-x: auto; }
 .toolcard.open .tc-body { display: block; }
+
+/* 思考卡:与工具卡同族但刻意全中性——彩色是稀缺资源,留给工具卡函数名与用户消息底色。
+   唯一的结构记号是左侧 1px 竖线,保证思考永远落在助手正文之后的第二层级。 */
+.thinkcard { max-width: 68ch; margin: 8px 0; }
+.thinkcard .tk-head {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 10px 5px 0; background: none; border: none; text-align: left;
+  font-family: var(--mono); font-size: 0.75rem; color: var(--faint);
+  cursor: pointer; border-radius: var(--r-s); transition: color 150ms var(--ease);
+}
+.thinkcard .tk-head:hover { color: var(--muted); }
+.thinkcard .tk-head:disabled { cursor: default; }
+.thinkcard .tk-head .ico { flex: none; }
+.thinkcard .tk-label { font-family: var(--sans); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.02em; }
+/* 耗时是有意义的信息不是装饰,必须过 AA:再降透明度会掉到 3.2:1(实测),
+   与 tk-label 的层次改由字体族/字重承担(mono 400 vs sans 600) */
+.thinkcard .tk-meta { color: var(--faint); }
+.thinkcard .tk-head .chev { margin-left: auto; transition: transform 180ms var(--ease); flex: none; }
+.thinkcard.open .tk-head .chev { transform: rotate(180deg); }
+.thinkcard .tk-body {
+  display: none; position: relative;
+  margin-left: 7px; padding: 4px 0 8px 16px; border-left: 1px solid var(--line);
+  font-size: 0.8125rem; line-height: 1.65; color: var(--faint); text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.thinkcard.open .tk-body, .thinkcard.live .tk-body { display: block; }
+.thinkcard .tk-body p + p { margin-top: 10px; }
+/* 超长思考:限高 + 底部渐隐 + 展开全文(高度与 THINK_CLAMP_CHARS 的估算保持一致) */
+.thinkcard .tk-body.clamped { max-height: 320px; overflow: hidden; }
+.thinkcard .tk-body.clamped::after {
+  content: ''; position: absolute; inset: auto 0 0 0; height: 56px; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface-2));
+}
+.thinkcard .tk-more {
+  position: absolute; left: 16px; bottom: 0; z-index: 1;
+  font-size: 0.6875rem; font-weight: 600; color: var(--muted);
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.thinkcard .tk-more:hover { color: var(--jade); }
+/* 思考中:竖线呼吸 + 图标缓慢自转,与助手正文的 .typing 三点区分(两者会先后出现) */
+.thinkcard.live .tk-head { color: var(--muted); }
+.thinkcard.live .tk-body { animation: think-breathe 2.4s var(--ease) infinite; }
+.thinkcard.live .tk-head .ico { animation: think-spin 3.6s linear infinite; }
+@keyframes think-breathe { 0%, 100% { border-left-color: var(--line); } 50% { border-left-color: var(--muted); } }
+@keyframes think-spin { to { transform: rotate(360deg); } }
+.thinkcard .caret {
+  display: inline-block; width: 6px; height: 0.95em; vertical-align: -2px;
+  background: var(--faint); margin-left: 2px; animation: think-blink 1s steps(2) infinite;
+}
+@keyframes think-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .thinkcard.live .tk-body, .thinkcard.live .tk-head .ico, .thinkcard .caret { animation: none; }
+}
+
 .raw-event {
   border: 1px dashed var(--line); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0;
   font-family: var(--mono); font-size: 0.71875rem; color: var(--faint); max-width: 68ch;
