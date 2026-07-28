@@ -60,7 +60,7 @@ describe('usage 成本口径', () => {
   });
   it('模型短名与牌价映射', () => {
     expect(shortModel('claude-sonnet-5')).toBe('sonnet');
-    expect(priceOf('claude-opus-4-8')).toEqual([5, 25]);
+    expect(priceOf('claude-opus-5')).toEqual([5, 25]);
     expect(priceOf('unknown-model')).toEqual([3, 15]); // 保守取 sonnet 档
   });
   it('按模型聚合并按成本排序', () => {
