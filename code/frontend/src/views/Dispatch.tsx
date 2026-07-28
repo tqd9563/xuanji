@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
@@ -53,6 +53,77 @@ function StreamMd({ text }: { text: string }) {
       ))}
     </>
   );
+}
+
+/**
+ * useTypewriter — 打字机平滑层(f9b2cad 解决的是"每帧解析成本",本层解决"到达粒度"):
+ * 上游 delta 是成块到达的(SDK/API/网络缓冲一次推几十上百字符),即便渲染零成本,
+ * 观感仍是"一坨坨蹦字"。这里把「到达文本」与「显示文本」解耦:每帧只放出少量字符,
+ * 积压越多放得越快(按比例追赶),视觉延迟上界 ≈ CATCH_UP_FRAMES 帧,永不掉队。
+ *
+ * animate=false(历史装载/回放)直接全文显示不做动画;
+ * 目标文本非纯追加(reset/attach 后按 index 复用的行拿到全新内容)时直接跳到全文。
+ */
+const MIN_CHARS_PER_FRAME = 2; // 放字下限 ~120 字/s(60fps):慢流时保持匀速打字感
+const CATCH_UP_FRAMES = 24; // 追赶窗口:积压字符在 ~24 帧(0.4s)内放完,落后有上界
+
+function useTypewriter(target: string, animate: boolean): string {
+  const [shown, setShown] = useState(() => (animate ? '' : target));
+  const nRef = useRef(animate ? 0 : target.length); // 已放出的字符数
+  const targetRef = useRef(target);
+  const prevTargetRef = useRef(target);
+  const rafRef = useRef<number | null>(null);
+  targetRef.current = target;
+
+  useEffect(() => {
+    if (!animate) {
+      // 历史行:目标即显示,无动画(装载时已初始化,这里兜底 attach 复用行的场景)
+      if (nRef.current !== target.length) {
+        nRef.current = target.length;
+        setShown(target);
+      }
+      return;
+    }
+    // 非纯追加 = 行被复用装了别的内容(index 作 key 的代价),直接对齐全文不动画
+    if (!target.startsWith(prevTargetRef.current)) {
+      nRef.current = target.length;
+      setShown(target);
+      prevTargetRef.current = target;
+      return;
+    }
+    prevTargetRef.current = target;
+    const step = () => {
+      rafRef.current = null;
+      const full = targetRef.current;
+      if (nRef.current >= full.length) return; // 放完了,等下一段 delta 到达重启
+      const backlog = full.length - nRef.current;
+      const add = Math.max(MIN_CHARS_PER_FRAME, Math.ceil(backlog / CATCH_UP_FRAMES));
+      nRef.current = Math.min(full.length, nRef.current + add);
+      setShown(full.slice(0, nRef.current));
+      if (nRef.current < full.length) rafRef.current = requestAnimationFrame(step);
+    };
+    if (rafRef.current === null) rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [target, animate]);
+
+  return shown;
+}
+
+/** 流式 assistant 消息的打字机包装:装载时就在流式中的行才做动画(回合结束后继续把
+ *  余量放完,不因 streaming 翻 false 而跳变);历史消息直接全文。onGrow 在每次放字后
+ *  通知父级跟滚(放字发生在 items 不变的帧里,父级按 items 触发的滚底看不见它)。 */
+function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: boolean; onGrow?: () => void }) {
+  const animRef = useRef(streaming);
+  const shown = useTypewriter(text, animRef.current);
+  useEffect(() => {
+    onGrow?.();
+  }, [shown, onGrow]);
+  return <StreamMd text={shown} />;
 }
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
@@ -248,14 +319,17 @@ export function Dispatch({ active }: { active: boolean }) {
     if (el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
-  useEffect(() => {
+  const followScroll = useCallback(() => {
     if (pinnedRef.current && scrollRafRef.current === null) {
       scrollRafRef.current = requestAnimationFrame(() => {
         scrollRafRef.current = null;
         chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
       });
     }
-  }, [d.items]);
+  }, []);
+  // items 变化(新消息/工具卡)与打字机放字(TypewriterMd onGrow)都要跟滚:
+  // 打字机放字发生在 items 不变的帧里,只靠 items 触发会在回合尾部停止跟滚。
+  useEffect(followScroll, [d.items, followScroll]);
 
   // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
   useEffect(() => {
@@ -549,7 +623,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </div>
           )}
           {d.items.map((item, i) => (
-            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} />
+            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
           ))}
         </div>
 
@@ -894,10 +968,12 @@ const ChatRow = memo(function ChatRow({
   item,
   onDecide,
   onAnswer,
+  onGrow,
 }: {
   item: ChatItem;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
+  onGrow?: () => void;
 }) {
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
@@ -912,7 +988,7 @@ const ChatRow = memo(function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          <StreamMd text={item.text} />
+          <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>
