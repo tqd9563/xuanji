@@ -404,10 +404,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
 
-/* 流式输出中的纯文本(不跑 Markdown 解析,详见 Dispatch.tsx ChatRow):
-   与 .md p 的字号/行高对齐,回合结束切回 Markdown 渲染时不跳动。 */
-.md-plain { white-space: pre-wrap; word-break: break-word; }
-
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
   position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;

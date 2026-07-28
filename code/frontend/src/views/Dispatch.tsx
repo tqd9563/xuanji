@@ -9,6 +9,52 @@ import { WdPalette } from '@/components/WdPalette';
 import { Md, ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
+/**
+ * StreamMd — 流式 markdown 渲染,块级记忆化。
+ *
+ * 核心:按 markdown 顶层块切分(双换行定界,跳过代码栅栏),每块走 <Md> 完整解析。
+ * 已完成块用 React.memo 缓存(内容不变就不重渲染);
+ * 只有最后一块(正在积累的未闭合块)每帧重渲染,但只解析一小段文本,
+ * 不随全文增长而增加每帧解析成本。O(n²) → O(last_block)。
+ */
+const MdBlock = memo(function MdBlock({ text }: { text: string }) {
+  return <Md>{text}</Md>;
+});
+
+/** 按 markdown 顶层块切分。尊重代码栅栏,栅栏内的空白行不触发分割。 */
+function splitMdBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let cur = '';
+  let inFence = false;
+  for (const line of text.split('\n')) {
+    if (line.startsWith('```')) {
+      inFence = !inFence;
+      cur += line + '\n';
+    } else if (!inFence && line.trim() === '') {
+      if (cur.trim()) {
+        blocks.push(cur.trimEnd());
+        cur = '';
+      }
+    } else {
+      cur += line + '\n';
+    }
+  }
+  const last = cur.trimEnd();
+  if (last) blocks.push(last);
+  return blocks;
+}
+
+function StreamMd({ text }: { text: string }) {
+  const blocks = useMemo(() => splitMdBlocks(text), [text]);
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <MdBlock key={i} text={block} />
+      ))}
+    </>
+  );
+}
+
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
   return events.slice(-200).map((ev, i): ChatItem => {
@@ -81,6 +127,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const chatRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
+  const scrollRafRef = useRef<number | null>(null); // rAF 合批 scrollTo,避免每帧重排
   const repin = () => {
     pinnedRef.current = true;
     lastChatTopRef.current = 0;
@@ -202,7 +249,12 @@ export function Dispatch({ active }: { active: boolean }) {
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
   useEffect(() => {
-    if (pinnedRef.current) chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
+    if (pinnedRef.current && scrollRafRef.current === null) {
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
+      });
+    }
   }, [d.items]);
 
   // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
@@ -860,9 +912,7 @@ const ChatRow = memo(function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          {/* 流式中:纯文本渲染,避免每帧对着还在增长的全文重新跑 remark 解析(O(n²));
-              回合结束(streaming=false)才切到共享 Md 组件(统一 gfm + 链接新窗口打开),那时文本已定长,只解析一次。 */}
-          {item.streaming ? <div className="md-plain">{item.text}</div> : <Md>{item.text}</Md>}
+          <StreamMd text={item.text} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>
