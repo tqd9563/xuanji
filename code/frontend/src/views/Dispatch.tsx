@@ -221,10 +221,12 @@ export function Dispatch({ active }: { active: boolean }) {
   const chatRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
+  const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
   const scrollRafRef = useRef<number | null>(null); // rAF 合批 scrollTo,避免每帧重排
   const repin = () => {
     pinnedRef.current = true;
     lastChatTopRef.current = 0;
+    lastChatHeightRef.current = 0;
   };
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
@@ -350,12 +352,18 @@ export function Dispatch({ active }: { active: boolean }) {
   // 快速流式下事件到达时内容又长高了,按距离判会把程序滚底误判成"离开了底部"而自我解钉。
   // scrollTop 变小 = 用户向上翻(程序滚底只会变大,天然免疫)→ 解钉;滚回距底 <48px → 回钉,自愈无需按钮。
   // 会话切换类动作(发送/续接/接回/新会话/交接)一律重新钉住:那是用户主动回到「看最新」。
+  // 内容变矮(思考卡结束后自动收起)会让浏览器把 scrollTop 夹回新的最大值,派发一个
+  // scrollTop 变小的 scroll 事件 —— 那不是用户上翻,按方向判会误解钉,此后打字机继续输出
+  // 却不再跟滚(用户看到画面卡住,手动往下划才见后文)。故 scrollHeight 变小的那次事件不解钉。
   const onChatScroll = () => {
     const el = chatRef.current;
     if (!el) return;
     const prev = lastChatTopRef.current;
+    const prevHeight = lastChatHeightRef.current;
     lastChatTopRef.current = el.scrollTop;
-    if (el.scrollTop < prev - 1) pinnedRef.current = false;
+    lastChatHeightRef.current = el.scrollHeight;
+    const shrank = el.scrollHeight < prevHeight;
+    if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
   const followScroll = useCallback(() => {
