@@ -187,6 +187,14 @@ export class DispatchSession {
          * 简单任务零思考、复杂任务可在一轮内产生多段思考(实测桥问题 4 段,与工具调用交替)。
          */
         thinking: { type: 'adaptive', display: 'summarized' },
+        /**
+         * 必须显式选 claude_code 预设。不传时 SDK 只发一句兜底提示(实测拦截控制协议报文:
+         * `{"subtype":"initialize","systemPrompt":[""]}`,模型自报首句为
+         * "You are a Claude agent, built on Anthropic's Claude Agent SDK."),Claude Code 那套行为规范
+         * (工具使用纪律、代码风格、commit 约束、拒绝边界)全部缺席,派发会话行为与终端不一致。
+         * 预设约 6.5K token(实测总输入 25.1K → 31.7K),走提示缓存,多轮下成本可忽略。
+         */
+        systemPrompt: { type: 'preset', preset: 'claude_code' },
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
         // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
