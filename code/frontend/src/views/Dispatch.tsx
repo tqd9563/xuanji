@@ -137,7 +137,14 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
   });
 }
 
-const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
+const MODELS = [
+  '(默认)',
+  'claude-fable-5',
+  'claude-opus-5',
+  'claude-opus-5[1m]',
+  'claude-sonnet-5',
+  'claude-haiku-4-5-20251001',
+];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
@@ -151,6 +158,7 @@ const DEFAULT_PERM = PERMS[2]!;
 const MODEL_SHORT: Record<string, string> = {
   fable: 'claude-fable-5',
   opus: 'claude-opus-5',
+  'opus-1m': 'claude-opus-5[1m]',
   sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -169,7 +177,10 @@ const initialModel = (): string => {
 const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
 /** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
  *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
-const MODEL_DEFAULT_EFFORT: Record<string, string> = { 'claude-opus-5': 'low' };
+const MODEL_DEFAULT_EFFORT: Record<string, string> = {
+  'claude-opus-5': 'low',
+  'claude-opus-5[1m]': 'low',
+};
 const LAST_EFFORT_KEY = 'xuanji-last-effort';
 const initialEffort = (): string => {
   const saved = localStorage.getItem(LAST_EFFORT_KEY);
