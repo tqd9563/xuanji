@@ -85,7 +85,9 @@ export type DispatchEvent =
   | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
   | { ev: 'error'; message: string };
 
-const CONTEXT_WINDOW = 200_000;
+/** 上下文窗口兜底值(200K)。真实值随模型而变(如 claude-opus-5[1m] 为 1M),
+ *  由 result 消息的 modelUsage[model].contextWindow 覆盖,见 consume() 的 case 'result'。 */
+const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 /** AskUserQuestion 的问题结构(agent 提问 ≠ 权限审批,渲染为提问卡) */
 export interface QuestionSpec {
@@ -153,6 +155,8 @@ export class DispatchSession {
    * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
+  /** 本会话实际的上下文窗口大小(token)。首个 result 到达前用兜底值,之后以 SDK 上报的为准 */
+  private contextWindow = DEFAULT_CONTEXT_WINDOW;
   /** 当前未闭合思考块的 content_block 下标(null = 不在思考中) */
   private thinkingIndex: number | null = null;
   /** 当前思考块的起始时刻,用于给 thinking-end 计算耗时 */
@@ -331,13 +335,21 @@ export class DispatchSession {
           }
           case 'result': {
             const usage = (msg as unknown as { usage?: Record<string, number> }).usage ?? {};
+            // 窗口大小随模型而变(opus-5 = 200K,opus-5[1m] = 1M),不能写死:
+            // 取本轮 modelUsage 里最大的 contextWindow(一轮内可能跨模型,如主模型 + 子代理小模型)
+            const windows = Object.values(
+              (msg as unknown as { modelUsage?: Record<string, { contextWindow?: number }> }).modelUsage ?? {},
+            )
+              .map((u) => u.contextWindow ?? 0)
+              .filter((n) => n > 0);
+            if (windows.length > 0) this.contextWindow = Math.max(...windows);
             const contextTokens =
               (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
             this.emit({
               ev: 'result',
               costUsd: (msg as { total_cost_usd?: number }).total_cost_usd ?? 0,
               contextTokens,
-              contextPct: Math.min(100, Math.round((contextTokens / CONTEXT_WINDOW) * 100)),
+              contextPct: Math.min(100, Math.round((contextTokens / this.contextWindow) * 100)),
               durationMs: (msg as { duration_ms?: number }).duration_ms ?? 0,
             });
             this.turnEnded = true;
