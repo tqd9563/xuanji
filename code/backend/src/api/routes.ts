@@ -15,6 +15,7 @@ import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
+import type { SessionState } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
@@ -175,6 +176,33 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     }
     storage.hideSession(sessionId);
     return c.json({ ok: true, ended: false });
+  });
+
+  /**
+   * 手动归档(看板拖到「已完成」):自有覆盖表,~/.claude 不动。
+   * 运行中/等待输入的会话拒绝——那是真实进行态,归档没有意义。
+   */
+  api.put('/sessions/:sessionId/archive', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const board = await sessionsBoard(storage);
+    const found = (Object.keys(board.columns) as SessionState[])
+      .flatMap((k) => board.columns[k])
+      .find((s) => s.sessionId === sessionId);
+    if (!found) return c.json({ error: '会话不在看板上' }, 404);
+    if (found.state === 'running' || found.state === 'blocked') {
+      return c.json({ error: '运行中/等待输入的会话不能归档' }, 409);
+    }
+    storage.archiveSession(sessionId, found.lastOutputAt);
+    return c.json({ ok: true });
+  });
+
+  /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
+  api.delete('/sessions/:sessionId/archive', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    storage.unarchiveSession(sessionId);
+    return c.json({ ok: true });
   });
 
   /** resume 前的所有权预检(前端在跳转派发页前调用) */

@@ -1,4 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
@@ -60,6 +70,150 @@ async function closeSession(s: AgentSession, refresh: () => void) {
   }
 }
 
+/** 归档拖拽的落点标识:只有「已完成」列接受拖入(单向归档) */
+const DONE_DROP_ID = 'col-done';
+
+interface CardProps {
+  s: AgentSession;
+  sel: boolean;
+  /** 拖拽可用性:运行中/等待输入的卡不可拖(那是真实进行态),移动端整体关闭 */
+  drag: boolean;
+  onOpen: () => void;
+  onClose: () => void;
+  onUnarchive: () => void;
+  onReply: () => void;
+}
+
+/** 关闭按钮:悬停/键盘选中才现身 */
+function XClose({ s, onClose }: { s: AgentSession; onClose: () => void }) {
+  if (s.readonly) return null;
+  return (
+    <button
+      className="x-close"
+      title="关闭会话(Ctrl+X)"
+      aria-label={`关闭会话 ${s.name}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
+    >
+      ×
+    </button>
+  );
+}
+
+/** 卡片的拖拽外壳:pointer 需移动 6px 才判定为拖拽,单击照常打开回放 */
+function useCardDrag(s: AgentSession, enabled: boolean) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: s.sessionId,
+    disabled: !enabled,
+  });
+  return {
+    ref: setNodeRef,
+    dragProps: enabled ? { ...attributes, ...listeners } : {},
+    style: transform
+      ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 30 }
+      : undefined,
+    isDragging,
+  };
+}
+
+/** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
+function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive }: CardProps) {
+  const d = useCardDrag(s, drag);
+  return (
+    <div
+      ref={d.ref}
+      style={d.style}
+      {...d.dragProps}
+      className={`scard compact ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+      onClick={() => onOpen()}
+    >
+      <div className="top">
+        {isUnread(s) && <span className="u-dot" />}
+        <span className="title">{s.name}</span>
+        {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        {s.archived && (
+          <button
+            className="x-close unarchive"
+            title="撤销归档,卡片回到原状态列"
+            aria-label={`撤销归档 ${s.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnarchive();
+            }}
+          >
+            ↩
+          </button>
+        )}
+        <XClose s={s} onClose={onClose} />
+      </div>
+      <div className="cwd">
+        <ProjChip name={s.project} path={s.cwd} />
+        <span className="ctime">{timeAgo(s.startedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
+function FullCard({ s, sel, drag, onOpen, onClose, onReply }: CardProps) {
+  const d = useCardDrag(s, drag);
+  return (
+    <div
+      ref={d.ref}
+      style={d.style}
+      {...d.dragProps}
+      className={`scard ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+      onClick={() => onOpen()}
+    >
+      <div className="top">
+        {isUnread(s) && <span className="u-dot" />}
+        <span className="title">{s.name}</span>
+        {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
+        {s.readonly && <Tag>只读</Tag>}
+        <XClose s={s} onClose={onClose} />
+      </div>
+      <div className="cwd">
+        <ProjChip name={s.project} path={s.cwd} />
+        <span className="sid">{s.id}</span>
+      </div>
+      {s.detail && <div className="detail">{s.detail}</div>}
+      {s.needs && <div className="needs">⏸ {s.needs}</div>}
+      <div className="foot">
+        {s.state === 'blocked' && !s.readonly && (
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReply();
+            }}
+          >
+            去回复
+          </button>
+        )}
+        <span className="time">{clock(s.startedAt)} 开始</span>
+      </div>
+    </div>
+  );
+}
+
+/** 「已完成」列体:唯一的拖拽落点,拖拽悬停时高亮 */
+function DoneDropZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: DONE_DROP_ID });
+  return (
+    <div ref={setNodeRef} className={`col-body ${isOver ? 'drop-over' : ''}`}>
+      {children}
+    </div>
+  );
+}
+
 export function Sessions({
   active,
   registerHandle,
@@ -76,16 +230,78 @@ export function Sessions({
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState<SessionState>('blocked');
   const [mobileDoneOpen, setMobileDoneOpen] = useState(false);
+  /** 拖拽归档的乐观集合:后端确认(轮询数据里已进 done)前先让卡片就位,失败则回滚 */
+  const [pendingArchive, setPendingArchive] = useState<Set<string>>(() => new Set());
 
-  // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序)
+  // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序);乐观归档在此就位
   const columns = useMemo(() => {
     if (!data) return undefined;
     const out = { ...data.columns };
     for (const key of Object.keys(out) as SessionState[]) {
+      let arr = [...out[key]];
+      if (key !== 'done' && pendingArchive.size) {
+        const moved = arr.filter((s) => pendingArchive.has(s.sessionId));
+        if (moved.length) {
+          arr = arr.filter((s) => !pendingArchive.has(s.sessionId));
+          out.done = [...out.done, ...moved.map((s) => ({ ...s, state: 'done' as const, archived: true }))];
+        }
+      }
+      out[key] = arr;
+    }
+    for (const key of Object.keys(out) as SessionState[]) {
       out[key] = [...out[key]].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a)));
     }
     return out;
-  }, [data]);
+  }, [data, pendingArchive]);
+
+  // 后端已把某张卡真正归档进 done,撤下对应的乐观标记(避免它永久盖住真实数据)
+  useEffect(() => {
+    if (!data || pendingArchive.size === 0) return;
+    const settled = new Set(data.columns.done.filter((s) => s.archived).map((s) => s.sessionId));
+    if (![...pendingArchive].some((id) => settled.has(id))) return;
+    setPendingArchive((prev) => new Set([...prev].filter((id) => !settled.has(id))));
+  }, [data, pendingArchive]);
+
+  /** 拖到「已完成」= 手动归档:乐观就位 → 落库 → 立刻重取;失败回滚并提示 */
+  const onDragEnd = useCallback(
+    (e: DragEndEvent) => {
+      if (e.over?.id !== DONE_DROP_ID) return;
+      const sessionId = String(e.active.id);
+      setPendingArchive((prev) => new Set(prev).add(sessionId));
+      void api
+        .archiveSession(sessionId)
+        .then(() => refresh())
+        .catch((err: unknown) => {
+          setPendingArchive((prev) => {
+            const next = new Set(prev);
+            next.delete(sessionId);
+            return next;
+          });
+          toast(err instanceof Error ? err.message : String(err));
+        });
+    },
+    [refresh],
+  );
+
+  /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
+  const unarchive = useCallback(
+    async (s: AgentSession) => {
+      try {
+        await api.unarchiveSession(s.sessionId);
+        toast(`已撤销归档 ${s.name}`);
+        refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh],
+  );
+
+  // 指针需移动 6px 才判定拖拽,单击照常打开回放;触屏长按 220ms 起拖,不影响滚动
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 220, tolerance: 8 } }),
+  );
 
   // 键盘选卡跟随滚动:选中卡始终保持在视口内
   useEffect(() => {
@@ -173,84 +389,16 @@ export function Sessions({
     return () => document.removeEventListener('keydown', onKey);
   }, [active, openReplay, refresh]);
 
-  // 卡片渲染:桌面(键盘选中态按列/行坐标)与移动端(单列,无键盘选中)共用同一套标记结构
-  const xClose = (s: AgentSession) =>
-    !s.readonly && (
-      <button
-        className="x-close"
-        title="关闭会话(Ctrl+X)"
-        aria-label={`关闭会话 ${s.name}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          void closeSession(s, refresh);
-        }}
-      >
-        ×
-      </button>
-    );
-
-  /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
-  const compactCard = (s: AgentSession, sel: boolean) => (
-    <div
-      key={s.id}
-      className={`scard compact ${sel ? 'kb-sel' : ''}`}
-      role="button"
-      tabIndex={0}
-      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
-      onClick={() => void openReplay(s.sessionId, s)}
-    >
-      <div className="top">
-        {isUnread(s) && <span className="u-dot" />}
-        <span className="title">{s.name}</span>
-        {isUnread(s) && <span className="tag t-unread">待验收</span>}
-        {xClose(s)}
-      </div>
-      <div className="cwd">
-        <ProjChip name={s.project} path={s.cwd} />
-        <span className="ctime">{timeAgo(s.startedAt)}</span>
-      </div>
-    </div>
-  );
-
-  const fullCard = (s: AgentSession, sel: boolean) => (
-    <div
-      key={s.id}
-      className={`scard ${sel ? 'kb-sel' : ''}`}
-      role="button"
-      tabIndex={0}
-      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
-      onClick={() => void openReplay(s.sessionId, s)}
-    >
-      <div className="top">
-        {isUnread(s) && <span className="u-dot" />}
-        <span className="title">{s.name}</span>
-        {isUnread(s) && <span className="tag t-unread">待验收</span>}
-        <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
-        {s.readonly && <Tag>只读</Tag>}
-        {xClose(s)}
-      </div>
-      <div className="cwd">
-        <ProjChip name={s.project} path={s.cwd} />
-        <span className="sid">{s.id}</span>
-      </div>
-      {s.detail && <div className="detail">{s.detail}</div>}
-      {s.needs && <div className="needs">⏸ {s.needs}</div>}
-      <div className="foot">
-        {s.state === 'blocked' && !s.readonly && (
-          <button
-            className="btn btn-sm btn-primary"
-            onClick={(e) => {
-              e.stopPropagation();
-              smartOpen(s, (id, sess) => void openReplay(id, sess));
-            }}
-          >
-            去回复
-          </button>
-        )}
-        <span className="time">{clock(s.startedAt)} 开始</span>
-      </div>
-    </div>
-  );
+  // 卡片渲染:桌面(键盘选中态按列/行坐标)与移动端(单列,无键盘选中)共用同一套组件
+  const cardProps = (s: AgentSession, sel: boolean, drag: boolean): CardProps => ({
+    s,
+    sel,
+    drag,
+    onOpen: () => void openReplay(s.sessionId, s),
+    onClose: () => void closeSession(s, refresh),
+    onUnarchive: () => void unarchive(s),
+    onReply: () => smartOpen(s, (id, sess) => void openReplay(id, sess)),
+  });
 
   return (
     <>
@@ -278,20 +426,19 @@ export function Sessions({
         )}
       </div>
       {!isMobile && (
-        <div className="board">
-          {COLS.map((col, ci) => {
-            const items = columns?.[col.key] ?? [];
-            const isDone = col.key === 'done';
-            const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
-            const card = (s: AgentSession, ri: number) =>
-              isDone ? compactCard(s, kbPos?.c === ci && kbPos?.r === ri) : fullCard(s, kbPos?.c === ci && kbPos?.r === ri);
-            return (
-              <div key={col.key}>
-                <div className="col-head">
-                  <Pill state={col.key} />
-                  <span className="n">{items.length}</span>
-                </div>
-                <div className="col-body">
+        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+          <div className="board">
+            {COLS.map((col, ci) => {
+              const items = columns?.[col.key] ?? [];
+              const isDone = col.key === 'done';
+              const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
+              // 运行中/等待输入是真实进行态,不给拖;已完成的卡拖了也没去处
+              const card = (s: AgentSession, ri: number) => {
+                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, col.key === 'idle');
+                return isDone ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
+              };
+              const body = (
+                <>
                   {items.slice(0, isDone ? DONE_RECENT : undefined).map((s, ri) => card(s, ri))}
                   {olderCount > 0 && (
                     <button className="col-more" onClick={() => setDoneOpen(!doneOpen)}>
@@ -300,17 +447,30 @@ export function Sessions({
                   )}
                   {isDone && doneOpen && items.slice(DONE_RECENT).map((s, i) => card(s, DONE_RECENT + i))}
                   {items.length === 0 && (
-                    <div className="empty" style={{ padding: '24px 12px' }}><p>暂无</p></div>
+                    <div className="empty" style={{ padding: '24px 12px' }}>
+                      <p>{isDone ? '暂无 · 可把空闲卡片拖到这里归档' : '暂无'}</p>
+                    </div>
                   )}
+                </>
+              );
+              return (
+                <div key={col.key}>
+                  <div className="col-head">
+                    <Pill state={col.key} />
+                    <span className="n">{items.length}</span>
+                  </div>
+                  {isDone ? <DoneDropZone>{body}</DoneDropZone> : <div className="col-body">{body}</div>}
                 </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        </DndContext>
       )}
 
       {/* 移动端:状态 tab(需要你优先)+ 单列卡片流,取代桌面 4×272px 横向滚动看板 */}
       {isMobile && (
+        // DndContext 仅为满足卡片组件的 useDraggable(移动端 drag 全关),不设落点
+        <DndContext sensors={sensors}>
         <div className="board-mobile">
           <div className="seg-scroll">
             <div className="seg">
@@ -329,7 +489,11 @@ export function Sessions({
             const items = columns?.[mobileTab] ?? [];
             const isDone = mobileTab === 'done';
             const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
-            const card = (s: AgentSession) => (isDone ? compactCard(s, false) : fullCard(s, false));
+            // 移动端是 tab 切换而非并排看板,没有可拖的落点,归档走卡片自身入口
+            const card = (s: AgentSession) => {
+              const p = cardProps(s, false, false);
+              return isDone ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
+            };
             if (items.length === 0) return <div className="empty" style={{ padding: '32px 12px' }}><p>这个状态下暂无会话。</p></div>;
             return (
               <>
@@ -344,6 +508,7 @@ export function Sessions({
             );
           })()}
         </div>
+        </DndContext>
       )}
 
       <Drawer
