@@ -454,7 +454,7 @@ export async function scanMemories(
   return out;
 }
 
-const VALID_TYPES = new Set(['user', 'feedback', 'project', 'reference']);
+const VALID_TYPES = new Set(['user', 'feedback', 'project', 'reference', 'cross-project']);
 
 async function parseMemoryMd(file: string, projectPath: string): Promise<Memory | null> {
   try {

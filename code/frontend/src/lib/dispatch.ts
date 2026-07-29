@@ -11,6 +11,8 @@ export interface QuestionSpec {
 export type ChatItem =
   | { t: 'user'; text: string }
   | { t: 'assistant'; text: string; streaming: boolean }
+  /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
+  | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
   | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
@@ -58,8 +60,23 @@ export interface StartOpts {
   cwd: string;
   permissionMode: string;
   model?: string;
+  /** 思考深度(low/medium/high/xhigh/max)。只在建会话时生效,SDK 无运行时切换 */
+  effort?: string;
   resume?: string;
   name?: string;
+}
+
+/**
+ * 收束仍在 streaming 的思考卡:正文/工具一旦开始,思考必然已结束。
+ * thinking-end 正常会先到,这里兜的是它没到的情形(轮次被中断、块未闭合),
+ * 否则思考卡会永远停在「进行中」转圈。
+ */
+function sealThinking(prev: ChatItem[]): ChatItem[] {
+  const last = prev[prev.length - 1];
+  if (last?.t === 'thinking' && last.streaming) {
+    return [...prev.slice(0, -1), { ...last, streaming: false }];
+  }
+  return prev;
 }
 
 export function useDispatch() {
@@ -77,14 +94,29 @@ export function useDispatch() {
   // 里排队,观感就是"一块块蹦出来"而非打字机。缓冲进 ref,每帧(rAF)合并一次 flush,
   // 把 setState 频率(≤ 屏幕刷新率)与 delta 到达频率解耦。
   const pendingDeltaRef = useRef('');
+  // 思考流同样是高频 delta(实测一段思考 ~54 条),与正文共用同一个 rAF 节拍合批。
+  // 两者不会同时活跃(思考块 stop 后才轮到正文),故一个 rAF 里顺序 flush 即可。
+  const pendingThinkRef = useRef('');
   const rafIdRef = useRef<number | null>(null);
 
   const flushDelta = useCallback(() => {
     rafIdRef.current = null;
+    const think = pendingThinkRef.current;
+    if (think) {
+      pendingThinkRef.current = '';
+      setItems((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.t === 'thinking' && last.streaming) {
+          return [...prev.slice(0, -1), { ...last, text: last.text + think }];
+        }
+        return [...prev, { t: 'thinking', text: think, streaming: true }];
+      });
+    }
     const text = pendingDeltaRef.current;
     if (!text) return;
     pendingDeltaRef.current = '';
-    setItems((prev) => {
+    setItems((prev0) => {
+      const prev = sealThinking(prev0);
       const last = prev[prev.length - 1];
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
@@ -97,6 +129,7 @@ export function useDispatch() {
    *  否则残留缓冲会在新会话的 items 上多蹦出一条不相干的消息。 */
   const clearPendingDelta = useCallback(() => {
     pendingDeltaRef.current = '';
+    pendingThinkRef.current = '';
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
@@ -123,11 +156,28 @@ export function useDispatch() {
         pendingDeltaRef.current += String(e.text);
         if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
+      case 'thinking-delta':
+        pendingThinkRef.current += String(e.text);
+        if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
+        break;
+      case 'thinking-end':
+        // 先刷掉缓冲里最后一截思考文本,再收起 —— 否则 rAF 尚未触发时残留会丢
+        flushDelta();
+        setItems((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.t === 'thinking' && last.streaming) {
+            return [...prev.slice(0, -1), { ...last, streaming: false, durationMs: Number(e.durationMs) }];
+          }
+          // 没有对应卡片 = 本轮思考无明文(模型未思考,或 display 未生效被剥成空串):不留占位
+          return prev;
+        });
+        break;
       case 'assistant':
         // 先把缓冲里未 flush 的 delta 并入,保证与最终文本的替换顺序不乱(最终文本本身是权威全文,
         // 是否已并入缓冲不影响正确性,只影响这一帧内 setItems 的调用次数)
         flushDelta();
-        setItems((prev) => {
+        setItems((prev0) => {
+          const prev = sealThinking(prev0);
           const last = prev[prev.length - 1];
           if (last?.t === 'assistant' && last.streaming) {
             return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false }];
@@ -137,7 +187,7 @@ export function useDispatch() {
         break;
       case 'tool':
         setItems((prev) => [
-          ...prev,
+          ...sealThinking(prev),
           { t: 'tool', id: String(e.id), name: String(e.name), input: String(e.input) },
         ]);
         break;
@@ -212,6 +262,14 @@ export function useDispatch() {
           },
         ]);
         break;
+      case 'compact': {
+        const pre = Number(e.preTokens ?? 0);
+        const post = typeof e.postTokens === 'number' ? Number(e.postTokens) : undefined;
+        const label = e.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
+        const stat = post != null ? `:${pre.toLocaleString()} → ${post.toLocaleString()} tokens` : '';
+        setItems((prev) => [...prev, { t: 'note', text: `🗜 ${label}${stat}` }]);
+        break;
+      }
       case 'bg-dispatched':
         setItems((prev) => [
           ...prev,
@@ -321,6 +379,7 @@ export function useDispatch() {
             cwd: opts.cwd,
             permissionMode: opts.permissionMode,
             model: opts.model,
+            effort: opts.effort,
             resume: opts.resume,
             name: opts.name,
             prompt: text,

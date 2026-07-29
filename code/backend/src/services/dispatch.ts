@@ -8,6 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import {
   query,
+  type EffortLevel,
   type PermissionResult,
   type PermissionUpdate,
   type Query,
@@ -54,6 +55,13 @@ export type DispatchEvent =
   | { ev: 'init'; sessionId: string; model: string }
   | { ev: 'status'; state: 'working' | 'awaiting-permission' | 'idle' | 'ended'; detail?: string }
   | { ev: 'delta'; text: string }
+  /**
+   * 思考流:仅在 thinking.display='summarized' 下才有明文(模型自写的英文摘要,非逐字原文)。
+   * 明文为空时后端不发本事件,所以前端「收到 thinking-delta」即等价于「确有可展示的思考」。
+   */
+  | { ev: 'thinking-delta'; text: string }
+  /** 当前思考块结束(含耗时),前端据此把 live 思考卡收起为一行 */
+  | { ev: 'thinking-end'; durationMs: number }
   | { ev: 'assistant'; text: string }
   | { ev: 'tool'; id: string; name: string; input: string }
   | { ev: 'tool-result'; id: string; output: string; isError: boolean }
@@ -74,9 +82,12 @@ export type DispatchEvent =
   | { ev: 'user-echo'; text: string }
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'model-changed'; model: string }
+  | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
   | { ev: 'error'; message: string };
 
-const CONTEXT_WINDOW = 200_000;
+/** 上下文窗口兜底值(200K)。真实值随模型而变(如 claude-opus-5[1m] 为 1M),
+ *  由 result 消息的 modelUsage[model].contextWindow 覆盖,见 consume() 的 case 'result'。 */
+const DEFAULT_CONTEXT_WINDOW = 200_000;
 
 /** AskUserQuestion 的问题结构(agent 提问 ≠ 权限审批,渲染为提问卡) */
 export interface QuestionSpec {
@@ -84,6 +95,25 @@ export interface QuestionSpec {
   header?: string;
   multiSelect?: boolean;
   options: { label: string; description?: string }[];
+}
+
+/** 派发会话创建参数(WS start / 定时任务 / 周报草稿共用) */
+export interface DispatchOpts {
+  cwd: string;
+  permissionMode?: string;
+  model?: string;
+  /** 思考深度(SDK effort)。省略 = 用模型自身默认(通常 high) */
+  effort?: EffortLevel;
+  resume?: string;
+  fork?: boolean;
+  name?: string;
+}
+
+const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** 外部输入(WS 消息 / REST body)转 EffortLevel:非法值一律当未指定,不让脏值传进 SDK */
+export function parseEffort(v: unknown): EffortLevel | undefined {
+  return typeof v === 'string' && EFFORT_LEVELS.includes(v) ? (v as EffortLevel) : undefined;
 }
 
 interface Pending {
@@ -125,11 +155,14 @@ export class DispatchSession {
    * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
+  /** 本会话实际的上下文窗口大小(token)。首个 result 到达前用兜底值,之后以 SDK 上报的为准 */
+  private contextWindow = DEFAULT_CONTEXT_WINDOW;
+  /** 当前未闭合思考块的 content_block 下标(null = 不在思考中) */
+  private thinkingIndex: number | null = null;
+  /** 当前思考块的起始时刻,用于给 thinking-end 计算耗时 */
+  private thinkingStartAt: number | null = null;
 
-  constructor(
-    storage: Storage,
-    opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
-  ) {
+  constructor(storage: Storage, opts: DispatchOpts) {
     this.storage = storage;
     this.cwd = opts.cwd;
     this.name = opts.name ?? '新会话';
@@ -140,11 +173,28 @@ export class DispatchSession {
       options: {
         cwd: opts.cwd,
         model: opts.model,
+        // 思考深度:与 model 一样是会话级设定,SDK 无运行时 setEffort,只能建会话时定
+        effort: opts.effort,
         permissionMode: (opts.permissionMode as never) ?? 'default',
         resume: opts.resume,
         // bg 后台代理会话归 daemon 所有,CLI 拒绝直接 --resume,只能分叉副本续接
         forkSession: opts.fork || undefined,
         includePartialMessages: true,
+        /**
+         * 思考过程展示开关。不传时 SDK 默认等价于 display:'omitted' —— thinking_delta 事件照发,
+         * 但明文被服务端剥成空串只剩 signature 密文(实测:40 个最新会话 2158 个思考块,2119 个明文为空)。
+         * 必须显式 summarized 才拿得到明文。adaptive = 由模型自行决定是否思考及思考多少,
+         * 简单任务零思考、复杂任务可在一轮内产生多段思考(实测桥问题 4 段,与工具调用交替)。
+         */
+        thinking: { type: 'adaptive', display: 'summarized' },
+        /**
+         * 必须显式选 claude_code 预设。不传时 SDK 只发一句兜底提示(实测拦截控制协议报文:
+         * `{"subtype":"initialize","systemPrompt":[""]}`,模型自报首句为
+         * "You are a Claude agent, built on Anthropic's Claude Agent SDK."),Claude Code 那套行为规范
+         * (工具使用纪律、代码风格、commit 约束、拒绝边界)全部缺席,派发会话行为与终端不一致。
+         * 预设约 6.5K token(实测总输入 25.1K → 31.7K),走提示缓存,多轮下成本可忽略。
+         */
+        systemPrompt: { type: 'preset', preset: 'claude_code' },
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
         // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
@@ -210,12 +260,49 @@ export class DispatchSession {
               this.backgroundTasks =
                 (msg as { tasks?: { task_id: string; task_type: string; description: string }[] }).tasks ?? [];
               this.applyBackgroundState();
+            } else if (msg.subtype === 'status' && msg.status === 'compacting') {
+              // /compact(用户手动输入,或 SDK 到阈值自动触发):压缩期间无 delta/assistant 事件,
+              // 靠 status detail 让看板"working"态不显得像卡死
+              this.emit({ ev: 'status', state: 'working', detail: '正在压缩上下文…' });
+            } else if (msg.subtype === 'compact_boundary') {
+              // 压缩成功才会有这条(见 compact_metadata.trigger);失败(如"消息数不足")走的是
+              // 合成 assistant 文本回复(下面 case 'assistant' 已覆盖),这里不重复提示避免报两遍
+              const meta = msg.compact_metadata;
+              this.emit({
+                ev: 'compact',
+                trigger: meta.trigger,
+                preTokens: meta.pre_tokens,
+                postTokens: meta.post_tokens,
+              });
             }
             break;
           case 'stream_event': {
-            const ev = msg.event as { type?: string; delta?: { type?: string; text?: string } };
-            if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
+            const ev = msg.event as {
+              type?: string;
+              index?: number;
+              content_block?: { type?: string };
+              delta?: { type?: string; text?: string; thinking?: string };
+            };
+            if (ev.type === 'content_block_start') {
+              // index 在每条 assistant 消息内从 0 重新计数(实测 thinking@0 → tool_use@1 → thinking@0),
+              // 故只记「当前未闭合的思考块」下标,不做跨消息的全局映射。
+              // 非 thinking 块开始时清账:思考块若因中断没等到 stop,残留下标会让后续同号
+              // 块的 stop 误判成思考结束。
+              if (ev.content_block?.type === 'thinking') {
+                this.thinkingIndex = ev.index ?? null;
+                this.thinkingStartAt = Date.now();
+              } else {
+                this.thinkingIndex = null;
+                this.thinkingStartAt = null;
+              }
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta' && ev.delta.text) {
               this.emit({ ev: 'delta', text: ev.delta.text });
+            } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'thinking_delta' && ev.delta.thinking) {
+              this.emit({ ev: 'thinking-delta', text: ev.delta.thinking });
+            } else if (ev.type === 'content_block_stop' && this.thinkingIndex !== null && ev.index === this.thinkingIndex) {
+              this.emit({ ev: 'thinking-end', durationMs: Date.now() - (this.thinkingStartAt ?? Date.now()) });
+              this.thinkingIndex = null;
+              this.thinkingStartAt = null;
             }
             break;
           }
@@ -224,7 +311,10 @@ export class DispatchSession {
             for (const b of blocks) {
               if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
                 this.emit({ ev: 'assistant', text: b.text });
-              } else if (b.type === 'tool_use') {
+              } else if (b.type === 'tool_use' && b.name !== 'AskUserQuestion') {
+                // AskUserQuestion 单独走 onPermission → 'question' 事件渲染成提问卡(见下),
+                // 这里若照常 emit 通用 'tool' 事件,会在提问卡上方多出一张重复的原始 JSON 工具卡
+                // (compact() 500 字符截断还会把 JSON 切成语法不完整的半截),观感像"坏了/context 丢了"。
                 this.emit({
                   ev: 'tool',
                   id: String(b.id),
@@ -253,13 +343,21 @@ export class DispatchSession {
           }
           case 'result': {
             const usage = (msg as unknown as { usage?: Record<string, number> }).usage ?? {};
+            // 窗口大小随模型而变(opus-5 = 200K,opus-5[1m] = 1M),不能写死:
+            // 取本轮 modelUsage 里最大的 contextWindow(一轮内可能跨模型,如主模型 + 子代理小模型)
+            const windows = Object.values(
+              (msg as unknown as { modelUsage?: Record<string, { contextWindow?: number }> }).modelUsage ?? {},
+            )
+              .map((u) => u.contextWindow ?? 0)
+              .filter((n) => n > 0);
+            if (windows.length > 0) this.contextWindow = Math.max(...windows);
             const contextTokens =
               (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
             this.emit({
               ev: 'result',
               costUsd: (msg as { total_cost_usd?: number }).total_cost_usd ?? 0,
               contextTokens,
-              contextPct: Math.min(100, Math.round((contextTokens / CONTEXT_WINDOW) * 100)),
+              contextPct: Math.min(100, Math.round((contextTokens / this.contextWindow) * 100)),
               durationMs: (msg as { duration_ms?: number }).duration_ms ?? 0,
             });
             this.turnEnded = true;
@@ -464,10 +562,7 @@ export class DispatchSession {
 
 const sessions = new Map<string, DispatchSession>();
 
-export function createDispatch(
-  storage: Storage,
-  opts: { cwd: string; permissionMode?: string; model?: string; resume?: string; fork?: boolean; name?: string },
-): DispatchSession {
+export function createDispatch(storage: Storage, opts: DispatchOpts): DispatchSession {
   const s = new DispatchSession(storage, opts);
   sessions.set(s.id, s);
   return s;

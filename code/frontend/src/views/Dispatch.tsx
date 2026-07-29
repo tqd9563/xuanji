@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
@@ -6,8 +6,125 @@ import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { Md, ToolCard, toast } from '@/components/shared';
+import { Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
+
+/**
+ * StreamMd — 流式 markdown 渲染,块级记忆化。
+ *
+ * 核心:按 markdown 顶层块切分(双换行定界,跳过代码栅栏),每块走 <Md> 完整解析。
+ * 已完成块用 React.memo 缓存(内容不变就不重渲染);
+ * 只有最后一块(正在积累的未闭合块)每帧重渲染,但只解析一小段文本,
+ * 不随全文增长而增加每帧解析成本。O(n²) → O(last_block)。
+ */
+const MdBlock = memo(function MdBlock({ text }: { text: string }) {
+  return <Md>{text}</Md>;
+});
+
+/** 按 markdown 顶层块切分。尊重代码栅栏,栅栏内的空白行不触发分割。 */
+function splitMdBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let cur = '';
+  let inFence = false;
+  for (const line of text.split('\n')) {
+    if (line.startsWith('```')) {
+      inFence = !inFence;
+      cur += line + '\n';
+    } else if (!inFence && line.trim() === '') {
+      if (cur.trim()) {
+        blocks.push(cur.trimEnd());
+        cur = '';
+      }
+    } else {
+      cur += line + '\n';
+    }
+  }
+  const last = cur.trimEnd();
+  if (last) blocks.push(last);
+  return blocks;
+}
+
+function StreamMd({ text }: { text: string }) {
+  const blocks = useMemo(() => splitMdBlocks(text), [text]);
+  return (
+    <>
+      {blocks.map((block, i) => (
+        <MdBlock key={i} text={block} />
+      ))}
+    </>
+  );
+}
+
+/**
+ * useTypewriter — 打字机平滑层(f9b2cad 解决的是"每帧解析成本",本层解决"到达粒度"):
+ * 上游 delta 是成块到达的(SDK/API/网络缓冲一次推几十上百字符),即便渲染零成本,
+ * 观感仍是"一坨坨蹦字"。这里把「到达文本」与「显示文本」解耦:每帧只放出少量字符,
+ * 积压越多放得越快(按比例追赶),视觉延迟上界 ≈ CATCH_UP_FRAMES 帧,永不掉队。
+ *
+ * animate=false(历史装载/回放)直接全文显示不做动画;
+ * 目标文本非纯追加(reset/attach 后按 index 复用的行拿到全新内容)时直接跳到全文。
+ */
+const MIN_CHARS_PER_FRAME = 2; // 放字下限 ~120 字/s(60fps):慢流时保持匀速打字感
+const CATCH_UP_FRAMES = 24; // 追赶窗口:积压字符在 ~24 帧(0.4s)内放完,落后有上界
+
+function useTypewriter(target: string, animate: boolean): string {
+  const [shown, setShown] = useState(() => (animate ? '' : target));
+  const nRef = useRef(animate ? 0 : target.length); // 已放出的字符数
+  const targetRef = useRef(target);
+  const prevTargetRef = useRef(target);
+  const rafRef = useRef<number | null>(null);
+  targetRef.current = target;
+
+  useEffect(() => {
+    if (!animate) {
+      // 历史行:目标即显示,无动画(装载时已初始化,这里兜底 attach 复用行的场景)
+      if (nRef.current !== target.length) {
+        nRef.current = target.length;
+        setShown(target);
+      }
+      return;
+    }
+    // 非纯追加 = 行被复用装了别的内容(index 作 key 的代价),直接对齐全文不动画
+    if (!target.startsWith(prevTargetRef.current)) {
+      nRef.current = target.length;
+      setShown(target);
+      prevTargetRef.current = target;
+      return;
+    }
+    prevTargetRef.current = target;
+    const step = () => {
+      rafRef.current = null;
+      const full = targetRef.current;
+      if (nRef.current >= full.length) return; // 放完了,等下一段 delta 到达重启
+      const backlog = full.length - nRef.current;
+      const add = Math.max(MIN_CHARS_PER_FRAME, Math.ceil(backlog / CATCH_UP_FRAMES));
+      nRef.current = Math.min(full.length, nRef.current + add);
+      setShown(full.slice(0, nRef.current));
+      if (nRef.current < full.length) rafRef.current = requestAnimationFrame(step);
+    };
+    if (rafRef.current === null) rafRef.current = requestAnimationFrame(step);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+    };
+  }, [target, animate]);
+
+  return shown;
+}
+
+/** 流式 assistant 消息的打字机包装:装载时就在流式中的行才做动画(回合结束后继续把
+ *  余量放完,不因 streaming 翻 false 而跳变);历史消息直接全文。onGrow 在每次放字后
+ *  通知父级跟滚(放字发生在 items 不变的帧里,父级按 items 触发的滚底看不见它)。 */
+function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: boolean; onGrow?: () => void }) {
+  const animRef = useRef(streaming);
+  const shown = useTypewriter(text, animRef.current);
+  useEffect(() => {
+    onGrow?.();
+  }, [shown, onGrow]);
+  return <StreamMd text={shown} />;
+}
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
@@ -20,7 +137,14 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
   });
 }
 
-const MODELS = ['(默认)', 'claude-fable-5', 'claude-opus-4-8', 'claude-sonnet-5', 'claude-haiku-4-5-20251001'];
+const MODELS = [
+  '(默认)',
+  'claude-fable-5',
+  'claude-opus-5',
+  'claude-opus-5[1m]',
+  'claude-sonnet-5',
+  'claude-haiku-4-5-20251001',
+];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
@@ -33,7 +157,8 @@ const DEFAULT_PERM = PERMS[2]!;
 /** /model 简写 → 完整模型名 */
 const MODEL_SHORT: Record<string, string> = {
   fable: 'claude-fable-5',
-  opus: 'claude-opus-4-8',
+  opus: 'claude-opus-5',
+  'opus-1m': 'claude-opus-5[1m]',
   sonnet: 'claude-sonnet-5',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -45,7 +170,21 @@ const MODEL_ALIAS: Record<string, string> = Object.fromEntries(
 const LAST_MODEL_KEY = 'xuanji-last-model';
 const initialModel = (): string => {
   const saved = localStorage.getItem(LAST_MODEL_KEY);
-  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-4-8';
+  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
+};
+
+/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
+const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
+/** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
+ *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
+const MODEL_DEFAULT_EFFORT: Record<string, string> = {
+  'claude-opus-5': 'low',
+  'claude-opus-5[1m]': 'low',
+};
+const LAST_EFFORT_KEY = 'xuanji-last-effort';
+const initialEffort = (): string => {
+  const saved = localStorage.getItem(LAST_EFFORT_KEY);
+  return saved && EFFORTS.includes(saved) ? saved : EFFORTS[0]!;
 };
 
 /** 会话标识(输入框上方,与用量条同行):名称按所属项目色荧光呈现,id 到手后补显。
@@ -63,6 +202,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
   const [modelSel, setModelSel] = useState(initialModel);
+  const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
@@ -81,9 +221,12 @@ export function Dispatch({ active }: { active: boolean }) {
   const chatRef = useRef<HTMLDivElement>(null);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
+  const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
+  const scrollRafRef = useRef<number | null>(null); // rAF 合批 scrollTo,避免每帧重排
   const repin = () => {
     pinnedRef.current = true;
     lastChatTopRef.current = 0;
+    lastChatHeightRef.current = 0;
   };
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
@@ -142,6 +285,22 @@ export function Dispatch({ active }: { active: boolean }) {
     }
   };
 
+  /** 实际下发给 SDK 的思考深度:显式选过就用选的,否则回落到该模型的默认档(未列出的模型 = 不下发) */
+  const resolvedEffort = effortSel === EFFORTS[0] ? MODEL_DEFAULT_EFFORT[modelSel] : effortSel;
+
+  /** 设定思考深度(/effort 与下拉共用)。SDK 只支持建会话时定 effort、无运行时切换,
+   *  所以已开始的会话不受影响,改动对下一个新会话生效 */
+  const applyEffort = (v: string) => {
+    setEffortSel(v);
+    localStorage.setItem(LAST_EFFORT_KEY, v);
+    const shown = v === EFFORTS[0] ? `自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : v;
+    d.pushNote(
+      d.started
+        ? `◈ 思考深度已设为 ${shown};当前会话无法中途改,对下一个新会话生效。`
+        : `◈ 思考深度已设为 ${shown},本会话生效。`,
+    );
+  };
+
   // 进入视图:接收跳转意图(看板续接/attach 接回/交接)并聚焦输入框;离开即清除来路,返回按钮随之隐藏。
   // 无意图进入(侧栏/数字键)= 全新派发:上一会话留在后端继续存活,可从会话页随时接回。
   const prevActiveRef = useRef(false);
@@ -193,17 +352,31 @@ export function Dispatch({ active }: { active: boolean }) {
   // 快速流式下事件到达时内容又长高了,按距离判会把程序滚底误判成"离开了底部"而自我解钉。
   // scrollTop 变小 = 用户向上翻(程序滚底只会变大,天然免疫)→ 解钉;滚回距底 <48px → 回钉,自愈无需按钮。
   // 会话切换类动作(发送/续接/接回/新会话/交接)一律重新钉住:那是用户主动回到「看最新」。
+  // 内容变矮(思考卡结束后自动收起)会让浏览器把 scrollTop 夹回新的最大值,派发一个
+  // scrollTop 变小的 scroll 事件 —— 那不是用户上翻,按方向判会误解钉,此后打字机继续输出
+  // 却不再跟滚(用户看到画面卡住,手动往下划才见后文)。故 scrollHeight 变小的那次事件不解钉。
   const onChatScroll = () => {
     const el = chatRef.current;
     if (!el) return;
     const prev = lastChatTopRef.current;
+    const prevHeight = lastChatHeightRef.current;
     lastChatTopRef.current = el.scrollTop;
-    if (el.scrollTop < prev - 1) pinnedRef.current = false;
+    lastChatHeightRef.current = el.scrollHeight;
+    const shrank = el.scrollHeight < prevHeight;
+    if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
-  useEffect(() => {
-    if (pinnedRef.current) chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
-  }, [d.items]);
+  const followScroll = useCallback(() => {
+    if (pinnedRef.current && scrollRafRef.current === null) {
+      scrollRafRef.current = requestAnimationFrame(() => {
+        scrollRafRef.current = null;
+        chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight });
+      });
+    }
+  }, []);
+  // items 变化(新消息/工具卡)与打字机放字(TypewriterMd onGrow)都要跟滚:
+  // 打字机放字发生在 items 不变的帧里,只靠 items 触发会在回合尾部停止跟滚。
+  useEffect(followScroll, [d.items, followScroll]);
 
   // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
   useEffect(() => {
@@ -255,6 +428,28 @@ export function Dispatch({ active }: { active: boolean }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
+
+  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车(见 submit() 同名分支),
+  // 直接开对应弹窗而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      if (e.key === 'm' || e.key === 'M') {
+        e.preventDefault();
+        taRef.current?.blur();
+        setModelQuery('');
+        setModelPalette(true);
+      } else if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        taRef.current?.blur();
+        setWdQuery('');
+        setWdPalette(true);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active]);
 
   /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
   const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
@@ -346,6 +541,22 @@ export function Dispatch({ active }: { active: boolean }) {
       setModelPalette(true);
       return;
     }
+    // /effort 设定思考深度:auto 回到按模型取默认档;无参数只回报当前值(档位就 5 个,不值得再开弹窗)
+    if (/^\/effort\b/.test(text)) {
+      const arg = text.replace(/^\/effort\b/, '').trim().toLowerCase();
+      if (!arg) {
+        const shown = effortSel === EFFORTS[0] ? `自动 → ${resolvedEffort ?? '模型默认'}` : effortSel;
+        d.pushNote(`◈ 当前思考深度:${shown}。用法:/effort ${EFFORTS.slice(1).join('|')}|auto`);
+        return;
+      }
+      if (arg === 'auto') {
+        applyEffort(EFFORTS[0]!);
+        return;
+      }
+      if (!EFFORTS.includes(arg)) return toast(`未知档位「${arg}」,可选:${EFFORTS.slice(1).join(' / ')} / auto`);
+      applyEffort(arg);
+      return;
+    }
     if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
@@ -365,6 +576,7 @@ export function Dispatch({ active }: { active: boolean }) {
         cwd: effectiveCwd,
         permissionMode: PERM_VALUE[permSel]!,
         model: modelSel === MODELS[0] ? undefined : modelSel,
+        effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
         name: resumeInfo?.name ?? text.slice(0, 40),
       });
@@ -475,7 +687,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </div>
           )}
           {d.items.map((item, i) => (
-            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} />
+            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
           ))}
         </div>
 
@@ -596,6 +808,18 @@ export function Dispatch({ active }: { active: boolean }) {
               }
             }}
             title={d.started ? '当前会话模型(切换只对本会话生效)' : '新会话默认模型(记忆最近一次)'}
+          />
+          <DropUp
+            className="dim"
+            id="effort-dd"
+            value={effortSel}
+            options={EFFORTS}
+            // 首项标注解析结果(如「思考 自动(low)」),否则它与显式 low 在列表里同名、无法区分
+            labelOf={(v) =>
+              v === EFFORTS[0] ? `思考 自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : `思考 ${v}`
+            }
+            onChange={applyEffort}
+            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus-5 → low),其余模型不下发、用模型自身默认(通常 high)`}
           />
           <DropUp
             className="dim"
@@ -820,10 +1044,12 @@ const ChatRow = memo(function ChatRow({
   item,
   onDecide,
   onAnswer,
+  onGrow,
 }: {
   item: ChatItem;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
+  onGrow?: () => void;
 }) {
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
@@ -838,13 +1064,13 @@ const ChatRow = memo(function ChatRow({
       <div className="chat-msg">
         <div className="who">Claude</div>
         <div className="body md">
-          {/* 流式中:纯文本渲染,避免每帧对着还在增长的全文重新跑 remark 解析(O(n²));
-              回合结束(streaming=false)才切到共享 Md 组件(统一 gfm + 链接新窗口打开),那时文本已定长,只解析一次。 */}
-          {item.streaming ? <div className="md-plain">{item.text}</div> : <Md>{item.text}</Md>}
+          <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
         </div>
       </div>
     );
+  if (item.t === 'thinking')
+    return <ThinkingCard text={item.text} streaming={item.streaming} durationMs={item.durationMs} />;
   if (item.t === 'tool') return <ToolCard name={item.name} input={item.input} output={item.output} isError={item.isError} />;
   if (item.t === 'approval') {
     const label =

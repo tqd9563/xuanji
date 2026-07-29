@@ -13,7 +13,7 @@ import { config } from './config.js';
 import { invalidateMemoryCache } from './services/memories.js';
 import { invalidateSkillsCache } from './services/skills.js';
 import { invalidateUsageCache } from './services/usage.js';
-import { canResume, createDispatch, getDispatch, type DispatchSession } from './services/dispatch.js';
+import { canResume, createDispatch, getDispatch, parseEffort, type DispatchSession } from './services/dispatch.js';
 import { bgDispatch } from './adapters/agents-cli.js';
 import type { Storage } from './storage/db.js';
 
@@ -113,6 +113,7 @@ export function attachWs(server: Server, storage: Storage) {
                 cwd: msg.cwd,
                 permissionMode: msg.permissionMode,
                 model: msg.model || undefined,
+                effort: parseEffort(msg.effort),
                 resume: msg.resume || undefined,
                 fork,
                 name: msg.name || undefined,

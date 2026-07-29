@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璇玑 · 思考过程呈现方案原型</title>
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface: oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --jade-dim: oklch(0.68 0.10 115);
+    --on-jade: oklch(0.18 0.02 120);
+    --amber: oklch(0.78 0.14 80);
+    --blue: oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --tool-exec: oklch(0.78 0.13 180);
+    --tint-jade: color-mix(in oklab, var(--jade) 12%, transparent);
+    --tint-blue: color-mix(in oklab, var(--blue) 12%, transparent);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-s: 6px; --r-m: 10px; --r-chip: 4px; --r-pill: 99px;
+    --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    font-size: 0.875rem; line-height: 1.6;
+    -webkit-font-smoothing: antialiased; padding: 40px 24px 120px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+
+  /* ---------- 页头 ---------- */
+  header { border-bottom: 1px solid var(--line-soft); padding-bottom: 24px; margin-bottom: 32px; }
+  h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin-bottom: 8px; }
+  .sub { color: var(--muted); font-size: 0.8125rem; max-width: 72ch; }
+  .warn {
+    margin-top: 16px; border: 1px solid color-mix(in oklab, var(--amber) 40%, transparent);
+    background: color-mix(in oklab, var(--amber) 9%, transparent);
+    border-radius: var(--r-s); padding: 10px 14px; font-size: 0.8125rem; color: var(--ink); max-width: 80ch;
+  }
+  .warn b { color: var(--amber); font-weight: 600; }
+
+  /* ---------- 方案区 ---------- */
+  section { margin-bottom: 56px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px; }
+  .sec-head h2 { font-size: 1.25rem; font-weight: 600; }
+  .tag {
+    font-size: 0.6875rem; font-weight: 600; padding: 2px 8px; border-radius: var(--r-chip);
+    background: var(--tint-jade); color: var(--jade); border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent);
+  }
+  .tag.alt { background: transparent; color: var(--faint); border-color: var(--line); }
+  .sec-desc { color: var(--muted); font-size: 0.8125rem; max-width: 76ch; margin-bottom: 20px; }
+  .sec-desc .k { color: var(--ink); }
+
+  /* ---------- 聊天容器(复刻 .chat) ---------- */
+  .chat {
+    border: 1px solid var(--line-soft); border-radius: var(--r-m);
+    background: var(--surface-2); padding: 20px 28px;
+  }
+  .chat-msg { margin-bottom: 20px; }
+  .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  .chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+  .chat-msg.user .who { color: var(--jade); }
+  .chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; }
+  .chat-msg.user .body {
+    background: var(--tint-jade); border-radius: var(--r-m);
+    padding: 10px 14px; display: inline-block;
+  }
+  .chat-msg .body p + p { margin-top: 10px; }
+  .chat-msg .body code {
+    font-family: var(--mono); font-size: 0.8125rem;
+    background: var(--surface); border: 1px solid var(--line-soft);
+    border-radius: var(--r-chip); padding: 1px 5px;
+  }
+
+  /* ---------- 既有工具卡(参照物,勿改) ---------- */
+  .toolcard {
+    border: 1px solid var(--line-soft); border-radius: var(--r-s);
+    background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch;
+  }
+  .toolcard .tc-head {
+    display: flex; align-items: center; gap: 8px; padding: 7px 12px; width: 100%;
+    font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+    cursor: pointer; background: none; border: none; text-align: left;
+  }
+  .toolcard .tc-head:hover { background: var(--hover); }
+  .toolcard .tc-head .fn { color: var(--blue); }
+  .toolcard .tc-head .fn[data-cat="exec"] { color: var(--tool-exec); }
+  .toolcard .tc-head .arg { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .toolcard .tc-head .chev { margin-left: auto; transition: transform 180ms var(--ease); color: var(--faint); flex: none; }
+  .toolcard.open .tc-head .chev { transform: rotate(180deg); }
+  .toolcard .tc-body {
+    display: none; padding: 10px 12px; border-top: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); white-space: pre-wrap;
+  }
+  .toolcard.open .tc-body { display: block; }
+
+  /* ================================================================
+     方案 A / B 共用:思考卡 .thinkcard
+     设计原则:思考不是数据,不发光 —— 全中性色阶,唯一的色相记号是
+     左侧 1px 竖线,与工具卡的彩色函数名形成层级区分。
+     ================================================================ */
+  .thinkcard { max-width: 68ch; margin: 8px 0; }
+  .thinkcard .tk-head {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    padding: 5px 10px 5px 0; background: none; border: none; text-align: left;
+    font-family: var(--mono); font-size: 0.75rem; color: var(--faint);
+    cursor: pointer; border-radius: var(--r-s);
+    transition: color 150ms var(--ease);
+  }
+  .thinkcard .tk-head:hover { color: var(--muted); }
+  .thinkcard .tk-head .ico { flex: none; color: var(--faint); }
+  .thinkcard .tk-head:hover .ico { color: var(--muted); }
+  .thinkcard .tk-label { font-family: var(--sans); font-weight: 600; font-size: 0.6875rem; letter-spacing: 0.02em; }
+  .thinkcard .tk-meta { color: color-mix(in oklab, var(--faint) 75%, transparent); }
+  .thinkcard .tk-head .chev { margin-left: auto; transition: transform 180ms var(--ease); flex: none; }
+  .thinkcard.open .tk-head .chev { transform: rotate(180deg); }
+  .thinkcard .tk-body {
+    display: none;
+    margin-left: 7px; padding: 4px 0 8px 16px;
+    border-left: 1px solid var(--line);
+    font-size: 0.8125rem; line-height: 1.65; color: var(--faint);
+    text-wrap: pretty;
+  }
+  .thinkcard.open .tk-body { display: block; }
+  .thinkcard .tk-body p + p { margin-top: 10px; }
+  /* 思考中:竖线呼吸,不用打字点(与助手正文的 .typing 区分) */
+  .thinkcard.live .tk-body { display: block; border-left-color: var(--muted); animation: breathe 2.4s var(--ease) infinite; }
+  .thinkcard.live .tk-head { color: var(--muted); }
+  .thinkcard.live .tk-head .ico { color: var(--muted); animation: spin 3.6s linear infinite; }
+  .thinkcard.live .chev { opacity: 0; }
+  @keyframes breathe { 0%, 100% { border-left-color: var(--line); } 50% { border-left-color: var(--muted); } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .thinkcard.live .tk-body, .thinkcard.live .tk-head .ico { animation: none; }
+  }
+  .caret {
+    display: inline-block; width: 6px; height: 0.95em; vertical-align: -2px;
+    background: var(--faint); margin-left: 2px; animation: blink 1s steps(2) infinite;
+  }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* ---------- 方案 C:常驻幽灵轨 ---------- */
+  .ghost {
+    max-width: 68ch; margin: 10px 0 14px;
+    padding-left: 16px; border-left: 1px solid var(--line);
+    font-size: 0.8125rem; line-height: 1.65; color: var(--faint);
+  }
+  .ghost .g-label {
+    font-family: var(--sans); font-size: 0.6875rem; font-weight: 600;
+    color: color-mix(in oklab, var(--faint) 80%, transparent);
+    letter-spacing: 0.02em; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;
+  }
+  .ghost p + p { margin-top: 10px; }
+
+  /* ---------- 演示控制条 ---------- */
+  .demo-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 12px; font-size: 0.75rem; color: var(--muted);
+  }
+  .btn {
+    font-family: var(--sans); font-size: 0.75rem; font-weight: 600;
+    border-radius: var(--r-s); padding: 6px 14px; cursor: pointer;
+    background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+    transition: border-color 150ms var(--ease), color 150ms var(--ease);
+  }
+  .btn:hover { border-color: var(--jade); color: var(--jade); }
+  .btn.primary { background: var(--jade); color: var(--on-jade); border-color: var(--jade); }
+  .btn.primary:hover { background: var(--jade-dim); border-color: var(--jade-dim); color: var(--on-jade); }
+  .btn:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
+
+  /* ---------- 状态矩阵 ---------- */
+  .matrix { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .cell {
+    border: 1px solid var(--line-soft); border-radius: var(--r-m);
+    background: var(--surface-2); padding: 16px 18px;
+  }
+  .cell h3 {
+    font-size: 0.6875rem; font-weight: 600; color: var(--muted);
+    letter-spacing: 0.02em; margin-bottom: 12px;
+  }
+  .cell .note { font-size: 0.75rem; color: var(--faint); margin-top: 10px; }
+
+  /* ---------- 对比表 ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: 0.6875rem; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; }
+  td.y { color: var(--jade); }
+  td.n { color: var(--faint); }
+  tbody tr:last-child td { border-bottom: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>璇玑 · 思考过程呈现方案</h1>
+  <p class="sub">
+    针对派发台（Dispatch）新增「模型思考过程」展示。以下三个方案共用同一条设计原则：
+    <b style="color:var(--ink);font-weight:600">思考不是数据，所以它不发光</b>——全部走中性色阶（faint / muted），
+    唯一的结构记号是左侧 1px 竖线；彩色只留给工具卡的函数名和用户消息的翡翠底，
+    保证思考块永远退到助手正文之后的第二层级。
+  </p>
+  <div class="warn">
+    <b>原型如实反映的两个限制：</b>
+    ① 下方思考文本是<b>英文</b>——SDK 的 <code style="font-family:var(--mono)">display: 'summarized'</code> 返回模型自写的英文摘要，不是逐字思考原文，也不保证中文；
+    ② 思考文本<b>只有开关打开后的新会话才有</b>，历史会话回放（会话页 / 定时任务页）永远是空的，所以本方案只作用于派发台实时流。
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section>
+  <div class="sec-head">
+    <h2>方案 B · 流式浮现，答完自动收起</h2>
+    <span class="tag">推荐</span>
+  </div>
+  <p class="sec-desc">
+    思考中<span class="k">默认展开</span>并逐字流出，竖线随之呼吸；模型开始输出正式回答的一刻，思考块<span class="k">自动坍缩成一行</span>，
+    留下耗时摘要，可随时点开回看。这是 Claude Code 终端的行为，也最贴合璇玑「观象台」的气质——
+    过程可见但不留痕，滚动回顾时视线不被大段灰字打断。
+  </p>
+
+  <div class="demo-bar">
+    <button class="btn primary" id="play">▸ 播放完整流程</button>
+    <button class="btn" id="reset">重置</button>
+    <span id="phase">就绪 — 点播放看「思考中 → 自动收起 → 可展开」全过程</span>
+  </div>
+
+  <div class="chat" id="demoB">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">昨天那个定时派发的周报任务失败了，帮我看看为什么</div>
+    </div>
+
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+
+      <div class="thinkcard" id="tkB">
+        <button class="tk-head" aria-expanded="false" aria-controls="tkB-body">
+          <svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/>
+          </svg>
+          <span class="tk-label">思考</span>
+          <span class="tk-meta" id="tkB-meta">进行中</span>
+          <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="tk-body" id="tkB-body"><span id="tkB-text"></span><span class="caret" id="tkB-caret"></span></div>
+      </div>
+
+      <div class="toolcard" id="toolB" style="display:none">
+        <button class="tc-head" aria-expanded="false">
+          <span class="fn" data-cat="exec">Bash</span>
+          <span class="arg">cat ~/.claude/jobs/state.json | jq '.jobs[-1]'</span>
+          <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="tc-body">{
+  "id": "cron-weekly-report",
+  "status": "failed",
+  "startedAt": "2026-07-27T09:00:02+08:00",
+  "endedAt": "2026-07-27T09:04:41+08:00",
+  "exitReason": "host_terminated"
+}</div>
+      </div>
+
+      <div class="body" id="answerB" style="display:none">
+        <p>不是任务本身出错——<code>exitReason: host_terminated</code> 说明会话是被宿主进程掐掉的。</p>
+        <p>时间对得上：任务 09:04:41 中止，后端 launchd 服务的重启时间是 09:04:39。周报任务跑到一半时后端被重启，子进程跟着一起死了。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <div class="sec-head">
+    <h2>方案 A · 始终折叠，与工具卡同族</h2>
+    <span class="tag alt">最省事</span>
+  </div>
+  <p class="sec-desc">
+    思考块<span class="k">从头到尾都是一行</span>，形态与工具卡完全一致，想看才点开。
+    好处是消息流永远紧凑、实现最简单（直接抄 <code style="font-family:var(--mono)">ToolCard</code>）；
+    代价是思考中你只能看到「思考中…」，看不到它在想什么，实时感受损失最大。
+  </p>
+
+  <div class="chat">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">昨天那个定时派发的周报任务失败了，帮我看看为什么</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+
+      <div class="thinkcard" data-toggle>
+        <button class="tk-head" aria-expanded="false">
+          <svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/>
+          </svg>
+          <span class="tk-label">思考</span>
+          <span class="tk-meta">8.2s</span>
+          <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="tk-body">
+          <p>The user is asking why yesterday's dispatched weekly-report task failed. I should locate the actual record rather than guess. The dispatch service writes job state to jobs/state.json, so that's the fastest path to a failure reason.</p>
+          <p>There's a subtlety worth checking first: the task ran under XUANJI_DISPATCH=1, meaning it was a child process of the backend. If the backend restarted mid-run, the session would look "failed" with no model-side error at all. I should compare the backend's uptime against the task's end timestamp before concluding anything about the task itself.</p>
+        </div>
+      </div>
+
+      <div class="toolcard" data-toggle-tool>
+        <button class="tc-head" aria-expanded="false">
+          <span class="fn" data-cat="exec">Bash</span>
+          <span class="arg">cat ~/.claude/jobs/state.json | jq '.jobs[-1]'</span>
+          <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="tc-body">{
+  "id": "cron-weekly-report",
+  "status": "failed",
+  "exitReason": "host_terminated"
+}</div>
+      </div>
+
+      <div class="body">
+        <p>不是任务本身出错——<code>exitReason: host_terminated</code> 说明会话是被宿主进程掐掉的。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <div class="sec-head">
+    <h2>方案 C · 常驻幽灵轨，不可折叠</h2>
+    <span class="tag alt">信息最全 / 最吵</span>
+  </div>
+  <p class="sec-desc">
+    思考文本<span class="k">永远铺开</span>，靠灰度和左竖线压到背景层，不提供折叠。
+    适合把璇玑当「模型行为观察窗」用——一眼看全推理链；
+    代价是长会话滚动距离翻倍，且英文思考混在中文回答里，阅读节奏会被反复打断。
+  </p>
+
+  <div class="chat">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">昨天那个定时派发的周报任务失败了，帮我看看为什么</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="ghost">
+        <div class="g-label">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/>
+          </svg>
+          思考 · 8.2s
+        </div>
+        <p>The user is asking why yesterday's dispatched weekly-report task failed. I should locate the actual record rather than guess. The dispatch service writes job state to jobs/state.json, so that's the fastest path to a failure reason.</p>
+        <p>There's a subtlety worth checking first: the task ran under XUANJI_DISPATCH=1, meaning it was a child process of the backend. If the backend restarted mid-run, the session would look "failed" with no model-side error at all.</p>
+      </div>
+      <div class="body">
+        <p>不是任务本身出错——<code>exitReason: host_terminated</code> 说明会话是被宿主进程掐掉的。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <div class="sec-head"><h2>边界状态</h2></div>
+  <p class="sec-desc">按推荐方案 B 的形态，列出必须处理的四种非典型状态。</p>
+
+  <div class="matrix">
+    <div class="cell">
+      <h3>模型没有思考（adaptive 判定为简单任务）</h3>
+      <div class="thinkcard" style="opacity:.35;pointer-events:none">
+        <button class="tk-head"><span class="tk-label">思考</span></button>
+      </div>
+      <div style="font-size:.8125rem;margin-top:-6px">好的，已帮你重启。</div>
+      <p class="note">不渲染任何思考块，也不留占位。实测简单问题（如「农夫过河」）opus-5 直接零思考。</p>
+    </div>
+
+    <div class="cell">
+      <h3>思考很长（&gt;3000 字）</h3>
+      <div class="thinkcard open">
+        <button class="tk-head" aria-expanded="true">
+          <svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+            <circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/>
+          </svg>
+          <span class="tk-label">思考</span><span class="tk-meta">41.7s · 3.2k 字</span>
+          <svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+            <path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+        <div class="tk-body" style="max-height:110px;overflow:hidden;position:relative">
+          <p>Let me reconsider the whole dispatch lifecycle. There are three places where a session can die without a model error, and I want to rule them out in order of likelihood rather than guessing…</p>
+          <div style="position:absolute;inset:auto 0 0 0;height:44px;background:linear-gradient(to bottom, transparent, var(--surface-2))"></div>
+        </div>
+      </div>
+      <p class="note">展开态给 max-height + 底部渐隐，再点一次「展开全文」。避免单条思考顶掉整屏。</p>
+    </div>
+
+    <div class="cell">
+      <h3>多轮思考（工具调用之间反复思考）</h3>
+      <div class="thinkcard"><button class="tk-head"><svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/></svg><span class="tk-label">思考</span><span class="tk-meta">6.1s</span><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="exec">Bash</span><span class="arg">jq '.jobs[-1]' state.json</span></button></div>
+      <div class="thinkcard"><button class="tk-head"><svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true"><circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/></svg><span class="tk-label">思考</span><span class="tk-meta">3.4s</span><svg class="chev" width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 4l3 3 3-3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+      <p class="note">每段思考独立成块、独立计时，不合并。与工具卡交替出现，天然构成推理时间线。</p>
+    </div>
+
+    <div class="cell">
+      <h3>历史会话回放</h3>
+      <div style="font-size:.8125rem;color:var(--faint);border-left:1px solid var(--line);padding-left:16px">
+        （无思考块）
+      </div>
+      <p class="note">
+        会话页 / 定时任务页的回放<b style="color:var(--amber);font-weight:600">不加思考块</b>。
+        磁盘实测：40 个最新会话共 2158 个思考块，2119 个明文为空，加了也只是空气泡。
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <div class="sec-head"><h2>方案取舍</h2></div>
+  <table>
+    <thead>
+      <tr><th style="width:26%">维度</th><th>B · 流式后收起</th><th>A · 始终折叠</th><th>C · 常驻铺开</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>思考中能看到内容</td><td class="y">能，逐字</td><td class="n">不能，只有「思考中」</td><td class="y">能，逐字</td></tr>
+      <tr><td>回滚长会话的干扰</td><td class="y">无，已收起</td><td class="y">无</td><td class="n">大，灰字占满屏</td></tr>
+      <tr><td>英文思考混入中文流</td><td class="y">仅进行时可见</td><td class="y">主动点开才见</td><td class="n">强制常驻可见</td></tr>
+      <tr><td>前端实现量</td><td class="n">中（需收起时机 + 流式复用）</td><td class="y">小（照抄 ToolCard）</td><td class="y">小</td></tr>
+      <tr><td>与既有视觉语言</td><td class="y">同族，多一个自动态</td><td class="y">完全同族</td><td class="n">新增一种常驻块型</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+
+<script>
+// ---- 通用折叠 ----
+document.querySelectorAll('.thinkcard [data-toggle], .thinkcard .tk-head').forEach(function (btn) {
+  var card = btn.closest('.thinkcard');
+  if (!card.querySelector('.tk-body')) return;
+  btn.addEventListener('click', function () {
+    if (card.classList.contains('live')) return;
+    var open = card.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+});
+document.querySelectorAll('.toolcard .tc-head').forEach(function (btn) {
+  var card = btn.closest('.toolcard');
+  if (!card.querySelector('.tc-body')) return;
+  btn.addEventListener('click', function () {
+    var open = card.classList.toggle('open');
+    btn.setAttribute('aria-expanded', String(open));
+  });
+});
+
+// ---- 方案 B 流程演示 ----
+var THINK = "The user is asking why yesterday's dispatched weekly-report task failed. I should locate the actual record rather than guess. The dispatch service writes job state to jobs/state.json, so that's the fastest path to a failure reason.\n\nThere's a subtlety worth checking first: the task ran under XUANJI_DISPATCH=1, meaning it was a child process of the backend. If the backend restarted mid-run, the session would look \"failed\" with no model-side error at all. I should compare the backend's uptime against the task's end timestamp before concluding anything about the task itself.";
+
+var card = document.getElementById('tkB'),
+    textEl = document.getElementById('tkB-text'),
+    caret = document.getElementById('tkB-caret'),
+    metaEl = document.getElementById('tkB-meta'),
+    toolB = document.getElementById('toolB'),
+    ansB = document.getElementById('answerB'),
+    phase = document.getElementById('phase'),
+    playBtn = document.getElementById('play');
+var timers = [];
+
+function reset() {
+  timers.forEach(clearTimeout); timers = [];
+  card.className = 'thinkcard';
+  card.querySelector('.tk-head').setAttribute('aria-expanded', 'false');
+  textEl.textContent = ''; caret.style.display = '';
+  metaEl.textContent = '进行中';
+  toolB.style.display = 'none'; toolB.classList.remove('open');
+  ansB.style.display = 'none';
+  phase.textContent = '就绪 — 点播放看「思考中 → 自动收起 → 可展开」全过程';
+  playBtn.disabled = false; playBtn.style.opacity = '';
+}
+function render(s) {
+  textEl.innerHTML = '';
+  s.split('\n\n').forEach(function (para) {
+    var p = document.createElement('p'); p.textContent = para; textEl.appendChild(p);
+  });
+}
+function play() {
+  reset();
+  playBtn.disabled = true; playBtn.style.opacity = '.5';
+  card.classList.add('live');
+  phase.textContent = '① 思考中 — 默认展开，逐字流出，竖线呼吸';
+  var i = 0, step = 3;
+  (function type() {
+    if (i < THINK.length) {
+      i = Math.min(i + step, THINK.length);
+      render(THINK.slice(0, i));
+      timers.push(setTimeout(type, 16));
+    } else {
+      timers.push(setTimeout(collapse, 500));
+    }
+  })();
+}
+function collapse() {
+  card.classList.remove('live');
+  caret.style.display = 'none';
+  metaEl.textContent = '8.2s';
+  phase.textContent = '② 开始回答 — 思考块自动收起为一行，点它可随时回看';
+  timers.push(setTimeout(function () {
+    toolB.style.display = '';
+    timers.push(setTimeout(function () {
+      ansB.style.display = '';
+      phase.textContent = '③ 完成 — 现在点「思考 8.2s」那一行，验证可回看';
+      playBtn.disabled = false; playBtn.style.opacity = '';
+    }, 700));
+  }, 450));
+}
+playBtn.addEventListener('click', play);
+document.getElementById('reset').addEventListener('click', reset);
+</script>
+</body>
+</html>
