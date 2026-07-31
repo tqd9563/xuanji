@@ -152,6 +152,20 @@ export interface ClosedSession {
   hiddenAt: number;
 }
 
+/** 待办(自有数据,与后端 types.ts 镜像):随手记的想法,可带着项目与内容一键进派发页 */
+export interface Todo {
+  id: number;
+  title: string;
+  cwd: string | null;
+  project: string | null;
+  status: 'open' | 'doing' | 'done';
+  sessionId: string | null;
+  createdAt: number;
+  startedAt: number | null;
+  doneAt: number | null;
+  source: 'web' | 'external';
+}
+
 export interface ProjectsResult {
   projects: Project[];
   filteredNoise: number;

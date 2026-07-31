@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { desc, eq } from 'drizzle-orm';
-import type { Memory, ScheduledJob, ScheduledRun, WeeklyDraft } from '../types.js';
+import type { Memory, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -119,6 +119,23 @@ export const weeklyDraftsTable = sqliteTable('weekly_drafts', {
   finishedAt: integer('finished_at'),
 });
 
+/**
+ * 待办(自有数据):临时想法收集箱。与 ~/.claude 无任何映射关系,纯璇玑自有,
+ * 因此可以放心写——不违反只读铁律(铁律约束的是他人格式的文件)。
+ */
+export const todosTable = sqliteTable('todos', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  title: text('title').notNull(),
+  cwd: text('cwd'),
+  project: text('project'),
+  status: text('status').notNull(), // open | doing | done
+  sessionId: text('session_id'),
+  createdAt: integer('created_at').notNull(),
+  startedAt: integer('started_at'),
+  doneAt: integer('done_at'),
+  source: text('source').notNull(), // web | external
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -175,6 +192,14 @@ export class Storage {
         status TEXT NOT NULL, session_id TEXT, cost_usd REAL, duration_ms INTEGER, error TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_scheduled_runs_job ON scheduled_runs(job_id, id DESC);
+      CREATE TABLE IF NOT EXISTS todos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL, cwd TEXT, project TEXT,
+        status TEXT NOT NULL, session_id TEXT,
+        created_at INTEGER NOT NULL, started_at INTEGER, done_at INTEGER,
+        source TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, id DESC);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
@@ -358,6 +383,40 @@ export class Storage {
          FROM weekly_drafts ORDER BY id DESC LIMIT ?`,
       )
       .all(limit) as WeeklyDraft[];
+  }
+
+  // ---------- 待办 ----------
+
+  createTodo(input: { title: string; cwd?: string | null; project?: string | null; source: Todo['source'] }): Todo {
+    const r = this.orm
+      .insert(todosTable)
+      .values({
+        title: input.title,
+        cwd: input.cwd ?? null,
+        project: input.project ?? null,
+        status: 'open',
+        createdAt: Date.now(),
+        source: input.source,
+      })
+      .run();
+    return this.getTodo(Number(r.lastInsertRowid))!;
+  }
+
+  getTodo(id: number): Todo | null {
+    return (this.orm.select().from(todosTable).where(eq(todosTable.id, id)).get() as Todo | undefined) ?? null;
+  }
+
+  /** 全部待办,新建的在前;过滤/分组交给前端(总量是几十到几百条量级) */
+  listTodos(): Todo[] {
+    return this.orm.select().from(todosTable).orderBy(desc(todosTable.id)).all() as Todo[];
+  }
+
+  updateTodo(id: number, patch: Partial<Omit<Todo, 'id' | 'createdAt'>>) {
+    this.orm.update(todosTable).set(patch).where(eq(todosTable.id, id)).run();
+  }
+
+  deleteTodo(id: number) {
+    this.orm.delete(todosTable).where(eq(todosTable.id, id)).run();
   }
 
   getMeta(key: string): string | null {

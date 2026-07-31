@@ -176,6 +176,29 @@ components:
     textColor: "{colors.amber}"
     rounded: "{rounded.sm}"
     padding: "10px 14px"
+  todo-capture:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    padding: "4px 6px 4px 16px"
+  todo-go:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 11px"
+  todo-go-hover:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+  todo-palette:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    width: "min(560px, 92vw)"
+  from-todo-banner:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.sm}"
+    padding: "7px 12px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -368,6 +391,15 @@ components:
 
 ### 总结列表(`.wl-item` / `.rvwl-item`)
 「总结」模块按日期分组(mono 小字组头),行 = 项目芯片 + 任务主题(单行省略)+ commit 数(mono faint)+ 状态胶囊;状态色沿用既有语义,不新造词汇:已合并=绿 `pill-done`(彻底完事)、待合并=蓝 `pill-sched`(事实标注,无需立刻处理)、未解决=琥珀 `pill-blk` 带脉冲点(需要你回来处理)。回顾页的「本周总结」是同一词汇的紧凑变体(`.rvwl-item`,加日期列、去 commit 数),点击下钻到「总结」模块——**同一份详情不在两处各维护一套**,状态胶囊也直接复用同一个组件。
+
+### 速记浮层(`.tp-box` · ⌘J 两段式捕获)
+顶部居中、距顶 22vh —— Spotlight/Raycast 建立的肌肉记忆位置,呼出后视线零搜索,半透明遮罩表达「临时压在当前视图之上」;22vh 而非更高,是给下方项目下拉留出展开空间。结构是**两段一线**:标题输入(0.9375rem,比列表正文大一号,是本浮层的主角)+ 项目模糊搜索框。键路径必须闭合成直线 `⌘J → 打字 → Tab → 搜项目 → ↩ → ↩`,其中确认项目后焦点自动回到标题框,**最后一次 ↩ 永远是「保存」**——同一个键在同一个浮层里不能有两种含义。项目框未输入时先列「最近使用」5 条(高频路径连打字都省),`Tab`/`⇧Tab` 与 `↑↓` 等价并在候选内循环,`Esc` 退回标题框而非直接关闭。不指定项目是合法终态:临时想法经常还没想清归属,不该为此卡住记录本身。
+
+### 待办列表(`.td-item`)与开工按钮(`.td-go`)
+按创建日分组(mono 组头,与总结模块同一词汇),行 = 勾选框 + 内容(单行省略)+ 项目芯片 + 停留时长(mono faint)+ 状态胶囊 + 开工。状态色继续复用既有语义、不新造:待办=中性 `pill-idle`、进行中=玉 `pill-run` 带脉冲点、已完成=绿 `pill-done`。**停留时长比内容更该被看见**——一条待办放了几天没动,是收集箱里最有行动价值的信号,故与状态胶囊并列常驻。`.td-go` 默认中性描边,悬停才染玉:玉色是稀缺资源,一整列常亮就不再是重点。勾选框未完成时中性、悬停才透出绿意——完成是奖励,不是默认期待;删除按钮悬停行才浮现,避免破坏性动作常驻。
+
+### 待办来源横幅(`.from-todo`)
+派发页 composer 上方的玉色 tint 条,说明本次会话由哪条待办发起,右端 ✕ 解除关联。它承担一条产品约束的可见化:待办「开工」只把内容**预填**进输入框、**不自动发送**(半句话想法直接发出去质量不高),所以界面必须解释「这段文字是哪来的、发出去会发生什么」。同理,会话结束不自动勾完成——那是人的判断。
 
 ## 6. Do's and Don'ts
 

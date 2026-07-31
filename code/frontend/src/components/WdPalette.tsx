@@ -6,50 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
-
-/** 子序列匹配:query 的字符按序出现在 target 中即命中(入参均已小写)。 */
-function isSubseq(q: string, t: string): boolean {
-  let qi = 0;
-  for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-    if (t[ti] === q[qi]) qi++;
-  }
-  return qi === q.length;
-}
-
-/** 分层打分(大小写不敏感),不命中返回 null:
- *  100 短名前缀连续命中 > 80 短名中段连续命中 > 60 短名子序列 > 40 路径连续 > 20 路径子序列。
- *  label 与 path 各自独立匹配、不拼接:曾经拼接后做整串子序列,公共路径前缀
- *  /Users/xxx/ 会兜底吸收查询字符("dee" 借 Us"e"rs/lilithgam"e"s 命中一切含 d 的项目)。
- *  path 入参须先剥掉所有候选共有的目录前缀(见 commonDirPrefix),同理防兜底。 */
-function matchScore(query: string, label: string, path: string): number | null {
-  if (!query) return 0;
-  const q = query.toLowerCase();
-  const l = label.toLowerCase();
-  const p = path.toLowerCase();
-  const idx = l.indexOf(q);
-  if (idx === 0) return 100;
-  if (idx > 0) return 80;
-  if (isSubseq(q, l)) return 60;
-  if (p.includes(q)) return 40;
-  if (isSubseq(q, p)) return 20;
-  return null;
-}
-
-/** 所有候选共有的目录前缀(截到最后一个 "/",含斜杠);无 "/" 或单候选时返回 ""。
- *  /model 复用本组件时选项是模型名(无斜杠),自动退化为不剥前缀。 */
-function commonDirPrefix(paths: string[]): string {
-  const first = paths[0];
-  if (paths.length < 2 || first === undefined) return '';
-  let prefix = first;
-  for (const p of paths.slice(1)) {
-    let i = 0;
-    while (i < prefix.length && i < p.length && prefix[i] === p[i]) i++;
-    prefix = prefix.slice(0, i);
-    if (!prefix) return '';
-  }
-  const cut = prefix.lastIndexOf('/');
-  return cut >= 0 ? prefix.slice(0, cut + 1) : '';
-}
+import { fuzzyRank } from '@/lib/fuzzy';
 
 export function WdPalette({
   value,
@@ -79,20 +36,8 @@ export function WdPalette({
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 短名与路径分别打分取高层级,按分排序;同分保持 options 原顺序(稳定,保留数据源的 recency)。
-  // 无 labelOf 时用剥前缀后的路径当短名,避免整条路径参与子序列匹配重蹈兜底吸收。
-  const filtered = useMemo(() => {
-    const prefix = commonDirPrefix(options);
-    return options
-      .map((o, i) => {
-        const rest = o.startsWith(prefix) ? o.slice(prefix.length) : o;
-        const score = matchScore(query, labelOf?.(o) ?? rest, rest);
-        return score === null ? null : { o, score, i };
-      })
-      .filter((x): x is { o: string; score: number; i: number } => x !== null)
-      .sort((a, b) => b.score - a.score || a.i - b.i)
-      .map((x) => x.o);
-  }, [options, query, labelOf]);
+  // 短名与路径分别打分取高层级(见 lib/fuzzy),待办速记浮层与后端共用同一口径
+  const filtered = useMemo(() => fuzzyRank(options, query, labelOf), [options, query, labelOf]);
 
   // 打开即聚焦搜索框:WKWebView(Pake 壳)下,唤起弹窗的那次 Enter 仍处理在派发框 textarea 上,
   // 同 tick focus 与 setTimeout(0) 补抢均被真机证实可能失效(2026-07-16;派发页还有「进入自动聚焦

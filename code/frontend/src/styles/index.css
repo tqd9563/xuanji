@@ -873,6 +873,112 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .sid-link { font-family: var(--mono); font-size: 0.8125rem; color: var(--blue); background: none; border: none; padding: 0; cursor: pointer; }
 .sid-link:hover { text-decoration: underline; }
 
+/* ============ 待办(自有收集箱) ============ */
+/* 速记行:本页第一动作,放大一号、玉色 focus,与列表拉开层级 */
+.td-capture {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 18px;
+  border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface);
+  padding: 4px 6px 4px 16px; transition: border-color 150ms var(--ease);
+}
+.td-capture:focus-within { border-color: var(--jade); }
+.td-capture .plus { color: var(--faint); font-size: 1rem; line-height: 1; flex: none; }
+.td-capture .input { flex: 1; min-width: 0; background: none; border: none; padding: 8px 0; font-size: 0.875rem; }
+.td-capture .input:hover, .td-capture .input:focus { border-color: transparent; outline: none; }
+.td-capture .hint { font-family: var(--mono); font-size: 0.625rem; color: var(--faint); flex: none; padding-right: 8px; }
+.td-proj-pick {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); flex: none;
+  border: 1px solid var(--line); border-radius: 4px; padding: 2px 9px;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease);
+}
+.td-proj-pick:hover { border-color: var(--muted); color: var(--ink); }
+
+.td-group > h2 { font-size: 0.75rem; color: var(--faint); font-weight: 600; font-family: var(--mono); padding: 12px 18px 4px; }
+.td-item {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 10px 18px; border-bottom: 1px solid var(--line-soft);
+  transition: background 120ms var(--ease);
+}
+.td-item:hover { background: var(--hover); }
+.td-group:last-child .td-item:last-child { border-bottom: none; }
+.td-item .title { font-size: 0.8125rem; color: var(--ink); min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-item.done .title { color: var(--faint); text-decoration: line-through; }
+.td-item .age { font-size: 0.6875rem; color: var(--faint); flex: none; }
+.td-noproj { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
+/* 勾选框:未完成时中性描边,悬停才透出绿意——完成是奖励,不是默认期待 */
+.td-item .chk {
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line);
+  flex: none; display: grid; place-items: center; color: transparent; font-size: 0.6875rem;
+  transition: border-color 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
+}
+.td-item .chk:hover { border-color: var(--green); color: var(--green); }
+.td-item.done .chk { border-color: var(--green); background: var(--tint-green); color: var(--green); }
+/* 开工:行内主操作。默认灰框、悬停行时才染玉——玉色稀缺,不整列常亮 */
+.td-go {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  padding: 3px 11px; border-radius: var(--r-s); border: 1px solid var(--line);
+  color: var(--muted); font-size: 0.75rem; font-weight: 600;
+  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
+}
+.td-go:hover { border-color: var(--jade); color: var(--jade); background: var(--tint-jade); }
+.td-del { flex: none; color: var(--faint); padding: 2px 6px; border-radius: var(--r-s); opacity: 0; transition: opacity 150ms var(--ease), color 150ms var(--ease); }
+.td-item:hover .td-del { opacity: 1; }
+.td-del:hover { color: var(--red); }
+
+/* 仪表盘待办卡(dash-now 之下、统计条之上) */
+.dash-todos { margin-bottom: 16px; }
+.dash-todo-item { display: flex; align-items: center; gap: 10px; padding: 9px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; transition: background 120ms var(--ease); }
+.dash-todo-item:hover { background: var(--hover); }
+.dash-todo-item .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.dash-todo-item .age { font-size: 0.6875rem; color: var(--faint); flex: none; }
+.dash-todo-foot { padding: 10px 18px; font-size: 0.75rem; }
+.dash-todo-foot button { color: var(--blue); }
+.dash-todo-foot button:hover { text-decoration: underline; }
+
+/* 速记浮层(⌘J):顶部偏上 22vh —— Spotlight 位置的肌肉记忆,并给项目下拉留出展开空间 */
+.tp-box {
+  position: fixed; top: 22vh; left: 50%; transform: translateX(-50%);
+  width: min(560px, 92vw); background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-m); box-shadow: 0 16px 48px oklch(0.05 0 0 / 0.5);
+  animation: tp-in 150ms var(--ease);
+}
+@keyframes tp-in { from { opacity: 0; transform: translate(-50%, -8px); } to { opacity: 1; transform: translateX(-50%); } }
+.tp-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px 0; }
+.tp-head .glyph { color: var(--jade); font-size: 0.875rem; flex: none; }
+.tp-title { flex: 1; min-width: 0; background: none; border: none; border-bottom: 1px solid var(--line-soft); padding: 0 0 12px; font-size: 0.9375rem; }
+.tp-title:focus { outline: none; }
+.tp-row { display: flex; align-items: center; gap: 10px; padding: 10px 18px 14px; position: relative; }
+.tp-row .lbl { font-size: 0.6875rem; color: var(--faint); flex: none; }
+.tp-pj {
+  flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: 4px 10px; font-family: var(--mono); font-size: 0.75rem;
+  color: var(--muted); transition: border-color 150ms var(--ease), color 150ms var(--ease);
+}
+.tp-pj:focus { outline: none; border-color: var(--jade); color: var(--ink); }
+.tp-pj.picked { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 45%, transparent); background: var(--tint-jade); }
+.tp-drop {
+  position: absolute; top: calc(100% - 6px); left: 52px; right: 18px; z-index: var(--z-dropdown);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-s);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.5); max-height: 240px; overflow-y: auto;
+}
+.tp-opt { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left; padding: 6px 12px; font-size: 0.75rem; transition: background 100ms var(--ease); }
+.tp-opt.hl { background: var(--tint-jade); }
+.tp-opt .n { font-family: var(--mono); color: var(--ink); flex: none; }
+.tp-opt.hl .n { color: var(--jade); font-weight: 600; }
+.tp-opt .p { font-size: 0.6875rem; color: var(--faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tp-opt .none-mark { color: var(--muted); }
+.tp-foot { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 8px 18px; border-top: 1px solid var(--line-soft); font-size: 0.6875rem; color: var(--faint); }
+.tp-foot .kbd { font-family: var(--mono); background: var(--tint-muted); border-radius: 3px; padding: 0 5px; }
+
+/* 派发页「来自待办」横幅:说明本次会话的来路,✕ 解除关联 */
+.from-todo {
+  display: flex; align-items: center; gap: 10px; margin-top: 12px;
+  font-size: 0.75rem; color: var(--jade); background: var(--tint-jade);
+  border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent);
+  border-radius: var(--r-s); padding: 7px 12px;
+}
+.from-todo .x { margin-left: auto; color: var(--muted); padding: 0 4px; flex: none; }
+.from-todo .x:hover { color: var(--ink); }
+
 /* ============ 回顾(周活动) ============ */
 .week-nav { display: flex; align-items: center; gap: 4px; }
 .week-nav .range { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); font-variant-numeric: tabular-nums; padding: 0 6px; }

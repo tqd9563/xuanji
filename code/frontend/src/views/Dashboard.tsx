@@ -5,6 +5,7 @@ import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, fmtCost, fmtTokens, isUnread, modelColor, projColor, timeAgo } from '@/lib/utils';
 import { Pill, ProjChip, Tag } from '@/components/shared';
+import { isStale, startTodo, useTodosChanged } from '@/views/Todos';
 
 const clockFmt = new Intl.DateTimeFormat('zh-CN', {
   timeZone: 'Asia/Shanghai',
@@ -50,6 +51,47 @@ function heatDayLabels(): { short: string; full: string }[] {
     });
   }
   return out;
+}
+
+/** 仪表盘待办卡:只露前 N 条未完成的,整理与回顾去「待办」模块 */
+const DASH_TODO_N = 5;
+
+function DashTodos() {
+  const { data, refresh } = usePoll(api.todos, 30_000);
+  useTodosChanged(refresh);
+  const all = data?.todos ?? [];
+  const undone = all.filter((t) => t.status !== 'done');
+  if (undone.length === 0) return null; // 没有待办时不占位:仪表盘只显示需要行动的东西
+
+  const stale = undone.filter(isStale).length;
+  return (
+    <div className="panel dash-todos">
+      <div className="panel-head">
+        <h2>待办</h2>
+        <span className="sub">
+          {undone.length} 条未完成
+          {stale > 0 && <span style={{ color: 'var(--amber)' }}> · {stale} 条超过 3 天</span>}
+        </span>
+        <span className="spacer" />
+        <span className="sub mono" title="任意页面按 ⌘J 速记一条待办">⌘J 速记</span>
+      </div>
+      {undone.slice(0, DASH_TODO_N).map((t) => (
+        <div key={t.id} className="dash-todo-item">
+          <span className="t" title={t.title}>{t.title}</span>
+          {t.project && <ProjChip name={t.project} path={t.cwd ?? undefined} />}
+          <span className="age mono" title={new Date(t.createdAt).toLocaleString('zh-CN')}>{timeAgo(t.createdAt)}</span>
+          <button className="td-go" onClick={() => startTodo(t)}>
+            {t.status === 'doing' ? '继续 ▶' : '开工 ▶'}
+          </button>
+        </div>
+      ))}
+      <div className="dash-todo-foot">
+        <button onClick={() => (location.hash = 'todo')}>
+          在待办模块中查看全部 {undone.length} 条 →
+        </button>
+      </div>
+    </div>
+  );
 }
 
 export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) => void }) {
@@ -143,6 +185,10 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
           </div>
         </div>
       </div>
+
+      {/* 待办:紧随「需要你处理 / 运行中」之下、统计条之上。仪表盘的纵向顺序是一条紧急度梯度
+          (会话在等你 → 机器在跑 → 你欠自己的事 → 统计 → 历史),待办正落在第三层。 */}
+      <DashTodos />
 
       <div className="panel dash-strip" title={data.caliber.usage}>
         <span>今日 prompt <b>{data.strip.todayPrompts}</b> 条</span>

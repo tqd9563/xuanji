@@ -12,6 +12,7 @@ import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessio
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
+import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
@@ -93,6 +94,67 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
       q: c.req.query('q')?.trim() || undefined,
     });
     return c.json({ cards });
+  });
+
+  // ---------- 待办(自有数据) ----------
+
+  api.get('/todos', async (c) => c.json({ todos: storage.listTodos() }));
+
+  /**
+   * 新建待办。project 宽松匹配(见 services/todos.resolveProject):
+   * web 传绝对路径,Raycast 等外部脚本传手打短名,匹配不上就存「未指定」而不是报错。
+   */
+  api.post('/todos', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const invalid = validateTitle(body.title);
+    if (invalid) return c.json(invalid, 400);
+    const { cwd, project } = await resolveProject(
+      typeof body.cwd === 'string' && body.cwd ? body.cwd : typeof body.project === 'string' ? body.project : null,
+    );
+    const todo = storage.createTodo({
+      title: String(body.title).trim(),
+      cwd,
+      project,
+      source: body.source === 'external' ? 'external' : 'web',
+    });
+    return c.json({ todo }, 201);
+  });
+
+  api.patch('/todos/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getTodo(id)) return c.json({ error: 'not found' }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const patch: Record<string, unknown> = {};
+    if (body.title !== undefined) {
+      const invalid = validateTitle(body.title);
+      if (invalid) return c.json(invalid, 400);
+      patch.title = String(body.title).trim();
+    }
+    if (body.status !== undefined) {
+      if (!isTodoStatus(body.status)) return c.json({ error: 'status 需为 open/doing/done' }, 400);
+      Object.assign(patch, statusPatch(body.status));
+    }
+    // cwd 显式传 null = 清空归属;传字符串走同一套宽松匹配
+    if (body.cwd !== undefined || body.project !== undefined) {
+      const { cwd, project } = await resolveProject(
+        typeof body.cwd === 'string' ? body.cwd : typeof body.project === 'string' ? body.project : null,
+      );
+      patch.cwd = cwd;
+      patch.project = project;
+    }
+    if (body.sessionId !== undefined) {
+      patch.sessionId = typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : null;
+    }
+    if (Object.keys(patch).length === 0) return c.json({ error: '没有可更新的字段' }, 400);
+    storage.updateTodo(id, patch);
+    return c.json({ todo: storage.getTodo(id) });
+  });
+
+  api.delete('/todos/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getTodo(id)) return c.json({ error: 'not found' }, 404);
+    storage.deleteTodo(id);
+    return c.json({ ok: true });
   });
 
   api.get('/usage/today', async (c) => {

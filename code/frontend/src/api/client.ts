@@ -9,6 +9,7 @@ import type {
   ScheduledRun,
   SessionsBoard,
   Skill,
+  Todo,
   UsageReport,
   WeeklyDraft,
   WeeklyReview,
@@ -53,6 +54,14 @@ export const api = {
     return get<{ cards: WorklogCard[] }>(`/api/worklog${qs ? `?${qs}` : ''}`);
   },
   usage: () => get<UsageReport>('/api/usage/today'),
+  // ---------- 待办 ----------
+  todos: () => get<{ todos: Todo[] }>('/api/todos'),
+  /** cwd 传绝对路径(界面已选好)或短名(外部脚本手打),后端统一宽松匹配 */
+  createTodo: (title: string, cwd?: string | null) =>
+    mutate<{ todo: Todo }>('/api/todos', 'POST', { title, cwd: cwd ?? null }),
+  updateTodo: (id: number, patch: Partial<{ title: string; status: Todo['status']; cwd: string | null; sessionId: string | null }>) =>
+    mutate<{ todo: Todo }>(`/api/todos/${id}`, 'PATCH', patch),
+  deleteTodo: (id: number) => mutate<{ ok: boolean }>(`/api/todos/${id}`, 'DELETE', {}),
   palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------

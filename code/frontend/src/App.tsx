@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
-import { ConfirmHost, ToastHost } from '@/components/shared';
+import { ConfirmHost, ToastHost, toast } from '@/components/shared';
 import { WallpaperSettings } from '@/components/WallpaperSettings';
 import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
 import { TabBar, mobileTabOf, type MobileTab } from '@/components/TabBar';
@@ -16,6 +16,8 @@ import { Memories } from '@/views/Memories';
 import { Crons } from '@/views/Crons';
 import { Review } from '@/views/Review';
 import { Worklog } from '@/views/Worklog';
+import { Todos, startTodo, notifyTodosChanged } from '@/views/Todos';
+import { TodoPalette } from '@/components/TodoPalette';
 
 const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
@@ -27,13 +29,14 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'cron', label: '定时', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2' },
   { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
   { id: 'worklog', label: '总结', icon: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5' },
+  { id: 'todo', label: '待办', icon: 'M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2' },
 ];
 
 /** 移动端(≤430px)导航是 5-tab + 更多 二级菜单;这四个视图归入更多,详见 TabBar.mobileTabOf */
-const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review', 'worklog'];
+const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review', 'worklog', 'todo'];
 const MOBILE_TITLE: Record<ViewId, string> = {
   dashboard: '首页', sessions: '会话', dispatch: '派发', cron: '定时任务',
-  projects: '项目', skills: '技能', memory: '经验', review: '回顾', worklog: '总结',
+  projects: '项目', skills: '技能', memory: '经验', review: '回顾', worklog: '总结', todo: '待办',
 };
 
 export default function App() {
@@ -49,6 +52,8 @@ export default function App() {
   // 任何真实导航(hash 变化,无论来自 tab 点击、更多菜单选择、深链或浏览器前进后退)都应该
   // 让位给目标视图本身,菜单开合只由「更多」tab 或次要视图的返回按钮显式触发(两者都不改 hash)。
   const [mobileMore, setMobileMore] = useState(false);
+  // ⌘J 速记浮层:挂在 App 层,任意视图之上都能呼出(见下方键盘监听)
+  const [todoPalette, setTodoPalette] = useState(false);
   useEffect(() => setMobileMore(false), [view]);
   // 会话 tab 徽章:与 Sessions.tsx 共享同一 fetcher 引用,命中 pollCache,不重复拉取
   const { data: sessData } = usePoll(api.sessions, 5_000);
@@ -94,6 +99,14 @@ export default function App() {
   // 裸数字在非输入状态保留(普通浏览器里 ⌘+数字被标签页快捷键占用时的兜底)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // ⌘J 速记待办:任意视图可呼出(Chrome/Safari 上 ⌘J 空闲;Firefox 的「下载」会截走,
+      // 那种情况从侧栏「待办」页顶部的速记行记录,或用 Raycast 全局热键)。
+      // 注意这是页内快捷键:璇玑窗口没有焦点时不触发,真·全局捕获走 Raycast → POST /api/todos。
+      if ((e.key === 'j' || e.key === 'J') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        setTodoPalette(true);
+        return;
+      }
       // ⌘N 新建会话:跳派发页并放下当前会话(浏览器里 ⌘N 被"新建窗口"占用,Pake 壳可用)
       if ((e.key === 'n' || e.key === 'N') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
@@ -220,6 +233,9 @@ export default function App() {
         <section className={cn('view', isShown('worklog') && 'active')}>
           {isShown('worklog') && <Worklog onGoSession={goSession} />}
         </section>
+        <section className={cn('view', isShown('todo') && 'active')}>
+          {isShown('todo') && <Todos />}
+        </section>
         {/* 移动端「更多」菜单:桌面 mobileMore 恒为 false,这个 section 永远不 active */}
         <section className={cn('view', mobileMore && 'active')}>
           {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} wall={wall} />}
@@ -227,6 +243,18 @@ export default function App() {
       </main>
 
       <TabBar active={mobileTabOf(view, mobileMore)} blockedCount={blockedCount} onPick={pickMobileTab} />
+
+      {todoPalette && (
+        <TodoPalette
+          onClose={() => setTodoPalette(false)}
+          onCreated={(todo, andStart) => {
+            notifyTodosChanged(); // 待办页/仪表盘卡立刻显示刚记的这条,不等下一次轮询
+            // ⌘↩ = 存下来顺手就开工;普通 ↩ 只落库,吐一条 toast 说明去哪找它
+            if (andStart) startTodo(todo);
+            else toast(`已记入待办${todo.project ? `(${todo.project})` : ''}`);
+          }}
+        />
+      )}
 
       <ToastHost />
       <ConfirmHost />
