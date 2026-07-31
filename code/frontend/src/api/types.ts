@@ -77,6 +77,34 @@ export interface Memory {
   links: string[];
 }
 
+/** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
+export interface WorklogCard {
+  name: string;
+  date: string;
+  project: string;
+  task: string;
+  branch?: string;
+  commits: string[];
+  mr?: string;
+  refs: string[];
+  status: 'merged' | 'pending-merge' | 'unresolved' | 'unknown';
+  session?: string;
+  coversUntil?: string;
+  file: string;
+  sections: WorklogSections;
+  degraded: boolean;
+}
+
+export interface WorklogSections {
+  problem?: string;
+  conclusion?: string;
+  excluded: string[];
+  residue: string[];
+  decisions: string[];
+  files: string[];
+  raw?: string;
+}
+
 export interface ModelUsage {
   model: string;
   inputTokens: number;

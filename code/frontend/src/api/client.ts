@@ -12,6 +12,7 @@ import type {
   UsageReport,
   WeeklyDraft,
   WeeklyReview,
+  WorklogCard,
 } from './types';
 
 async function get<T>(path: string): Promise<T> {
@@ -40,6 +41,17 @@ export const api = {
   memories: () => get<{ memories: Memory[] }>('/api/memories'),
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
+  /** 任务总结:窗口/项目/状态/关键词过滤全在后端做,前端只管展示 */
+  worklog: (f?: { start?: number; end?: number; project?: string; status?: string; q?: string }) => {
+    const p = new URLSearchParams();
+    if (f?.start) p.set('start', String(f.start));
+    if (f?.end) p.set('end', String(f.end));
+    if (f?.project) p.set('project', f.project);
+    if (f?.status && f.status !== 'all') p.set('status', f.status);
+    if (f?.q) p.set('q', f.q);
+    const qs = p.toString();
+    return get<{ cards: WorklogCard[] }>(`/api/worklog${qs ? `?${qs}` : ''}`);
+  },
   usage: () => get<UsageReport>('/api/usage/today'),
   palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),

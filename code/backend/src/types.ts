@@ -95,6 +95,45 @@ export interface Memory {
   links: string[];
 }
 
+/** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
+export interface WorklogCard {
+  /** 文件名去扩展名,全局唯一键 */
+  name: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** 项目 slug(卡里只记 slug,不记绝对路径) */
+  project: string;
+  /** 一句话任务主题 */
+  task: string;
+  branch?: string;
+  commits: string[];
+  mr?: string;
+  /** 外部锚点:issue id / request_id / 样例文件路径 */
+  refs: string[];
+  status: 'merged' | 'pending-merge' | 'unresolved' | 'unknown';
+  /** 出卡会话 id,直连只读回放 */
+  session?: string;
+  /** ISO8601,下一张卡据此续接划界 */
+  coversUntil?: string;
+  file: string;
+  /** 正文分段;解析不出任何段落时 raw 保留全文(降级不丢卡) */
+  sections: WorklogSections;
+  /** frontmatter 缺失/损坏的降级标记 */
+  degraded: boolean;
+}
+
+export interface WorklogSections {
+  problem?: string;
+  conclusion?: string;
+  /** 排除项 / 已知残留:逐条 bullet(卡片最值钱的两段) */
+  excluded: string[];
+  residue: string[];
+  decisions: string[];
+  files: string[];
+  /** 一个已知段落都没识别出来时的全文兜底 */
+  raw?: string;
+}
+
 export interface HistoryEntry {
   display: string;
   /** epoch ms */

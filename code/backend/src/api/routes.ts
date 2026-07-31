@@ -11,11 +11,12 @@ import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
+import { queryWorklog } from '../services/worklog.js';
 import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
-import type { SessionState } from '../types.js';
+import type { SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
@@ -79,6 +80,19 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     const q = c.req.query('q')?.trim() ?? '';
     if (!q) return c.json({ memories: [] });
     return c.json({ memories: await searchMemories(storage, q) });
+  });
+
+  /** 任务总结(wrapup 卡):只读扫 ~/.claude/worklog,支持窗口/项目/状态/关键词过滤 */
+  api.get('/worklog', async (c) => {
+    const status = c.req.query('status');
+    const cards = await queryWorklog({
+      start: num(c.req.query('start')),
+      end: num(c.req.query('end')),
+      project: c.req.query('project')?.trim() || undefined,
+      status: status && status !== 'all' ? (status as WorklogCard['status']) : undefined,
+      q: c.req.query('q')?.trim() || undefined,
+    });
+    return c.json({ cards });
   });
 
   api.get('/usage/today', async (c) => {
