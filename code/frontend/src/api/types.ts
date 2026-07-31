@@ -261,6 +261,8 @@ export interface WeeklyReview {
   range: { start: number; end: number; dayCount: number };
   totals: { prompts: number; sessions: number; projects: number; activeDays: number; costUsd: number };
   projects: ReviewProject[];
+  /** 本周任务总结(worklog 卡):周报草稿的主料,回顾页也直接展示 */
+  cards: WorklogCard[];
   caliber: Record<string, string>;
   computedAt: number;
 }

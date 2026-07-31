@@ -375,7 +375,7 @@ input, textarea { font: inherit; color: var(--ink); }
               <li>另有 2 个项目 9 个会话无总结覆盖(仅统计,未展开):lark-skills、ip-risk 例行维护。</li>
             </ul>
           </div>
-          <div class="draft-meta"><span>sonnet 生成</span><span>·</span><span id="draft-meta-tok">输入 ≈ 6.2k tok(旧流水方案 ≈ 48k)</span><span>·</span><span>生成于 08:12</span></div>
+          <div class="draft-meta"><span>sonnet 生成</span><span>·</span><span id="draft-meta-tok">物料:4 条总结 + 流水兜底</span><span>·</span><span>生成于 08:12</span></div>
         </div>
       </div>
     </section>
@@ -578,7 +578,7 @@ document.querySelectorAll('#demo-toggle button').forEach(b => b.addEventListener
   $('#draft-warn').style.display = cards ? 'none' : '';
   $('#strip-cards').textContent = cards ? '5' : '0';
   $('#draft-src').textContent = cards ? '物料:5 条总结 + 活动统计兜底' : '物料:原始流水(兜底路径)';
-  $('#draft-meta-tok').textContent = cards ? '输入 ≈ 6.2k tok(旧流水方案 ≈ 48k)' : '输入 ≈ 48k tok(全量流水)';
+  $('#draft-meta-tok').textContent = cards ? '物料:总结为主体 + 流水兜底' : '物料:全量流水(准确率较差)';
 }));
 
 renderWl(); renderRvCards();

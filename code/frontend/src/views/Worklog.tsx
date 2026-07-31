@@ -15,7 +15,8 @@ const STATUS: Record<WorklogCard['status'], { cls: string; label: string; dot: b
   unknown: { cls: 'pill-idle', label: '未标注', dot: false },
 };
 
-function StatusPill({ s }: { s: WorklogCard['status'] }) {
+/** 状态胶囊:回顾页的「本周总结」面板复用同一份,避免同一语义在两处长得不一样 */
+export function WorklogStatusPill({ s }: { s: WorklogCard['status'] }) {
   const m = STATUS[s];
   return (
     <span className={`pill ${m.cls}`} style={{ flex: 'none' }}>
@@ -118,7 +119,7 @@ export function Worklog({ onGoSession }: { onGoSession: (sessionId: string) => v
                   <span className="anchors">
                     {c.commits.length > 0 ? `${c.commits.length} commit` : '无 commit'}
                   </span>
-                  <StatusPill s={c.status} />
+                  <WorklogStatusPill s={c.status} />
                 </button>
               ))}
             </div>
@@ -134,7 +135,7 @@ export function Worklog({ onGoSession }: { onGoSession: (sessionId: string) => v
           sel && (
             <>
               <ProjChip name={sel.project} />
-              <StatusPill s={sel.status} />
+              <WorklogStatusPill s={sel.status} />
               <span className="mono">{sel.date}</span>
             </>
           )

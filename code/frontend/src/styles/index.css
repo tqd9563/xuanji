@@ -899,6 +899,18 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rv-prompts li { list-style: none; font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); padding: 2px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rv-prompts li.more { color: var(--faint); font-family: var(--sans); }
 
+/* 本周总结:回顾页里的周报物料预览,一行一条,详情下钻「总结」模块 */
+.rvwl-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem;
+  background: none; border-left: none; border-right: none; border-top: none;
+  cursor: pointer; transition: background 120ms var(--ease);
+}
+.rvwl-item:hover { background: var(--hover); }
+.rvwl-item:last-child { border-bottom: none; }
+.rvwl-item .d { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
+.rvwl-item .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+
 .draft-body { padding: 16px 20px; font-size: 0.8125rem; max-width: 68ch; }
 .draft-run { display: flex; align-items: center; gap: 10px; padding: 20px; font-size: 0.8125rem; color: var(--muted); }
 .draft-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 0.6875rem; color: var(--faint); padding: 10px 20px; border-top: 1px solid var(--line-soft); }
