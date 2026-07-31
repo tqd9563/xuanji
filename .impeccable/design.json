@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-16T18:00:00+08:00",
+  "generatedAt": "2026-07-31T13:40:00+08:00",
   "title": "Design System: 璇玑 xuanji",
   "extensions": {
     "colorMeta": {
@@ -510,6 +510,30 @@
       "description": "移动端技能启停开关(46×28px,伪元素扩触控区至 44px),开=玉色。",
       "html": "<button class=\"ds-switch\" role=\"switch\" aria-checked=\"true\"></button>",
       "css": ".ds-switch { position: relative; width: 46px; height: 28px; border: none; border-radius: 99px; background: oklch(0.27 0.010 120); cursor: pointer; padding: 0; transition: background 180ms cubic-bezier(0.22,1,0.36,1); } .ds-switch::before { content: \"\"; position: absolute; inset: -8px; } .ds-switch::after { content: \"\"; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: oklch(0.93 0.008 110); transition: transform 180ms cubic-bezier(0.22,1,0.36,1); } .ds-switch[aria-checked=\"true\"] { background: oklch(0.80 0.13 115); } .ds-switch[aria-checked=\"true\"]::after { transform: translateX(18px); background: oklch(0.18 0.02 120); }"
+    },
+    {
+      "name": "Wrapup Entry Button",
+      "kind": "button",
+      "refersTo": "wrapup-btn",
+      "description": "派发页 composer 底栏的「⚑ 任务总结」入口,带 ⌘⏎ 角标;玉色 tint 表主操作但不脉冲不发光,会话未开始时禁用。",
+      "html": "<button class=\"ds-wrapup-btn\"><span class=\"ds-wrapup-flag\">⚑</span>任务总结<span class=\"ds-wrapup-kbd\">⌘⏎</span></button>",
+      "css": ".ds-wrapup-btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 6px; border: 1px solid color-mix(in oklab, var(--jade) 40%, transparent); background: color-mix(in oklab, var(--jade) 13%, transparent); color: var(--jade); font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: background 150ms cubic-bezier(0.22,1,0.36,1), border-color 150ms cubic-bezier(0.22,1,0.36,1); } .ds-wrapup-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--jade) 22%, transparent); border-color: var(--jade); } .ds-wrapup-btn:active:not(:disabled) { transform: translateY(1px); } .ds-wrapup-btn:disabled { opacity: 0.45; cursor: not-allowed; } .ds-wrapup-btn:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; } .ds-wrapup-flag { font-size: 0.8125rem; line-height: 1; } .ds-wrapup-kbd { font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace; font-size: 0.625rem; opacity: 0.8; letter-spacing: 0.02em; }"
+    },
+    {
+      "name": "Residue Block",
+      "kind": "custom",
+      "refersTo": "residue-block",
+      "description": "任务总结详情抽屉顶部的「已知残留」琥珀块:唯一意味着还需要你回来处理的段落;写「无」的残留渲染前须过滤。",
+      "html": "<div class=\"ds-residue\"><div class=\"ds-residue-head\">已知残留 · 2 条</div><ul class=\"ds-residue-list\"><li>求值门只覆盖 genPrompt,其它模板串未纳入</li><li>门依赖 node,缺失时 skip</li></ul></div>",
+      "css": ".ds-residue { border: 1px solid color-mix(in oklab, var(--amber) 35%, transparent); background: color-mix(in oklab, var(--amber) 14%, transparent); border-radius: 6px; padding: 10px 14px; } .ds-residue-head { font-size: 0.6875rem; font-weight: 600; color: var(--amber); margin-bottom: 4px; } .ds-residue-list { margin: 0; padding-left: 18px; font-size: 0.8125rem; color: var(--muted); } .ds-residue-list li { margin: 3px 0; }"
+    },
+    {
+      "name": "Worklog List Row",
+      "kind": "custom",
+      "refersTo": "wl-item",
+      "description": "「总结」模块的列表行:项目芯片 + 任务主题(单行省略)+ commit 数 + 状态胶囊;回顾页「本周总结」是同一词汇的紧凑变体。",
+      "html": "<button class=\"ds-wl-item\"><span class=\"ds-wl-chip\">xuanji</span><span class=\"ds-wl-task\">会话卡片拖拽归档到「已完成」</span><span class=\"ds-wl-anchors\">1 commit</span><span class=\"ds-wl-pill\">已合并</span></button>",
+      "css": ".ds-wl-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 18px; border: none; border-bottom: 1px solid var(--line-soft); background: none; cursor: pointer; transition: background 120ms cubic-bezier(0.22,1,0.36,1); } .ds-wl-item:hover { background: var(--hover); } .ds-wl-chip { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.6875rem; font-weight: 500; border-radius: 4px; padding: 1.5px 8px; color: oklch(0.78 0.12 115); background: color-mix(in oklab, oklch(0.78 0.12 115) 16%, transparent); flex: none; } .ds-wl-task { font-size: 0.8125rem; color: var(--ink); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-wl-anchors { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.6875rem; color: var(--faint); flex: none; } .ds-wl-pill { font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; color: var(--green); background: color-mix(in oklab, var(--green) 14%, transparent); flex: none; }"
     }
   ],
   "narrative": {
@@ -578,7 +602,9 @@
       "Do 所有过渡 150–250ms、cubic-bezier(0.22,1,0.36,1) 缓出,只在状态变化时发生;提供 prefers-reduced-motion 瞬时降级。",
       "Do 可变长度文案一律限行截断,全文放下钻层或悬停提示。",
       "Do 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 --wall-* 参数用户可调、存 localStorage,永不写 ~/.claude;预设一律暗色低饱和以守夜间底线。",
-      "Do 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、safe-area 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。"
+      "Do 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、safe-area 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。",
+      "Do 渲染外部生成的 markdown(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 Md 组件;抽屉 .kv dd 里的长 URL/路径必须 overflow-wrap: anywhere。",
+      "Do 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——写着「无」的琥珀警示块把「不需要你」误报成「需要你」。"
     ],
     "donts": [
       "Don't 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效。",

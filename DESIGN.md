@@ -164,6 +164,18 @@ components:
     rounded: "{rounded.pill}"
     width: "46px"
     height: "28px"
+  wrapup-btn:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.sm}"
+    padding: "4px 12px"
+  wrapup-btn-hover:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 22%, transparent)"
+  residue-block:
+    backgroundColor: "color-mix(in oklab, {colors.amber} 14%, transparent)"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "10px 14px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -348,6 +360,15 @@ components:
 ### 定时任务列表(Signature Component)
 一次性与周期任务共用同一份折叠列表(`.cron-item`/`.cron-row`):行首状态胶囊覆盖全生命周期(待执行=蓝 `pill-scheduled`、运行中=玉脉冲、需审批/已错过=琥珀脉冲、已完成=绿、已熔断=红),行尾时钟(mono、tabular-nums)与相对时间(faint)。周期任务在折叠态额外插入**近 7 期状态点**(`.runline`,6px 圆点,绿/红/琥珀,左旧右新,悬停提示范围),不展开也能扫出好坏。展开后运行历史表(`.runs`)逐期一行,「结果会话」列直连只读回放抽屉——失败/审批中的任务在此看真实转录(工具调用、报错原文),而不是新开一个会话去问 Claude 发生了什么;source of truth 恒在 `~/.claude` 的 session jsonl。
 
+### 任务总结入口(Signature Component · composer 底栏的收口按钮)
+派发页输入框底栏左端的 `.wrapup-btn`(⚑ 任务总结 + mono 角标 `⌘⏎`):玉色 13% tint 底 + 40% 玉描边 + 玉字,与紧邻的 faint 灰字 hint 形成一眼可辨的层级差。它借用「导航 active / 主操作」那套玉色词汇,但**刻意不加脉冲、不加发光**——wrapup 是语义触发、禁止自动执行的动作,入口的价值在常驻可达,稀缺的玉色本身就是高亮(仍在一成玉规则内)。会话未开始时 45% 透明并禁用,提示语讲清为什么不可用而不是沉默。角标是「机器的话」用 mono 承载,不与按钮文字争字重;移动端无物理键盘,角标隐藏、命中区撑到 44px。
+
+### 已知残留块(`.residue`)
+任务总结详情抽屉顶部的琥珀块:14% 琥珀 tint 底 + 35% 琥珀描边,头部一行「已知残留 · N 条」。它是抽屉里唯一被提到锚点区之上的段落——一条总结的六段正文里,「已知残留」是唯一意味着**还需要你回来处理**的内容,与琥珀「它出现即意味着需要你」的语义完全对齐。卡片模板里写「无」是合法写法,渲染前必须过滤,否则会出现一个写着「无」的琥珀警示块——那是纯噪声。
+
+### 总结列表(`.wl-item` / `.rvwl-item`)
+「总结」模块按日期分组(mono 小字组头),行 = 项目芯片 + 任务主题(单行省略)+ commit 数(mono faint)+ 状态胶囊;状态色沿用既有语义,不新造词汇:已合并=绿 `pill-done`(彻底完事)、待合并=蓝 `pill-sched`(事实标注,无需立刻处理)、未解决=琥珀 `pill-blk` 带脉冲点(需要你回来处理)。回顾页的「本周总结」是同一词汇的紧凑变体(`.rvwl-item`,加日期列、去 commit 数),点击下钻到「总结」模块——**同一份详情不在两处各维护一套**,状态胶囊也直接复用同一个组件。
+
 ## 6. Do's and Don'ts
 
 ### Do:
@@ -359,6 +380,8 @@ components:
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
 - **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
 - **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
+- **Do** 渲染外部生成的 markdown 内容(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 `Md` 组件——这些文本里的 `**粗体**` 与反引号是作者的真实表达,当纯文本贴出来就是满屏字面量星号。同理,抽屉 `.kv dd` 里的长 URL / 路径必须 `overflow-wrap: anywhere`,否则顶破右边界。
+- **Do** 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——一个写着「无」的琥珀警示块比不显示更糟,它把「不需要你」误报成「需要你」。
 
 ### Don't:
 - **Don't** 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效——这是工作台,不是落地页(PRODUCT.md 反例原文)。
