@@ -98,3 +98,14 @@ export function fmtTokens(n: number): string {
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
   return String(n);
 }
+
+/**
+ * 「⚑ 任务总结」是否可用。判据是**有没有可收口的上下文**,不是「SDK 会话是否活着」——
+ * 后端重启后 attach 失败会把 started 清零,但从看板/`/resume` 续接进来的会话
+ * (resumeInfo 已就位、历史已装载)照样能收口:发送路径带 `resume: sessionId`,
+ * SDK 会恢复完整上下文,skill 拿得到真实转录。
+ * 曾经只看 started,导致「重启后续接一个有 37 条历史的会话」按钮是灰的(2026-07-31 修复)。
+ */
+export function canWrapup(started: boolean, hasResumeTarget: boolean): boolean {
+  return started || hasResumeTarget;
+}

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
@@ -437,8 +437,8 @@ export function Dispatch({ active }: { active: boolean }) {
   /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
   const wrapupRef = useRef<() => void>(() => {});
   wrapupRef.current = () => {
-    if (!d.started) {
-      toast('会话还没开始,先派发一个任务再收口');
+    if (!canWrapup(d.started, !!resumeInfo)) {
+      toast('这里还没有可收口的上下文,先派发或续接一个会话');
       return;
     }
     void submit(WRAPUP_PROMPT);
@@ -537,7 +537,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // skill 靠语义触发、SDK 没有原生 slash,所以拦下来换成一句固定触发语发出去——固定措辞保证命中率,
     // 也避免每次靠临场措辞碰运气。璇玑自己不写盘,出卡动作全在会话内由 skill 完成(架构铁律 2)。
     if (/^\/wrapup\b/.test(text)) {
-      if (!d.started) return toast('会话还没开始,先派发一个任务再收口');
+      if (!canWrapup(d.started, !!resumeInfo)) return toast('这里还没有可收口的上下文,先派发或续接一个会话');
       void submit(WRAPUP_PROMPT);
       return;
     }
@@ -790,11 +790,11 @@ export function Dispatch({ active }: { active: boolean }) {
             <button
               className="wrapup-btn"
               onClick={() => wrapupRef.current()}
-              disabled={!d.started}
+              disabled={!canWrapup(d.started, !!resumeInfo)}
               title={
-                d.started
+                canWrapup(d.started, !!resumeInfo)
                   ? '⌘⏎ · 把本会话刚完成的任务沉淀成一张收口卡,落到 ~/.claude/worklog/(等同输入 /wrapup);边界由 Claude 识别后与你确认'
-                  : '会话还没开始,先派发一个任务再收口'
+                  : '这里还没有可收口的上下文,先派发或续接一个会话'
               }
             >
               <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
