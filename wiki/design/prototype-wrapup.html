@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璇玑 · wrapup 总结集成(原型)</title>
+<style>
+/* ============ 璇玑设计 token(与根目录 DESIGN.md 同源,勿改值) ============ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --on-jade:   oklch(0.18 0.02 120);
+  --amber: oklch(0.78 0.14 80);
+  --blue:  oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
+  --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
+  --tool-skill: oklch(0.78 0.12 345);
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+  --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
+  --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
+  --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+  --tint-skill: color-mix(in oklab, var(--tool-skill) 13%, transparent);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --z-dropdown: 10; --z-backdrop: 30; --z-drawer: 40; --z-toast: 50;
+  --r-s: 6px; --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; background: var(--bg); }
+body { font-family: var(--sans); background: var(--bg); color: var(--ink); font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, textarea { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+
+/* ============ 骨架(与主原型同词汇) ============ */
+.app { display: grid; grid-template-columns: 226px 1fr; min-height: 100vh; }
+.sidebar { background: var(--surface-2); border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 20px 20px 18px; }
+.brand .zh { font-size: 1.25rem; font-weight: 700; letter-spacing: 0.06em; color: var(--jade); line-height: 1; }
+.brand-meta { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+.nav { display: flex; flex-direction: column; gap: 2px; padding: 0 10px; }
+.nav button { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: var(--r-s); color: var(--muted); text-align: left; font-size: 0.875rem; transition: background 150ms var(--ease), color 150ms var(--ease); }
+.nav button:hover { background: var(--hover); color: var(--ink); }
+.nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+.nav svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.nav .count { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); background: var(--tint-muted); border-radius: 99px; padding: 0 7px; }
+.nav button.active .count { color: var(--jade); background: transparent; }
+.nav .dim-note { font-size: 0.6875rem; color: var(--faint); padding: 10px 12px 4px; }
+.side-foot { margin-top: auto; padding: 14px 20px 18px; border-top: 1px solid var(--line-soft); font-size: 0.75rem; color: var(--muted); }
+.side-foot .proto { color: var(--faint); }
+.main { min-width: 0; padding: 24px clamp(32px, 3.5vw, 80px) 48px; }
+.view { display: none; }
+.view.active { display: block; animation: view-in 200ms var(--ease); }
+@keyframes view-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+.view-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.view-head h1 { font-size: 1.25rem; }
+.view-head .sub { color: var(--muted); font-size: 0.8125rem; }
+.view-head .spacer { flex: 1; }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: var(--r-s); border: 1px solid var(--line); background: var(--surface); font-size: 0.8125rem; color: var(--ink); transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.btn:hover { background: var(--hover); border-color: var(--muted); }
+.btn:active { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn-primary { background: var(--jade); border-color: var(--jade); color: var(--on-jade); font-weight: 600; }
+.btn-primary:hover { background: var(--jade-dim); border-color: var(--jade-dim); }
+.btn-sm { padding: 3px 10px; font-size: 0.75rem; }
+.input { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem; transition: border-color 150ms var(--ease); }
+.input:hover { border-color: var(--muted); }
+.input:focus { outline: none; border-color: var(--jade); }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; white-space: nowrap; }
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.pill-run  { color: var(--jade);  background: var(--tint-jade); }
+.pill-blk  { color: var(--amber); background: var(--tint-amber); }
+.pill-done { color: var(--green); background: var(--tint-green); }
+.pill-sched{ color: var(--blue);  background: var(--tint-blue); }
+.pill-run .dot, .pill-blk .dot { animation: pulse 2s var(--ease) infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 0.6875rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.mono { font-family: var(--mono); font-size: 0.8em; }
+.proj-chip { font-family: var(--mono); font-size: 0.6875rem; font-weight: 500; border-radius: 4px; padding: 1.5px 8px; flex: none; }
+
+.panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+.panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+.panel-head h2 { font-size: 0.875rem; }
+.panel-head .sub { font-size: 0.75rem; color: var(--muted); }
+.panel-head .spacer { flex: 1; }
+.notice { display: flex; align-items: center; gap: 10px; font-size: 0.75rem; color: var(--muted); padding: 8px 14px; border: 1px solid var(--line-soft); border-radius: var(--r-s); background: var(--surface-2); margin-bottom: 16px; }
+.notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
+.notice-amber { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--amber); background: var(--tint-amber); border-radius: var(--r-s); padding: 7px 12px; margin-bottom: 12px; }
+.filter-tabs { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.filter-tabs button { padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+.filter-tabs button:hover { color: var(--ink); }
+.filter-tabs button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+.empty { text-align: center; padding: 48px 24px; color: var(--muted); }
+.empty .glyph { font-size: 1.5rem; margin-bottom: 8px; color: var(--faint); }
+.empty p { font-size: 0.8125rem; max-width: 34em; margin: 0 auto 4px; }
+
+/* 抽屉 */
+.backdrop { position: fixed; inset: 0; background: oklch(0.05 0 0 / 0.55); opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease); z-index: var(--z-backdrop); }
+.backdrop.show { opacity: 1; pointer-events: auto; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 94vw); background: var(--surface-2); border-left: 1px solid var(--line); box-shadow: -12px 0 32px oklch(0.05 0 0 / 0.45); transform: translateX(102%); transition: transform 240ms var(--ease); z-index: var(--z-drawer); display: flex; flex-direction: column; }
+.drawer.show { transform: none; }
+.drawer-head { padding: 18px 24px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: flex-start; gap: 12px; }
+.drawer-head h2 { font-size: 1rem; }
+.drawer-head .meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.drawer-body { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.drawer-foot { padding: 14px 24px; border-top: 1px solid var(--line-soft); display: flex; gap: 10px; align-items: center; font-size: 0.75rem; color: var(--faint); }
+.x-btn { margin-left: auto; color: var(--muted); padding: 4px 8px; border-radius: var(--r-s); flex: none; }
+.x-btn:hover { background: var(--hover); color: var(--ink); }
+.kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
+.kv dt { color: var(--muted); }
+.kv dd { min-width: 0; overflow-wrap: anywhere; }
+.kv dd a { color: var(--blue); text-decoration: none; }
+.kv dd a:hover { text-decoration: underline; }
+
+/* toast */
+.toast { position: fixed; bottom: 24px; left: 50%; transform: translate(-50%, 80px); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 10px 20px; font-size: 0.8125rem; z-index: var(--z-toast); transition: transform 240ms var(--ease), opacity 240ms var(--ease); opacity: 0; box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.4); }
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+
+/* ============ ① 派发页 ============ */
+.dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
+.chat { flex: 1; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+.chat-msg { margin-bottom: 20px; }
+.chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.chat-msg.user .who { color: var(--jade); }
+.chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+.chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; overflow-wrap: anywhere; }
+.chat-msg.user .body { background: var(--tint-jade); border-radius: var(--r-m); padding: 10px 14px; display: inline-block; }
+.toolcard { border: 1px solid var(--line-soft); border-radius: var(--r-s); background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch; }
+.toolcard .tc-head { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); }
+.toolcard .tc-head .fn { color: var(--tool-skill); }
+.typing { display: inline-flex; gap: 4px; padding: 4px 0; }
+.typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: 0.2s; }
+.typing i:nth-child(3) { animation-delay: 0.4s; }
+.chat-status { display: flex; align-items: center; gap: 14px; padding: 8px 6px 0; font-size: 0.6875rem; color: var(--muted); }
+.u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+.u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
+.u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
+.cs-state { display: flex; align-items: center; gap: 7px; white-space: nowrap; margin-left: auto; }
+.cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; }
+.cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
+.composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
+.composer:focus-within { border-color: var(--jade); }
+.composer textarea { width: 100%; background: none; border: none; resize: none; padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5; }
+.composer textarea:focus { outline: none; }
+.composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 10px; }
+.composer .hint { font-size: 0.6875rem; color: var(--faint); }
+.composer .spacer { flex: 1; }
+
+/* ★ 新增:任务总结按钮 —— composer 底栏左端的高亮入口。
+   玉色 tint 底 + 玉字(与导航 active 同一「当前/主操作」词汇),区别于灰字 hint 一眼可辨;
+   悬停加深 tint,禁用态 45% 透明。不做脉冲/发光:wrapup 禁止自动触发,入口常驻即可,
+   「高亮」靠稀缺的玉色本身(一成玉规则内)。 */
+.wrapup-btn { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--r-s); border: 1px solid color-mix(in oklab, var(--jade) 40%, transparent); background: var(--tint-jade); color: var(--jade); font-size: 0.75rem; font-weight: 600; transition: background 150ms var(--ease), border-color 150ms var(--ease); }
+.wrapup-btn:hover { background: color-mix(in oklab, var(--jade) 22%, transparent); border-color: var(--jade); }
+.wrapup-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.wrapup-btn .flag { font-size: 0.8125rem; line-height: 1; }
+/* 键位角标:mono 小字承担「机器的话」,不与按钮文字争字重;按下时随按钮整体反馈 */
+.wrapup-btn .kbd { font-family: var(--mono); font-size: 0.625rem; color: color-mix(in oklab, var(--jade) 78%, var(--ink)); opacity: 0.85; letter-spacing: 0.02em; }
+.term-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 7px 6px 0; font-size: 0.75rem; color: var(--muted); }
+.term-line .cwd { font-family: var(--mono); color: var(--blue); }
+.term-line .branch { font-family: var(--mono); color: var(--jade); }
+.term-line .model { font-family: var(--mono); color: var(--violet); margin-left: auto; }
+
+/* ============ ② 总结模块 ============ */
+.wl-group { margin-bottom: 4px; }
+.wl-group > h2 { font-size: 0.75rem; color: var(--faint); font-weight: 600; font-family: var(--mono); padding: 12px 18px 4px; }
+.wl-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); cursor: pointer; transition: background 120ms var(--ease); }
+.wl-item:hover { background: var(--hover); }
+.wl-group .wl-item:last-child { border-bottom: none; }
+.wl-item .task { font-size: 0.8125rem; color: var(--ink); font-weight: 600; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-item .anchors { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; white-space: nowrap; }
+.wl-sep { border-top: 1px solid var(--line-soft); }
+.residue { border: 1px solid color-mix(in oklab, var(--amber) 35%, transparent); background: var(--tint-amber); border-radius: var(--r-s); padding: 10px 14px; margin: 8px 0 16px; }
+.residue .r-head { font-size: 0.6875rem; font-weight: 600; color: var(--amber); margin-bottom: 4px; }
+.wl-body { font-size: 0.8125rem; max-width: 68ch; }
+.wl-body h3 { font-size: 0.8125rem; color: var(--ink); margin: 16px 0 6px; }
+.wl-body h3:first-child { margin-top: 0; }
+.wl-body p, .wl-body li { color: var(--muted); text-wrap: pretty; margin-bottom: 6px; }
+.wl-body ul { padding-left: 18px; }
+.wl-body b { color: var(--ink); font-weight: 600; }
+.wl-body .file { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); }
+
+/* ============ ③ 回顾 ============ */
+.week-nav { display: flex; align-items: center; gap: 4px; }
+.week-nav .range { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); font-variant-numeric: tabular-nums; padding: 0 6px; }
+.week-nav .wk-btn { padding: 3px 8px; border-radius: var(--r-s); color: var(--muted); }
+.week-nav .wk-btn:hover { background: var(--hover); color: var(--ink); }
+.week-nav .wk-btn:disabled { opacity: 0.35; cursor: default; background: none; }
+.dash-strip { display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 18px; font-size: 0.8125rem; color: var(--muted); margin-bottom: 16px; }
+.dash-strip b { color: var(--ink); font-weight: 600; }
+.rv-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 1100px) { .rv-grid { grid-template-columns: 1fr; } }
+/* 本周总结:紧凑行(回顾页内的物料预览,详情跳总结模块) */
+.rvwl-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 9px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; cursor: pointer; transition: background 120ms var(--ease); }
+.rvwl-item:hover { background: var(--hover); }
+.rvwl-item:last-child { border-bottom: none; }
+.rvwl-item .d { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
+.rvwl-item .t { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.rvwl-foot { padding: 10px 18px; font-size: 0.75rem; color: var(--faint); }
+.rvwl-foot button { color: var(--blue); }
+.rvwl-foot button:hover { text-decoration: underline; }
+.draft-body { padding: 16px 20px; font-size: 0.8125rem; max-width: 68ch; }
+.draft-body h3 { font-size: 0.875rem; margin: 14px 0 6px; color: var(--ink); }
+.draft-body h3:first-child { margin-top: 0; }
+.draft-body ul { padding-left: 18px; }
+.draft-body li { margin-bottom: 5px; color: var(--muted); text-wrap: pretty; }
+.draft-body li b { color: var(--ink); font-weight: 600; }
+.draft-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 0.6875rem; color: var(--faint); padding: 10px 20px; border-top: 1px solid var(--line-soft); }
+/* 数据源切换(原型演示用:对比「有卡」与「零卡兜底」两态) */
+.demo-toggle { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div>
+        <div class="zh">璇玑</div>
+        <div class="brand-meta">wrapup 集成 · 原型</div>
+      </div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-v="dispatch" class="active"><svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>派发<span class="tag" style="margin-left:auto">改①</span></button>
+      <button data-v="worklog"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg>总结<span class="count">5</span></button>
+      <button data-v="review"><svg viewBox="0 0 24 24"><path d="M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12"/></svg>回顾<span class="tag" style="margin-left:auto">改②</span></button>
+      <div class="dim-note">其余视图不在本次改动范围,略。「总结」为新增模块(改③),侧栏计数 = 本周卡数。</div>
+    </nav>
+    <div class="side-foot">
+      <div class="proto">原型 · mock 数据取自 ~/.claude/worklog 真实卡片格式</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ====== ① 派发:任务总结入口 ====== -->
+    <section class="view active" id="view-dispatch">
+      <div class="view-head">
+        <h1>派发</h1>
+        <span class="sub">改动①:composer 底栏新增「任务总结」高亮入口</span>
+        <span class="spacer"></span>
+        <button class="btn">新会话</button>
+      </div>
+      <div class="dispatch">
+        <div class="chat" id="chat">
+          <div class="chat-msg user"><div class="who">你</div><div class="body">修一下思考卡收起后聊天区不再自动滚底的问题</div></div>
+          <div class="chat-msg"><div class="who">CLAUDE</div><div class="body">已定位并修复:收起思考卡时高度变化未触发滚动补偿……修复已通过 vitest 与 tsc,详见 commit <span class="mono">c698a08</span>。可以验收了。</div></div>
+        </div>
+        <div class="chat-status">
+          <span class="u-chip">Context <span class="u-bar"><i style="width:32%"></i></span><b>32%</b></span>
+          <span class="u-chip">Usage <span class="u-bar"><i style="width:41%"></i></span><b>41%</b></span>
+          <span class="cs-state" id="agent-status"><span class="cs-dot"></span><span id="agent-status-t">空闲</span></span>
+        </div>
+        <div class="composer">
+          <textarea id="composer-input" rows="2" placeholder="描述要派发的任务…"></textarea>
+          <div class="c-bar">
+            <button class="wrapup-btn" id="wrapup-btn" title="⌘⏎ · 向当前会话发送 wrapup 触发语,把刚完成的任务沉淀成一条总结(等价输入 /wrapup);任务边界由 Claude 识别后与你确认">
+              <span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span>
+            </button>
+            <span class="hint">Enter 发送 · Shift+Enter 换行 · <span class="mono">/wrapup</span> 同效</span>
+            <span class="spacer"></span>
+            <button class="btn btn-primary">发送</button>
+          </div>
+        </div>
+        <div class="term-line">
+          <span class="cwd">~/xuanji</span>
+          <span class="branch">⎇ fix/thinking-collapse-scroll</span>
+          <span class="model">fable-5</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ====== ③ 总结模块 ====== -->
+    <section class="view" id="view-worklog">
+      <div class="view-head">
+        <h1>总结</h1>
+        <span class="sub" id="wl-count"></span>
+        <span class="spacer"></span>
+        <div class="filter-tabs" id="wl-tabs">
+          <button class="active" data-f="all">全部</button>
+          <button data-f="merged">已合并</button>
+          <button data-f="pending-merge">待合并</button>
+          <button data-f="unresolved">未解决</button>
+        </div>
+        <input class="input" type="search" id="wl-search" placeholder="搜索结论 / 排除项 / 残留…" style="width:220px">
+      </div>
+      <div class="notice"><span class="ok"></span>只读扫描 <span class="mono">~/.claude/worklog/</span> · 由派发会话内的 wrapup skill 生成,璇玑不写入 · 点条目看结论 / 排除项 / 残留与锚点</div>
+      <div class="panel" id="wl-list"></div>
+      <div class="empty" id="wl-empty" style="display:none">
+        <div class="glyph">◌</div>
+        <p>没有匹配的总结。</p>
+        <p style="color:var(--faint)">任务验收后在派发页点「⚑ 任务总结」即可沉淀一张。</p>
+      </div>
+    </section>
+
+    <!-- ====== ② 回顾:周报数据源改造 ====== -->
+    <section class="view" id="view-review">
+      <div class="view-head">
+        <h1>回顾</h1>
+        <div class="week-nav">
+          <button class="wk-btn">‹</button>
+          <span class="range">7/27 – 8/2</span>
+          <button class="wk-btn" disabled>›</button>
+        </div>
+        <span class="pill pill-run"><span class="dot"></span>本周</span>
+        <span class="spacer"></span>
+        <div class="filter-tabs demo-toggle" id="demo-toggle" title="原型演示:切换有卡 / 零卡兜底两种状态">
+          <button class="active" data-d="cards">有总结</button>
+          <button data-d="fallback">零卡兜底</button>
+        </div>
+        <button class="btn btn-primary">✦ 生成周报草稿</button>
+      </div>
+
+      <div class="panel dash-strip">
+        <span>prompt <b>187</b> 条</span>
+        <span>会话 <b>28</b> 个</span>
+        <span>项目 <b>6</b> 个</span>
+        <span>总结 <b id="strip-cards">5</b> 张</span>
+        <span>成本 <b>$291.40</b></span>
+      </div>
+
+      <div class="rv-grid">
+        <div>
+          <div class="panel" style="margin-bottom:16px">
+            <div class="panel-head">
+              <h2>本周总结</h2>
+              <span class="sub">周报的第一物料 · 详情见「总结」模块</span>
+            </div>
+            <div id="rv-cards"></div>
+            <div class="rvwl-foot" id="rv-cards-foot"><button onclick="go('worklog')">在总结模块查看全部 ›</button></div>
+            <div class="empty" id="rv-cards-empty" style="display:none;padding:28px 24px">
+              <div class="glyph">⚑</div>
+              <p>本周还没有总结。</p>
+              <p style="color:var(--faint)">任务验收后在派发页点「⚑ 任务总结」,周报会更准、更省。</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2 style="white-space:nowrap">周报草稿</h2>
+            <span class="sub" id="draft-src">物料:5 条总结 + 活动统计兜底</span>
+          </div>
+          <div id="draft-warn" style="display:none;margin:12px 18px 0"><div class="notice-amber" style="margin-bottom:0">本周暂无总结,本次草稿将退回原始流水扫描生成 —— 准确率与 token 消耗都较差,建议先做任务总结再生成。</div></div>
+          <div class="draft-body" id="draft-body">
+            <h3>本周进展</h3>
+            <ul>
+              <li><b>璇玑</b>:/clear 清空上下文另起会话、会话卡拖拽归档、思考卡收起滚底修复,三项均已合并(源:3 条总结)。</li>
+              <li><b>antifraud_skills</b>:workflow prompt 裸反引号致 genPrompt 返回 NaN 已修复并加求值门(已合并);legacy evidence 完整性核查仍有 2 处残留未解决。</li>
+              <li><b>baize</b>:insight 上报契约改造完成,待合并回 main。</li>
+            </ul>
+            <h3>遗留与下周</h3>
+            <ul>
+              <li>求值门未覆盖 judge prompt 模板串;legacy evidence 残留项跟进。</li>
+            </ul>
+            <h3>其余活动</h3>
+            <ul>
+              <li>另有 2 个项目 9 个会话无总结覆盖(仅统计,未展开):lark-skills、ip-risk 例行维护。</li>
+            </ul>
+          </div>
+          <div class="draft-meta"><span>sonnet 生成</span><span>·</span><span id="draft-meta-tok">输入 ≈ 6.2k tok(旧流水方案 ≈ 48k)</span><span>·</span><span>生成于 08:12</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- 总结详情抽屉 -->
+<div class="backdrop" id="backdrop"></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="drawer-head">
+    <div style="min-width:0;flex:1">
+      <h2 id="dw-title"></h2>
+      <div class="meta" id="dw-meta"></div>
+    </div>
+    <button class="x-btn" onclick="closeDrawer()" aria-label="关闭">✕</button>
+  </div>
+  <div class="drawer-body" id="dw-body"></div>
+  <div class="drawer-foot"><span id="dw-file" class="mono"></span></div>
+</aside>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- mock:总结(格式 1:1 对齐 ~/.claude/worklog 真实卡) ---------- */
+const PROJ_HUE = { xuanji: 115, antifraud_skills: 245, baize: 300 };
+const STATUS = {
+  'merged':        { label: '已合并', cls: 'pill-done' },
+  'pending-merge': { label: '待合并', cls: 'pill-sched' },
+  'unresolved':    { label: '未解决', cls: 'pill-blk' },
+};
+const CARDS = [
+  { name: '2026-07-31-antifraud-skills-workflow-nan-prompt', date: '2026-07-31', project: 'antifraud_skills',
+    task: 'workflow prompt 裸反引号致 genPrompt 返回 NaN,sub-agent 空跑一次真实回放',
+    branch: 'feature/legacy-evidence-completeness', commits: ['f653895'], mr: 'gitlab …/merge_requests/337',
+    session: 'dc7357c9', covers: '2026-07-31T15:00Z', status: 'merged',
+    problem: '一次真实回放(约 $2)产出的 narrative 是「未收到有效任务输入」,sub-agent 收到的 prompt 是字面量 "NaN"。',
+    conclusion: 'reporter_eval.workflow.js 的 prompt 正文里写了裸反引号,整段是 JS 模板字符串,反引号提前闭合、剩余 ** 被解析成幂运算 → NaN。已改中文引号并新增 node 求值门反向验证。',
+    excluded: ['不是 workflow.js 在 main 上有变动:git diff 无输出', '不是 headless CLI 侧问题:.headless-raw.json is_error:false', '不是 manifest/args 传递问题:两者均正常'],
+    residue: ['求值门只覆盖 genPrompt,judge prompt 等其它模板串未纳入', '求值门依赖 node,node 缺失时 skip'],
+    files: ['baize/evals/reporter_eval.workflow.js — 措辞改中文引号', 'baize/evals/test_workflow_syntax.py — 新增 test_gen_prompt_returns_string'] },
+  { name: '2026-07-30-xuanji-clear-command', date: '2026-07-30', project: 'xuanji',
+    task: '/clear 清空上下文另起会话',
+    branch: 'feature/clear-command', commits: ['2754bbe', 'da6e5f3'], mr: null,
+    session: '8f21ac04', covers: '2026-07-30T12:40Z', status: 'merged',
+    problem: '长会话上下文膨胀后没有低成本的「换脑不换窗」方式,只能新开窗口丢失 cwd/model 设定。',
+    conclusion: '前端 submit() 拦截 /clear,后端结束旧 SDK 会话并以同配置新起一个,窗口内 session id 无缝切换。',
+    excluded: ['不走 SDK 原生 compact:语义是「另起」不是「压缩」'],
+    residue: ['无'],
+    files: ['code/frontend/src/views/Dispatch.tsx — /clear 拦截', 'code/backend/src/services/dispatch.ts — 会话重建'] },
+  { name: '2026-07-30-xuanji-session-card-drag', date: '2026-07-30', project: 'xuanji',
+    task: '会话卡片拖拽归档到「已完成」',
+    branch: 'feature/session-card-drag', commits: ['c698a08'], mr: null,
+    session: '5b77e1d2', covers: '2026-07-30T09:10Z', status: 'merged',
+    problem: '看板上处理完的会话要点开菜单才能归档,高频动作路径太长。',
+    conclusion: 'HTML5 DnD 把卡拖入「已完成」列即归档,列头高亮承接;触屏端保留原菜单路径。',
+    excluded: ['不引入 dnd-kit:原生 DnD 足够,少 12kb 依赖'],
+    residue: ['Safari 拖拽 ghost 图像偏移,视觉小瑕疵未修'],
+    files: ['code/frontend/src/views/Sessions.tsx — DnD 逻辑'] },
+  { name: '2026-07-29-baize-insight-contract', date: '2026-07-29', project: 'baize',
+    task: 'insight 上报契约 insight-1.0 改造',
+    branch: 'feature/insight-contract', commits: ['91acd02', '0be773a'], mr: 'gitlab …/merge_requests/341',
+    session: '3d09ffa1', covers: '2026-07-29T18:22Z', status: 'pending-merge',
+    problem: '洞察卡字段散乱,Web 端渲染要逐版本兼容。',
+    conclusion: '固化 insight-1.0 envelope,新旧字段双写一个版本后切换。',
+    excluded: ['不做 protobuf:JSON 契约 + schema 校验已够'],
+    residue: ['旧字段下线时间未定,需与 Web 端约定'],
+    files: ['baize/insight/contract.py — envelope 定义'] },
+  { name: '2026-07-28-antifraud-skills-legacy-evidence', date: '2026-07-28', project: 'antifraud_skills',
+    task: 'legacy evidence 完整性核查:三处历史证据链断裂定位',
+    branch: 'feature/legacy-evidence-completeness', commits: [], mr: null,
+    session: 'a41c9e77', covers: '2026-07-28T20:05Z', status: 'unresolved',
+    problem: '历史封禁记录抽查发现 3 例 evidence 字段为空,无法回答申诉。',
+    conclusion: '断裂发生在 2025-11 的 schema 迁移窗口,迁移脚本对 NULL evidence 静默跳过;可从冷备回填,方案已验证 1 例。',
+    excluded: ['不是采集端丢数:kafka offset 连续', '不是 TTL 清理:同批次其它字段完好'],
+    residue: ['其余 2 例回填未执行,等冷备恢复窗口', '迁移脚本静默跳过的告警缺口未补'],
+    files: ['(排障任务,无 commit;结论全在本卡)'] },
+];
+
+/* ---------- 通用 ---------- */
+const $ = s => document.querySelector(s);
+function chip(p) {
+  const h = PROJ_HUE[p] ?? 195;
+  return `<span class="proj-chip" style="color:oklch(0.78 0.12 ${h});background:color-mix(in oklab, oklch(0.78 0.12 ${h}) 16%, transparent)">${p}</span>`;
+}
+function pill(s) { const m = STATUS[s]; return `<span class="pill ${m.cls}">${s==='unresolved' ? '<span class="dot"></span>' : ''}${m.label}</span>`; }
+function go(v) {
+  document.querySelectorAll('.nav button[data-v]').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('active'));
+  $('#view-' + v).classList.add('active');
+}
+document.querySelectorAll('.nav button[data-v]').forEach(b => b.addEventListener('click', () => go(b.dataset.v)));
+function toast(msg) { const t = $('#toast'); t.innerHTML = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 3200); }
+
+/* ---------- ① 派发:任务总结 ---------- */
+function fireWrapup() {
+  const chat = $('#chat');
+  chat.insertAdjacentHTML('beforeend',
+    `<div class="chat-msg user"><div class="who">你</div><div class="body">执行 wrapup skill,把本会话刚完成的任务总结成一条记录;任务边界你先识别再向我确认</div></div>
+     <div class="chat-msg" id="wl-flow"><div class="who">CLAUDE</div>
+       <div class="toolcard"><div class="tc-head"><span class="fn">Skill</span><span>wrapup</span></div></div>
+       <div class="body"><span class="typing"><i></i><i></i><i></i></span></div></div>`);
+  chat.scrollTop = chat.scrollHeight;
+  $('#agent-status').classList.add('think'); $('#agent-status-t').textContent = '工作中';
+  setTimeout(() => {
+    $('#wl-flow .body').innerHTML = '识别到 1 个已完成任务:<b>思考卡收起后保持自动滚底</b>(commit <span class="mono">c698a08</span>,已验收)。已生成总结:<span class="mono">2026-07-31-xuanji-thinking-collapse-scroll.md</span>,含结论、1 条排除项、无残留。要顺带沉淀一条 memory 吗?';
+    $('#agent-status').classList.remove('think'); $('#agent-status-t').textContent = '空闲';
+    chat.scrollTop = chat.scrollHeight;
+    toast('⚑ 已生成总结:<span class="mono">2026-07-31-xuanji-thinking-collapse-scroll</span> · 侧栏「总结」+1');
+  }, 2200);
+}
+$('#wrapup-btn').addEventListener('click', fireWrapup);
+
+/* ⌘⏎ 触发任务总结(派发页内,含输入框聚焦时)。
+   注意:实现层必须同时给发送分支补上 !e.metaKey —— 现状 Dispatch.tsx 的
+   `e.key === 'Enter' && !e.shiftKey` 没排除 metaKey,⌘⏎ 今天等同发送,
+   不改会一次按键同时发送 + 触发总结。改后裸 Enter 仍是发送,行为无损。 */
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  if (!$('#view-dispatch').classList.contains('active')) return;
+  if (e.isComposing) return;   // 中文输入法候选窗内的回车不劫持
+  e.preventDefault();
+  fireWrapup();
+});
+
+/* ---------- ③ 总结列表 ---------- */
+let wlFilter = 'all', wlQ = '';
+function renderWl() {
+  const list = CARDS.filter(c =>
+    (wlFilter === 'all' || c.status === wlFilter) &&
+    (!wlQ || (c.task + c.conclusion + c.excluded.join('') + c.residue.join('') + c.project).toLowerCase().includes(wlQ)));
+  $('#wl-count').textContent = `${list.length} 张 · 本周 5 张 · 全部 12 张`;
+  const byDate = {};
+  list.forEach(c => (byDate[c.date] ??= []).push(c));
+  $('#wl-list').innerHTML = Object.keys(byDate).sort().reverse().map(d => `
+    <div class="wl-group">
+      <h2>${d}</h2>
+      ${byDate[d].map(c => `
+        <button class="wl-item" onclick="openCard('${c.name}')">
+          ${chip(c.project)}
+          <span class="task">${c.task}</span>
+          <span class="anchors">${c.commits.length ? c.commits.length + ' commit' : '无 commit'}</span>
+          ${pill(c.status)}
+        </button>`).join('')}
+    </div>`).join('<div class="wl-sep"></div>');
+  $('#wl-list').style.display = list.length ? '' : 'none';
+  $('#wl-empty').style.display = list.length ? 'none' : '';
+}
+document.querySelectorAll('#wl-tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#wl-tabs button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active'); wlFilter = b.dataset.f; renderWl();
+}));
+$('#wl-search').addEventListener('input', e => { wlQ = e.target.value.trim().toLowerCase(); renderWl(); });
+
+/* 详情抽屉 */
+function openCard(name) {
+  const c = CARDS.find(x => x.name === name);
+  $('#dw-title').textContent = c.task;
+  $('#dw-meta').innerHTML = `${chip(c.project)} ${pill(c.status)} <span class="mono">${c.date}</span>`;
+  const residue = c.residue.filter(r => r !== '无');
+  $('#dw-body').innerHTML = `
+    <dl class="kv">
+      <dt>分支</dt><dd class="mono">${c.branch}</dd>
+      <dt>commits</dt><dd class="mono">${c.commits.length ? c.commits.join(' · ') : '—(排障任务)'}</dd>
+      ${c.mr ? `<dt>MR</dt><dd><a href="#" onclick="return false">${c.mr}</a></dd>` : ''}
+      <dt>会话</dt><dd><a href="#" class="mono" onclick="return false" title="跳转只读回放">${c.session}…</a></dd>
+      <dt>覆盖至</dt><dd class="mono">${c.covers}</dd>
+    </dl>
+    ${residue.length ? `<div class="residue"><div class="r-head">已知残留 · ${residue.length} 条</div><div class="wl-body"><ul>${residue.map(r => `<li>${r}</li>`).join('')}</ul></div></div>` : ''}
+    <div class="wl-body">
+      <h3>问题</h3><p>${c.problem}</p>
+      <h3>结论</h3><p>${c.conclusion}</p>
+      <h3>排除项</h3><ul>${c.excluded.map(x => `<li>${x}</li>`).join('')}</ul>
+      ${residue.length === 0 ? '<h3>已知残留</h3><p>无</p>' : ''}
+      <h3>涉及文件</h3><ul>${c.files.map(f => `<li class="file">${f}</li>`).join('')}</ul>
+    </div>`;
+  $('#dw-file').textContent = `~/.claude/worklog/${c.date.slice(0,4)}/${c.date.slice(5,7)}/${c.name}.md · 只读`;
+  $('#backdrop').classList.add('show'); $('#drawer').classList.add('show');
+}
+function closeDrawer() { $('#backdrop').classList.remove('show'); $('#drawer').classList.remove('show'); }
+$('#backdrop').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+/* ---------- ② 回顾:本周总结 + 两态演示 ---------- */
+function renderRvCards() {
+  $('#rv-cards').innerHTML = CARDS.map(c => `
+    <button class="rvwl-item" onclick="openCard('${c.name}')">
+      <span class="d">${c.date.slice(5).replace('-', '/')}</span>
+      ${chip(c.project)}
+      <span class="t">${c.task}</span>
+      ${pill(c.status)}
+    </button>`).join('');
+}
+document.querySelectorAll('#demo-toggle button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#demo-toggle button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  const cards = b.dataset.d === 'cards';
+  $('#rv-cards').style.display = cards ? '' : 'none';
+  $('#rv-cards-foot').style.display = cards ? '' : 'none';
+  $('#rv-cards-empty').style.display = cards ? 'none' : '';
+  $('#draft-warn').style.display = cards ? 'none' : '';
+  $('#strip-cards').textContent = cards ? '5' : '0';
+  $('#draft-src').textContent = cards ? '物料:5 条总结 + 活动统计兜底' : '物料:原始流水(兜底路径)';
+  $('#draft-meta-tok').textContent = cards ? '输入 ≈ 6.2k tok(旧流水方案 ≈ 48k)' : '输入 ≈ 48k tok(全量流水)';
+}));
+
+renderWl(); renderRvCards();
+/* hash 直达视图(#worklog / #review),便于分享与截图 */
+const h = location.hash.slice(1);
+if (['dispatch','worklog','review'].includes(h)) go(h);
+</script>
+</body>
+</html>
