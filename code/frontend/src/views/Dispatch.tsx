@@ -173,6 +173,11 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
+/** ⚑ 任务总结的固定触发语。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
+ *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
+const WRAPUP_PROMPT =
+  '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
+
 /** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
 const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
 /** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
@@ -429,8 +434,18 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
-  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车(见 submit() 同名分支),
-  // 直接开对应弹窗而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
+  /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
+  const wrapupRef = useRef<() => void>(() => {});
+  wrapupRef.current = () => {
+    if (!d.started) {
+      toast('会话还没开始,先派发一个任务再收口');
+      return;
+    }
+    void submit(WRAPUP_PROMPT);
+  };
+
+  // ⌘M 切换模型 / ⌘D 切换工作目录 / ⌘⏎ 任务总结:仅派发页生效,等同于在输入框敲 /model、/wd、/wrapup 回车
+  // (见 submit() 同名分支),直接执行而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -445,6 +460,10 @@ export function Dispatch({ active }: { active: boolean }) {
         taRef.current?.blur();
         setWdQuery('');
         setWdPalette(true);
+      } else if (e.key === 'Enter' && !e.isComposing) {
+        // isComposing:中文输入法候选窗里的回车不劫持(否则选词就变成发总结)
+        e.preventDefault();
+        wrapupRef.current();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -489,12 +508,15 @@ export function Dispatch({ active }: { active: boolean }) {
     ta.setSelectionRange(pos, pos);
   };
 
-  const submit = async () => {
+  /** override:不经输入框直接发一段文本(⚑ 任务总结按钮与 ⌘⏎ 走这条路,与手打 /wrapup 完全等价) */
+  const submit = async (override?: string) => {
     const ta = taRef.current;
-    const text = ta?.value.trim();
+    const text = override ?? ta?.value.trim();
     if (!text || !effectiveCwd) return;
-    ta!.value = '';
-    resetHistoryBrowse();
+    if (!override) {
+      ta!.value = '';
+      resetHistoryBrowse();
+    }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       // blur 派发框:弹窗期间不让输入框吃字符,也避免输入框焦点环与弹窗玉色选中环同屏双环
@@ -509,6 +531,14 @@ export function Dispatch({ active }: { active: boolean }) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       newSession();
       toast(wasLive ? '已清空上下文;上一个会话仍在后台运行,可在「会话」页接回' : '已清空上下文,开始新会话');
+      return;
+    }
+    // /wrapup 任务总结:把刚完成的任务沉淀成一张卡落到 ~/.claude/worklog/(见「总结」视图)。
+    // skill 靠语义触发、SDK 没有原生 slash,所以拦下来换成一句固定触发语发出去——固定措辞保证命中率,
+    // 也避免每次靠临场措辞碰运气。璇玑自己不写盘,出卡动作全在会话内由 skill 完成(架构铁律 2)。
+    if (/^\/wrapup\b/.test(text)) {
+      if (!d.started) return toast('会话还没开始,先派发一个任务再收口');
+      void submit(WRAPUP_PROMPT);
       return;
     }
     // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
@@ -719,7 +749,9 @@ export function Dispatch({ active }: { active: boolean }) {
             rows={2}
             placeholder="描述要派发的任务…"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
+              // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
                 e.preventDefault();
                 void submit();
               }
@@ -753,6 +785,20 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
           />
           <div className="c-bar">
+            {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
+                但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}
+            <button
+              className="wrapup-btn"
+              onClick={() => wrapupRef.current()}
+              disabled={!d.started}
+              title={
+                d.started
+                  ? '⌘⏎ · 把本会话刚完成的任务沉淀成一张收口卡,落到 ~/.claude/worklog/(等同输入 /wrapup);边界由 Claude 识别后与你确认'
+                  : '会话还没开始,先派发一个任务再收口'
+              }
+            >
+              <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
+            </button>
             <span className="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
