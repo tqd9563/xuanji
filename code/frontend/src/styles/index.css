@@ -946,7 +946,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .tp-head .glyph { color: var(--jade); font-size: 0.875rem; flex: none; }
 .tp-title { flex: 1; min-width: 0; background: none; border: none; border-bottom: 1px solid var(--line-soft); padding: 0 0 12px; font-size: 0.9375rem; }
 .tp-title:focus { outline: none; }
-.tp-row { display: flex; align-items: center; gap: 10px; padding: 10px 18px 14px; position: relative; }
+.tp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 18px 14px; }
 .tp-row .lbl { font-size: 0.6875rem; color: var(--faint); flex: none; }
 .tp-pj {
   flex: 1; min-width: 0; background: var(--surface); border: 1px solid var(--line);
@@ -955,10 +955,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .tp-pj:focus { outline: none; border-color: var(--jade); color: var(--ink); }
 .tp-pj.picked { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 45%, transparent); background: var(--tint-jade); }
+/* 下拉走文档流(整个浮层跟着长高),不做绝对定位浮层:否则它会盖住底部快捷键条,
+   用户正要选项目时恰好看不到「↩ 保存 / tab 选项目」这几条提示 */
 .tp-drop {
-  position: absolute; top: calc(100% - 6px); left: 52px; right: 18px; z-index: var(--z-dropdown);
-  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-s);
-  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.5); max-height: 240px; overflow-y: auto;
+  flex-basis: 100%; margin-left: 34px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-s);
+  max-height: 240px; overflow-y: auto;
 }
 .tp-opt { display: flex; align-items: baseline; gap: 10px; width: 100%; text-align: left; padding: 6px 12px; font-size: 0.75rem; transition: background 100ms var(--ease); }
 .tp-opt.hl { background: var(--tint-jade); }

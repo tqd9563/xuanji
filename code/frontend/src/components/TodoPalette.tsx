@@ -73,6 +73,8 @@ export function TodoPalette({ onClose, onCreated }: { onClose: () => void; onCre
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = stateRef.current;
+      // 中文输入法选词时的 ↩/Tab 属于 IME,不是本浮层的按键:不放行会把半截拼音当标题存掉
+      if (e.isComposing || e.keyCode === 229) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopImmediatePropagation();

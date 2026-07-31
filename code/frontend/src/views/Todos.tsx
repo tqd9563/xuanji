@@ -4,7 +4,7 @@
  * 与「总结」的关系:总结记的是做完的事(只读扫 ~/.claude/worklog),待办记的是还没做的事
  * (自有 SQLite)。两者一前一后夹住一次任务的生命周期。
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { Todo } from '@/api/types';
 import { usePoll, useIsMobile } from '@/lib/hooks';
@@ -69,6 +69,19 @@ export function Todos() {
   const [draft, setDraft] = useState('');
   const [draftCwd, setDraftCwd] = useState<string | null>(null);
   const [wdOpen, setWdOpen] = useState(false);
+  const draftRef = useRef<HTMLInputElement>(null);
+  /**
+   * 项目选择器关闭后把焦点还给速记框:这一行的主交互是「打字→回车」,焦点落回 body 整行就废了
+   * (选完项目按回车什么都不发生 —— 2026-07-31 实测)。WdPalette 卸载前还会轮询抢焦点,
+   * 单次 focus 会被它抢回去,故沿用同款轮询重试(50ms×10 上限 ~0.5s)。
+   */
+  const focusDraft = () => {
+    let tries = 0;
+    const timer = setInterval(() => {
+      draftRef.current?.focus();
+      if (document.activeElement === draftRef.current || ++tries > 10) clearInterval(timer);
+    }, 50);
+  };
   const [busy, setBusy] = useState(false);
   const isMobile = useIsMobile();
   const { data, refresh } = usePoll(api.todos, 30_000);
@@ -157,6 +170,7 @@ export function Todos() {
       <div className="td-capture">
         <span className="plus" aria-hidden="true">＋</span>
         <Input
+          ref={draftRef}
           placeholder="记一条待办…(回车保存)"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -231,8 +245,12 @@ export function Todos() {
           onPick={(p) => {
             setDraftCwd(p);
             setWdOpen(false);
+            focusDraft(); // 选完项目焦点必须回速记框,否则「↩ 保存」按下去没人接(焦点在 body)
           }}
-          onClose={() => setWdOpen(false)}
+          onClose={() => {
+            setWdOpen(false);
+            focusDraft();
+          }}
         />
       )}
     </>
