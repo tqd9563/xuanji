@@ -43,6 +43,18 @@ export const hiddenSessionsTable = sqliteTable('hidden_sessions', {
   hiddenAt: integer('hidden_at').notNull(),
 });
 
+/**
+ * 手动归档:用户把卡片拖到「已完成」列的覆盖表(自有数据,可逆)。
+ * 记下归档瞬间的 lastOutputAt,之后会话一旦重新活跃(推导态转 running/blocked,
+ * 或产出时间前进)即自动失效——归档是人工判断,不该盖住真实进展。
+ */
+export const sessionArchivesTable = sqliteTable('session_archives', {
+  sessionId: text('session_id').primaryKey(),
+  archivedAt: integer('archived_at').notNull(),
+  /** 归档时该会话的最近产出时间;无产出记为 0 */
+  markedLastOutputAt: integer('marked_last_output_at').notNull(),
+});
+
 /** 项目分类色调色板:首次出现顺序分配序号并固定(前 N 个项目互不撞色,全端一致) */
 export const paletteTable = sqliteTable('palette', {
   name: text('name').primaryKey(),
@@ -130,6 +142,10 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS hidden_sessions (
         session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_archives (
+        session_id TEXT PRIMARY KEY, archived_at INTEGER NOT NULL,
+        marked_last_output_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS palette (
         name TEXT PRIMARY KEY, idx INTEGER NOT NULL
@@ -269,6 +285,32 @@ export class Storage {
   /** 隐藏(已关闭)会话完整行:/resume 弹窗数据源 */
   hiddenSessions(): { sessionId: string; hiddenAt: number }[] {
     return this.orm.select().from(hiddenSessionsTable).all();
+  }
+
+  /** 手动归档(拖到「已完成」):记下当时的最近产出时间,作为日后自动失效的基准 */
+  archiveSession(sessionId: string, lastOutputAt?: number) {
+    const marked = lastOutputAt ?? 0;
+    this.orm
+      .insert(sessionArchivesTable)
+      .values({ sessionId, archivedAt: Date.now(), markedLastOutputAt: marked })
+      .onConflictDoUpdate({
+        target: sessionArchivesTable.sessionId,
+        set: { archivedAt: Date.now(), markedLastOutputAt: marked },
+      })
+      .run();
+  }
+
+  /** sessionId → 归档基准(archivedAt / 归档时的 lastOutputAt) */
+  sessionArchives(): Map<string, { archivedAt: number; markedLastOutputAt: number }> {
+    const rows = this.orm.select().from(sessionArchivesTable).all();
+    return new Map(
+      rows.map((r) => [r.sessionId, { archivedAt: r.archivedAt, markedLastOutputAt: r.markedLastOutputAt }]),
+    );
+  }
+
+  /** 撤销归档:手动撤销与「会话重新活跃」的自动失效共用此入口 */
+  unarchiveSession(sessionId: string) {
+    this.orm.delete(sessionArchivesTable).where(eq(sessionArchivesTable.sessionId, sessionId)).run();
   }
 
   /** 调色板:已有的保持不变,新名字按当前最大序号顺延(首次出现即永久固定) */

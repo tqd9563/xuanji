@@ -103,8 +103,47 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       source: 'web',
     });
   }
+  applyArchives(columns, storage);
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);
   return { ok: agents.ok, error: agents.error, columns, refreshedAt: Date.now() };
+}
+
+/**
+ * 套用手动归档覆盖:把用户拖到「已完成」的卡从推导列搬到 done。
+ *
+ * 自动失效两条件(命中任一即删除归档记录,卡片回归推导态):
+ *  1) 推导态是 running / blocked —— 会话正在跑或在等你,归档显然过期了;
+ *  2) lastOutputAt 比归档时前进 —— 你进去接着聊过,轮询间隙里它可能已经聊完又回到 idle,
+ *     只看状态会漏判,故以产出时间兜底。
+ * 归档态本身是 done 的会话不改归属,但保留记录以便前端给撤销入口。
+ */
+function applyArchives(columns: Record<SessionState, AgentSession[]>, storage?: Storage) {
+  const archives = storage?.sessionArchives();
+  if (!archives?.size) return;
+  for (const state of Object.keys(columns) as SessionState[]) {
+    const keep: AgentSession[] = [];
+    for (const s of columns[state]) {
+      const a = archives.get(s.sessionId);
+      if (!a) {
+        keep.push(s);
+        continue;
+      }
+      const revived =
+        state === 'running' || state === 'blocked' || (s.lastOutputAt ?? 0) > a.markedLastOutputAt;
+      if (revived) {
+        storage?.unarchiveSession(s.sessionId);
+        keep.push(s);
+        continue;
+      }
+      s.archived = true;
+      if (state === 'done') keep.push(s);
+      else {
+        s.state = 'done';
+        columns.done.push(s);
+      }
+    }
+    columns[state] = keep;
+  }
 }
 
 export async function sessionReplay(sessionId: string): Promise<Replay | null> {

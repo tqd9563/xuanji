@@ -58,6 +58,10 @@ export const api = {
     get<{ sessions: ClosedSession[] }>(`/api/sessions/closed${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
   unhideSession: (sessionId: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/unhide`, 'POST', {}),
+  archiveSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'PUT', {}),
+  unarchiveSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'DELETE', {}),
   // ---------- 周回顾 ----------
   weeklyReview: (start: number, end: number) =>
     get<WeeklyReview>(`/api/weekly-review?start=${start}&end=${end}`),

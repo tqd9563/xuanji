@@ -38,6 +38,8 @@ export interface AgentSession {
   dispatchId?: string;
   /** 最近一次产出时间:与本地已读表比较,标「待验收」 */
   lastOutputAt?: number;
+  /** 手动拖到「已完成」的归档卡:提供撤销入口 */
+  archived?: boolean;
 }
 
 export type ReplayEvent =

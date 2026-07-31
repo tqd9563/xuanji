@@ -50,6 +50,8 @@ export interface AgentSession {
   dispatchId?: string;
   /** 最近一次产出时间:前端据此与本地已读时间比较,标「待验收」 */
   lastOutputAt?: number;
+  /** 用户手动拖到「已完成」的归档卡:state 已被覆盖为 done,前端据此给出撤销入口 */
+  archived?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */

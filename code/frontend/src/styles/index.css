@@ -341,6 +341,14 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover .x-close, .scard.kb-sel .x-close, .scard .x-close:focus-visible { opacity: 1; }
 .scard .x-close:hover { color: var(--red); }
+.scard .unarchive { font-size: 0.8125rem; }
+.scard .unarchive:hover { color: var(--jade); }
+/* 拖拽归档:被拖的卡半透明脱离原位,「已完成」列在悬停时显出接纳边框 */
+.scard.dragging { opacity: 0.55; cursor: grabbing; border-color: var(--jade); }
+.col-body.drop-over {
+  border: 1px dashed var(--jade); border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--jade) 7%, transparent);
+}
 /* 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),砍掉概要、后台标、去回复 */
 .scard.compact { padding: 9px 12px; }
 .scard.compact .top { margin-bottom: 5px; }
