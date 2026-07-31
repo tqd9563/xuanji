@@ -719,7 +719,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
 .kv dt { color: var(--muted); }
-.kv dd { min-width: 0; }
+/* 长 URL / 路径(MR 链接、锚点文件路径)无空格,不强制断行会顶破抽屉右边界 */
+.kv dd { min-width: 0; overflow-wrap: anywhere; }
 .md-preview { border-top: 1px solid var(--line-soft); padding-top: 16px; font-size: 0.8125rem; color: var(--muted); max-width: 68ch; }
 .md-preview h3 { color: var(--ink); font-size: 0.875rem; margin: 14px 0 6px; }
 .md-preview code { font-family: var(--mono); font-size: 0.75rem; background: var(--surface); border: 1px solid var(--line-soft); border-radius: 4px; padding: 0 5px; }
@@ -823,6 +824,38 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .msummary b { color: var(--jade); font-weight: 600; }
 
 .sys-note { font-size: 0.75rem; color: var(--faint); padding: 10px 18px 4px; }
+
+/* ============ 总结(wrapup 任务总结卡) ============ */
+/* 日期分组头:mono 小字当「机器的话」,不与任务标题争字重 */
+.wl-group > h2 { font-size: 0.75rem; color: var(--faint); font-weight: 600; font-family: var(--mono); padding: 12px 18px 4px; }
+.wl-item {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  padding: 10px 18px; border-bottom: 1px solid var(--line-soft);
+  background: none; border-left: none; border-right: none; border-top: none;
+  cursor: pointer; transition: background 120ms var(--ease);
+}
+.wl-item:hover { background: var(--hover); }
+.wl-group:last-child .wl-item:last-child { border-bottom: none; }
+.wl-item .task { font-size: 0.8125rem; color: var(--ink); font-weight: 600; min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-item .anchors { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; white-space: nowrap; }
+.wl-sep { border-top: 1px solid var(--line-soft); }
+/* 已知残留:抽屉里置顶的琥珀块——「需要你回来处理」的唯一视觉承载 */
+.residue {
+  border: 1px solid color-mix(in oklab, var(--amber) 35%, transparent);
+  background: var(--tint-amber); border-radius: var(--r-s);
+  padding: 10px 14px; margin: 8px 0 16px;
+}
+.residue .r-head { font-size: 0.6875rem; font-weight: 600; color: var(--amber); margin-bottom: 4px; }
+.wl-body { font-size: 0.8125rem; max-width: 68ch; }
+.wl-body h3 { font-size: 0.8125rem; color: var(--ink); margin: 16px 0 6px; }
+.wl-body h3:first-child { margin-top: 0; }
+.wl-body p, .wl-body li { color: var(--muted); text-wrap: pretty; margin-bottom: 6px; }
+.wl-body ul { padding-left: 18px; }
+.wl-body .file { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); }
+.wl-body pre { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); white-space: pre-wrap; }
+/* 会话锚点:蓝=纯信息(路径/id),点开只读回放 */
+.sid-link { font-family: var(--mono); font-size: 0.8125rem; color: var(--blue); background: none; border: none; padding: 0; cursor: pointer; }
+.sid-link:hover { text-decoration: underline; }
 
 /* ============ 回顾(周活动) ============ */
 .week-nav { display: flex; align-items: center; gap: 4px; }
