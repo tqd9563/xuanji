@@ -502,6 +502,15 @@ export function Dispatch({ active }: { active: boolean }) {
       setResumePalette(true);
       return;
     }
+    // /clear 清空上下文:SDK 环境下原生 /clear 会被当普通 prompt 发给模型(白烧一轮 token 且上下文照旧),
+    // 故拦截为璇玑等价语义 —— 丢弃当前会话上下文另起一轮,工作目录/模型/权限档等派发设置保持不变(等同 ⌘N)。
+    // 旧会话不 kill:仍在跑的留在后台,可在「会话」页接回。
+    if (/^\/clear\b/.test(text)) {
+      const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
+      newSession();
+      toast(wasLive ? '已清空上下文;上一个会话仍在后台运行,可在「会话」页接回' : '已清空上下文,开始新会话');
+      return;
+    }
     // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
     // 支持 /wd <关键词> 直接带初始搜索词(如 /wd skill)。
     if (/^\/wd\b/.test(text)) {
