@@ -39,6 +39,10 @@ export interface DispatchIntent {
    *  随手带过来,省一趟按 dispatchId 反查的请求;派发页只管展示,不关心其来源。 */
   attach?: { dispatchId: string; cwd: string; name: string; project: string };
   prefill?: string;
+  /** 全新派发的工作目录(待办「开工」带过来;attach/resume 自带 cwd,不走这里) */
+  cwd?: string;
+  /** 由哪条待办发起:会话拿到 sessionId 后回填给这条待办(状态转「进行中」并挂上锚点) */
+  todoId?: number;
 }
 
 const DISPATCH_KEY = 'xuanji-dispatch-id';

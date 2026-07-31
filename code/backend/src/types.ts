@@ -207,6 +207,29 @@ export interface WeeklyDraft {
   finishedAt: number | null;
 }
 
+/**
+ * 待办(自有数据,SQLite):临时想法的收集箱,不映射 ~/.claude 任何文件。
+ * 生命周期 open → doing(已开工,挂上派发会话)→ done;完成与否始终由人判断,
+ * 会话结束不自动完成——一次会话未必真把事做完。
+ */
+export interface Todo {
+  id: number;
+  title: string;
+  /** 项目工作目录绝对路径;未指定为 null(开工时再选) */
+  cwd: string | null;
+  /** cwd 末段短名,列表展示用;未指定为 null */
+  project: string | null;
+  status: 'open' | 'doing' | 'done';
+  /** 开工后绑定的派发会话,可直连只读回放 */
+  sessionId: string | null;
+  createdAt: number;
+  /** 首次开工时间 */
+  startedAt: number | null;
+  doneAt: number | null;
+  /** 来源:web 界面 / Raycast 等外部脚本(仅作展示,不影响行为) */
+  source: 'web' | 'external';
+}
+
 export interface ModelUsage {
   model: string;
   inputTokens: number;

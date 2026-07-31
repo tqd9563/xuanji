@@ -233,6 +233,8 @@ export function Dispatch({ active }: { active: boolean }) {
     lastChatTopRef.current = 0;
     lastChatHeightRef.current = 0;
   };
+  /** 本次派发由哪条待办发起(待办页「开工」跳来):拿到 sessionId 后回填,横幅可解除关联 */
+  const [fromTodo, setFromTodo] = useState<{ id: number; title: string } | null>(null);
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
   const [sessCtx, setSessCtx] = useState<SessCtx | null>(null);
@@ -344,6 +346,9 @@ export function Dispatch({ active }: { active: boolean }) {
       setFromBoard(true);
       applyResume(intent.resume);
     }
+    // 待办「开工」:全新派发,带着待办的项目目录与内容进来(内容只预填,发不发由人决定)
+    if (intent?.cwd) setCwd(intent.cwd);
+    if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
     // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
     // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
@@ -393,6 +398,15 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!d.sessionId) return;
     setSessCtx((prev) => (prev && prev.id === null ? { ...prev, id: d.sessionId } : prev));
   }, [d.sessionId]);
+
+  // 待办发起的会话:SDK 分配 sessionId(= 真的发出去了)后把这条待办转「进行中」并挂上锚点。
+  // 只在拿到 sessionId 时回填,所以「开工后又没发」不会污染待办状态;完成与否仍由人手动勾。
+  useEffect(() => {
+    if (!fromTodo || !d.sessionId) return;
+    const todoId = fromTodo.id;
+    setFromTodo(null);
+    void api.updateTodo(todoId, { status: 'doing', sessionId: d.sessionId }).catch(() => {});
+  }, [fromTodo, d.sessionId]);
 
   // 兜底:刷新页面后 useDispatch 内部静默 attach 回存活会话(不经过看板意图),
   // 本组件没有 name/project 可用,按 sessionId 查一次会话看板补全。
@@ -742,6 +756,14 @@ export function Dispatch({ active }: { active: boolean }) {
             {statusText.text}
           </span>
         </div>
+
+        {/* 待办来源横幅:说明本次派发由哪条待办发起(发送后它转「进行中」);✕ 解除关联 = 当普通新会话发 */}
+        {fromTodo && (
+          <div className="from-todo">
+            ✦ 来自待办:「{fromTodo.title}」 · 发送后此待办转为进行中
+            <button className="x" onClick={() => setFromTodo(null)} title="解除关联" aria-label="解除关联">✕</button>
+          </div>
+        )}
 
         <div className="composer">
           <textarea
