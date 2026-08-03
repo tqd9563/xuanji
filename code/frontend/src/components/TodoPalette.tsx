@@ -49,8 +49,14 @@ export function TodoPalette({ onClose, onCreated }: { onClose: () => void; onCre
   const shortOf = (p: string) => p.split('/').filter(Boolean).pop() ?? p;
 
   const save = async (andStart: boolean) => {
-    const t = title.trim();
-    if (!t || busy) return;
+    // 以 DOM 值为准、state 兜底:WKWebView + 中文输入法下 onChange 可能没跟上输入法上屏,
+    // state 为空但框里明明有字,按 state 保存会静默什么都不做
+    const t = (titleRef.current?.value ?? title).trim();
+    if (busy) return;
+    if (!t) {
+      toast('先输入内容再保存');
+      return;
+    }
     setBusy(true);
     try {
       const { todo } = await api.createTodo(t, pj);
@@ -73,8 +79,10 @@ export function TodoPalette({ onClose, onCreated }: { onClose: () => void; onCre
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = stateRef.current;
-      // 中文输入法选词时的 ↩/Tab 属于 IME,不是本浮层的按键:不放行会把半截拼音当标题存掉
-      if (e.isComposing || e.keyCode === 229) return;
+      // 中文输入法选词时的 ↩/Tab 属于 IME,不是本浮层的按键:不放行会把半截拼音当标题存掉。
+      // 只看 isComposing,不看 keyCode 229:WKWebView 里输入法激活时普通回车也可能标 229,
+      // 按 229 拦会把「保存」整个吞掉(2026-08-03 桌面壳实测回车无反应)。
+      if (e.isComposing) return;
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopImmediatePropagation();

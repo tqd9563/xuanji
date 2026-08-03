@@ -112,12 +112,14 @@ export function Todos() {
   const shortOf = (p: string) => p.split('/').filter(Boolean).pop() ?? p;
 
   const add = async () => {
-    const t = draft.trim();
+    // 与 TodoPalette 同理:DOM 值为准,防 WKWebView 输入法上屏后 state 落后
+    const t = (draftRef.current?.value ?? draft).trim();
     if (!t || busy) return;
     setBusy(true);
     try {
       await api.createTodo(t, draftCwd);
       setDraft('');
+      if (draftRef.current) draftRef.current.value = ''; // state 若本就为空,受控 value 不会触发 DOM 清空
       notifyTodosChanged(); // 本页与仪表盘卡同时刷新
     } catch (e) {
       toast(e instanceof Error ? e.message : '保存失败');
