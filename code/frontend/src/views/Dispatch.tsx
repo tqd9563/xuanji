@@ -65,7 +65,7 @@ function StreamMd({ text }: { text: string }) {
  * 目标文本非纯追加(reset/attach 后按 index 复用的行拿到全新内容)时直接跳到全文。
  */
 const MIN_CHARS_PER_FRAME = 2; // 放字下限 ~120 字/s(60fps):慢流时保持匀速打字感
-const CATCH_UP_FRAMES = 24; // 追赶窗口:积压字符在 ~24 帧(0.4s)内放完,落后有上界
+const CATCH_UP_FRAMES = 84; // 追赶窗口:积压在 ~84 帧(1.4s)内放完;需大于上游 delta 块间隔才能填平"放完干等"的卡顿
 
 function useTypewriter(target: string, animate: boolean): string {
   const [shown, setShown] = useState(() => (animate ? '' : target));
