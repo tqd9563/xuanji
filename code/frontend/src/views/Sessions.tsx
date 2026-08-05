@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
+  DragOverlay,
   PointerSensor,
   TouchSensor,
   useDraggable,
@@ -8,6 +9,7 @@ import {
   useSensor,
   useSensors,
   type DragEndEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
@@ -126,7 +128,7 @@ function XClose({ s, onClose }: { s: AgentSession; onClose: () => void }) {
 
 /** 卡片的拖拽外壳:pointer 需移动 6px 才判定为拖拽,单击照常打开回放 */
 function useCardDrag(s: AgentSession, enabled: boolean) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: s.sessionId,
     disabled: !enabled,
   });
@@ -149,9 +151,9 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
           onTouchStart: guard<React.TouchEvent>('onTouchStart'),
         }
       : {},
-    style: transform
-      ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 30 }
-      : undefined,
+    // 跟手的那张由 DragOverlay 画(渲染在 body 层,不被列的 overflow 裁掉、也不被邻列盖住);
+    // 原位卡只留半透明占位,所以这里不再给它上 transform。
+    style: undefined,
     isDragging,
   };
 }
@@ -400,6 +402,8 @@ export function Sessions({
   const [pendingArchive, setPendingArchive] = useState<Set<string>>(() => new Set());
   /** 拖拽挂起的乐观集合:同上,后端确认前先把卡挪进空闲 */
   const [pendingSuspend, setPendingSuspend] = useState<Set<string>>(() => new Set());
+  /** 正在拖的卡:交给 DragOverlay 画,免受列 overflow 裁剪与邻列遮挡 */
+  const [dragId, setDragId] = useState<string | null>(null);
 
   // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序);乐观归档在此就位
   const columns = useMemo(() => {
@@ -466,6 +470,7 @@ export function Sessions({
    */
   const onDragEnd = useCallback(
     (e: DragEndEvent) => {
+      setDragId(null);
       const over = e.over?.id;
       if (over !== DONE_DROP_ID && over !== IDLE_DROP_ID) return;
       const sessionId = String(e.active.id);
@@ -683,7 +688,12 @@ export function Sessions({
         )}
       </div>
       {!isMobile && (
-        <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <DndContext
+          sensors={sensors}
+          onDragStart={(e: DragStartEvent) => setDragId(String(e.active.id))}
+          onDragCancel={() => setDragId(null)}
+          onDragEnd={onDragEnd}
+        >
           <div className="board">
             {COLS.map((col, ci) => {
               const items = itemsOf(col);
@@ -747,6 +757,13 @@ export function Sessions({
               );
             })}
           </div>
+          {/* 跟手的那张:渲染在 body 层,不被列的 overflow 裁掉,也不被右侧列盖住 */}
+          <DragOverlay dropAnimation={null} className="drag-ghost">
+            {(() => {
+              const s = dragId ? (columns?.review ?? []).find((x) => x.sessionId === dragId) : undefined;
+              return s ? <MidCard {...cardProps(s, false, false)} /> : null;
+            })()}
+          </DragOverlay>
         </DndContext>
       )}
 

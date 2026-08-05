@@ -323,7 +323,9 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
 .board { display: grid; grid-template-columns: repeat(4, minmax(252px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
-.col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+/* flex:1 —— 列体撑满整列高度。不撑满时它只有内容那么高,空闲列一两张卡就意味着拖拽落点
+   只是顶部一条窄带,拖到列中段接不住(2026-08-05 实测:已完成列卡多能接,空闲列接不到)。 */
+.col-body { flex: 1; overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .col-body::-webkit-scrollbar { width: 6px; }
 .col-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 .col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; flex: none; }
@@ -361,8 +363,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard .x-close:hover { color: var(--red); }
 .scard .unarchive { font-size: 0.8125rem; }
 .scard .unarchive:hover { color: var(--jade); }
-/* 拖拽归档:被拖的卡半透明脱离原位,「已完成」列在悬停时显出接纳边框 */
-.scard.dragging { opacity: 0.55; cursor: grabbing; border-color: var(--jade); }
+/* 拖拽处置:原位卡留半透明占位,跟手的那张由 DragOverlay 画;落点列悬停时显出接纳边框 */
+.scard.dragging { opacity: 0.4; cursor: grabbing; border-style: dashed; border-color: var(--jade); }
+/* 跟手卡:抬起来的质感(阴影 + 玉色描边),不再被相邻列或列体滚动容器盖住 */
+.drag-ghost .scard { cursor: grabbing; border-color: var(--jade); box-shadow: 0 12px 28px rgb(0 0 0 / 0.45); margin-bottom: 0; }
 .col-body.drop-over {
   border: 1px dashed var(--jade); border-radius: var(--r-m);
   background: color-mix(in srgb, var(--jade) 7%, transparent);
