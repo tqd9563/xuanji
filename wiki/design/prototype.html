@@ -44,6 +44,7 @@
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
   --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
   --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
   --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
@@ -169,8 +170,9 @@ select.input { appearance: none; padding-right: 28px;
 .pill-run  { color: var(--jade);  background: var(--tint-jade); }
 .pill-blk  { color: var(--amber); background: var(--tint-amber); }
 .pill-idle { color: var(--muted); background: var(--tint-muted); }
-/* 验收中:注意力家族(琥珀)但 dot 不脉动——「等你处置」比「正在等输入」低一级紧迫度 */
-.pill-rev  { color: var(--amber); background: var(--tint-amber); }
+/* 验收中:紫罗兰单列一色——琥珀独占「等待输入」(会话被卡住),验收中是「等你判断」,
+   两者紧迫度不同必须一眼可分;dot 不脉动,与运行/阻塞的活跃态拉开层级 */
+.pill-rev  { color: var(--violet); background: var(--tint-violet); }
 .pill-done { color: var(--green); background: var(--tint-green); }
 .pill-err  { color: var(--red);   background: var(--tint-red); }
 .pill-sched{ color: var(--blue);  background: var(--tint-blue); }
@@ -356,6 +358,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族里最重的一级,
    压得住旁边的琥珀警示文字(实心块 > 琥珀文字 > 灰文字) */
 .tag.t-unread { color: oklch(0.24 0.05 85); background: var(--amber); border-color: transparent; font-weight: 650; }
+/* 待处置 = 已看过但没做决定:比未读的实心琥珀轻一级(描边紫罗兰),与验收中列同色系 */
+.tag.t-review { color: var(--violet); background: var(--tint-violet); border-color: color-mix(in oklab, var(--violet) 40%, transparent); font-weight: 600; }
 .scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }
 @keyframes udot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -1560,7 +1564,9 @@ function renderDashboard() {
       <div class="what">
         <div class="t">${esc(s.title)}
           ${projChip(s.cwd)}
-          <span class="tag t-unread">${s.state === 'blocked' ? '等输入' : s.unread ? '待验收' : '待处置'}</span>
+          ${s.state === 'blocked' ? '<span class="tag t-unread">等输入</span>'
+            : s.unread ? '<span class="tag t-unread">待验收</span>'
+            : '<span class="tag t-review">待处置</span>'}
           <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
         <div class="n${s.state === 'blocked' ? '' : ' plain'}">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
       </div>
