@@ -353,11 +353,19 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   transition: border-color 150ms var(--ease), background 150ms var(--ease);
 }
 .scard:hover { border-color: var(--muted); background: var(--hover); }
+/* outline 是「键盘选中」的专属通道,任何持久状态都不许占用它——
+   否则状态描边会盖住选中框,你就分不清光标在哪(2026-08-05 实测暴露) */
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
-/* 等你回话的卡:琥珀常驻描边 + 微微琥珀底。并入「进行中」后仅靠置顶不够显眼,
-   描边让它在列里像被圈出来。键盘选中(玉色 outline)会盖过它,两者不打架。 */
-.scard.blk { outline: 1.5px solid var(--amber); outline-offset: -1px; background: color-mix(in oklab, var(--amber) 5%, var(--surface)); }
+/* 等你回话的卡:左侧琥珀立柱 + 微微琥珀底,走 border 与 background 两个通道,
+   与选中框正交——选中时玉色描边照常出现在外圈,立柱仍在,两个信息同时可读。 */
+.scard.blk {
+  border-left: 3px solid var(--amber);
+  padding-left: 12px; /* 抵掉加粗的 2px,内容不位移 */
+  background: color-mix(in oklab, var(--amber) 5%, var(--surface));
+}
 .scard.blk:hover { background: color-mix(in oklab, var(--amber) 8%, var(--surface)); }
+/* hover 时基础规则会把整圈边框染成 muted,单独保住左立柱不被冲掉 */
+.scard.blk:hover, .scard.blk.kb-sel { border-left-color: var(--amber); }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族里最重的一级,
    压得住旁边的琥珀警示文字(实心块 > 琥珀文字 > 灰文字) */
