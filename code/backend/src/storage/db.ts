@@ -55,6 +55,18 @@ export const sessionArchivesTable = sqliteTable('session_archives', {
   markedLastOutputAt: integer('marked_last_output_at').notNull(),
 });
 
+/**
+ * 显式挂起:用户在「验收中」点「挂起」= 看过了、暂时不处理,把卡放回空闲停车场。
+ * 与归档同构——记下挂起瞬间的 lastOutputAt,会话一旦重新产出即自动失效回到验收中,
+ * 免得挂起变成「永久静音」把新产出也一起埋掉。
+ */
+export const sessionSuspendsTable = sqliteTable('session_suspends', {
+  sessionId: text('session_id').primaryKey(),
+  suspendedAt: integer('suspended_at').notNull(),
+  /** 挂起时该会话的最近产出时间;无产出记为 0 */
+  markedLastOutputAt: integer('marked_last_output_at').notNull(),
+});
+
 /** 项目分类色调色板:首次出现顺序分配序号并固定(前 N 个项目互不撞色,全端一致) */
 export const paletteTable = sqliteTable('palette', {
   name: text('name').primaryKey(),
@@ -162,6 +174,10 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS session_archives (
         session_id TEXT PRIMARY KEY, archived_at INTEGER NOT NULL,
+        marked_last_output_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_suspends (
+        session_id TEXT PRIMARY KEY, suspended_at INTEGER NOT NULL,
         marked_last_output_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS palette (
@@ -336,6 +352,45 @@ export class Storage {
   /** 撤销归档:手动撤销与「会话重新活跃」的自动失效共用此入口 */
   unarchiveSession(sessionId: string) {
     this.orm.delete(sessionArchivesTable).where(eq(sessionArchivesTable.sessionId, sessionId)).run();
+  }
+
+  /** 显式挂起(验收中 →「挂起」):与归档同构,记下当时的最近产出时间作为失效基准 */
+  suspendSession(sessionId: string, lastOutputAt?: number) {
+    const marked = lastOutputAt ?? 0;
+    this.orm
+      .insert(sessionSuspendsTable)
+      .values({ sessionId, suspendedAt: Date.now(), markedLastOutputAt: marked })
+      .onConflictDoUpdate({
+        target: sessionSuspendsTable.sessionId,
+        set: { suspendedAt: Date.now(), markedLastOutputAt: marked },
+      })
+      .run();
+  }
+
+  /** sessionId → 挂起基准(suspendedAt / 挂起时的 lastOutputAt) */
+  sessionSuspends(): Map<string, { suspendedAt: number; markedLastOutputAt: number }> {
+    const rows = this.orm.select().from(sessionSuspendsTable).all();
+    return new Map(
+      rows.map((r) => [r.sessionId, { suspendedAt: r.suspendedAt, markedLastOutputAt: r.markedLastOutputAt }]),
+    );
+  }
+
+  /** 撤销挂起:手动复位与「会话重新产出」的自动失效共用此入口 */
+  unsuspendSession(sessionId: string) {
+    this.orm.delete(sessionSuspendsTable).where(eq(sessionSuspendsTable.sessionId, sessionId)).run();
+  }
+
+  /**
+   * 「验收中」启用基线:首次调用即钉住当前时刻并持久化。
+   * 只有产出时间晚于基线的会话才会被收进验收中——否则功能一上线,
+   * 历史上几十个早就了结的空闲/已完成会话会集体涌入,验收列当场失去意义。
+   */
+  reviewBaseline(): number {
+    const cached = this.getMeta('review_baseline_at');
+    if (cached) return Number(cached);
+    const now = Date.now();
+    this.setMeta('review_baseline_at', String(now));
+    return now;
   }
 
   /** 调色板:已有的保持不变,新名字按当前最大序号顺延(首次出现即永久固定) */

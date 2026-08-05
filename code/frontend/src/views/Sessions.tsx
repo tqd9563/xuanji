@@ -32,10 +32,12 @@ function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) =>
   location.hash = 'dispatch';
 }
 
+/** 列序 = 注意力流:进行态在左,验收收件箱居中逼处置,停车场(空闲)与归档(已完成)靠右收纳 */
 const COLS: { key: SessionState; label: string }[] = [
-  { key: 'idle', label: '空闲' },
   { key: 'running', label: '运行中' },
   { key: 'blocked', label: '等待输入' },
+  { key: 'review', label: '验收中' },
+  { key: 'idle', label: '空闲' },
   { key: 'done', label: '已完成' },
 ];
 
@@ -43,6 +45,7 @@ const COLS: { key: SessionState; label: string }[] = [
  *  取代桌面 4×272px 横向滚动看板——重新组织信息架构而非缩放同一个网格。 */
 const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
   { key: 'blocked', label: '需要你', warn: true },
+  { key: 'review', label: '验收中', warn: true },
   { key: 'running', label: '运行中' },
   { key: 'idle', label: '空闲' },
   { key: 'done', label: '已完成' },
@@ -50,6 +53,11 @@ const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
 
 /** 已完成 = 归档:默认展示最近条数,更早的折叠 */
 const DONE_RECENT = 5;
+/** 空闲 = 停车场:同样紧凑折叠,把注意力让给验收中 */
+const IDLE_RECENT = 3;
+/** 收纳列(紧凑卡 + 折叠):与验收中/进行态的完整卡区分开 */
+const STOWED: SessionState[] = ['idle', 'done'];
+const recentOf = (key: SessionState) => (key === 'done' ? DONE_RECENT : IDLE_RECENT);
 
 export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
@@ -82,6 +90,11 @@ interface CardProps {
   onClose: () => void;
   onUnarchive: () => void;
   onReply: () => void;
+  /** 验收中的处置:挂起 → 空闲停车场,归档 → 已完成 */
+  onSuspend: () => void;
+  onArchive: () => void;
+  /** 空闲列里被挂起的卡:撤销挂起,回验收中 */
+  onUnsuspend: () => void;
 }
 
 /** 关闭按钮:悬停/键盘选中才现身 */
@@ -119,7 +132,7 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
 }
 
 /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
-function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive }: CardProps) {
+function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive, onUnsuspend }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
     <div
@@ -136,6 +149,7 @@ function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive }: CardProps) 
         {isUnread(s) && <span className="u-dot" />}
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        {s.suspended && <span className="tag t-susp">已挂起</span>}
         {s.archived && (
           <button
             className="x-close unarchive"
@@ -144,6 +158,19 @@ function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive }: CardProps) 
             onClick={(e) => {
               e.stopPropagation();
               onUnarchive();
+            }}
+          >
+            ↩
+          </button>
+        )}
+        {s.suspended && (
+          <button
+            className="x-close unarchive"
+            title="撤销挂起,卡片回到验收中"
+            aria-label={`撤销挂起 ${s.name}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUnsuspend();
             }}
           >
             ↩
@@ -159,7 +186,7 @@ function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive }: CardProps) 
   );
 }
 
-function FullCard({ s, sel, drag, onOpen, onClose, onReply }: CardProps) {
+function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
     <div
@@ -198,6 +225,41 @@ function FullCard({ s, sel, drag, onOpen, onClose, onReply }: CardProps) {
             去回复
           </button>
         )}
+        {/* 验收中的三条出路:只有显式处置才让卡片离开该列,这是不再堆积的关键 */}
+        {s.state === 'review' && (
+          <>
+            <button
+              className="btn btn-sm btn-primary"
+              title="下达下一步指令,回到运行中"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReply();
+              }}
+            >
+              继续
+            </button>
+            <button
+              className="btn btn-sm"
+              title="暂时不管,移到空闲;会话再有新产出会自动回验收中"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSuspend();
+              }}
+            >
+              挂起
+            </button>
+            <button
+              className="btn btn-sm"
+              title="验收通过,归档到已完成"
+              onClick={(e) => {
+                e.stopPropagation();
+                onArchive();
+              }}
+            >
+              归档
+            </button>
+          </>
+        )}
         <span className="time">{clock(s.startedAt)} 开始</span>
       </div>
     </div>
@@ -226,7 +288,14 @@ export function Sessions({
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
-  const [doneOpen, setDoneOpen] = useState(false);
+  /** 收纳列(空闲/已完成)的展开状态:两列各自独立折叠 */
+  const [openCols, setOpenCols] = useState<Set<SessionState>>(() => new Set());
+  const toggleCol = (key: SessionState) =>
+    setOpenCols((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(key)) next.add(key);
+      return next;
+    });
   const isMobile = useIsMobile();
   const [mobileTab, setMobileTab] = useState<SessionState>('blocked');
   const [mobileDoneOpen, setMobileDoneOpen] = useState(false);
@@ -297,6 +366,54 @@ export function Sessions({
     [refresh],
   );
 
+  /** 验收中 →「挂起」:放回空闲停车场;会话再有新产出后端会自动撤销挂起 */
+  const suspend = useCallback(
+    async (s: AgentSession) => {
+      try {
+        await api.suspendSession(s.sessionId);
+        toast(`已挂起 ${s.name}`);
+        refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh],
+  );
+
+  /** 撤销挂起:卡片回验收中 */
+  const unsuspend = useCallback(
+    async (s: AgentSession) => {
+      try {
+        await api.unsuspendSession(s.sessionId);
+        toast(`已回到验收中 ${s.name}`);
+        refresh();
+      } catch (err) {
+        toast(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh],
+  );
+
+  /** 验收中 →「归档」:与拖拽归档同一后端入口,只是从按钮触发 */
+  const archive = useCallback(
+    async (s: AgentSession) => {
+      setPendingArchive((prev) => new Set(prev).add(s.sessionId));
+      try {
+        await api.archiveSession(s.sessionId);
+        toast(`已归档 ${s.name}`);
+        refresh();
+      } catch (err) {
+        setPendingArchive((prev) => {
+          const next = new Set(prev);
+          next.delete(s.sessionId);
+          return next;
+        });
+        toast(err instanceof Error ? err.message : String(err));
+      }
+    },
+    [refresh],
+  );
+
   // 指针需移动 6px 才判定拖拽,单击照常打开回放;触屏长按 220ms 起拖,不影响滚动
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -333,14 +450,15 @@ export function Sessions({
   }, [registerHandle, openReplay]);
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
-  const kbRef = useRef({ kbPos, columns, drawerOpen, doneOpen });
-  kbRef.current = { kbPos, columns, drawerOpen, doneOpen };
+  const kbRef = useRef({ kbPos, columns, drawerOpen, openCols });
+  kbRef.current = { kbPos, columns, drawerOpen, openCols };
   useEffect(() => {
     if (!active) return;
-    // 已完成折叠区里的卡不参与键盘导航
+    // 收纳列(空闲/已完成)折叠区里的卡不参与键盘导航
     const cardsIn = (c: number) => {
-      const arr = kbRef.current.columns?.[COLS[c]!.key] ?? [];
-      if (COLS[c]!.key === 'done' && !kbRef.current.doneOpen) return arr.slice(0, DONE_RECENT);
+      const key = COLS[c]!.key;
+      const arr = kbRef.current.columns?.[key] ?? [];
+      if (STOWED.includes(key) && !kbRef.current.openCols.has(key)) return arr.slice(0, recentOf(key));
       return arr;
     };
     const onKey = (e: KeyboardEvent) => {
@@ -398,6 +516,9 @@ export function Sessions({
     onClose: () => void closeSession(s, refresh),
     onUnarchive: () => void unarchive(s),
     onReply: () => smartOpen(s, (id, sess) => void openReplay(id, sess)),
+    onSuspend: () => void suspend(s),
+    onArchive: () => void archive(s),
+    onUnsuspend: () => void unsuspend(s),
   });
 
   return (
@@ -431,24 +552,34 @@ export function Sessions({
             {COLS.map((col, ci) => {
               const items = columns?.[col.key] ?? [];
               const isDone = col.key === 'done';
-              const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
-              // 运行中/等待输入是真实进行态,不给拖;已完成的卡拖了也没去处
+              // 空闲与已完成都是收纳区:紧凑卡 + 折叠,注意力让位给验收中
+              const stowed = STOWED.includes(col.key);
+              const recent = recentOf(col.key);
+              const open = openCols.has(col.key);
+              const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
+              // 运行中/等待输入是真实进行态,不给拖;验收中的卡可拖去已完成归档
               const card = (s: AgentSession, ri: number) => {
-                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, col.key === 'idle');
-                return isDone ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
+                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, col.key === 'review');
+                return stowed ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
               };
               const body = (
                 <>
-                  {items.slice(0, isDone ? DONE_RECENT : undefined).map((s, ri) => card(s, ri))}
+                  {items.slice(0, stowed ? recent : undefined).map((s, ri) => card(s, ri))}
                   {olderCount > 0 && (
-                    <button className="col-more" onClick={() => setDoneOpen(!doneOpen)}>
-                      {doneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
+                    <button className="col-more" onClick={() => toggleCol(col.key)}>
+                      {open ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
                     </button>
                   )}
-                  {isDone && doneOpen && items.slice(DONE_RECENT).map((s, i) => card(s, DONE_RECENT + i))}
+                  {stowed && open && items.slice(recent).map((s, i) => card(s, recent + i))}
                   {items.length === 0 && (
                     <div className="empty" style={{ padding: '24px 12px' }}>
-                      <p>{isDone ? '暂无 · 可把空闲卡片拖到这里归档' : '暂无'}</p>
+                      <p>
+                        {isDone
+                          ? '暂无 · 可把验收中的卡片拖到这里归档'
+                          : col.key === 'review'
+                            ? '暂无 · 跑完的会话会落到这里等你处置'
+                            : '暂无'}
+                      </p>
                     </div>
                   )}
                 </>
@@ -487,23 +618,24 @@ export function Sessions({
           </div>
           {(() => {
             const items = columns?.[mobileTab] ?? [];
-            const isDone = mobileTab === 'done';
-            const olderCount = isDone ? Math.max(0, items.length - DONE_RECENT) : 0;
-            // 移动端是 tab 切换而非并排看板,没有可拖的落点,归档走卡片自身入口
+            const stowed = STOWED.includes(mobileTab);
+            const recent = recentOf(mobileTab);
+            const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
+            // 移动端是 tab 切换而非并排看板,没有可拖的落点,处置全走卡片自身入口
             const card = (s: AgentSession) => {
               const p = cardProps(s, false, false);
-              return isDone ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
+              return stowed ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
             };
             if (items.length === 0) return <div className="empty" style={{ padding: '32px 12px' }}><p>这个状态下暂无会话。</p></div>;
             return (
               <>
-                {items.slice(0, isDone ? DONE_RECENT : undefined).map((s) => card(s))}
+                {items.slice(0, stowed ? recent : undefined).map((s) => card(s))}
                 {olderCount > 0 && (
                   <button className="col-more" onClick={() => setMobileDoneOpen(!mobileDoneOpen)}>
                     {mobileDoneOpen ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
                   </button>
                 )}
-                {isDone && mobileDoneOpen && items.slice(DONE_RECENT).map((s) => card(s))}
+                {stowed && mobileDoneOpen && items.slice(recent).map((s) => card(s))}
               </>
             );
           })()}
@@ -535,8 +667,31 @@ export function Sessions({
                   smartOpen(replayFor, (id, sess) => void openReplay(id, sess));
                 }}
               >
-                续接此会话(--resume)
+                {replayFor.state === 'review' ? '继续' : '续接此会话(--resume)'}
               </button>
+            )}
+            {/* 看完回放当场就能处置,不必关抽屉再回卡片找按钮 */}
+            {replayFor?.state === 'review' && (
+              <>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    void suspend(replayFor);
+                  }}
+                >
+                  挂起
+                </button>
+                <button
+                  className="btn btn-sm"
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    void archive(replayFor);
+                  }}
+                >
+                  归档
+                </button>
+              </>
             )}
             <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
               只读回放 · source of truth 在 ~/.claude

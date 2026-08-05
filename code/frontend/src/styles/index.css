@@ -180,6 +180,9 @@ select.input { appearance: none; padding-right: 28px;
 .pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pill-run  { color: var(--jade);  background: var(--tint-jade); }
 .pill-blk  { color: var(--amber); background: var(--tint-amber); }
+/* 验收中:紫罗兰单列一色。琥珀独占「等待输入」(会话卡住动不了),验收中是「等你判断」,
+   紧迫度不同必须一眼可分;dot 不脉动,与运行/阻塞的活跃态拉开层级 */
+.pill-rev  { color: var(--violet); background: var(--tint-violet); }
 .pill-idle { color: var(--muted); background: var(--tint-muted); }
 .pill-done { color: var(--green); background: var(--tint-green); }
 .pill-sched{ color: var(--blue);  background: var(--tint-blue); }
@@ -318,7 +321,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 会话看板 ============ */
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
-.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(232px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 .col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .col-body::-webkit-scrollbar { width: 6px; }
@@ -385,6 +388,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族最重的一级 */
 .tag.t-unread { color: oklch(0.24 0.05 85); background: var(--amber); border-color: transparent; font-weight: 650; flex: none; }
+/* 已挂起:比「待验收」轻一级(描边紫罗兰),标在空闲列被显式挂起的卡上 */
+.tag.t-susp { color: var(--violet); background: var(--tint-violet); border-color: color-mix(in oklab, var(--violet) 40%, transparent); font-weight: 600; flex: none; }
 .scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }
 @keyframes udot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 /* 待验收条目的摘要是产出信息不是警示:muted */
@@ -1116,7 +1121,7 @@ body.wall-glass .dd-menu {
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
   .dash-now, .dash-grid, .rv-grid { grid-template-columns: minmax(0, 1fr); }
-  .board { grid-template-columns: repeat(4, 272px); height: auto; }
+  .board { grid-template-columns: repeat(5, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }

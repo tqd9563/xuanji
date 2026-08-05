@@ -26,7 +26,12 @@ export interface Project {
   git: GitStatus | null;
 }
 
-export type SessionState = 'running' | 'blocked' | 'idle' | 'done';
+/**
+ * 看板列。'review'(验收中)不由任何适配器上报,而是在 sessionsBoard 里推导:
+ * 已产出、非进行态、未被处置的会话都落在这里,只有显式处置(挂起→idle / 归档→done)
+ * 才离开;「看过回放」只熄灭前端的未读角标,不改变归属。
+ */
+export type SessionState = 'running' | 'blocked' | 'review' | 'idle' | 'done';
 
 export interface AgentSession {
   id: string;
@@ -52,6 +57,8 @@ export interface AgentSession {
   lastOutputAt?: number;
   /** 用户手动拖到「已完成」的归档卡:state 已被覆盖为 done,前端据此给出撤销入口 */
   archived?: boolean;
+  /** 用户在验收中显式「挂起」的卡:state 已被覆盖为 idle,前端据此给出复位入口 */
+  suspended?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */

@@ -56,10 +56,13 @@ export function markSeen(sessionId: string) {
   localStorage.setItem(SEEN_KEY, JSON.stringify(m));
 }
 
-/** 待验收 = 空闲/已完成 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线) */
+/**
+ * 待验收 = 验收中/空闲/已完成 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线)。
+ * 注意角标与列是两件事:看过回放只熄灭角标(卡片留在验收中),显式处置才换列。
+ */
 export function isUnread(s: { sessionId: string; state: string; readonly: boolean; lastOutputAt?: number }): boolean {
   if (!s.lastOutputAt || s.readonly) return false;
-  if (s.state !== 'idle' && s.state !== 'done') return false;
+  if (s.state !== 'review' && s.state !== 'idle' && s.state !== 'done') return false;
   return s.lastOutputAt > (seenMap()[s.sessionId] ?? seenBaseline());
 }
 
