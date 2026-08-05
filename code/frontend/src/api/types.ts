@@ -18,7 +18,8 @@ export interface Project {
   git: GitStatus | null;
 }
 
-export type SessionState = 'running' | 'blocked' | 'idle' | 'done';
+/** 'review'(验收中)由后端推导:已产出、非进行态、未处置的会话都在这列 */
+export type SessionState = 'running' | 'blocked' | 'review' | 'idle' | 'done';
 
 export interface AgentSession {
   id: string;
@@ -40,6 +41,8 @@ export interface AgentSession {
   lastOutputAt?: number;
   /** 手动拖到「已完成」的归档卡:提供撤销入口 */
   archived?: boolean;
+  /** 在验收中显式「挂起」的卡:落在空闲列,提供回验收入口 */
+  suspended?: boolean;
 }
 
 export type ReplayEvent =

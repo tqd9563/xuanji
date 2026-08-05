@@ -83,6 +83,10 @@ export const api = {
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'PUT', {}),
   unarchiveSession: (sessionId: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'DELETE', {}),
+  suspendSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/suspend`, 'PUT', {}),
+  unsuspendSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/suspend`, 'DELETE', {}),
   // ---------- 周回顾 ----------
   weeklyReview: (start: number, end: number) =>
     get<WeeklyReview>(`/api/weekly-review?start=${start}&end=${end}`),

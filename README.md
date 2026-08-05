@@ -61,6 +61,15 @@ cd code/frontend && pnpm dev
 ```
 开发时先 `pnpm launchd:uninstall` 释放端口,避免与常驻实例冲突。
 
+### 验收(worktree 里改完,想在浏览器里看看)
+
+```bash
+./preview.sh          # 起一套隔离环境,打印验收地址
+./preview.sh --stop   # 验收完收摊,清理临时数据
+```
+
+不必停常驻实例:脚本用高位端口(默认 37777/35173,占用自动顺延、永不绑 7777)另起一套后端 + vite dev server,数据是宿主库的 sqlite 快照副本——验收里怎么归档、挂起、改名都写不回生产库。多个 worktree 可同时验收,互不打架。访问用 `localhost` 而非 `127.0.0.1`(vite 可能只绑 IPv6)。
+
 ### 测试与检查
 
 ```bash

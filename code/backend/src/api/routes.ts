@@ -281,6 +281,33 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     return c.json({ ok: true });
   });
 
+  /**
+   * 挂起(验收中 →「挂起」):看过了、暂时不处理,卡片放回空闲停车场。
+   * 与归档同样拒绝进行态——运行中/等待输入的会话没有「暂时不处理」这一说。
+   */
+  api.put('/sessions/:sessionId/suspend', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const board = await sessionsBoard(storage);
+    const found = (Object.keys(board.columns) as SessionState[])
+      .flatMap((k) => board.columns[k])
+      .find((s) => s.sessionId === sessionId);
+    if (!found) return c.json({ error: '会话不在看板上' }, 404);
+    if (found.state === 'running' || found.state === 'blocked') {
+      return c.json({ error: '运行中/等待输入的会话不能挂起' }, 409);
+    }
+    storage.suspendSession(sessionId, found.lastOutputAt);
+    return c.json({ ok: true });
+  });
+
+  /** 撤销挂起:卡片回验收中(会话重新产出时后端也会自动撤销) */
+  api.delete('/sessions/:sessionId/suspend', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    storage.unsuspendSession(sessionId);
+    return c.json({ ok: true });
+  });
+
   /** resume 前的所有权预检(前端在跳转派发页前调用) */
   api.get('/sessions/:sessionId/can-resume', async (c) => {
     return c.json(await canResume(c.req.param('sessionId')));

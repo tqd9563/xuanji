@@ -101,8 +101,11 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
 
   const maxHeat = Math.max(1, ...data.heat.flatMap((h) => h.days));
   const dayLabels = heatDayLabels();
-  /** 待验收:有新产出且你还没看过的会话(已读状态在本地) */
-  const reviewable = (data.reviewCandidates ?? []).filter(isUnread);
+  /**
+   * 待处置队列 = 验收中列全体。已看过但没做决定的卡必须留下——
+   * 它们正是「看过一眼就忘」的堆积来源,只按未读过滤会把它们藏起来。
+   */
+  const reviewable = data.reviewCandidates ?? [];
   const goSession = (s: (typeof reviewable)[number]) => {
     if (s.dispatchId) {
       setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
@@ -152,13 +155,18 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
                 <div className="what">
                   <div className="t">
                     {s.name} <ProjChip name={s.project} path={s.cwd} />{' '}
-                    <span className="tag t-unread">待验收</span>{' '}
+                    {/* 没看过的用琥珀实心催,看过没决定的用紫罗兰描边:轻重分明,但都不放过 */}
+                    {isUnread(s) ? (
+                      <span className="tag t-unread">待验收</span>
+                    ) : (
+                      <span className="tag t-susp">待处置</span>
+                    )}{' '}
                     <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
                   </div>
                   <div className="n plain">{s.detail ?? '回合结束,等你验收'}</div>
                 </div>
                 <button className="btn btn-sm btn-primary" onClick={() => goSession(s)}>
-                  去验收
+                  {isUnread(s) ? '去验收' : '去处置'}
                 </button>
               </div>
             ))}

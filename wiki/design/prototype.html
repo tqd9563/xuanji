@@ -44,6 +44,7 @@
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
   --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
   --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
   --tint-green: color-mix(in oklab, var(--green) 14%, transparent);
   --tint-red:   color-mix(in oklab, var(--red) 15%, transparent);
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
@@ -169,6 +170,9 @@ select.input { appearance: none; padding-right: 28px;
 .pill-run  { color: var(--jade);  background: var(--tint-jade); }
 .pill-blk  { color: var(--amber); background: var(--tint-amber); }
 .pill-idle { color: var(--muted); background: var(--tint-muted); }
+/* 验收中:紫罗兰单列一色——琥珀独占「等待输入」(会话被卡住),验收中是「等你判断」,
+   两者紧迫度不同必须一眼可分;dot 不脉动,与运行/阻塞的活跃态拉开层级 */
+.pill-rev  { color: var(--violet); background: var(--tint-violet); }
 .pill-done { color: var(--green); background: var(--tint-green); }
 .pill-err  { color: var(--red);   background: var(--tint-red); }
 .pill-sched{ color: var(--blue);  background: var(--tint-blue); }
@@ -336,7 +340,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 会话看板 ============ */
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
-.board { display: grid; grid-template-columns: repeat(4, minmax(258px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(232px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 .col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .col-body::-webkit-scrollbar { width: 6px; }
@@ -354,6 +358,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族里最重的一级,
    压得住旁边的琥珀警示文字(实心块 > 琥珀文字 > 灰文字) */
 .tag.t-unread { color: oklch(0.24 0.05 85); background: var(--amber); border-color: transparent; font-weight: 650; }
+/* 待处置 = 已看过但没做决定:比未读的实心琥珀轻一级(描边紫罗兰),与验收中列同色系 */
+.tag.t-review { color: var(--violet); background: var(--tint-violet); border-color: color-mix(in oklab, var(--violet) 40%, transparent); font-weight: 600; }
 .scard .u-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); flex: none; animation: udot 2.2s ease-in-out infinite; }
 @keyframes udot { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -780,7 +786,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
   .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
-  .board { grid-template-columns: repeat(4, 272px); height: auto; }
+  .board { grid-template-columns: repeat(5, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
@@ -1250,12 +1256,17 @@ const SESSIONS = [
     needs: 'review the 4 output groups, submit feedback via Submit All Reviews', started: '前天 19:11' },
   { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'blocked', cwd: '~/baize',
     needs: '要不要接着把 self_history 正式落地到引擎?', started: '前天 15:47' },
-  { id: 'f3ab12cd', title: 'baize 指标口径答疑', kind: 'background', state: 'idle', cwd: '~/deep-baize',
+  /* 验收中 = 跑完的会话的默认落点,只有显式处置(继续/挂起/归档)才离开;看过回放只灭角标不挪列 */
+  { id: 'f3ab12cd', title: 'baize 指标口径答疑', kind: 'background', state: 'review', cwd: '~/deep-baize',
     detail: '回合结束 · 已回答口径差异的三个来源', started: '13:58', owner: 'web', unread: true },
+  { id: '77aa34ef', title: '周报文案润色', kind: 'background', state: 'review', cwd: '~/project',
+    detail: '回合结束 · 终稿已产出(你已查看,待处置)', started: '11:32', owner: 'web' },
+  { id: '3d5a90fe', title: '换卡 skill N换1 兜底', kind: 'background', state: 'review', cwd: '~/yuiko-skills',
+    detail: '回合结束 · --n-ratio 默认 3 已实现并通过测试', started: '10:05', owner: 'web', unread: true },
   { id: '5fd8a3b0', title: '知识小卡设计', kind: 'interactive', state: 'idle', cwd: '~/wiki-cards',
     detail: '空闲 42 分钟(终端存活,只读)', started: '12:10', readonly: true },
-  { id: '77aa34ef', title: '周报文案润色', kind: 'background', state: 'idle', cwd: '~/project',
-    detail: '回合结束 · 终稿已产出(你已查看)', started: '11:32', owner: 'web' },
+  { id: 'ba77c210', title: '经验沉淀草稿整理', kind: 'background', state: 'idle', cwd: '~/xuanji',
+    detail: '已挂起 · 等 memory 评审结论再继续', started: '昨天 20:14', owner: 'web' },
   { id: 'e2a79c14', title: 'ip-risk 批量扫描', kind: 'background', state: 'done', cwd: '~/go-antifraud',
     detail: '退出码 0 · 扫描 156 个 IP,3 个高风险', started: '08:30', ended: '08:47' },
   { id: '9d016e5f', title: 'CHANGELOG 整理', kind: 'background', state: 'done', cwd: '~/xuanji',
@@ -1481,6 +1492,7 @@ function projChip(cwd) {
 const STATE_PILL = {
   running: '<span class="pill pill-run"><span class="dot"></span>运行中</span>',
   blocked: '<span class="pill pill-blk"><span class="dot"></span>等待输入</span>',
+  review:  '<span class="pill pill-rev"><span class="dot"></span>验收中</span>',
   idle:    '<span class="pill pill-idle"><span class="dot"></span>空闲</span>',
   done:    '<span class="pill pill-done"><span class="dot"></span>已完成</span>',
 };
@@ -1543,8 +1555,8 @@ function showView(id) {
    仪表盘
    ============================================================ */
 function renderDashboard() {
-  /* 催办队列 = 等审批/输入的 + 有未读产出待验收的 */
-  const attention = SESSIONS.filter(s => s.state === 'blocked' || s.unread);
+  /* 催办队列 = 等审批/输入的 + 验收中(含已看未处置的) */
+  const attention = SESSIONS.filter(s => s.state === 'blocked' || s.state === 'review' || s.unread);
   const needsN = document.getElementById('dash-needs-n');
   if (needsN) needsN.textContent = attention.length;
   $('#dash-needs').innerHTML = attention.map(s => `
@@ -1552,7 +1564,9 @@ function renderDashboard() {
       <div class="what">
         <div class="t">${esc(s.title)}
           ${projChip(s.cwd)}
-          <span class="tag t-unread">${s.state === 'blocked' ? '等输入' : '待验收'}</span>
+          ${s.state === 'blocked' ? '<span class="tag t-unread">等输入</span>'
+            : s.unread ? '<span class="tag t-unread">待验收</span>'
+            : '<span class="tag t-review">待处置</span>'}
           <span class="tag">${s.kind === 'background' ? '后台' : '终端'}</span></div>
         <div class="n${s.state === 'blocked' ? '' : ' plain'}">${esc(s.state === 'blocked' ? s.needs : (s.detail ?? '回合结束,等你验收'))}</div>
       </div>
@@ -1669,10 +1683,12 @@ function renderProjects(q) {
 /* ============================================================
    会话看板
    ============================================================ */
+/* 列序 = 注意力流:进行态在左,验收收件箱居中逼处置,停车场(空闲)与归档(已完成)靠右收纳 */
 const COLS = [
-  { key: 'idle', label: '空闲' },
   { key: 'running', label: '运行中' },
   { key: 'blocked', label: '等待输入' },
+  { key: 'review', label: '验收中' },
+  { key: 'idle', label: '空闲' },
   { key: 'done', label: '已完成' },
 ];
 
@@ -1740,6 +1756,7 @@ document.addEventListener('keydown', e => {
 });
 
 const DONE_RECENT = 5; // 已完成默认展示条数,更早的折叠
+const IDLE_RECENT = 3; // 空闲 = 停车场,同样紧凑折叠,注意力让位给验收中
 
 function fullCard(s) {
   return `
@@ -1760,9 +1777,25 @@ function fullCard(s) {
       ${s.needs ? `<div class="needs">⏸ ${esc(s.needs)}</div>` : ''}
       <div class="foot">
         ${s.state === 'blocked' ? `<button class="btn btn-sm btn-primary" onclick="event.stopPropagation();resumeSession('${s.id}')">去回复</button>` : ''}
+        ${s.state === 'review' ? `
+          <button class="btn btn-sm btn-primary" title="下达下一步指令,回到运行中" onclick="event.stopPropagation();resumeSession('${s.id}')">继续</button>
+          <button class="btn btn-sm" title="暂时不管,移到空闲" onclick="event.stopPropagation();dispose('${s.id}','idle')">挂起</button>
+          <button class="btn btn-sm" title="验收通过,归档到已完成" onclick="event.stopPropagation();dispose('${s.id}','done')">归档</button>` : ''}
         <span class="time">${s.ended ? `${s.started} → ${s.ended}` : s.started + ' 开始'}</span>
       </div>
     </div>`;
+}
+
+/* 验收处置:显式动作才让卡片离开「验收中」;挂起→空闲(停车场),归档→已完成 */
+function dispose(id, to) {
+  const s = SESSIONS.find(x => x.id === id);
+  if (!s) return;
+  s.state = to;
+  s.unread = false;
+  if (to === 'idle') s.detail = '已挂起 · ' + (s.detail ?? '');
+  if (to === 'done') s.ended = '刚刚';
+  renderBoard();
+  toast(to === 'idle' ? `已挂起「${s.title}」` : `已归档「${s.title}」`);
 }
 
 /* 已完成 = 归档,两行紧凑卡:标题 / 项目 + 完成时间;细节在悬停提示与回放页 */
@@ -1773,7 +1806,7 @@ function compactCard(s) {
         ${s.unread ? '<span class="u-dot"></span>' : ''}
         <span class="title">${esc(s.title)}</span>
         ${s.unread ? '<span class="tag t-unread">待验收</span>' : ''}
-        <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
+        ${s.readonly ? '<span class="tag">只读</span>' : `<button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>`}
       </div>
       <div class="cwd">
         ${projChip(s.cwd)}
@@ -1794,9 +1827,11 @@ function renderBoard() {
     // 待验收(未读)排列顶:注意力优先
     const items = SESSIONS.filter(s => s.state === c.key).sort((a, b) => (b.unread ? 1 : 0) - (a.unread ? 1 : 0));
     let body;
-    if (c.key === 'done') {
-      const recent = items.slice(0, DONE_RECENT);
-      const older = items.slice(DONE_RECENT);
+    if (c.key === 'done' || c.key === 'idle') {
+      // 归档与停车场都用两行紧凑卡 + 折叠:它们是收纳区,不该与验收中争夺注意力
+      const limit = c.key === 'done' ? DONE_RECENT : IDLE_RECENT;
+      const recent = items.slice(0, limit);
+      const older = items.slice(limit);
       body = recent.map(compactCard).join('')
         + (older.length ? `
           <button class="col-more" data-open="更早的 ${older.length} 条 ▾" onclick="toggleMore(this)">更早的 ${older.length} 条 ▾</button>
@@ -1844,9 +1879,16 @@ function openReplay(id) {
   $('#drawer-foot').innerHTML =
     s.state === 'blocked'
       ? `<button class="btn btn-primary" onclick="resumeSession('${s.id}')">续接此会话(--resume)</button><span style="font-size:0.75rem;color:var(--muted)">回复后继续执行</span>`
+      : s.state === 'review'
+        ? `<button class="btn btn-primary" onclick="resumeSession('${s.id}')">继续</button>
+           <button class="btn" onclick="dispose('${s.id}','idle');closeDrawer()">挂起</button>
+           <button class="btn" onclick="dispose('${s.id}','done');closeDrawer()">归档</button>
+           <span style="font-size:0.75rem;color:var(--muted)">验收中:处置后才离开该列</span>`
       : s.readonly
         ? `<span style="font-size:0.75rem;color:var(--muted)">终端存活的交互会话,只读不接管(会话所有权规则)</span>`
         : `<span style="font-size:0.75rem;color:var(--muted)">只读回放 · source of truth 在 ~/.claude</span>`;
+  /* 看过回放 = 灭「待验收」角标;验收中的卡不挪列,处置才离开 */
+  if (s.unread) { s.unread = false; renderBoard(); renderDashboard(); }
   openDrawer();
 }
 

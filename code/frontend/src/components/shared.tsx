@@ -49,6 +49,7 @@ export function Md({ children }: { children: string }) {
 const PILL: Record<SessionState | 'err', { cls: string; label: string }> = {
   running: { cls: 'pill-run', label: '运行中' },
   blocked: { cls: 'pill-blk', label: '等待输入' },
+  review: { cls: 'pill-rev', label: '验收中' },
   idle: { cls: 'pill-idle', label: '空闲' },
   done: { cls: 'pill-done', label: '已完成' },
   err: { cls: 'pill-err', label: '错误' },
