@@ -32,17 +32,25 @@ function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) =>
   location.hash = 'dispatch';
 }
 
-/** 列序 = 注意力流:进行态在左,验收收件箱居中逼处置,停车场(空闲)与归档(已完成)靠右收纳 */
-const COLS: { key: SessionState; label: string }[] = [
-  { key: 'running', label: '运行中' },
-  { key: 'blocked', label: '等待输入' },
-  { key: 'review', label: '验收中' },
-  { key: 'idle', label: '空闲' },
-  { key: 'done', label: '已完成' },
+/**
+ * 四列生命周期:做 → 验 → 停 → 档(列序 = 注意力流,收纳区靠右)。
+ *
+ * 「等待输入」不独占一列——它不是生命周期的一段,而是运行中会话的瞬时子状态
+ * (会话还活着,只是停下来问你一句),低频却常年占 1/5 宽度。并入「进行中」后靠
+ * 置顶 + 左侧琥珀立柱保持显眼,列头另给「n 等你」计数,注意力信号一个不少。
+ * 后端 blocked 状态本身保留,这里只是不再为它单独开列。
+ */
+const COLS: { key: SessionState; label: string; states: SessionState[] }[] = [
+  { key: 'running', label: '进行中', states: ['running', 'blocked'] },
+  { key: 'review', label: '验收中', states: ['review'] },
+  { key: 'idle', label: '空闲', states: ['idle'] },
+  { key: 'done', label: '已完成', states: ['done'] },
 ];
 
 /** 移动端状态 tab 顺序与文案:「需要你」优先(与 DESIGN.md 移动端章节同源),
- *  取代桌面 4×272px 横向滚动看板——重新组织信息架构而非缩放同一个网格。 */
+ *  取代桌面横向滚动看板——重新组织信息架构而非缩放同一个网格。
+ *  这里「需要你」仍与「运行中」分列两个 tab:桌面合并是为省列宽,tab 不占宽度,
+ *  而移动端最主要的用法恰恰是「有没有事等我处理」,拆开更直达。 */
 const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
   { key: 'blocked', label: '需要你', warn: true },
   { key: 'review', label: '验收中', warn: true },
@@ -186,6 +194,7 @@ function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive, onUnsuspend }
   );
 }
 
+/** blk = 左侧琥珀立柱,在合并列里标出「它在等你回话」;与 kb-sel 走不同视觉通道,可叠加显示 */
 function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
@@ -193,7 +202,7 @@ function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
-      className={`scard ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      className={`scard ${s.state === 'blocked' ? 'blk' : ''} ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
       title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
@@ -203,6 +212,7 @@ function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive
         {isUnread(s) && <span className="u-dot" />}
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        {s.state === 'blocked' && <span className="tag t-unread">等输入</span>}
         <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
         {s.readonly && <Tag>只读</Tag>}
         <XClose s={s} onClose={onClose} />
@@ -266,6 +276,76 @@ function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive
   );
 }
 
+/**
+ * 验收中的中密度卡:标题 / 项目+id / 一行摘要 / 三个处置按钮 —— 四行。
+ *
+ * 相对全尺寸卡砍掉的都是验收时用不到的:来源标(点开回放都有)、needs 区(验收态没有
+ * needs)、多行摘要压成单行截断(全文在悬停提示与回放里)。摘要与按钮都不能砍——
+ * 前者是「要不要点开细看」的依据,后者是这列存在的意义。
+ * 该列刻意不折叠:列的长度就是积压量的信号,收起来等于回到「看不见就忘」,
+ * 所以只能从单卡高度上要空间。
+ */
+function MidCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
+  const d = useCardDrag(s, drag);
+  return (
+    <div
+      ref={d.ref}
+      style={d.style}
+      {...d.dragProps}
+      className={`scard mid ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
+      onClick={() => onOpen()}
+    >
+      <div className="top">
+        {isUnread(s) && <span className="u-dot" />}
+        <span className="title">{s.name}</span>
+        {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        <XClose s={s} onClose={onClose} />
+      </div>
+      <div className="cwd">
+        <ProjChip name={s.project} path={s.cwd} />
+        <span className="sid">{s.id}</span>
+      </div>
+      {s.detail && <div className="detail one">{s.detail}</div>}
+      <div className="foot">
+        <button
+          className="btn btn-sm btn-primary"
+          title="下达下一步指令,回到进行中"
+          onClick={(e) => {
+            e.stopPropagation();
+            onReply();
+          }}
+        >
+          继续
+        </button>
+        <button
+          className="btn btn-sm"
+          title="暂时不管,移到空闲;会话再有新产出会自动回验收中"
+          onClick={(e) => {
+            e.stopPropagation();
+            onSuspend();
+          }}
+        >
+          挂起
+        </button>
+        <button
+          className="btn btn-sm"
+          title="验收通过,归档到已完成"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchive();
+          }}
+        >
+          归档
+        </button>
+        <span className="time">{clock(s.startedAt)}</span>
+      </div>
+    </div>
+  );
+}
+
 /** 「已完成」列体:唯一的拖拽落点,拖拽悬停时高亮 */
 function DoneDropZone({ children }: { children: React.ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id: DONE_DROP_ID });
@@ -322,6 +402,21 @@ export function Sessions({
     }
     return out;
   }, [data, pendingArchive]);
+
+  /**
+   * 桌面列 → 卡片列表。合并列把多个状态拼起来,等你回话的(blocked)排最前——
+   * 它是这列里唯一需要你动手的。其余列沿用 columns 里已按未读排好的顺序。
+   * 渲染与键盘导航共用此函数,避免两处排序漂移导致「看到的」与「选中的」错位。
+   */
+  const itemsOf = useCallback(
+    (col: (typeof COLS)[number]): AgentSession[] => {
+      if (!columns) return [];
+      const arr = col.states.flatMap((st) => columns[st] ?? []);
+      if (col.key !== 'running') return arr;
+      return [...arr].sort((a, b) => Number(b.state === 'blocked') - Number(a.state === 'blocked'));
+    },
+    [columns],
+  );
 
   // 后端已把某张卡真正归档进 done,撤下对应的乐观标记(避免它永久盖住真实数据)
   useEffect(() => {
@@ -450,15 +545,17 @@ export function Sessions({
   }, [registerHandle, openReplay]);
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
-  const kbRef = useRef({ kbPos, columns, drawerOpen, openCols });
-  kbRef.current = { kbPos, columns, drawerOpen, openCols };
+  const kbRef = useRef({ kbPos, itemsOf, drawerOpen, openCols });
+  kbRef.current = { kbPos, itemsOf, drawerOpen, openCols };
   useEffect(() => {
     if (!active) return;
-    // 收纳列(空闲/已完成)折叠区里的卡不参与键盘导航
+    // 与渲染共用 itemsOf(合并列同序);收纳列折叠区里的卡不参与键盘导航
     const cardsIn = (c: number) => {
-      const key = COLS[c]!.key;
-      const arr = kbRef.current.columns?.[key] ?? [];
-      if (STOWED.includes(key) && !kbRef.current.openCols.has(key)) return arr.slice(0, recentOf(key));
+      const col = COLS[c]!;
+      const arr = kbRef.current.itemsOf(col);
+      if (STOWED.includes(col.key) && !kbRef.current.openCols.has(col.key)) {
+        return arr.slice(0, recentOf(col.key));
+      }
       return arr;
     };
     const onKey = (e: KeyboardEvent) => {
@@ -550,17 +647,22 @@ export function Sessions({
         <DndContext sensors={sensors} onDragEnd={onDragEnd}>
           <div className="board">
             {COLS.map((col, ci) => {
-              const items = columns?.[col.key] ?? [];
+              const items = itemsOf(col);
               const isDone = col.key === 'done';
               // 空闲与已完成都是收纳区:紧凑卡 + 折叠,注意力让位给验收中
               const stowed = STOWED.includes(col.key);
               const recent = recentOf(col.key);
               const open = openCols.has(col.key);
               const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
+              // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
+              const waiting =
+                col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
               // 运行中/等待输入是真实进行态,不给拖;验收中的卡可拖去已完成归档
               const card = (s: AgentSession, ri: number) => {
                 const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, col.key === 'review');
-                return stowed ? <CompactCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
+                if (stowed) return <CompactCard key={s.id} {...p} />;
+                // 验收中用中密度卡:压低单卡高度,让列长如实反映积压量(该列刻意不折叠)
+                return col.key === 'review' ? <MidCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
               };
               const body = (
                 <>
@@ -587,8 +689,13 @@ export function Sessions({
               return (
                 <div key={col.key}>
                   <div className="col-head">
-                    <Pill state={col.key} />
+                    <Pill state={col.key} label={col.label} />
                     <span className="n">{items.length}</span>
+                    {waiting > 0 && (
+                      <span className="n" style={{ color: 'var(--amber)' }}>
+                        · {waiting} 等你
+                      </span>
+                    )}
                   </div>
                   {isDone ? <DoneDropZone>{body}</DoneDropZone> : <div className="col-body">{body}</div>}
                 </div>
