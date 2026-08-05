@@ -86,8 +86,9 @@ async function closeSession(s: AgentSession, refresh: () => void) {
   }
 }
 
-/** 归档拖拽的落点标识:只有「已完成」列接受拖入(单向归档) */
+/** 拖拽落点:验收中的卡可拖进「已完成」(归档)或「空闲」(挂起),与卡上两个按钮同义 */
 const DONE_DROP_ID = 'col-done';
+const IDLE_DROP_ID = 'col-idle';
 
 interface CardProps {
   s: AgentSession;
@@ -129,9 +130,25 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
     id: s.sessionId,
     disabled: !enabled,
   });
+  // 卡内按钮(归档/挂起/继续/关闭)上的按压不进拖拽通道:onClick 的 stopPropagation 拦不住
+  // pointerdown,按钮上手抖 6px 就会被判成拖拽,click 随即被吞——表现为「首次点击失效,
+  // 卡片黏住鼠标」(2026-08-05 验收中卡片实测)。
+  const guard =
+    <E extends React.SyntheticEvent>(key: 'onPointerDown' | 'onTouchStart') =>
+    (e: E) => {
+      if ((e.target as HTMLElement).closest('button')) return;
+      (listeners?.[key] as ((ev: E) => void) | undefined)?.(e);
+    };
   return {
     ref: setNodeRef,
-    dragProps: enabled ? { ...attributes, ...listeners } : {},
+    dragProps: enabled
+      ? {
+          ...attributes,
+          ...listeners,
+          onPointerDown: guard<React.PointerEvent>('onPointerDown'),
+          onTouchStart: guard<React.TouchEvent>('onTouchStart'),
+        }
+      : {},
     style: transform
       ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`, zIndex: 30 }
       : undefined,
@@ -346,9 +363,9 @@ function MidCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive 
   );
 }
 
-/** 「已完成」列体:唯一的拖拽落点,拖拽悬停时高亮 */
-function DoneDropZone({ children }: { children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: DONE_DROP_ID });
+/** 拖拽落点列体(已完成 = 归档,空闲 = 挂起),悬停时高亮 */
+function ColDropZone({ id, children }: { id: string; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div ref={setNodeRef} className={`col-body ${isOver ? 'drop-over' : ''}`}>
       {children}
@@ -381,6 +398,8 @@ export function Sessions({
   const [mobileDoneOpen, setMobileDoneOpen] = useState(false);
   /** 拖拽归档的乐观集合:后端确认(轮询数据里已进 done)前先让卡片就位,失败则回滚 */
   const [pendingArchive, setPendingArchive] = useState<Set<string>>(() => new Set());
+  /** 拖拽挂起的乐观集合:同上,后端确认前先把卡挪进空闲 */
+  const [pendingSuspend, setPendingSuspend] = useState<Set<string>>(() => new Set());
 
   // 待验收(未读)排列顶:注意力优先(键盘导航与渲染共用同一排序);乐观归档在此就位
   const columns = useMemo(() => {
@@ -393,6 +412,13 @@ export function Sessions({
         if (moved.length) {
           arr = arr.filter((s) => !pendingArchive.has(s.sessionId));
           out.done = [...out.done, ...moved.map((s) => ({ ...s, state: 'done' as const, archived: true }))];
+        }
+      }
+      if (key === 'review' && pendingSuspend.size) {
+        const moved = arr.filter((s) => pendingSuspend.has(s.sessionId));
+        if (moved.length) {
+          arr = arr.filter((s) => !pendingSuspend.has(s.sessionId));
+          out.idle = [...out.idle, ...moved.map((s) => ({ ...s, state: 'idle' as const, suspended: true }))];
         }
       }
       out[key] = arr;
@@ -426,17 +452,30 @@ export function Sessions({
     setPendingArchive((prev) => new Set([...prev].filter((id) => !settled.has(id))));
   }, [data, pendingArchive]);
 
-  /** 拖到「已完成」= 手动归档:乐观就位 → 落库 → 立刻重取;失败回滚并提示 */
+  // 后端已确认挂起,撤下乐观标记
+  useEffect(() => {
+    if (!data || pendingSuspend.size === 0) return;
+    const settled = new Set(data.columns.idle.filter((s) => s.suspended).map((s) => s.sessionId));
+    if (![...pendingSuspend].some((id) => settled.has(id))) return;
+    setPendingSuspend((prev) => new Set([...prev].filter((id) => !settled.has(id))));
+  }, [data, pendingSuspend]);
+
+  /**
+   * 拖到「已完成」= 归档,拖到「空闲」= 挂起:与卡上同名按钮同一后端入口。
+   * 乐观就位 → 落库 → 立刻重取;失败回滚并提示。
+   */
   const onDragEnd = useCallback(
     (e: DragEndEvent) => {
-      if (e.over?.id !== DONE_DROP_ID) return;
+      const over = e.over?.id;
+      if (over !== DONE_DROP_ID && over !== IDLE_DROP_ID) return;
       const sessionId = String(e.active.id);
-      setPendingArchive((prev) => new Set(prev).add(sessionId));
-      void api
-        .archiveSession(sessionId)
+      const toIdle = over === IDLE_DROP_ID;
+      const setPending = toIdle ? setPendingSuspend : setPendingArchive;
+      setPending((prev) => new Set(prev).add(sessionId));
+      void (toIdle ? api.suspendSession(sessionId) : api.archiveSession(sessionId))
         .then(() => refresh())
         .catch((err: unknown) => {
-          setPendingArchive((prev) => {
+          setPending((prev) => {
             const next = new Set(prev);
             next.delete(sessionId);
             return next;
@@ -680,7 +719,9 @@ export function Sessions({
                           ? '暂无 · 可把验收中的卡片拖到这里归档'
                           : col.key === 'review'
                             ? '暂无 · 跑完的会话会落到这里等你处置'
-                            : '暂无'}
+                            : col.key === 'idle'
+                              ? '暂无 · 可把验收中的卡片拖到这里挂起'
+                              : '暂无'}
                       </p>
                     </div>
                   )}
@@ -697,7 +738,11 @@ export function Sessions({
                       </span>
                     )}
                   </div>
-                  {isDone ? <DoneDropZone>{body}</DoneDropZone> : <div className="col-body">{body}</div>}
+                  {isDone || col.key === 'idle' ? (
+                    <ColDropZone id={isDone ? DONE_DROP_ID : IDLE_DROP_ID}>{body}</ColDropZone>
+                  ) : (
+                    <div className="col-body">{body}</div>
+                  )}
                 </div>
               );
             })}
