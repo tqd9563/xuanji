@@ -57,12 +57,16 @@ export function markSeen(sessionId: string) {
 }
 
 /**
- * 待验收 = 验收中/空闲/已完成 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线)。
- * 注意角标与列是两件事:看过回放只熄灭角标(卡片留在验收中),显式处置才换列。
+ * 待验收 = 验收中 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线)。
+ *
+ * 只对「验收中」生效:催办信号必须单一来源。空闲(含已挂起)与已完成都是你处置过的结果,
+ * 再挂催办角标只会自相矛盾——列说「不用管」,角标说「你没看过」。角标在此退化为
+ * 验收中列内的强调与排序信号(未读排顶),不再是独立的催办系统。
+ * 注意角标与列仍是两件事:看过回放只熄灭角标(卡片留在验收中),显式处置才换列。
  */
 export function isUnread(s: { sessionId: string; state: string; readonly: boolean; lastOutputAt?: number }): boolean {
   if (!s.lastOutputAt || s.readonly) return false;
-  if (s.state !== 'review' && s.state !== 'idle' && s.state !== 'done') return false;
+  if (s.state !== 'review') return false;
   return s.lastOutputAt > (seenMap()[s.sessionId] ?? seenBaseline());
 }
 
