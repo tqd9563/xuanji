@@ -340,7 +340,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 /* ============ 会话看板 ============ */
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
-.board { display: grid; grid-template-columns: repeat(5, minmax(232px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+.board { display: grid; grid-template-columns: repeat(4, minmax(252px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 .col-body { overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
 .col-body::-webkit-scrollbar { width: 6px; }
@@ -354,6 +354,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard:hover { border-color: var(--muted); background: var(--hover); }
 .scard.kb-sel { outline: 2px solid var(--jade); outline-offset: -1px; }
+/* 等你回话的卡:琥珀常驻描边 + 微微琥珀底。并入「进行中」后仅靠置顶不够显眼,
+   描边让它在列里像被圈出来。键盘选中(玉色 outline)会盖过它,两者不打架。 */
+.scard.blk { outline: 1.5px solid var(--amber); outline-offset: -1px; background: color-mix(in oklab, var(--amber) 5%, var(--surface)); }
+.scard.blk:hover { background: color-mix(in oklab, var(--amber) 8%, var(--surface)); }
 .scard .top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 /* 注意力类别标签(等输入/待验收):实心琥珀底 + 深色字——琥珀家族里最重的一级,
    压得住旁边的琥珀警示文字(实心块 > 琥珀文字 > 灰文字) */
@@ -394,6 +398,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .scard .sid { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .detail { font-size: 0.75rem; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+/* 中密度卡的摘要:单行截断(全文在悬停提示与回放里),把列长还给积压量本身 */
+.scard .detail.one { display: block; white-space: nowrap; text-overflow: ellipsis; }
+.scard.mid { gap: 5px; }
+.scard.mid .foot { margin-top: 1px; }
 .scard .needs { font-size: 0.75rem; color: var(--amber); margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .scard .foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 .scard .time { font-size: 0.6875rem; color: var(--faint); margin-left: auto; }
@@ -786,7 +794,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
   .dash-now, .dash-grid, .rv-grid { grid-template-columns: 1fr; }
-  .board { grid-template-columns: repeat(5, 272px); height: auto; }
+  .board { grid-template-columns: repeat(4, 272px); height: auto; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
@@ -1246,16 +1254,18 @@ const SESSIONS = [
     detail: '终端交互会话(pid 48213 存活)', started: '13:47', readonly: true },
   { id: '77e2f0a9', title: '弱信号引擎评估', kind: 'background', state: 'blocked', cwd: '~/go-antifraud',
     needs: '等待权限审批:Bash(pnpm test -- --run)', started: '11:20', owner: 'web' },
-  { id: 'c410be77', title: '周报汇总草稿', kind: 'background', state: 'blocked', cwd: '~/project/cronjob',
-    needs: 'send a prompt to start', started: '09:00' },
   { id: 'b2f61a0d', title: 'mvp-2 评审与开发', kind: 'background', state: 'blocked', cwd: '~/jianghu-idle',
     needs: 'approve or modify: (1) mechanics finalization (2) sect names (3) naming rules', started: '昨天 16:16' },
-  { id: '4e0c97ab', title: 'claude 工作模式梳理', kind: 'background', state: 'blocked', cwd: '~/project',
-    needs: 'send a prompt to start', started: '昨天 23:40' },
-  { id: '8c25d3f7', title: '知识小卡评审', kind: 'background', state: 'blocked', cwd: '~/project',
-    needs: 'review the 4 output groups, submit feedback via Submit All Reviews', started: '前天 19:11' },
-  { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'blocked', cwd: '~/baize',
-    needs: '要不要接着把 self_history 正式落地到引擎?', started: '前天 15:47' },
+  /* 分布贴近实测(2026-08-05 生产实例:运行 2 / 等输入 0 / 验收 5 / 空闲 8 / 已完成 3):
+     等待输入低频、验收中偏长——这正是并列与降密度要解决的两件事 */
+  { id: 'c410be77', title: '周报汇总草稿', kind: 'background', state: 'review', cwd: '~/project/cronjob',
+    detail: '回合结束 · 已按收口卡合成初稿,待你定调', started: '09:00', owner: 'web', unread: true },
+  { id: '4e0c97ab', title: 'claude 工作模式梳理', kind: 'background', state: 'review', cwd: '~/project',
+    detail: '回合结束 · 梳理出 6 类工作模式与触发条件', started: '昨天 23:40', owner: 'web' },
+  { id: '8c25d3f7', title: '知识小卡评审', kind: 'background', state: 'review', cwd: '~/project',
+    detail: '回合结束 · 4 组产出已给出评审意见,含 3 处事实性纠错与 1 处口径分歧', started: '前天 19:11', owner: 'web', unread: true },
+  { id: 'f7a1c46e', title: '白泽横截面诊断开发', kind: 'background', state: 'review', cwd: '~/baize',
+    detail: '回合结束 · self_history 已落地到引擎并通过回归', started: '前天 15:47', owner: 'web' },
   /* 验收中 = 跑完的会话的默认落点,只有显式处置(继续/挂起/归档)才离开;看过回放只灭角标不挪列 */
   { id: 'f3ab12cd', title: 'baize 指标口径答疑', kind: 'background', state: 'review', cwd: '~/deep-baize',
     detail: '回合结束 · 已回答口径差异的三个来源', started: '13:58', owner: 'web', unread: true },
@@ -1496,6 +1506,13 @@ const STATE_PILL = {
   idle:    '<span class="pill pill-idle"><span class="dot"></span>空闲</span>',
   done:    '<span class="pill pill-done"><span class="dot"></span>已完成</span>',
 };
+/* 列头胶囊:合并列叫「进行中」(含运行中 + 等待输入);单卡胶囊仍用 STATE_PILL 报精确状态 */
+const COL_PILL = {
+  running: '<span class="pill pill-run"><span class="dot"></span>进行中</span>',
+  review:  STATE_PILL.review,
+  idle:    STATE_PILL.idle,
+  done:    STATE_PILL.done,
+};
 const KIND_TAG = { background: '<span class="tag">后台</span>', interactive: '<span class="tag">终端</span>', cronjob: '<span class="tag">◷ 定时</span>' };
 
 /* 定时任务触发的会话:轻量描述符,不进主 SESSIONS 列表(那里是看板),openReplay 兜底查找 */
@@ -1683,13 +1700,15 @@ function renderProjects(q) {
 /* ============================================================
    会话看板
    ============================================================ */
-/* 列序 = 注意力流:进行态在左,验收收件箱居中逼处置,停车场(空闲)与归档(已完成)靠右收纳 */
+/* 四列生命周期:做 → 验 → 停 → 档。
+   「等待输入」不再独占一列——它不是生命周期的一段,而是运行中会话的瞬时子状态
+   (会话还活着,只是停下来问你一句),低频却常年占 1/5 宽度。并入「进行中」后
+   靠置顶 + 琥珀描边保持显眼,注意力信号一个不少。 */
 const COLS = [
-  { key: 'running', label: '运行中' },
-  { key: 'blocked', label: '等待输入' },
-  { key: 'review', label: '验收中' },
-  { key: 'idle', label: '空闲' },
-  { key: 'done', label: '已完成' },
+  { key: 'running', label: '进行中', states: ['running', 'blocked'] },
+  { key: 'review',  label: '验收中', states: ['review'] },
+  { key: 'idle',    label: '空闲',   states: ['idle'] },
+  { key: 'done',    label: '已完成', states: ['done'] },
 ];
 
 /* ⌘N 新建会话:跳派发页 + 白纸(浏览器里被"新建窗口"占用,Pake 壳可用) */
@@ -1758,9 +1777,36 @@ document.addEventListener('keydown', e => {
 const DONE_RECENT = 5; // 已完成默认展示条数,更早的折叠
 const IDLE_RECENT = 3; // 空闲 = 停车场,同样紧凑折叠,注意力让位给验收中
 
+/* 验收中的中密度卡:标题 / 项目 + id / 一行摘要 / 三个处置按钮 —— 四行。
+   相对全尺寸卡砍掉的是验收时用不到的部分:来源标(点开回放都有)、needs 区
+   (验收态没有 needs)、多行摘要压成一行(截断,全文在悬停提示与回放里)。
+   摘要与按钮都不能砍:前者是「要不要点开细看」的依据,后者是这列存在的意义。 */
+function midCard(s) {
+  return `
+    <div class="scard mid" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
+      <div class="top">
+        ${s.unread ? '<span class="u-dot"></span>' : ''}
+        <span class="title">${esc(s.title)}</span>
+        ${s.unread ? '<span class="tag t-unread">待验收</span>' : ''}
+        <button class="x-close" title="关闭会话(Ctrl+X)" onclick="event.stopPropagation(); this.closest('.scard').remove()">×</button>
+      </div>
+      <div class="cwd">
+        ${projChip(s.cwd)}
+        <span class="sid">${s.id}</span>
+      </div>
+      ${s.detail ? `<div class="detail one">${esc(s.detail)}</div>` : ''}
+      <div class="foot">
+        <button class="btn btn-sm btn-primary" title="下达下一步指令,回到进行中" onclick="event.stopPropagation();resumeSession('${s.id}')">继续</button>
+        <button class="btn btn-sm" title="暂时不管,移到空闲" onclick="event.stopPropagation();dispose('${s.id}','idle')">挂起</button>
+        <button class="btn btn-sm" title="验收通过,归档到已完成" onclick="event.stopPropagation();dispose('${s.id}','done')">归档</button>
+        <span class="time">${s.started}</span>
+      </div>
+    </div>`;
+}
+
 function fullCard(s) {
   return `
-    <div class="scard" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
+    <div class="scard${s.state === 'blocked' ? ' blk' : ''}" data-id="${s.id}" onclick="openReplay('${s.id}')" role="button" tabindex="0" title="${esc(s.title)}${s.detail ? ' — ' + esc(s.detail) : ''}">
       <div class="top">
         ${s.unread ? '<span class="u-dot"></span>' : ''}
         <span class="title">${esc(s.title)}</span>
@@ -1824,8 +1870,12 @@ function toggleMore(btn) {
 
 function renderBoard() {
   $('#board').innerHTML = COLS.map(c => {
-    // 待验收(未读)排列顶:注意力优先
-    const items = SESSIONS.filter(s => s.state === c.key).sort((a, b) => (b.unread ? 1 : 0) - (a.unread ? 1 : 0));
+    // 进行中:等你回话的排最前(它是这列里唯一需要你动手的);验收中:未读排最前
+    const items = SESSIONS.filter(s => c.states.includes(s.state)).sort((a, b) =>
+      c.key === 'running'
+        ? (b.state === 'blocked' ? 1 : 0) - (a.state === 'blocked' ? 1 : 0)
+        : (b.unread ? 1 : 0) - (a.unread ? 1 : 0),
+    );
     let body;
     if (c.key === 'done' || c.key === 'idle') {
       // 归档与停车场都用两行紧凑卡 + 折叠:它们是收纳区,不该与验收中争夺注意力
@@ -1836,11 +1886,20 @@ function renderBoard() {
         + (older.length ? `
           <button class="col-more" data-open="更早的 ${older.length} 条 ▾" onclick="toggleMore(this)">更早的 ${older.length} 条 ▾</button>
           <div hidden>${older.map(compactCard).join('')}</div>` : '');
+    } else if (c.key === 'review') {
+      // 验收中不折叠:列的长度就是积压量的信号,收起来等于回到「看不见就忘」。
+      // 改为压低单卡高度——处置所需的信息(标题/项目/一行摘要/三个按钮)一个不少。
+      body = items.map(midCard).join('');
     } else {
       body = items.map(fullCard).join('');
     }
+    // 合并列里若有人在等你回话,列头补一枚琥珀计数:不必逐张扫也知道有几件事卡着
+    const waiting = c.key === 'running' ? items.filter(s => s.state === 'blocked').length : 0;
     return `<div>
-      <div class="col-head">${STATE_PILL[c.key]}<span class="n">${items.length}</span></div>
+      <div class="col-head">
+        ${COL_PILL[c.key]}<span class="n">${items.length}</span>
+        ${waiting ? `<span class="n" style="color:var(--amber)">· ${waiting} 等你</span>` : ''}
+      </div>
       <div class="col-body">${body || '<div class="empty" style="padding:24px 12px"><p>暂无</p></div>'}</div>
     </div>`;
   }).join('');
