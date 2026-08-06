@@ -702,6 +702,7 @@ export function Dispatch({ active }: { active: boolean }) {
   })();
 
   const showCwdNote = d.started && sessionCwd && effectiveCwd !== sessionCwd;
+  const nowTick = useMinuteTick();
 
   return (
     <>
@@ -747,9 +748,21 @@ export function Dispatch({ active }: { active: boolean }) {
         <div className="chat-status">
           {!isMobile && sessCtx && <SessCtxBadge ctx={sessCtx} />}
           <span className="u-chips">
-            <Chip label="Context" pct={d.chips.contextPct} />
-            <Chip label="Usage" pct={d.chips.fiveHourPct} resetsAt={d.chips.fiveHourResetsAt} />
-            <Chip label="Weekly" pct={d.chips.sevenDayPct} resetsAt={d.chips.sevenDayResetsAt} />
+            <Chip label="Context" pct={d.chips.contextPct} now={nowTick} />
+            <Chip
+              label="Usage"
+              pct={d.chips.fiveHourPct}
+              resetsAt={d.chips.fiveHourResetsAt}
+              windowMs={FIVE_HOUR_MS}
+              now={nowTick}
+            />
+            <Chip
+              label="Weekly"
+              pct={d.chips.sevenDayPct}
+              resetsAt={d.chips.sevenDayResetsAt}
+              windowMs={SEVEN_DAY_MS}
+              now={nowTick}
+            />
           </span>
           <span className={cn('cs-state', statusText.cls)}>
             <span className="cs-dot" />
@@ -968,6 +981,10 @@ export function Dispatch({ active }: { active: boolean }) {
   );
 }
 
+/** 两个配额窗口的时长(与 Claude 订阅口径一致):用于把 resetsAt 反推成「窗口已过去多少」 */
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** 用量三档取色:<50% 玉(健康)/ 50–75% 琥珀(注意)/ ≥75% 红(告警) */
 function usageColor(pct: number | null): string | undefined {
   if (pct === null) return undefined;
@@ -977,14 +994,38 @@ function usageColor(pct: number | null): string | undefined {
 }
 
 /** 剩余重置时长:resetsAt(ms) → 「Xh Ym 后重置」/「Ym 后重置」 */
-function untilReset(resetsAt: number | null | undefined): string | null {
+function untilReset(resetsAt: number | null | undefined, now = Date.now()): string | null {
   if (!resetsAt) return null;
-  const ms = resetsAt - Date.now();
+  const ms = resetsAt - now;
   if (ms <= 0) return '即将重置';
   const totalMin = Math.round(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${h > 0 ? `${h}h ` : ''}${m}m 后重置`;
+}
+
+/** 紧凑倒计时(常驻状态条,不能占太宽):「2h41m」/「3d4h」/「41m」 */
+function untilResetShort(resetsAt: number | null | undefined, now = Date.now()): string | null {
+  if (!resetsAt) return null;
+  const ms = resetsAt - now;
+  if (ms <= 0) return '即将重置';
+  const totalMin = Math.floor(ms / 60000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `${d}d${h}h`;
+  if (h > 0) return `${h}h${m}m`;
+  return `${m}m`;
+}
+
+/** 分钟级心跳:倒计时与时间刻度靠它自走,不再依赖流式事件顺带触发的重渲染 */
+function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
 }
 
 /** 会话标识:名称按项目色荧光呈现,id 未到手前只显名称+项目;悬停给出完整信息(未命名时提示原因)。 */
@@ -1002,27 +1043,51 @@ function SessCtxBadge({ ctx }: { ctx: SessCtx }) {
   );
 }
 
+/**
+ * 用量芯片:轨道本身即「配额窗口」,填充是已用比例,轨上那道亮刻度是当前时刻在窗口中的位置——
+ * 填充越过刻度即「烧超了」,不读数字也一眼可见。紧凑倒计时常驻在百分比后作为兜底
+ * (此前只写在 title 里,必须悬停才看得见,移动端根本摸不到)。
+ * windowMs 缺省(Context 无重置窗口)时不画刻度、不显倒计时。
+ */
 function Chip({
   label,
   pct,
   resetsAt,
+  windowMs,
+  now,
 }: {
   label: string;
   pct: number | null;
   resetsAt?: number | null;
+  windowMs?: number;
+  now: number;
 }) {
   const color = usageColor(pct);
   const alert = pct !== null && pct >= 50;
-  const reset = untilReset(resetsAt);
+  const reset = untilReset(resetsAt, now);
+  // 窗口时间进度:剩余时长反推已流逝比例;数据异常(reset 早于/远超窗口)时夹到 0–100 不画到轨外
+  const timePct =
+    resetsAt && windowMs ? Math.min(100, Math.max(0, ((windowMs - (resetsAt - now)) / windowMs) * 100)) : null;
+  const overspent = pct !== null && timePct !== null && pct > timePct + 5;
   const title =
-    pct === null ? '会话产生用量数据后显示' : [`${label} ${pct}%`, reset].filter(Boolean).join(' · ');
+    pct === null
+      ? '会话产生用量数据后显示'
+      : [
+          `${label} ${pct}%`,
+          reset,
+          timePct === null ? null : `窗口已过去 ${Math.round(timePct)}%${overspent ? ' · 用量领先于时间' : ''}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
   return (
     <span className="u-chip" title={title}>
-      {label}{' '}
+      <span className="u-lab">{label}</span>
       <span className="u-bar">
         <i style={{ width: `${pct ?? 0}%`, background: color }} />
+        {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
       </span>
       <b style={alert ? { color } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
+      {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
     </span>
   );
 }
