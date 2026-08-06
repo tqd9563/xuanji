@@ -77,7 +77,11 @@ pnpm --dir code/backend  install --prefer-offline --silent
 pnpm --dir code/frontend install --prefer-offline --silent
 
 echo "» 启动后端(:$API_PORT)…"
-XUANJI_PORT="$API_PORT" XUANJI_DATA_DIR="$RUN_DIR" \
+# XUANJI_ENV_FILE=none:验收实例不吃宿主的 ~/.xuanji/remote.env,免得远程鉴权配置漏进隔离环境;
+# 要验收登录关卡时在命令行显式带 XUANJI_PASSWORD/XUANJI_CONFIRM_TOKEN 覆盖即可
+XUANJI_ENV_FILE="${XUANJI_ENV_FILE:-none}" XUANJI_PORT="$API_PORT" XUANJI_DATA_DIR="$RUN_DIR" \
+  XUANJI_PASSWORD="${XUANJI_PASSWORD:-}" XUANJI_CONFIRM_TOKEN="${XUANJI_CONFIRM_TOKEN:-}" \
+  XUANJI_TRUST_LOOPBACK="${XUANJI_TRUST_LOOPBACK:-1}" \
   pnpm --dir code/backend start > "$RUN_DIR/backend.log" 2>&1 &
 echo $! >> "$PID_FILE"
 

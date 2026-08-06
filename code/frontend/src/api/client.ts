@@ -15,23 +15,65 @@ import type {
   WeeklyReview,
   WorklogCard,
 } from './types';
+import { ensureConfirmToken, forgetConfirmToken, notifyUnauthorized, type AuthStatus } from '@/lib/auth';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error('未登录或会话已过期');
+  }
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
 
+/**
+ * 写请求。开了二次确认的部署里先带上内存中的口令;服务端判 403 needConfirm 时
+ * 重新问一次口令再重试——首次操作与口令输错都走这条路,调用方无需感知。
+ */
 async function mutate<T>(path: string, method: string, body: unknown): Promise<T> {
-  const res = await fetch(path, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json().catch(() => ({}))) as T & { error?: string };
+  const send = async (token: string | null) => {
+    const payload = token ? { ...(body as object), confirmToken: token } : body;
+    const res = await fetch(path, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const json = (await res.json().catch(() => ({}))) as T & { error?: string; needConfirm?: boolean };
+    return { res, json };
+  };
+
+  let { res, json } = await send(await ensureConfirmToken());
+  if (res.status === 403 && json.needConfirm) {
+    const retry = await ensureConfirmToken(true);
+    if (!retry) throw new Error('已取消:该操作需要二次确认口令');
+    ({ res, json } = await send(retry));
+  }
+  if (res.status === 401) {
+    notifyUnauthorized();
+    throw new Error('未登录或会话已过期');
+  }
   if (!res.ok) throw new Error(json.error ?? `${path} → ${res.status}`);
   return json;
 }
+
+/** 登录/注销/状态。登录接口不走 mutate:它本身就是拿凭证的入口,不该被二次口令逻辑套住。 */
+export const auth = {
+  status: () => get<AuthStatus>('/api/auth/status'),
+  login: async (password: string) => {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    if (!res.ok) throw new Error(json.error ?? '登录失败');
+  },
+  logout: async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    forgetConfirmToken();
+  },
+};
 
 export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
@@ -144,8 +186,17 @@ export function subscribeChanges(onChange: (scope: string) => void): () => void 
         /* ignore */
       }
     };
+    // 401 会让 upgrade 直接被拒,表现为 onclose;这里回探一次登录态,避免界面卡在「静默不刷新」
     ws.onclose = () => {
-      if (!closed) setTimeout(connect, 3000);
+      if (closed) return;
+      void auth.status()
+        .then((s) => {
+          if (s.authEnabled && !s.loggedIn) notifyUnauthorized();
+        })
+        .catch(() => {/* 后端不可达,交给下面的重连退避 */})
+        .finally(() => {
+          if (!closed) setTimeout(connect, 3000);
+        });
     };
   };
   connect();

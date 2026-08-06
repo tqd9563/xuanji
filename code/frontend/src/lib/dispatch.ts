@@ -1,5 +1,6 @@
 /** 派发页状态机:/ws/dispatch 双向流 → 消息列表 + agent 状态 + 用量指示 */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ensureConfirmToken } from '@/lib/auth';
 
 export interface QuestionSpec {
   question: string;
@@ -348,7 +349,7 @@ export function useDispatch() {
       setCostUsd(0);
       setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
       const ws = await ensureWs();
-      ws.send(JSON.stringify({ op: 'attach', dispatchId }));
+      ws.send(JSON.stringify({ op: 'attach', dispatchId, confirmToken: await ensureConfirmToken() }));
     },
     [ensureWs, clearPendingDelta],
   );
@@ -369,9 +370,12 @@ export function useDispatch() {
   const send = useCallback(
     async (text: string, opts: StartOpts & { bg?: boolean }) => {
       const ws = await ensureWs();
+      // 派发 = 在办公笔记本上执行代码,进入通道的 op(start/bg/attach)要带二次口令;
+      // 同一条连接确认过一次后,后续 send/permission 不再反复问
+      const confirmToken = await ensureConfirmToken();
       if (opts.bg) {
         setItems((prev) => [...prev, { t: 'user', text }]);
-        ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text }));
+        ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text, confirmToken }));
         return;
       }
       if (!startedRef.current) {
@@ -379,6 +383,7 @@ export function useDispatch() {
         setStatus({ state: 'working' });
         ws.send(
           JSON.stringify({
+            confirmToken,
             op: 'start',
             cwd: opts.cwd,
             permissionMode: opts.permissionMode,

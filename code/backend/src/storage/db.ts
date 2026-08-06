@@ -216,6 +216,16 @@ export class Storage {
         source TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, id DESC);
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id_hash TEXT PRIMARY KEY, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL,
+        ip TEXT, ua TEXT
+      );
+      CREATE TABLE IF NOT EXISTS access_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL, ip TEXT NOT NULL, method TEXT NOT NULL, path TEXT NOT NULL,
+        is_write INTEGER NOT NULL, status INTEGER NOT NULL, note TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_access_log_ts ON access_log(ts DESC);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
@@ -569,6 +579,45 @@ export class Storage {
   countScheduledRuns(jobId: string): number {
     const row = this.sqlite.prepare('SELECT COUNT(*) as n FROM scheduled_runs WHERE job_id = ?').get(jobId) as { n: number };
     return row.n;
+  }
+
+  // ---------- 登录会话与访问审计(远程访问模式) ----------
+
+  /** 只存 session id 的 sha256:库文件被读走也无法直接冒用 */
+  createAuthSession(idHash: string, expiresAt: number, ip: string, ua: string) {
+    this.sqlite
+      .prepare('INSERT OR REPLACE INTO auth_sessions (id_hash, created_at, expires_at, ip, ua) VALUES (?, ?, ?, ?, ?)')
+      .run(idHash, Date.now(), expiresAt, ip, ua);
+  }
+
+  /** 返回未过期的会话;顺带清掉过期行 */
+  findAuthSession(idHash: string): { expiresAt: number } | null {
+    this.sqlite.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?').run(Date.now());
+    const row = this.sqlite
+      .prepare('SELECT expires_at as expiresAt FROM auth_sessions WHERE id_hash = ?')
+      .get(idHash) as { expiresAt: number } | undefined;
+    return row ?? null;
+  }
+
+  deleteAuthSession(idHash: string) {
+    this.sqlite.prepare('DELETE FROM auth_sessions WHERE id_hash = ?').run(idHash);
+  }
+
+  /** 单活跃会话:新登录踢掉全部旧会话,凭证被盗用时本人会立刻被踢下线从而察觉 */
+  clearAuthSessions() {
+    this.sqlite.prepare('DELETE FROM auth_sessions').run();
+  }
+
+  recordAccess(entry: { ip: string; method: string; path: string; isWrite: boolean; status: number; note?: string }) {
+    this.sqlite
+      .prepare('INSERT INTO access_log (ts, ip, method, path, is_write, status, note) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(Date.now(), entry.ip, entry.method, entry.path, entry.isWrite ? 1 : 0, entry.status, entry.note ?? null);
+  }
+
+  listAccessLog(limit = 200): Array<{ ts: number; ip: string; method: string; path: string; isWrite: number; status: number; note: string | null }> {
+    return this.sqlite
+      .prepare('SELECT ts, ip, method, path, is_write as isWrite, status, note FROM access_log ORDER BY id DESC LIMIT ?')
+      .all(limit) as Array<{ ts: number; ip: string; method: string; path: string; isWrite: number; status: number; note: string | null }>;
   }
 
   close() {

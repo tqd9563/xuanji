@@ -449,6 +449,31 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .confirm-box p { font-size: 0.8125rem; line-height: 1.7; white-space: pre-line; margin-bottom: 16px; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
+/* 二次口令弹框:复用 confirm-box 外壳,补标题/说明/输入框间距 */
+.secret-title { font-size: 0.875rem; font-weight: 600; margin-bottom: 6px; }
+.secret-hint { font-size: 0.75rem; color: var(--muted); line-height: 1.7; margin-bottom: 14px; }
+.confirm-box .input { width: 100%; margin-bottom: 16px; }
+
+/* 登录关卡:未登录时占满视口,与驾驶舱同一近黑玉调 */
+.login-shell {
+  position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: var(--bg);
+}
+.login-card {
+  width: min(360px, 100%); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-l); padding: 32px 28px; box-shadow: 0 18px 48px rgb(0 0 0 / 0.5);
+  display: flex; flex-direction: column;
+}
+.login-brand {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; color: var(--jade);
+}
+.login-sub { font-size: 0.8125rem; color: var(--muted); margin: 6px 0 20px; }
+.login-input { width: 100%; }
+.login-error { font-size: 0.75rem; color: var(--red); margin-top: 10px; }
+.login-submit { margin-top: 16px; justify-content: center; }
+.login-foot { font-size: 0.6875rem; color: var(--faint); line-height: 1.7; margin-top: 18px; }
+
 /* 命令弹窗(/resume /wd /model 共用,复用 confirm-mask 遮罩) */
 .rp-box {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
