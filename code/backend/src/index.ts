@@ -35,12 +35,21 @@ if (fs.existsSync(frontendDist)) {
   app.get('*', serveStatic({ path: path.relative(process.cwd(), path.join(frontendDist, 'index.html')) }));
 }
 
-// 本机监听:恒为 http + 回环。Pake 壳/本机浏览器走这条,不碰自签证书(WKWebView 不认 mkcert rootCA)
-const localServer = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
-  const mode = isAuthEnabled() ? '鉴权开启' : '本机独占(无鉴权)';
-  console.log(`[xuanji] 本机 http://${config.host}:${info.port}  [${mode}]  (claudeDir: ${config.claudeDir})`);
-});
-attachWs(localServer as Server, storage);
+// 本机监听:恒为 http + 回环。Pake 壳/本机浏览器走这条,不碰自签证书(WKWebView 不认 mkcert rootCA)。
+// 必须同时绑 IPv4(127.0.0.1)与 IPv6(::1):WKWebView 把 localhost 优先解析为 ::1,只绑 IPv4
+// 会导致壳连不上而白屏(2026-08-06 实际踩到);而 restart.sh / curl 健康检查走 127.0.0.1,两族都要在。
+const mode = isAuthEnabled() ? '鉴权开启' : '本机独占(无鉴权)';
+for (const host of ['127.0.0.1', '::1']) {
+  const srv = serve({ fetch: app.fetch, hostname: host, port: config.port }, (info) => {
+    const shown = host === '::1' ? `[${host}]` : host;
+    console.log(`[xuanji] 本机 http://${shown}:${info.port}  [${mode}]  (claudeDir: ${config.claudeDir})`);
+  });
+  // 某些系统禁用了 IPv6,::1 绑不上时只告警不退出——IPv4 那条已足够保证本机可用
+  srv.on('error', (e: NodeJS.ErrnoException) => {
+    console.error(`[xuanji] 本机 ${host}:${config.port} 绑定失败(${e.code ?? e.message}),已跳过`);
+  });
+  attachWs(srv as Server, storage);
+}
 
 // 远程监听:仅在口令 + 证书齐备时启动,面向办公网,强制 https
 if (config.remote.enabled && config.tls) {
