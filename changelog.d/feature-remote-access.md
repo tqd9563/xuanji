@@ -20,3 +20,4 @@
 - **会话 cookie 的 Secure 标记按请求协议自适应**：远程 https 请求置 `Secure`，本机 http 请求不置，避免双监听下本机登录被浏览器丢弃 cookie。
 - **测试不再受宿主部署状态影响**：`vitest.config.ts` 钉死全部 `XUANJI_*` 变量，避免测试进程从宿主环境（派发会话是后端子进程）继承到真实口令而导致用例结果漂移。
 - **Pake 壳仍白屏(IPv6)**：本机监听器此前只绑 IPv4 `127.0.0.1`，而 WKWebView 把 `localhost` 优先解析为 IPv6 `::1`，导致壳连不上而白屏。改为同时绑 `127.0.0.1` 与 `::1`（IPv6 不可用的系统只告警不退出，IPv4 仍保证可用）。
+- **Pake 壳/浏览器缓存旧 HTML 致白屏**：后端此前对 HTML 入口不发缓存控制头，客户端缓存了旧 `index.html`，而每次构建 vite 会给 JS/CSS 换新 hash，旧 HTML 引用的资源已不存在 → 白屏。改为对 `.html` 响应发 `Cache-Control: no-cache, must-revalidate`；带 hash 的 assets 不受影响，仍可长缓存。

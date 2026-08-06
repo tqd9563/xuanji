@@ -28,11 +28,20 @@ const app = new Hono();
 app.use('/api/*', createAuthMiddleware(storage));
 app.route('/api', createApi(storage, scheduler));
 
-// 生产模式:若前端已构建,由后端直接托管 SPA
+// 生产模式:若前端已构建,由后端直接托管 SPA。
+// HTML 入口(URL 固定但内容随构建变)必须 no-cache:否则 Pake 壳/浏览器会缓存旧 HTML,
+// 而 vite 每次构建给 JS/CSS 换新 hash,旧 HTML 引用的资源文件名已不存在 → 白屏
+// (2026-08-06 反复踩到)。带 hash 的 assets 内容变则文件名变,可放心让客户端长缓存。
 const frontendDist = path.join(import.meta.dirname, '..', '..', 'frontend', 'dist');
 if (fs.existsSync(frontendDist)) {
-  app.use('/*', serveStatic({ root: path.relative(process.cwd(), frontendDist) }));
-  app.get('*', serveStatic({ path: path.relative(process.cwd(), path.join(frontendDist, 'index.html')) }));
+  const noCacheHtml = (p: string, c: { header: (k: string, v: string) => void }) => {
+    if (p.endsWith('.html')) c.header('Cache-Control', 'no-cache, must-revalidate');
+  };
+  app.use('/*', serveStatic({ root: path.relative(process.cwd(), frontendDist), onFound: noCacheHtml }));
+  app.get(
+    '*',
+    serveStatic({ path: path.relative(process.cwd(), path.join(frontendDist, 'index.html')), onFound: noCacheHtml }),
+  );
 }
 
 // 本机监听:恒为 http + 回环。Pake 壳/本机浏览器走这条,不碰自签证书(WKWebView 不认 mkcert rootCA)。
