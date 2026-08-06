@@ -34,3 +34,6 @@ coverage/
 Thumbs.db
 
 # pnpm-lock.yaml 必须提交,不要忽略
+
+# 远程访问方案与威胁模型:只留本机,不进公开仓库
+.planning/xuanji/remote-vpn-access.md

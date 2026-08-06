@@ -10,6 +10,7 @@ import path from 'node:path';
 import chokidar from 'chokidar';
 import { WebSocketServer, WebSocket } from 'ws';
 import { config } from './config.js';
+import { checkConfirmToken, isAuthEnabled, isLoopbackIp, normalizeIp, verifySessionCookie } from './auth.js';
 import { invalidateMemoryCache } from './services/memories.js';
 import { invalidateSkillsCache } from './services/skills.js';
 import { invalidateUsageCache } from './services/usage.js';
@@ -23,6 +24,14 @@ export function attachWs(server: Server, storage: Storage) {
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? '/', 'http://localhost');
+    // 鉴权:浏览器 WebSocket 不能设自定义 header,但会自动带同源 cookie,故直接校验会话 cookie
+    const ip = normalizeIp(req.socket.remoteAddress);
+    const trusted = (config.auth.trustLoopback && isLoopbackIp(ip)) || verifySessionCookie(storage, req.headers.cookie);
+    if (!trusted) {
+      socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+      socket.destroy();
+      return;
+    }
     if (pathname === '/ws') {
       changesWss.handleUpgrade(req, socket, head, (ws) => changesWss.emit('connection', ws, req));
     } else if (pathname === '/ws/dispatch') {
@@ -69,9 +78,17 @@ export function attachWs(server: Server, storage: Storage) {
 
   // ---------- 派发通道 ----------
 
-  dispatchWss.on('connection', (ws) => {
+  dispatchWss.on('connection', (ws, req: IncomingMessage) => {
     let session: DispatchSession | null = null;
     let unsubscribe: (() => void) | null = null;
+    /**
+     * 派发通道 = 在本机执行任意代码,登录会话之外还要过二次口令。
+     * 口令按连接确认一次(start/bg/attach 时校验),之后该连接内的 send/permission 不再反复问——
+     * 否则每轮对话都要输口令,不可用;而攻击者拿到 cookie 也无法 attach 到已有会话继续下指令。
+     */
+    const confirmRequired = isAuthEnabled() && Boolean(config.auth.confirmToken);
+    let confirmed = !confirmRequired;
+    const ip = normalizeIp(req.socket.remoteAddress);
 
     const send = (obj: object) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
@@ -94,6 +111,19 @@ export function attachWs(server: Server, storage: Storage) {
           return send({ ev: 'error', message: 'bad message' });
         }
         try {
+          if (confirmRequired) {
+            const entering = msg.op === 'start' || msg.op === 'bg' || msg.op === 'attach';
+            if (entering) {
+              if (!checkConfirmToken(msg.confirmToken)) {
+                storage.recordAccess({ ip, method: 'WS', path: `/ws/dispatch#${String(msg.op)}`, isWrite: true, status: 403, note: 'bad-confirm-token' });
+                return send({ ev: 'error', message: '二次确认口令错误', needConfirm: true });
+              }
+              confirmed = true;
+              storage.recordAccess({ ip, method: 'WS', path: `/ws/dispatch#${String(msg.op)}`, isWrite: true, status: 200 });
+            } else if (!confirmed) {
+              return send({ ev: 'error', message: '本连接尚未通过二次确认', needConfirm: true });
+            }
+          }
           switch (msg.op) {
             case 'start': {
               if (typeof msg.cwd !== 'string' || typeof msg.prompt !== 'string' || !msg.prompt.trim()) {

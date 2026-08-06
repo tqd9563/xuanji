@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, subscribeChanges } from '@/api/client';
+import { api, auth as authApi, subscribeChanges } from '@/api/client';
+import { LoginView, SecretPromptHost } from '@/components/AuthGate';
+import { getAuthStatus, registerUnauthorized, setAuthStatus, OPEN_STATUS, type AuthStatus } from '@/lib/auth';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
 import { ConfirmHost, ToastHost, toast } from '@/components/shared';
@@ -42,6 +44,8 @@ const MOBILE_TITLE: Record<ViewId, string> = {
 export default function App() {
   const [view, nav] = useHashRoute();
   const [health, setHealth] = useState<{ cli: string | null } | null>(null);
+  /** null = 尚未探明登录态,先不渲染任何东西,避免驾驶舱与登录页闪一下 */
+  const [authState, setAuth] = useState<AuthStatus | null>(null);
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
   const [wall, patchWall] = useWallpaper();
@@ -90,6 +94,21 @@ export default function App() {
       .dashboard()
       .then((d) => setHealth({ cli: d.health.cli }))
       .catch(() => setHealth({ cli: null }));
+  }, []);
+
+  // 鉴权关卡:未开鉴权(本机独占)时 /auth/status 直接回 loggedIn,界面与改造前无差异;
+  // 远程模式下未登录先渲染登录页。会话过期/被新登录踢下线时由 registerUnauthorized 拉回登录页。
+  useEffect(() => {
+    registerUnauthorized(() => setAuth({ ...getAuthStatus(), loggedIn: false }));
+    authApi
+      .status()
+      .then((s) => {
+        setAuthStatus(s);
+        setAuth(s);
+      })
+      // 后端不可达时不要把人挡在登录页外:侧栏的连接状态指示已经在报这件事
+      .catch(() => setAuth(OPEN_STATUS));
+    return () => registerUnauthorized(null);
   }, []);
 
   // ws 变更订阅(M1 仅日志级消费:轮询已覆盖刷新;保留通道供 M2 扩展)
@@ -164,6 +183,19 @@ export default function App() {
   // 各视图内容是否应显示:桌面恒为 `view === id`;移动端「更多」菜单打开时,一律让位给菜单
   const isShown = (id: ViewId) => view === id && !mobileMore;
 
+  if (!authState) return null;
+  if (authState.authEnabled && !authState.loggedIn) {
+    return (
+      <LoginView
+        onSuccess={() => {
+          const next = { ...authState, loggedIn: true };
+          setAuthStatus(next);
+          setAuth(next);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app">
       <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
@@ -203,6 +235,18 @@ export default function App() {
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
             {health === null ? '连接后端…' : health.cli ? `${health.cli} · 就绪` : '后端可用 · CLI 不可达'}
           </div>
+          {/* 注销只在远程模式露出:本机独占部署没有登录概念 */}
+          {authState.authEnabled && (
+            <button
+              className="btn btn-sm btn-quiet"
+              onClick={async () => {
+                await authApi.logout();
+                setAuth({ ...authState, loggedIn: false });
+              }}
+            >
+              注销
+            </button>
+          )}
         </div>
       </aside>
 
@@ -274,6 +318,7 @@ export default function App() {
 
       <ToastHost />
       <ConfirmHost />
+      <SecretPromptHost />
     </div>
   );
 }

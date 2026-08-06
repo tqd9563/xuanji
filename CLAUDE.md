@@ -24,6 +24,12 @@
 2. 只读优先:能只读实现的功能绝不写 `~/.claude`;例外仅二(2026-07-08 用户批准):① 经验沉淀模块写 memory md;② 用户在界面显式触发、带二次确认的管理操作(如技能启停 = 在 `skills/` 与 `skills-disabled/` 间移动技能目录,可逆且不改文件内容)
 3. 会话所有权:终端存活的 interactive 会话只读不接管;web 只 resume 自己派发的/已退出的/blocked 的会话
 
+### 远程访问鉴权的维护纪律
+- 新增任何「会在办公笔记本上执行代码」的写路由(派发、定时任务、技能启停、打开外链、拉起子进程等),**必须同步加进 `code/backend/src/auth.ts` 的 `EXEC_WRITE_PATTERNS`**,否则远程模式下它会绕过二次口令闸门。这是 code review 的固定检查项。
+- 口令与证书只放 `~/.xuanji/remote.env`(chmod 600),不进仓库、不进 launchd plist、不进前端任何存储。
+- `scripts/ip-watch.sh` 与 `install-ip-watch.mjs` 会重启后端,属宿主级操作,**派发会话严禁执行**(防自斩铁律)。
+- 部署细则见 `wiki/tech/remote-access.md`。方案与威胁模型文档只留在本机(不进仓库,已 gitignore)。
+
 ### 流程
 - 前端未过原型关卡(prototype.html 获批 → `/impeccable document` 出 DESIGN.md)前,不写任何前端代码(全局 R2)
 - 开发在 `feature/` 分支进行,不直接提交 main(全局 R7;仅文档类改动例外,遵循既有惯例)

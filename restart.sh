@@ -21,9 +21,11 @@ echo "» 重启后端…"
 launchctl kickstart -k "gui/$(id -u)/com.xuanji.backend"
 
 echo "» 等待就绪…"
+# 远程模式下后端以 https 监听(自签证书故 -k),普通模式仍是 http:两种都试,谁通算谁
 for _ in $(seq 1 15); do
   sleep 1
-  if health=$(curl -sf -m 2 http://127.0.0.1:7777/api/health); then
+  if health=$(curl -sf -m 2 http://127.0.0.1:7777/api/health 2>/dev/null) \
+    || health=$(curl -skf -m 2 https://127.0.0.1:7777/api/health 2>/dev/null); then
     echo "✓ 后端已就绪:${health:0:120}"
     exit 0
   fi

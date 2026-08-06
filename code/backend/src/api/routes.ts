@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import { config } from '../config.js';
+import { attachAuthRoutes } from '../auth.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
@@ -31,6 +32,9 @@ function num(v: unknown): number | undefined {
 
 export function createApi(storage: Storage, scheduler: SchedulerService) {
   const api = new Hono();
+
+  // 登录/注销/状态/审计日志。会话校验与二次口令由 index.ts 的中间件统一处理。
+  attachAuthRoutes(api, storage);
 
   api.get('/health', async (c) => {
     const cli = await cliVersion();
