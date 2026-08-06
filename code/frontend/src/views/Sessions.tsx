@@ -91,6 +91,8 @@ async function closeSession(s: AgentSession, refresh: () => void) {
 /** 拖拽落点:验收中的卡可拖进「已完成」(归档)或「空闲」(挂起),与卡上两个按钮同义 */
 const DONE_DROP_ID = 'col-done';
 const IDLE_DROP_ID = 'col-idle';
+/** 可拖的源列:验收中(→ 空闲挂起 / 已完成归档)与空闲(→ 已完成归档) */
+const DRAGGABLE_COLS: SessionState[] = ['review', 'idle'];
 
 interface CardProps {
   s: AgentSession;
@@ -475,6 +477,8 @@ export function Sessions({
       if (over !== DONE_DROP_ID && over !== IDLE_DROP_ID) return;
       const sessionId = String(e.active.id);
       const toIdle = over === IDLE_DROP_ID;
+      // 空闲列的卡拖回空闲列 = 没动:不发请求,免得对已挂起的卡重复挂起
+      if (toIdle && (columns?.idle ?? []).some((s) => s.sessionId === sessionId)) return;
       const setPending = toIdle ? setPendingSuspend : setPendingArchive;
       setPending((prev) => new Set(prev).add(sessionId));
       void (toIdle ? api.suspendSession(sessionId) : api.archiveSession(sessionId))
@@ -488,7 +492,7 @@ export function Sessions({
           toast(err instanceof Error ? err.message : String(err));
         });
     },
-    [refresh],
+    [refresh, columns],
   );
 
   /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
@@ -706,9 +710,9 @@ export function Sessions({
               // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
               const waiting =
                 col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
-              // 运行中/等待输入是真实进行态,不给拖;验收中的卡可拖去已完成归档
+              // 运行中/等待输入是真实进行态,不给拖;验收中(→空闲/已完成)与空闲(→已完成)可拖
               const card = (s: AgentSession, ri: number) => {
-                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, col.key === 'review');
+                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, DRAGGABLE_COLS.includes(col.key));
                 if (stowed) return <CompactCard key={s.id} {...p} />;
                 // 验收中用中密度卡:压低单卡高度,让列长如实反映积压量(该列刻意不折叠)
                 return col.key === 'review' ? <MidCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;
@@ -726,7 +730,7 @@ export function Sessions({
                     <div className="empty" style={{ padding: '24px 12px' }}>
                       <p>
                         {isDone
-                          ? '暂无 · 可把验收中的卡片拖到这里归档'
+                          ? '暂无 · 可把验收中/空闲的卡片拖到这里归档'
                           : col.key === 'review'
                             ? '暂无 · 跑完的会话会落到这里等你处置'
                             : col.key === 'idle'
@@ -760,8 +764,12 @@ export function Sessions({
           {/* 跟手的那张:渲染在 body 层,不被列的 overflow 裁掉,也不被右侧列盖住 */}
           <DragOverlay dropAnimation={null} className="drag-ghost">
             {(() => {
-              const s = dragId ? (columns?.review ?? []).find((x) => x.sessionId === dragId) : undefined;
-              return s ? <MidCard {...cardProps(s, false, false)} /> : null;
+              if (!dragId || !columns) return null;
+              const s = DRAGGABLE_COLS.flatMap((k) => columns[k] ?? []).find((x) => x.sessionId === dragId);
+              if (!s) return null;
+              const p = cardProps(s, false, false);
+              // 卡型跟随源列:验收中是中密度卡,空闲是紧凑卡——浮层与原位形状一致才不跳
+              return s.state === 'idle' ? <CompactCard {...p} /> : <MidCard {...p} />;
             })()}
           </DragOverlay>
         </DndContext>

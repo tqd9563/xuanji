@@ -79,6 +79,10 @@ export function TodoPalette({ onClose, onCreated }: { onClose: () => void; onCre
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const st = stateRef.current;
+      // [临时诊断 2026-08-03] 桌面壳回车无反应排查:回车必吐 toast,定位事件到底走到哪一步
+      if (e.key === 'Enter' || e.keyCode === 13 || e.keyCode === 229) {
+        toast(`[诊断] key=${e.key} keyCode=${e.keyCode} composing=${e.isComposing ? 1 : 0} pjMode=${st.pjMode ? 1 : 0}`);
+      }
       // 中文输入法选词时的 ↩/Tab 属于 IME,不是本浮层的按键:不放行会把半截拼音当标题存掉。
       // 只看 isComposing,不看 keyCode 229:WKWebView 里输入法激活时普通回车也可能标 229,
       // 按 229 拦会把「保存」整个吞掉(2026-08-03 桌面壳实测回车无反应)。
@@ -209,6 +213,8 @@ export function TodoPalette({ onClose, onCreated }: { onClose: () => void; onCre
           <span><span className="kbd">tab</span> 选项目 / 下一个</span>
           <span><span className="kbd">⌘↩</span> 保存并立即开工</span>
           <span><span className="kbd">esc</span> {pjMode ? '退回' : '取消'}</span>
+          {/* [临时诊断] 构建标记:footer 看不到 b3 = 壳还在跑旧 bundle */}
+          <span style={{ marginLeft: 'auto', opacity: 0.5 }} className="mono">b3</span>
         </div>
       </div>
     </div>
