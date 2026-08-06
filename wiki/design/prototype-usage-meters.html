@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>璇玑 · 用量条呈现方案原型</title>
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface: oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --jade-dim: oklch(0.68 0.10 115);
+    --amber: oklch(0.78 0.14 80);
+    --red: oklch(0.68 0.19 25);
+    --blue: oklch(0.72 0.11 245);
+    --tint-muted: oklch(0.27 0.010 120 / 0.55);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-s: 6px; --r-m: 10px; --r-chip: 4px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 0.875rem; line-height: 1.6;
+    padding: 40px 32px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin: 0 0 6px; }
+  .lede { color: var(--muted); max-width: 68ch; margin: 0 0 40px; text-wrap: pretty; }
+  section { margin-bottom: 48px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .sec-head h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+  .sec-head .tag {
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+    border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent);
+    border-radius: var(--r-chip); padding: 1px 6px;
+  }
+  .sec-note { color: var(--muted); font-size: 0.8125rem; margin: 0 0 14px; max-width: 72ch; }
+  .sec-note b { color: var(--ink); font-weight: 600; }
+
+  /* 真实语境:派发页状态条 */
+  .stage {
+    border: 1px solid var(--line-soft); border-radius: var(--r-m);
+    background: var(--surface-2); padding: 0 18px 4px;
+  }
+  .stage .fake-chat {
+    height: 54px; display: flex; align-items: center;
+    color: var(--faint); font-size: 0.75rem; border-bottom: 1px dashed var(--line-soft);
+  }
+  .chat-status {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 0 8px; font-size: 0.6875rem; color: var(--muted);
+  }
+  .sess-ctx { display: flex; align-items: center; gap: 8px; flex: none; }
+  .sc-title { font-size: 0.9375rem; font-weight: 600; color: oklch(0.82 0.155 300); text-shadow: 0 0 12px oklch(0.82 0.155 300 / 0.4); }
+  .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+  .cs-state { display: flex; align-items: center; gap: 7px; margin-left: auto; white-space: nowrap; }
+  .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .u-chips { display: flex; align-items: center; gap: 16px; }
+
+  /* ---------- 现状(对照组) ---------- */
+  .v0 .u-chip { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .v0 .u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; }
+  .v0 .u-bar i { display: block; height: 100%; border-radius: 3px; }
+  .v0 b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+
+  /* ---------- A 加厚 + 尾随倒计时 ---------- */
+  .vA .u-chip { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .vA .u-bar {
+    width: 64px; height: 8px; border-radius: 99px;
+    background: var(--tint-muted); overflow: hidden;
+    box-shadow: inset 0 0 0 1px oklch(1 0 0 / 0.04);
+  }
+  .vA .u-bar i { display: block; height: 100%; border-radius: 99px; transition: width 400ms var(--ease); }
+  .vA b { font-family: var(--mono); font-weight: 500; color: var(--ink); font-size: 0.75rem; }
+  .vA .reset {
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--faint);
+    padding-left: 7px; border-left: 1px solid var(--line-soft);
+  }
+
+  /* ---------- B 双轨条:用量 vs 时间窗进度 ---------- */
+  .vB .u-chip { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; min-width: 132px; }
+  .vB .lab { font-size: 0.6875rem; color: var(--muted); }
+  .vB .val { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); text-align: right; }
+  .vB .tracks { grid-column: 1 / -1; display: grid; gap: 2px; }
+  .vB .t-use { height: 9px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; }
+  .vB .t-use i { display: block; height: 100%; border-radius: 3px; transition: width 400ms var(--ease); }
+  .vB .t-time { height: 3px; border-radius: 2px; background: oklch(0.27 0.010 120 / 0.35); overflow: hidden; }
+  .vB .t-time i { display: block; height: 100%; border-radius: 2px; background: var(--faint); }
+  .vB .sub { grid-column: 1 / -1; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); display: flex; justify-content: space-between; }
+  .vB .sub .over { color: var(--amber); }
+
+  /* ---------- C 刻度标记:重置点画在轨道上 ---------- */
+  .vC .u-chip { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .vC .u-bar {
+    position: relative; width: 88px; height: 10px; border-radius: 3px;
+    background: var(--tint-muted); overflow: hidden;
+  }
+  .vC .u-bar i { display: block; height: 100%; transition: width 400ms var(--ease); }
+  .vC .u-bar .tick {
+    position: absolute; top: -1px; bottom: -1px; width: 2px;
+    background: var(--ink); opacity: 0.55; border-radius: 1px;
+  }
+  .vC .u-bar .tick::after {
+    content: ''; position: absolute; inset: 0 -3px;
+  }
+  .vC .cap { font-family: var(--mono); font-size: 0.75rem; color: var(--ink); }
+  .vC .cap em { font-style: normal; color: var(--faint); font-size: 0.6875rem; }
+  .vC .lab { color: var(--muted); }
+
+  /* ---------- D 一行式仪表带(合并三段 + 单一重置行) ---------- */
+  .vD .gauge {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0; border: 1px solid var(--line-soft); border-radius: var(--r-s);
+    overflow: hidden; background: var(--surface); width: 100%; max-width: 460px;
+  }
+  .vD .cell { padding: 7px 11px; display: grid; gap: 5px; border-right: 1px solid var(--line-soft); }
+  .vD .cell:last-child { border-right: none; }
+  .vD .cell .top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .vD .cell .lab { font-size: 0.6875rem; color: var(--muted); }
+  .vD .cell .val { font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); }
+  .vD .cell .bar { height: 4px; border-radius: 99px; background: var(--tint-muted); overflow: hidden; }
+  .vD .cell .bar i { display: block; height: 100%; border-radius: 99px; }
+  .vD .cell .rst { font-family: var(--mono); font-size: 0.625rem; color: var(--faint); }
+  .vD .cell .rst.soon { color: var(--amber); }
+
+  /* 移动端并排展示 */
+  .phones { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 18px; }
+  .phone {
+    width: 330px; border: 1px solid var(--line); border-radius: 20px;
+    background: var(--surface-2); padding: 14px 12px;
+  }
+  .phone .cap { font-size: 0.6875rem; color: var(--faint); font-family: var(--mono); margin-bottom: 10px; }
+  .phone .chat-status { gap: 10px; }
+  .phone .u-chips { flex: 1; min-width: 0; justify-content: space-between; gap: 8px; }
+  .phone .cs-state { display: none; }
+  .phone .vA .u-bar { width: 46px; }
+  .phone .vA .reset { border-left: none; padding-left: 0; }
+  .phone .vB .u-chip { min-width: 0; }
+  .phone .vC .u-bar { width: 56px; }
+  .phone .vD .gauge { max-width: none; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-top: 12px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 18px; height: 6px; border-radius: 99px; display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>用量条呈现方案 · 派发页状态条</h1>
+  <p class="lede">
+    问题两条:① Context / Usage / Weekly 三条 5px 细轨在深色底上几乎读不出填充比例;② 重置倒计时只在 <code>title</code> 里,必须把鼠标停上去才看得到,移动端根本摸不到。
+    下面四个方案都在真实语境里演示(桌面状态条 + 330px 窄屏),数值取同一组:Context 34%、Usage 62%(2h41m 后重置)、Weekly 88%(3d 4h 后重置)。
+  </p>
+
+  <!-- 对照组 -->
+  <section>
+    <div class="sec-head"><h2>现状</h2><span class="tag">对照</span></div>
+    <p class="sec-note">5px 轨 + 52px 宽,倒计时藏在 title。放在这里是为了让下面每个方案的差异有参照。</p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status v0">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip" title="Context 34%">Context <span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span> <b>34%</b></span>
+          <span class="u-chip" title="Usage 62% · 2h 41m 后重置">Usage <span class="u-bar"><i style="width:62%;background:var(--amber)"></i></span> <b>62%</b></span>
+          <span class="u-chip" title="Weekly 88% · 3d 4h 后重置">Weekly <span class="u-bar"><i style="width:88%;background:var(--red)"></i></span> <b>88%</b></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- A -->
+  <section>
+    <div class="sec-head"><h2>方案 A · 加厚 + 尾随倒计时</h2><span class="tag">改动最小</span></div>
+    <p class="sec-note">
+      轨道 5px → <b>8px</b>、宽 52 → 64px、圆角改胶囊;倒计时以等宽小字跟在百分比后,用一条竖细线与数值分隔。
+      信息全部平铺,零交互成本;代价是状态条横向占用增加约 120px,窄屏靠缩短为 <code>2h41m</code> 吸收。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vA">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip">Context <span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span> <b>34%</b></span>
+          <span class="u-chip">Usage <span class="u-bar"><i style="width:62%;background:var(--amber)"></i></span> <b>62%</b> <span class="reset">2h41m 后重置</span></span>
+          <span class="u-chip">Weekly <span class="u-bar"><i style="width:88%;background:var(--red)"></i></span> <b>88%</b> <span class="reset">3d4h 后重置</span></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section>
+    <div class="sec-head"><h2>方案 B · 双轨:用量 vs 时间窗</h2><span class="tag">信息量最大</span></div>
+    <p class="sec-note">
+      每个芯片两层轨道:上层 <b>9px</b> 是用量百分比,下层 3px 暗轨是<b>时间窗已流逝比例</b>。
+      两条一比即知是否超支——用量条明显长于时间条 = 按当前速度会提前用光,底行直接把结论写出来(<span style="color:var(--amber)">超前 26%</span>)。
+      倒计时常驻底行。这是唯一能回答「我烧得太快吗」的方案,代价是芯片变成两行、状态条高度 +14px。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vB">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip">
+            <span class="lab">Context</span><span></span><span class="val">34%</span>
+            <span class="tracks"><span class="t-use"><i style="width:34%;background:var(--jade-dim)"></i></span></span>
+            <span class="sub"><span>本会话上下文</span></span>
+          </span>
+          <span class="u-chip">
+            <span class="lab">Usage</span><span></span><span class="val">62%</span>
+            <span class="tracks">
+              <span class="t-use"><i style="width:62%;background:var(--amber)"></i></span>
+              <span class="t-time"><i style="width:46%"></i></span>
+            </span>
+            <span class="sub"><span>2h41m 后重置</span><span class="over">超前 16%</span></span>
+          </span>
+          <span class="u-chip">
+            <span class="lab">Weekly</span><span></span><span class="val">88%</span>
+            <span class="tracks">
+              <span class="t-use"><i style="width:88%;background:var(--red)"></i></span>
+              <span class="t-time"><i style="width:62%"></i></span>
+            </span>
+            <span class="sub"><span>3d4h 后重置</span><span class="over">超前 26%</span></span>
+          </span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section>
+    <div class="sec-head"><h2>方案 C · 轨道上的重置刻度</h2><span class="tag">最省横向</span></div>
+    <p class="sec-note">
+      轨道加厚到 <b>10px</b> 并加宽到 88px,轨道本身即时间窗:填充是用量,轨上那道亮刻度是<b>「此刻」在窗口中的位置</b>。
+      填充越过刻度 = 烧超了,一眼可见,不需要读任何数字。倒计时用极简形式(<code>2h41m</code>)跟在百分比后作为兜底。
+      横向占用与现状接近,但「刻度=时间」需要学一次才懂。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vC">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip"><span class="lab">Context</span>
+            <span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span>
+            <span class="cap">34%</span></span>
+          <span class="u-chip"><span class="lab">Usage</span>
+            <span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="tick" style="left:46%"></span></span>
+            <span class="cap">62% <em>2h41m</em></span></span>
+          <span class="u-chip"><span class="lab">Weekly</span>
+            <span class="u-bar"><i style="width:88%;background:var(--red)"></i><span class="tick" style="left:62%"></span></span>
+            <span class="cap">88% <em>3d4h</em></span></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--amber)"></i>已用配额</span>
+      <span><i style="background:var(--ink);opacity:.55;width:2px;height:12px;border-radius:1px"></i>此刻 / 窗口时间进度</span>
+      <span><i style="background:var(--tint-muted)"></i>剩余</span>
+    </div>
+  </section>
+
+  <!-- D -->
+  <section>
+    <div class="sec-head"><h2>方案 D · 三格仪表带</h2><span class="tag">最像仪表</span></div>
+    <p class="sec-note">
+      不再是散落的芯片,而是一块三格仪表:每格自带标签、数值、细条、倒计时行,靠 1px 分隔线成组。
+      细条在这里只做辅助编码(数值和倒计时才是主角),所以反而可以更细。
+      占一整行、把会话标识挤到上一行是它的代价;好处是移动端不用做任何特殊处理,天然三等分。
+      Weekly 逼近上限时倒计时转琥珀 —— <b>「还剩多少」和「还有多久」并列</b>才构成决策。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vD" style="flex-wrap:wrap;row-gap:8px">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+        <span class="gauge">
+          <span class="cell">
+            <span class="top"><span class="lab">Context</span><span class="val">34%</span></span>
+            <span class="bar"><i style="width:34%;background:var(--jade-dim)"></i></span>
+            <span class="rst">本会话</span>
+          </span>
+          <span class="cell">
+            <span class="top"><span class="lab">Usage</span><span class="val">62%</span></span>
+            <span class="bar"><i style="width:62%;background:var(--amber)"></i></span>
+            <span class="rst">2h41m 后重置</span>
+          </span>
+          <span class="cell">
+            <span class="top"><span class="lab">Weekly</span><span class="val" style="color:var(--red)">88%</span></span>
+            <span class="bar"><i style="width:88%;background:var(--red)"></i></span>
+            <span class="rst soon">3d4h 后重置</span>
+          </span>
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 移动端 -->
+  <section>
+    <div class="sec-head"><h2>窄屏(330px)四方案并排</h2><span class="tag">真机形态</span></div>
+    <p class="sec-note">移动端会话标识已挪进消息区顶部,状态条整行让给用量;这里检验的是「加了倒计时之后还塞不塞得下」。</p>
+    <div class="phones">
+      <div class="phone">
+        <div class="cap">A · 加厚 + 尾随倒计时</div>
+        <div class="chat-status vA">
+          <span class="u-chips">
+            <span class="u-chip">Ctx <span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span> <b>34%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:62%;background:var(--amber)"></i></span> <b>62%</b> <span class="reset">2h41m</span></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:88%;background:var(--red)"></i></span> <b>88%</b> <span class="reset">3d4h</span></span>
+          </span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="cap">B · 双轨</div>
+        <div class="chat-status vB">
+          <span class="u-chips">
+            <span class="u-chip"><span class="lab">Ctx</span><span></span><span class="val">34%</span>
+              <span class="tracks"><span class="t-use"><i style="width:34%;background:var(--jade-dim)"></i></span></span>
+              <span class="sub"><span>会话</span></span></span>
+            <span class="u-chip"><span class="lab">Usage</span><span></span><span class="val">62%</span>
+              <span class="tracks"><span class="t-use"><i style="width:62%;background:var(--amber)"></i></span><span class="t-time"><i style="width:46%"></i></span></span>
+              <span class="sub"><span>2h41m</span></span></span>
+            <span class="u-chip"><span class="lab">Weekly</span><span></span><span class="val">88%</span>
+              <span class="tracks"><span class="t-use"><i style="width:88%;background:var(--red)"></i></span><span class="t-time"><i style="width:62%"></i></span></span>
+              <span class="sub"><span>3d4h</span></span></span>
+          </span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="cap">C · 重置刻度</div>
+        <div class="chat-status vC">
+          <span class="u-chips">
+            <span class="u-chip"><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><span class="cap">34%</span></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="tick" style="left:46%"></span></span><span class="cap">62%</span></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:88%;background:var(--red)"></i><span class="tick" style="left:62%"></span></span><span class="cap">88%</span></span>
+          </span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="cap">D · 三格仪表带</div>
+        <div class="chat-status vD">
+          <span class="gauge">
+            <span class="cell"><span class="top"><span class="lab">Ctx</span><span class="val">34%</span></span><span class="bar"><i style="width:34%;background:var(--jade-dim)"></i></span><span class="rst">会话</span></span>
+            <span class="cell"><span class="top"><span class="lab">Usage</span><span class="val">62%</span></span><span class="bar"><i style="width:62%;background:var(--amber)"></i></span><span class="rst">2h41m</span></span>
+            <span class="cell"><span class="top"><span class="lab">Wk</span><span class="val" style="color:var(--red)">88%</span></span><span class="bar"><i style="width:88%;background:var(--red)"></i></span><span class="rst soon">3d4h</span></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>

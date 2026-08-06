@@ -666,10 +666,19 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .cwd-note .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--amber); flex: none; }
 .cwd-note .mono { color: var(--ink); }
-.u-chip { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
-.u-chip b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
-.u-bar { width: 52px; height: 5px; border-radius: 3px; background: var(--tint-muted); overflow: hidden; display: inline-block; }
-.u-bar i { display: block; height: 100%; border-radius: 3px; background: var(--jade-dim); }
+/* 用量芯片:轨道 = 配额窗口。填充=已用,轨上亮刻度=此刻在窗口中的位置,填充越过刻度即烧超。
+   5px 细轨在近黑底上读不出填充比例,故加厚到 10px;倒计时从 title 移到轨后常驻(悬停在移动端不存在)。 */
+.u-chip { display: flex; align-items: center; gap: 7px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.u-chip b { font-family: var(--mono); font-weight: 500; font-size: 0.75rem; color: var(--ink); }
+.u-chip .u-reset { font-family: var(--mono); font-style: normal; font-size: 0.6875rem; color: var(--faint); }
+.u-bar {
+  position: relative; width: 88px; height: 10px; border-radius: 3px;
+  background: var(--tint-muted); overflow: hidden; display: inline-block; flex: none;
+}
+.u-bar i { display: block; height: 100%; background: var(--jade-dim); transition: width 400ms var(--ease); }
+/* 刻度上下各溢出 1px 顶到轨道边缘,窄轨上才看得出是「一道标线」而非填充的一段 */
+.u-bar .u-tick { position: absolute; top: -1px; bottom: -1px; width: 2px; border-radius: 1px; background: var(--ink); opacity: 0.55; }
+@media (prefers-reduced-motion: reduce) { .u-bar i { transition: none; } }
 /* min-height:0 是经典 flexbox 坑的修复:flex 子项默认 min-height:auto,在部分内核
    (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
    形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到
@@ -1300,8 +1309,12 @@ body.wall-glass .dd-menu {
   .chat-status { flex-wrap: nowrap; gap: 10px; padding: 10px 4px; overflow-x: auto; scrollbar-width: none; } /* 空间紧张时兜底横滑,正常宽度下不需要 */
   .chat-status::-webkit-scrollbar { display: none; }
   .u-chips { flex: 1; min-width: 0; justify-content: space-between; gap: 8px; }
-  .u-chip { flex: 1; min-width: 66px; justify-content: center; }
-  .u-bar { width: 36px; }
+  /* 窄屏:标签让位给「条 + % + 倒计时」——Context/Usage/Weekly 的顺序固定,颜色与位置已足够辨识,
+     完整标签仍在 title 里。gap 收紧到 5px 让三段挤得下,不再靠横滑找 Weekly。 */
+  .u-chip { flex: 1; min-width: 0; justify-content: center; gap: 5px; }
+  .u-chip .u-lab { display: none; }
+  .u-bar { width: 44px; }
+  .u-chip b { font-size: 0.6875rem; }
   .cs-state { flex: none; }
   .composer textarea { font-size: 1rem; min-height: 44px; }
   .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
