@@ -14,7 +14,7 @@ STATE_DIR="${XUANJI_STATE_DIR:-$HOME/.xuanji}"
 CERT_DIR="${XUANJI_CERT_DIR:-$STATE_DIR/certs}"
 LAST_IP_FILE="$STATE_DIR/last-ip"
 SAN_FILE="$CERT_DIR/san-list"
-PORT="${XUANJI_PORT:-7777}"
+PORT="${XUANJI_REMOTE_PORT:-7778}"   # 远程 https 端口(本机 http 7777 不对外)
 LABEL="com.xuanji.backend"
 
 mkdir -p "$STATE_DIR"

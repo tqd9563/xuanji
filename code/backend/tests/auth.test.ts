@@ -254,6 +254,49 @@ describe('WS 会话校验', () => {
   });
 });
 
+describe('密钥加载(remote.env)', () => {
+  /**
+   * 回归:配置文件里的口令**绝不能写回 process.env**。
+   * 曾经写回过,后果是后端 spawn 的每个派发会话都继承了登录口令,
+   * 派发出去的 Claude 会话及其运行的任意命令都能读到(2026-08-06 实际发生)。
+   */
+  it('读得到配置文件的值,但不污染 process.env', async () => {
+    const envFile = path.join(dir, 'remote.env');
+    fs.writeFileSync(
+      envFile,
+      ['# 注释行', `XUANJI_PASSWORD=${PASSWORD}`, `XUANJI_CONFIRM_TOKEN="${CONFIRM}"`, 'NOT_XUANJI=ignored', ''].join('\n'),
+    );
+    vi.resetModules();
+    vi.stubEnv('XUANJI_ENV_FILE', envFile);
+    const { config } = await import('../src/config.js');
+
+    expect(config.auth.password).toBe(PASSWORD);
+    expect(config.auth.confirmToken).toBe(CONFIRM); // 引号被剥掉
+    // 关键断言:文件里的值没有被写回环境变量(vitest.config 把它们钉成空串,故比对「不等于口令」)
+    expect(process.env.XUANJI_PASSWORD).not.toBe(PASSWORD);
+    expect(process.env.XUANJI_CONFIRM_TOKEN).not.toBe(CONFIRM);
+    expect(process.env.NOT_XUANJI).toBeUndefined();
+  });
+
+  it('真实环境变量优先于配置文件(preview.sh / 测试可覆盖)', async () => {
+    const envFile = path.join(dir, 'remote.env');
+    fs.writeFileSync(envFile, `XUANJI_PASSWORD=${PASSWORD}\n`);
+    vi.resetModules();
+    vi.stubEnv('XUANJI_ENV_FILE', envFile);
+    vi.stubEnv('XUANJI_PASSWORD', 'env-wins-'.padEnd(20, 'x'));
+    const { config } = await import('../src/config.js');
+    expect(config.auth.password).toBe('env-wins-'.padEnd(20, 'x'));
+  });
+
+  it('XUANJI_ENV_FILE=none 时完全不读文件(隔离验收)', async () => {
+    vi.resetModules();
+    vi.stubEnv('XUANJI_ENV_FILE', 'none');
+    const { config } = await import('../src/config.js');
+    expect(config.auth.password).toBe('');
+    expect(config.remote.enabled).toBe(false);
+  });
+});
+
 describe('启动前置校验(fail closed)', () => {
   async function errorsFor(env: Record<string, string>) {
     vi.resetModules();
@@ -262,12 +305,36 @@ describe('启动前置校验(fail closed)', () => {
     return assertConfigSafe();
   }
 
-  it('默认绑回环时不做任何要求', async () => {
+  it('未表达远程意图时不做任何要求', async () => {
     expect(await errorsFor({})).toEqual([]);
   });
 
+  it('只配口令不配证书:允许启动,但远程监听器不启用(仅本机 http 带鉴权)', async () => {
+    vi.resetModules();
+    vi.stubEnv('XUANJI_PASSWORD', PASSWORD);
+    vi.stubEnv('XUANJI_CONFIRM_TOKEN', CONFIRM);
+    const { assertConfigSafe, config } = await import('../src/config.js');
+    expect(assertConfigSafe()).toEqual([]);
+    expect(config.remote.enabled).toBe(false);
+    expect(config.host).toBe('127.0.0.1');
+  });
+
+  it('三件套齐备时启用远程监听器,本机监听仍是回环 http', async () => {
+    vi.resetModules();
+    vi.stubEnv('XUANJI_PASSWORD', PASSWORD);
+    vi.stubEnv('XUANJI_CONFIRM_TOKEN', CONFIRM);
+    vi.stubEnv('XUANJI_TLS_CERT', '/tmp/c.pem');
+    vi.stubEnv('XUANJI_TLS_KEY', '/tmp/k.pem');
+    const { config } = await import('../src/config.js');
+    expect(config.remote.enabled).toBe(true);
+    expect(config.remote.port).toBe(7778);
+    // 本机口子不受远程配置影响:仍是回环 + 明文,Pake 壳照旧可用
+    expect(config.host).toBe('127.0.0.1');
+    expect(config.port).toBe(7777);
+  });
+
   it('绑办公网地址但缺口令/TLS 时逐条报错', async () => {
-    const errs = await errorsFor({ XUANJI_HOST: '<办公网IP>' });
+    const errs = await errorsFor({ XUANJI_HOST: '192.0.2.42' });
     expect(errs.some((e) => e.includes('XUANJI_PASSWORD'))).toBe(true);
     expect(errs.some((e) => e.includes('XUANJI_CONFIRM_TOKEN'))).toBe(true);
     expect(errs.some((e) => e.includes('HTTPS'))).toBe(true);
@@ -275,7 +342,7 @@ describe('启动前置校验(fail closed)', () => {
 
   it('二次口令与登录口令相同时拒绝', async () => {
     const errs = await errorsFor({
-      XUANJI_HOST: '<办公网IP>',
+      XUANJI_HOST: '192.0.2.42',
       XUANJI_PASSWORD: PASSWORD,
       XUANJI_CONFIRM_TOKEN: PASSWORD,
       XUANJI_TLS_CERT: '/tmp/c.pem',
@@ -287,7 +354,7 @@ describe('启动前置校验(fail closed)', () => {
 
   it('口令过短时拒绝', async () => {
     const errs = await errorsFor({
-      XUANJI_HOST: '<办公网IP>',
+      XUANJI_HOST: '192.0.2.42',
       XUANJI_PASSWORD: 'short',
       XUANJI_CONFIRM_TOKEN: CONFIRM,
       XUANJI_TLS_CERT: '/tmp/c.pem',

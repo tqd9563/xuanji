@@ -4,6 +4,17 @@
 
 访问路径:**家里浏览器 → 公司官方 VPN → 办公网 → 办公笔记本上的璇玑**。数据不出办公网,家里只渲染网页。
 
+## 双监听(重要)
+
+后端同时开两个口子,互不影响:
+
+| 口子 | 地址 | 协议 | 用途 |
+|---|---|---|---|
+| 本机 | `127.0.0.1:7777` | **http**,永远在 | Pake 壳、本机浏览器。流量不出机器,无嗅探威胁 |
+| 远程 | `0.0.0.0:7778` | **https**,仅在口令+证书齐备时启用 | 家里经 VPN 访问,全套鉴权 |
+
+本机口子恒为明文回环,**不受远程配置影响**——给它套自签 https 只会让 Pake(WKWebView)因不认 mkcert rootCA 而白屏(2026-08-06 实际踩到)。同一端口无法既 http 又 https(绑 `0.0.0.0:7777` 已包含回环),所以远程用独立端口 7778。
+
 ## 0. 默认形态没有变化
 
 不配任何 env 时,璇玑仍是 `127.0.0.1:7777` 的本机独占驾驶舱,无登录、无二次口令,行为与改造前一致。
@@ -16,7 +27,8 @@
 ```bash
 mkdir -p ~/.xuanji && chmod 700 ~/.xuanji
 cat > ~/.xuanji/remote.env <<EOF
-XUANJI_HOST=0.0.0.0                      # 同时监听回环与办公网;IP 漂移不必改这里
+XUANJI_HOST=0.0.0.0                      # 远程监听器绑定地址;IP 漂移不必改这里
+XUANJI_REMOTE_PORT=7778                  # 远程 https 端口(可选,默认 7778)
 XUANJI_PASSWORD=$(openssl rand -base64 32)        # 登录口令
 XUANJI_CONFIRM_TOKEN=$(openssl rand -base64 32)   # 写操作二次口令
 XUANJI_TLS_CERT=$HOME/.xuanji/certs/xuanji.pem
@@ -26,7 +38,9 @@ EOF
 chmod 600 ~/.xuanji/remote.env
 ```
 
-`XUANJI_HOST` 用 `0.0.0.0` 而非具体 IP:绑具体 IP 会导致后端**不再监听 127.0.0.1**,本机 `localhost:7777` 打不开、本机免登录豁免也失效;绑 `0.0.0.0` 则两边都在,DHCP 地址漂移时也不用改配置(只有证书需要跟着 IP 走,由 ip-watch 自动处理)。
+`XUANJI_HOST` 只影响**远程**监听器,用 `0.0.0.0` 而非具体 IP:绑具体 IP 后 DHCP 地址一变就得改配置,绑 `0.0.0.0` 则一劳永逸(只有证书需要跟着 IP 走,由 ip-watch 自动处理)。本机 `127.0.0.1:7777` 那个口子与此无关,恒定存在。
+
+**密钥不写回 `process.env`**:配置文件解析结果只留在后端模块内。曾经写回过,后果是口令被后端 spawn 的每个派发会话继承,派发出去的 Claude 会话及其运行的任意命令都能读到(2026-08-06 实际发生,已修 + 加回归测试)。
 
 两个口令记在密码管理器里。**二次口令建议只记在脑子里、不存在家里那台电脑上**——家庭设备被实时远控时,它是唯一还能挡住派发(=任意命令执行)的东西。
 
@@ -65,7 +79,7 @@ node code/backend/scripts/install-ip-watch.mjs --uninstall
 配置就位后由**用户或非派发会话**执行 `./restart.sh`(或 `launchctl kickstart -k gui/$(id -u)/com.xuanji.backend`)。
 回滚:`rm ~/.xuanji/remote.env` 再重启,即回到本机独占形态。
 
-建议同时打开 macOS 应用层防火墙,仅放行办公网/VPN 网段访问 7777。
+建议同时打开 macOS 应用层防火墙,仅放行办公网/VPN 网段访问 **7778**(7777 只绑回环,本就不对外)。
 
 ## 5. 鉴权模型速查
 
@@ -99,3 +113,5 @@ XUANJI_PASSWORD=<32位> XUANJI_CONFIRM_TOKEN=<32位> XUANJI_TRUST_LOOPBACK=0 ./p
 6. WS:无 cookie / 伪造 cookie / 已注销 cookie 均被 401 拒绝握手
 7. `GET /api/auth/access-log` 有远程 IP 记录,且不含任何口令明文
 8. HTTPS 访问无证书告警(家里装过 rootCA 后)
+9. 本机 `http://localhost:7777` 仍可用且免登录,Pake 壳与派发通道正常(双监听回归)
+10. 后端进程环境不含口令:`ps eww -p <pid> | tr ' ' '\n' | grep -c XUANJI_PASSWORD` 应为 0

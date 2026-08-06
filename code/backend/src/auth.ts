@@ -175,8 +175,9 @@ export function attachAuthRoutes(api: import('hono').Hono, storage: Storage) {
     storage.createAuthSession(hashSessionId(sid), Date.now() + ttl, ip, c.req.header('user-agent') ?? '');
     setCookie(c, SESSION_COOKIE, sid, {
       httpOnly: true,
-      // 本机 HTTP 调试时 Secure cookie 不会被回写,故仅在启用 TLS 时置 Secure
-      secure: Boolean(config.tls),
+      // 按本次请求的实际协议定:远程 https 请求置 Secure;本机 http 请求不置,
+      // 否则浏览器会丢弃 cookie(双监听下同一个 app 同时服务两种协议)
+      secure: c.req.url.startsWith('https:'),
       sameSite: 'Strict',
       path: '/',
       maxAge: Math.floor(ttl / 1000),
