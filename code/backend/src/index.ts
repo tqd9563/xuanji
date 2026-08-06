@@ -35,22 +35,25 @@ if (fs.existsSync(frontendDist)) {
   app.get('*', serveStatic({ path: path.relative(process.cwd(), path.join(frontendDist, 'index.html')) }));
 }
 
-const tlsOptions = config.tls
-  ? { key: fs.readFileSync(config.tls.key), cert: fs.readFileSync(config.tls.cert) }
-  : null;
-const scheme = tlsOptions ? 'https' : 'http';
+// 本机监听:恒为 http + 回环。Pake 壳/本机浏览器走这条,不碰自签证书(WKWebView 不认 mkcert rootCA)
+const localServer = serve({ fetch: app.fetch, hostname: config.host, port: config.port }, (info) => {
+  const mode = isAuthEnabled() ? '鉴权开启' : '本机独占(无鉴权)';
+  console.log(`[xuanji] 本机 http://${config.host}:${info.port}  [${mode}]  (claudeDir: ${config.claudeDir})`);
+});
+attachWs(localServer as Server, storage);
 
-const server = serve(
-  {
-    fetch: app.fetch,
-    hostname: config.host,
-    port: config.port,
-    ...(tlsOptions ? { createServer: createHttpsServer, serverOptions: tlsOptions } : {}),
-  },
-  (info) => {
-    const mode = isAuthEnabled() ? '鉴权开启' : '本机独占(无鉴权)';
-    console.log(`[xuanji] listening on ${scheme}://${config.host}:${info.port}  [${mode}]  (claudeDir: ${config.claudeDir})`);
-  },
-);
-
-attachWs(server as Server, storage);
+// 远程监听:仅在口令 + 证书齐备时启动,面向办公网,强制 https
+if (config.remote.enabled && config.tls) {
+  const tlsOptions = { key: fs.readFileSync(config.tls.key), cert: fs.readFileSync(config.tls.cert) };
+  const remoteServer = serve(
+    {
+      fetch: app.fetch,
+      hostname: config.remote.host,
+      port: config.remote.port,
+      createServer: createHttpsServer,
+      serverOptions: tlsOptions,
+    },
+    (info) => console.log(`[xuanji] 远程 https://${config.remote.host}:${info.port}  [鉴权开启]`),
+  );
+  attachWs(remoteServer as Server, storage);
+}
