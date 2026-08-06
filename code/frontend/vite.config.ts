@@ -14,6 +14,9 @@ export default defineConfig({
   },
   server: {
     port: Number(process.env.XUANJI_WEB_PORT ?? 5173),
+    // 端口被占时宁可起不来也不静默顺延:preview.sh 打印的验收地址必须就是实际监听的端口,
+    // 否则用户会对着别的 worktree 的旧实例验收(2026-08-05 实际发生)。
+    strictPort: Boolean(process.env.XUANJI_WEB_PORT),
     proxy: {
       '/api': `http://127.0.0.1:${BACKEND_PORT}`,
       '/ws': { target: `ws://127.0.0.1:${BACKEND_PORT}`, ws: true },

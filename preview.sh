@@ -45,7 +45,9 @@ pick_port() {
   local p=$1
   for _ in $(seq 1 30); do
     if [ "$p" = "$HOST_PORT" ]; then p=$((p + 1)); continue; fi
-    if ! nc -z 127.0.0.1 "$p" 2>/dev/null; then echo "$p"; return 0; fi
+    # 两个协议栈都要探:vite 只绑 IPv6([::1]),只查 127.0.0.1 会把已被占用的端口
+    # 误判为空闲,vite 随后自己顺延到下一个,而脚本仍打印旧端口(2026-08-05 实际踩到)
+    if ! nc -z 127.0.0.1 "$p" 2>/dev/null && ! nc -z ::1 "$p" 2>/dev/null; then echo "$p"; return 0; fi
     p=$((p + 1))
   done
   echo "✗ 找不到可用端口(从 $1 起试了 30 个)" >&2
