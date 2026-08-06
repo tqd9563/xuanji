@@ -9,9 +9,11 @@ import type {
   ScheduledRun,
   SessionsBoard,
   Skill,
+  Todo,
   UsageReport,
   WeeklyDraft,
   WeeklyReview,
+  WorklogCard,
 } from './types';
 
 async function get<T>(path: string): Promise<T> {
@@ -40,7 +42,26 @@ export const api = {
   memories: () => get<{ memories: Memory[] }>('/api/memories'),
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
+  /** 任务总结:窗口/项目/状态/关键词过滤全在后端做,前端只管展示 */
+  worklog: (f?: { start?: number; end?: number; project?: string; status?: string; q?: string }) => {
+    const p = new URLSearchParams();
+    if (f?.start) p.set('start', String(f.start));
+    if (f?.end) p.set('end', String(f.end));
+    if (f?.project) p.set('project', f.project);
+    if (f?.status && f.status !== 'all') p.set('status', f.status);
+    if (f?.q) p.set('q', f.q);
+    const qs = p.toString();
+    return get<{ cards: WorklogCard[] }>(`/api/worklog${qs ? `?${qs}` : ''}`);
+  },
   usage: () => get<UsageReport>('/api/usage/today'),
+  // ---------- 待办 ----------
+  todos: () => get<{ todos: Todo[] }>('/api/todos'),
+  /** cwd 传绝对路径(界面已选好)或短名(外部脚本手打),后端统一宽松匹配 */
+  createTodo: (title: string, cwd?: string | null) =>
+    mutate<{ todo: Todo }>('/api/todos', 'POST', { title, cwd: cwd ?? null }),
+  updateTodo: (id: number, patch: Partial<{ title: string; status: Todo['status']; cwd: string | null; sessionId: string | null }>) =>
+    mutate<{ todo: Todo }>(`/api/todos/${id}`, 'PATCH', patch),
+  deleteTodo: (id: number) => mutate<{ ok: boolean }>(`/api/todos/${id}`, 'DELETE', {}),
   palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------
@@ -58,6 +79,14 @@ export const api = {
     get<{ sessions: ClosedSession[] }>(`/api/sessions/closed${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
   unhideSession: (sessionId: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/unhide`, 'POST', {}),
+  archiveSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'PUT', {}),
+  unarchiveSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/archive`, 'DELETE', {}),
+  suspendSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/suspend`, 'PUT', {}),
+  unsuspendSession: (sessionId: string) =>
+    mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/suspend`, 'DELETE', {}),
   // ---------- 周回顾 ----------
   weeklyReview: (start: number, end: number) =>
     get<WeeklyReview>(`/api/weekly-review?start=${start}&end=${end}`),

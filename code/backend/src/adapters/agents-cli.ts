@@ -67,11 +67,23 @@ export interface AgentsResult {
 let agentsCache: { at: number; result: AgentsResult } | null = null;
 const AGENTS_TTL_MS = 2_500;
 
+/**
+ * 每次返回卡片副本,绝不把缓存里的对象直接交出去。
+ *
+ * sessionsBoard 会原地改写这些对象(name/detail 覆盖、归档改 state=done、验收中改 state=review)。
+ * 若把缓存对象本体交出去,TTL 内的第二次轮询拿到的就是「已经被上一轮改过状态」的卡:
+ * 主循环 columns[s.state].push(s) 会把它直接塞进 review/done 列,跳过 applyArchives/promoteReview,
+ * 挂起与归档记录形同虚设(2026-08-05 实测:挂起后卡片始终不动)。
+ */
+function cloneResult(r: AgentsResult): AgentsResult {
+  return { ...r, sessions: r.sessions.map((s) => ({ ...s })) };
+}
+
 export async function listAgents(): Promise<AgentsResult> {
-  if (agentsCache && Date.now() - agentsCache.at < AGENTS_TTL_MS) return agentsCache.result;
+  if (agentsCache && Date.now() - agentsCache.at < AGENTS_TTL_MS) return cloneResult(agentsCache.result);
   const result = await listAgentsUncached();
   if (result.ok) agentsCache = { at: Date.now(), result };
-  return result;
+  return cloneResult(result);
 }
 
 async function listAgentsUncached(): Promise<AgentsResult> {

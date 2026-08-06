@@ -80,7 +80,8 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
   return {
     needsAttention: board.columns.blocked,
     running: board.columns.running,
-    reviewCandidates: [...board.columns.idle, ...board.columns.done].filter((s) => s.lastOutputAt && !s.readonly),
+    // 待处置队列 = 验收中列全体(含已看过但没做决定的)。空闲/已完成是处置后的结果,不再催办。
+    reviewCandidates: board.columns.review.filter((s) => s.lastOutputAt && !s.readonly),
     strip: {
       todayPrompts: todayEntries.length,
       todayTokensInOut: usage.totalTokens.inOut,

@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { api } from '@/api/client';
-import type { ReviewProject, WeeklyDraft } from '@/api/types';
+import type { ReviewProject, WeeklyDraft, WorklogCard } from '@/api/types';
 import { usePoll, useIsMobile } from '@/lib/hooks';
 import { fmtCost, projColor } from '@/lib/utils';
 import { Empty, Md, ProjChip, toast } from '@/components/shared';
+import { WorklogStatusPill } from '@/views/Worklog';
 
 const DAY = 86_400_000;
 
@@ -87,7 +88,7 @@ export function Review() {
         <div className="stat-grid" title={data?.caliber.active}>
           <div className="cell"><div className="k">prompt</div><div className="v">{data?.totals.prompts ?? '—'} <small>条</small></div></div>
           <div className="cell"><div className="k">会话</div><div className="v">{data?.totals.sessions ?? '—'} <small>个 · {data?.totals.projects ?? '—'} 项目</small></div></div>
-          <div className="cell"><div className="k">活跃天数</div><div className="v">{data?.totals.activeDays ?? '—'} <small>天</small></div></div>
+          <div className="cell" title={data?.caliber.cards}><div className="k">任务总结</div><div className="v">{data?.cards.length ?? '—'} <small>条</small></div></div>
           <div className="cell"><div className="k">成本</div><div className="v">{data ? fmtCost(data.totals.costUsd) : '—'}</div></div>
         </div>
       ) : (
@@ -96,6 +97,7 @@ export function Review() {
           <span>会话 <b>{data?.totals.sessions ?? '—'}</b> 个</span>
           <span>项目 <b>{data?.totals.projects ?? '—'}</b> 个</span>
           <span>活跃 <b>{data?.totals.activeDays ?? '—'}</b> 天</span>
+          <span title={data?.caliber.cards}>总结 <b>{data?.cards.length ?? '—'}</b> 条</span>
           <span>成本 <b>{data ? fmtCost(data.totals.costUsd) : '—'}</b></span>
         </div>
       )}
@@ -127,11 +129,27 @@ export function Review() {
       </div>
 
       <div className="rv-grid">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+        <div className="panel">
+          <div className="panel-head">
+            <h2 style={{ whiteSpace: 'nowrap' }}>本周总结</h2>
+            <span className="sub">周报的第一物料 · 点条目去「总结」模块</span>
+          </div>
+          {!data && <div className="empty" style={{ padding: 20 }}><p>加载中…</p></div>}
+          {data && data.cards.length === 0 && (
+            <Empty>
+              <p>本周还没有任务总结。</p>
+              <p style={{ color: 'var(--faint)' }}>任务验收后在派发页点「⚑ 任务总结」(⌘⏎)沉淀一条,周报会更准、更省。</p>
+            </Empty>
+          )}
+          {data?.cards.map((c) => <ReviewCardRow key={c.name} c={c} />)}
+        </div>
         <div className="panel">
           <div className="panel-head"><h2>活跃会话</h2><span className="sub">按项目分组 · 点会话展开 prompt 原文</span></div>
           {!data && <div className="empty" style={{ padding: 20 }}><p>加载中…</p></div>}
           {data && data.projects.length === 0 && <Empty><p>本周没有活跃会话。</p></Empty>}
           {data?.projects.map((p) => <ReviewProjectRow key={p.path} p={p} />)}
+        </div>
         </div>
         <div className="panel">
           <div className="panel-head">
@@ -146,10 +164,23 @@ export function Review() {
               </span>
             )}
           </div>
-          <DraftPanel draft={draft} generating={!!generating} totals={data?.totals} />
+          <DraftPanel draft={draft} generating={!!generating} totals={data?.totals} cardCount={data?.cards.length} />
         </div>
       </div>
     </>
+  );
+}
+
+/** 本周总结的紧凑行:与「总结」模块同一套词汇(项目芯片 + 状态胶囊),详情不在此展开——
+ *  这里是周报物料的预览,下钻走「总结」模块,避免同一份详情在两处各维护一套。 */
+function ReviewCardRow({ c }: { c: WorklogCard }) {
+  return (
+    <button className="rvwl-item" onClick={() => { location.hash = 'worklog'; }} title={c.sections.conclusion ?? c.task}>
+      <span className="d">{c.date.slice(5).replace('-', '/')}</span>
+      <ProjChip name={c.project} />
+      <span className="t">{c.task}</span>
+      <WorklogStatusPill s={c.status} />
+    </button>
   );
 }
 
@@ -198,16 +229,24 @@ function DraftPanel({
   draft,
   generating,
   totals,
+  cardCount,
 }: {
   draft: WeeklyDraft | null;
   generating: boolean;
   totals?: { prompts: number; sessions: number };
+  cardCount?: number;
 }) {
+  // 零卡:草稿会退回全量流水扫描,准确率与消耗都更差,提前把代价讲清楚而不是事后解释
+  const noCards = cardCount === 0 && (
+    <div className="notice-amber" style={{ margin: '12px 18px 0' }}>
+      本周暂无任务总结,草稿将退回原始流水扫描生成——准确率与 token 消耗都较差,建议先在派发页收几条总结再生成。
+    </div>
+  );
   if (generating && draft?.status !== 'done') {
     return (
       <div className="draft-run">
         <span className="typing"><i /><i /><i /></span>
-        正在从 {totals?.prompts ?? '—'} 条 prompt、{totals?.sessions ?? '—'} 个会话的素材生成草稿…会话已入看板可跟踪
+        正在从 {cardCount ? `${cardCount} 条任务总结 + ` : ''}{totals?.prompts ?? '—'} 条 prompt、{totals?.sessions ?? '—'} 个会话的素材生成草稿…会话已入看板可跟踪
       </div>
     );
   }
@@ -216,14 +255,21 @@ function DraftPanel({
   }
   if (!draft || !draft.content) {
     return (
-      <Empty>
-        <p>本周还没有草稿。点右上「生成周报草稿」,由 AI 从本页素材(prompt 流 + 会话名 + commits)写一份按项目分组的周报。</p>
-        <p style={{ color: 'var(--faint)' }}>素材只喂 prompt 原文与提交题目,不读会话全文;生成会话入看板,完成后待验收提醒。</p>
-      </Empty>
+      <>
+        {noCards}
+        <Empty>
+          <p>
+            本周还没有草稿。点右上「生成周报草稿」,由 AI 写一份按项目分组的周报——
+            {cardCount ? `以本周 ${cardCount} 条任务总结为主体` : '以活动流水为素材'},未被总结覆盖的项目再用 prompt 流水与 commits 补齐。
+          </p>
+          <p style={{ color: 'var(--faint)' }}>不读会话全文;生成会话入看板,完成后待验收提醒。</p>
+        </Empty>
+      </>
     );
   }
   return (
     <>
+      {noCards}
       <div className="draft-body md">
         <Md>{draft.content}</Md>
       </div>

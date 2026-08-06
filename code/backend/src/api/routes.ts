@@ -11,10 +11,13 @@ import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
+import { queryWorklog } from '../services/worklog.js';
+import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
+import type { SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
@@ -78,6 +81,80 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     const q = c.req.query('q')?.trim() ?? '';
     if (!q) return c.json({ memories: [] });
     return c.json({ memories: await searchMemories(storage, q) });
+  });
+
+  /** 任务总结(wrapup 卡):只读扫 ~/.claude/worklog,支持窗口/项目/状态/关键词过滤 */
+  api.get('/worklog', async (c) => {
+    const status = c.req.query('status');
+    const cards = await queryWorklog({
+      start: num(c.req.query('start')),
+      end: num(c.req.query('end')),
+      project: c.req.query('project')?.trim() || undefined,
+      status: status && status !== 'all' ? (status as WorklogCard['status']) : undefined,
+      q: c.req.query('q')?.trim() || undefined,
+    });
+    return c.json({ cards });
+  });
+
+  // ---------- 待办(自有数据) ----------
+
+  api.get('/todos', async (c) => c.json({ todos: storage.listTodos() }));
+
+  /**
+   * 新建待办。project 宽松匹配(见 services/todos.resolveProject):
+   * web 传绝对路径,Raycast 等外部脚本传手打短名,匹配不上就存「未指定」而不是报错。
+   */
+  api.post('/todos', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const invalid = validateTitle(body.title);
+    if (invalid) return c.json(invalid, 400);
+    const { cwd, project } = await resolveProject(
+      typeof body.cwd === 'string' && body.cwd ? body.cwd : typeof body.project === 'string' ? body.project : null,
+    );
+    const todo = storage.createTodo({
+      title: String(body.title).trim(),
+      cwd,
+      project,
+      source: body.source === 'external' ? 'external' : 'web',
+    });
+    return c.json({ todo }, 201);
+  });
+
+  api.patch('/todos/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getTodo(id)) return c.json({ error: 'not found' }, 404);
+    const body = await c.req.json().catch(() => ({}));
+    const patch: Record<string, unknown> = {};
+    if (body.title !== undefined) {
+      const invalid = validateTitle(body.title);
+      if (invalid) return c.json(invalid, 400);
+      patch.title = String(body.title).trim();
+    }
+    if (body.status !== undefined) {
+      if (!isTodoStatus(body.status)) return c.json({ error: 'status 需为 open/doing/done' }, 400);
+      Object.assign(patch, statusPatch(body.status));
+    }
+    // cwd 显式传 null = 清空归属;传字符串走同一套宽松匹配
+    if (body.cwd !== undefined || body.project !== undefined) {
+      const { cwd, project } = await resolveProject(
+        typeof body.cwd === 'string' ? body.cwd : typeof body.project === 'string' ? body.project : null,
+      );
+      patch.cwd = cwd;
+      patch.project = project;
+    }
+    if (body.sessionId !== undefined) {
+      patch.sessionId = typeof body.sessionId === 'string' && body.sessionId ? body.sessionId : null;
+    }
+    if (Object.keys(patch).length === 0) return c.json({ error: '没有可更新的字段' }, 400);
+    storage.updateTodo(id, patch);
+    return c.json({ todo: storage.getTodo(id) });
+  });
+
+  api.delete('/todos/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getTodo(id)) return c.json({ error: 'not found' }, 404);
+    storage.deleteTodo(id);
+    return c.json({ ok: true });
   });
 
   api.get('/usage/today', async (c) => {
@@ -175,6 +252,60 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     }
     storage.hideSession(sessionId);
     return c.json({ ok: true, ended: false });
+  });
+
+  /**
+   * 手动归档(看板拖到「已完成」):自有覆盖表,~/.claude 不动。
+   * 运行中/等待输入的会话拒绝——那是真实进行态,归档没有意义。
+   */
+  api.put('/sessions/:sessionId/archive', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const board = await sessionsBoard(storage);
+    const found = (Object.keys(board.columns) as SessionState[])
+      .flatMap((k) => board.columns[k])
+      .find((s) => s.sessionId === sessionId);
+    if (!found) return c.json({ error: '会话不在看板上' }, 404);
+    if (found.state === 'running' || found.state === 'blocked') {
+      return c.json({ error: '运行中/等待输入的会话不能归档' }, 409);
+    }
+    storage.archiveSession(sessionId, found.lastOutputAt);
+    return c.json({ ok: true });
+  });
+
+  /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
+  api.delete('/sessions/:sessionId/archive', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    storage.unarchiveSession(sessionId);
+    return c.json({ ok: true });
+  });
+
+  /**
+   * 挂起(验收中 →「挂起」):看过了、暂时不处理,卡片放回空闲停车场。
+   * 与归档同样拒绝进行态——运行中/等待输入的会话没有「暂时不处理」这一说。
+   */
+  api.put('/sessions/:sessionId/suspend', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const board = await sessionsBoard(storage);
+    const found = (Object.keys(board.columns) as SessionState[])
+      .flatMap((k) => board.columns[k])
+      .find((s) => s.sessionId === sessionId);
+    if (!found) return c.json({ error: '会话不在看板上' }, 404);
+    if (found.state === 'running' || found.state === 'blocked') {
+      return c.json({ error: '运行中/等待输入的会话不能挂起' }, 409);
+    }
+    storage.suspendSession(sessionId, found.lastOutputAt);
+    return c.json({ ok: true });
+  });
+
+  /** 撤销挂起:卡片回验收中(会话重新产出时后端也会自动撤销) */
+  api.delete('/sessions/:sessionId/suspend', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    storage.unsuspendSession(sessionId);
+    return c.json({ ok: true });
   });
 
   /** resume 前的所有权预检(前端在跳转派发页前调用) */

@@ -115,6 +115,10 @@ components:
     textColor: "{colors.amber}"
     rounded: "{rounded.pill}"
     padding: "1px 9px"
+  pill-review:
+    textColor: "{colors.violet}"
+    rounded: "{rounded.pill}"
+    padding: "1px 9px"
   pill-done:
     textColor: "{colors.green}"
     rounded: "{rounded.pill}"
@@ -164,6 +168,41 @@ components:
     rounded: "{rounded.pill}"
     width: "46px"
     height: "28px"
+  wrapup-btn:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.sm}"
+    padding: "4px 12px"
+  wrapup-btn-hover:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 22%, transparent)"
+  residue-block:
+    backgroundColor: "color-mix(in oklab, {colors.amber} 14%, transparent)"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "10px 14px"
+  todo-capture:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    padding: "4px 6px 4px 16px"
+  todo-go:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 11px"
+  todo-go-hover:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+  todo-palette:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    width: "min(560px, 92vw)"
+  from-todo-banner:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.sm}"
+    padding: "7px 12px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -178,7 +217,7 @@ components:
 
 **Key Characteristics:**
 - 近黑玉调底 + 明度三阶墨色层级,深夜环境零刺眼
-- 状态色即语义(玉/琥珀/蓝/红),项目分类色锁明度转色相,两套色彩词汇互不越界
+- 状态色即语义(玉/琥珀/紫/翠/蓝/红),项目分类色锁明度转色相,两套色彩词汇互不越界
 - 单一无衬线 UI 字族 + 等宽数据字族,实时数字一律表格数字
 - 平面优先,深度靠色调分层;阴影只属于悬浮层(抽屉/菜单/toast)
 - 动效只表状态,150–250ms,指数缓出,尊重 prefers-reduced-motion
@@ -187,7 +226,7 @@ components:
 
 ## 2. Colors
 
-夜空底、墨色层、玉之品牌、五色状态、等明度分类——五套词汇各司其职。
+夜空底、墨色层、玉之品牌、六色状态、等明度分类——五套词汇各司其职。
 
 ### Primary
 - **玉 Jade** (oklch(0.80 0.13 115)):品牌主色与「运行中」状态色。主按钮底色、当前导航项、焦点描边、键盘选中卡描边、运行脉冲点。配 **on-jade** (oklch(0.18 0.02 120)) 深色文字确保按钮对比。
@@ -197,7 +236,7 @@ components:
 - **琥珀 Amber** (oklch(0.78 0.14 80)):「等待输入/审批」专用。blocked 状态、needs 文案、审批卡边框、git 脏区计数、超阈值用量、定时任务的「需审批/已错过」胶囊。它出现即意味着"需要你"。
 - **翠 Green** (oklch(0.74 0.12 155)):「已完成」专属状态色。会话看板/派发结果/定时任务运行历史的完成状态胶囊(`.pill-done`),以及成功退出的运行记录。绿色出现即意味着"这件事彻底完事了,不需要你再看"。
 - **信使蓝 Blue** (oklch(0.72 0.11 245)):纯「信息」,不再表完成。未推送计数(↑n)、工作目录文字色、自绘下拉里目录值的字色、定时任务「待执行」排程胶囊(`.pill-scheduled`)——它标注事实,不宣告状态已终结。
-- **紫 Violet** (oklch(0.73 0.11 300)):模型/编排同族色(派发状态行的模型名、自绘下拉里模型值的字色;亦作 ToolCard 编排类工具的类别色——Task 派发的即是子 agent,与模型标识同源)。
+- **紫 Violet** (oklch(0.73 0.11 300)):模型/编排同族色(派发状态行的模型名、自绘下拉里模型值的字色;亦作 ToolCard 编排类工具的类别色——Task 派发的即是子 agent,与模型标识同源)。**兼任「验收中」状态色**(`.pill-review`、`.tag.t-susp` 已挂起标签):琥珀严格独占「等待输入」(会话卡住动不了、必须你回话),验收中是「跑完了等你判断」——两者紧迫度不同,必须一眼可分,故验收中另起色相而非共用琥珀。验收中的胶囊圆点不脉动,与运行/阻塞的活跃态拉开层级。
 - **赤 Red** (oklch(0.68 0.19 25)):错误与熔断,以及危险操作按钮。全站最稀有的颜色,出现即事故。
 
 ### Neutral
@@ -348,6 +387,24 @@ components:
 ### 定时任务列表(Signature Component)
 一次性与周期任务共用同一份折叠列表(`.cron-item`/`.cron-row`):行首状态胶囊覆盖全生命周期(待执行=蓝 `pill-scheduled`、运行中=玉脉冲、需审批/已错过=琥珀脉冲、已完成=绿、已熔断=红),行尾时钟(mono、tabular-nums)与相对时间(faint)。周期任务在折叠态额外插入**近 7 期状态点**(`.runline`,6px 圆点,绿/红/琥珀,左旧右新,悬停提示范围),不展开也能扫出好坏。展开后运行历史表(`.runs`)逐期一行,「结果会话」列直连只读回放抽屉——失败/审批中的任务在此看真实转录(工具调用、报错原文),而不是新开一个会话去问 Claude 发生了什么;source of truth 恒在 `~/.claude` 的 session jsonl。
 
+### 任务总结入口(Signature Component · composer 底栏的收口按钮)
+派发页输入框底栏左端的 `.wrapup-btn`(⚑ 任务总结 + mono 角标 `⌘⏎`):玉色 13% tint 底 + 40% 玉描边 + 玉字,与紧邻的 faint 灰字 hint 形成一眼可辨的层级差。它借用「导航 active / 主操作」那套玉色词汇,但**刻意不加脉冲、不加发光**——wrapup 是语义触发、禁止自动执行的动作,入口的价值在常驻可达,稀缺的玉色本身就是高亮(仍在一成玉规则内)。会话未开始时 45% 透明并禁用,提示语讲清为什么不可用而不是沉默。角标是「机器的话」用 mono 承载,不与按钮文字争字重;移动端无物理键盘,角标隐藏、命中区撑到 44px。
+
+### 已知残留块(`.residue`)
+任务总结详情抽屉顶部的琥珀块:14% 琥珀 tint 底 + 35% 琥珀描边,头部一行「已知残留 · N 条」。它是抽屉里唯一被提到锚点区之上的段落——一条总结的六段正文里,「已知残留」是唯一意味着**还需要你回来处理**的内容,与琥珀「它出现即意味着需要你」的语义完全对齐。卡片模板里写「无」是合法写法,渲染前必须过滤,否则会出现一个写着「无」的琥珀警示块——那是纯噪声。
+
+### 总结列表(`.wl-item` / `.rvwl-item`)
+「总结」模块按日期分组(mono 小字组头),行 = 项目芯片 + 任务主题(单行省略)+ commit 数(mono faint)+ 状态胶囊;状态色沿用既有语义,不新造词汇:已合并=绿 `pill-done`(彻底完事)、待合并=蓝 `pill-sched`(事实标注,无需立刻处理)、未解决=琥珀 `pill-blk` 带脉冲点(需要你回来处理)。回顾页的「本周总结」是同一词汇的紧凑变体(`.rvwl-item`,加日期列、去 commit 数),点击下钻到「总结」模块——**同一份详情不在两处各维护一套**,状态胶囊也直接复用同一个组件。
+
+### 速记浮层(`.tp-box` · ⌘J 两段式捕获)
+顶部居中、距顶 22vh —— Spotlight/Raycast 建立的肌肉记忆位置,呼出后视线零搜索,半透明遮罩表达「临时压在当前视图之上」;22vh 而非更高,是给下方项目下拉留出展开空间。结构是**两段一线**:标题输入(0.9375rem,比列表正文大一号,是本浮层的主角)+ 项目模糊搜索框。键路径必须闭合成直线 `⌘J → 打字 → Tab → 搜项目 → ↩ → ↩`,其中确认项目后焦点自动回到标题框,**最后一次 ↩ 永远是「保存」**——同一个键在同一个浮层里不能有两种含义。项目框未输入时先列「最近使用」5 条(高频路径连打字都省),`Tab`/`⇧Tab` 与 `↑↓` 等价并在候选内循环,`Esc` 退回标题框而非直接关闭。不指定项目是合法终态:临时想法经常还没想清归属,不该为此卡住记录本身。
+
+### 待办列表(`.td-item`)与开工按钮(`.td-go`)
+按创建日分组(mono 组头,与总结模块同一词汇),行 = 勾选框 + 内容(单行省略)+ 项目芯片 + 停留时长(mono faint)+ 状态胶囊 + 开工。状态色继续复用既有语义、不新造:待办=中性 `pill-idle`、进行中=玉 `pill-run` 带脉冲点、已完成=绿 `pill-done`。**停留时长比内容更该被看见**——一条待办放了几天没动,是收集箱里最有行动价值的信号,故与状态胶囊并列常驻。`.td-go` 默认中性描边,悬停才染玉:玉色是稀缺资源,一整列常亮就不再是重点。勾选框未完成时中性、悬停才透出绿意——完成是奖励,不是默认期待;删除按钮悬停行才浮现,避免破坏性动作常驻。
+
+### 待办来源横幅(`.from-todo`)
+派发页 composer 上方的玉色 tint 条,说明本次会话由哪条待办发起,右端 ✕ 解除关联。它承担一条产品约束的可见化:待办「开工」只把内容**预填**进输入框、**不自动发送**(半句话想法直接发出去质量不高),所以界面必须解释「这段文字是哪来的、发出去会发生什么」。同理,会话结束不自动勾完成——那是人的判断。
+
 ## 6. Do's and Don'ts
 
 ### Do:
@@ -359,6 +416,8 @@ components:
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
 - **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
 - **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
+- **Do** 渲染外部生成的 markdown 内容(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 `Md` 组件——这些文本里的 `**粗体**` 与反引号是作者的真实表达,当纯文本贴出来就是满屏字面量星号。同理,抽屉 `.kv dd` 里的长 URL / 路径必须 `overflow-wrap: anywhere`,否则顶破右边界。
+- **Do** 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——一个写着「无」的琥珀警示块比不显示更糟,它把「不需要你」误报成「需要你」。
 
 ### Don't:
 - **Don't** 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效——这是工作台,不是落地页(PRODUCT.md 反例原文)。

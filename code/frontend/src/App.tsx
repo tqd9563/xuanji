@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
-import { ConfirmHost, ToastHost } from '@/components/shared';
+import { ConfirmHost, ToastHost, toast } from '@/components/shared';
 import { WallpaperSettings } from '@/components/WallpaperSettings';
 import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
 import { TabBar, mobileTabOf, type MobileTab } from '@/components/TabBar';
@@ -15,6 +15,9 @@ import { Skills } from '@/views/Skills';
 import { Memories } from '@/views/Memories';
 import { Crons } from '@/views/Crons';
 import { Review } from '@/views/Review';
+import { Worklog } from '@/views/Worklog';
+import { Todos, startTodo, notifyTodosChanged } from '@/views/Todos';
+import { TodoPalette } from '@/components/TodoPalette';
 
 const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
@@ -25,13 +28,15 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'memory', label: '经验', icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4' },
   { id: 'cron', label: '定时', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2' },
   { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
+  { id: 'worklog', label: '总结', icon: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5' },
+  { id: 'todo', label: '待办', icon: 'M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2' },
 ];
 
 /** 移动端(≤430px)导航是 5-tab + 更多 二级菜单;这四个视图归入更多,详见 TabBar.mobileTabOf */
-const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review'];
+const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review', 'worklog', 'todo'];
 const MOBILE_TITLE: Record<ViewId, string> = {
   dashboard: '首页', sessions: '会话', dispatch: '派发', cron: '定时任务',
-  projects: '项目', skills: '技能', memory: '经验', review: '回顾',
+  projects: '项目', skills: '技能', memory: '经验', review: '回顾', worklog: '总结', todo: '待办',
 };
 
 export default function App() {
@@ -47,6 +52,8 @@ export default function App() {
   // 任何真实导航(hash 变化,无论来自 tab 点击、更多菜单选择、深链或浏览器前进后退)都应该
   // 让位给目标视图本身,菜单开合只由「更多」tab 或次要视图的返回按钮显式触发(两者都不改 hash)。
   const [mobileMore, setMobileMore] = useState(false);
+  // ⌘J 速记浮层:挂在 App 层,任意视图之上都能呼出(见下方键盘监听)
+  const [todoPalette, setTodoPalette] = useState(false);
   useEffect(() => setMobileMore(false), [view]);
   // 会话 tab 徽章:与 Sessions.tsx 共享同一 fetcher 引用,命中 pollCache,不重复拉取
   const { data: sessData } = usePoll(api.sessions, 5_000);
@@ -92,11 +99,35 @@ export default function App() {
   // 裸数字在非输入状态保留(普通浏览器里 ⌘+数字被标签页快捷键占用时的兜底)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // ⌘J 速记待办:任意视图可呼出(Chrome/Safari 上 ⌘J 空闲;Firefox 的「下载」会截走,
+      // 那种情况从侧栏「待办」页顶部的速记行记录,或用 Raycast 全局热键)。
+      // 注意这是页内快捷键:璇玑窗口没有焦点时不触发,真·全局捕获走 Raycast → POST /api/todos。
+      if ((e.key === 'j' || e.key === 'J') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        setTodoPalette(true);
+        return;
+      }
       // ⌘N 新建会话:跳派发页并放下当前会话(浏览器里 ⌘N 被"新建窗口"占用,Pake 壳可用)
       if ((e.key === 'n' || e.key === 'N') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('xuanji:new-session'));
         nav('dispatch');
+        return;
+      }
+      // ⌥⌘←/→ 在侧栏顺序里前后挪一格(首尾相接)。长按连跳靠浏览器自身的按键重复,
+      // 不拦 e.repeat 即可;输入框里也放行,这个组合键不产生字符。
+      // ⌃⌥←/→ 是浏览器里的等价别名:Chrome/Safari 把 ⌥⌘←/→ 占作「切换标签页」,
+      // 那是浏览器层的加速键,preventDefault 拦不住(桌面壳无标签页,主组合键照常可用)。
+      const navArrow =
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+        e.altKey &&
+        !e.shiftKey &&
+        ((e.metaKey && !e.ctrlKey) || (e.ctrlKey && !e.metaKey));
+      if (navArrow) {
+        e.preventDefault();
+        const cur = VIEW_IDS.indexOf(view);
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        nav(VIEW_IDS[(cur + step + VIEW_IDS.length) % VIEW_IDS.length]!);
         return;
       }
       const i = parseInt(e.key, 10);
@@ -111,7 +142,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [nav]);
+  }, [nav, view]);
 
   const goSession = useCallback(
     (sessionId: string) => {
@@ -156,7 +187,7 @@ export default function App() {
             <button
               key={n.id}
               className={view === n.id ? 'active' : ''}
-              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1})`}
+              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1});⌥⌘←/→ 在侧栏前后切换`}
               onClick={() => nav(n.id)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
@@ -215,6 +246,12 @@ export default function App() {
         <section className={cn('view', isShown('review') && 'active')}>
           {isShown('review') && <Review />}
         </section>
+        <section className={cn('view', isShown('worklog') && 'active')}>
+          {isShown('worklog') && <Worklog onGoSession={goSession} />}
+        </section>
+        <section className={cn('view', isShown('todo') && 'active')}>
+          {isShown('todo') && <Todos />}
+        </section>
         {/* 移动端「更多」菜单:桌面 mobileMore 恒为 false,这个 section 永远不 active */}
         <section className={cn('view', mobileMore && 'active')}>
           {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} wall={wall} />}
@@ -222,6 +259,18 @@ export default function App() {
       </main>
 
       <TabBar active={mobileTabOf(view, mobileMore)} blockedCount={blockedCount} onPick={pickMobileTab} />
+
+      {todoPalette && (
+        <TodoPalette
+          onClose={() => setTodoPalette(false)}
+          onCreated={(todo, andStart) => {
+            notifyTodosChanged(); // 待办页/仪表盘卡立刻显示刚记的这条,不等下一次轮询
+            // ⌘↩ = 存下来顺手就开工;普通 ↩ 只落库,吐一条 toast 说明去哪找它
+            if (andStart) startTodo(todo);
+            else toast(`已记入待办${todo.project ? `(${todo.project})` : ''}`);
+          }}
+        />
+      )}
 
       <ToastHost />
       <ConfirmHost />

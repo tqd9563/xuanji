@@ -6,6 +6,7 @@
 import { config } from '../config.js';
 import { extractSessionTitle, extractUsage, mapSessionFiles, readHistory } from '../adapters/claude-dir.js';
 import { gitLogSubjects } from '../adapters/git.js';
+import { worklogForWeek } from './worklog.js';
 import { costUsd } from './usage.js';
 import type { HistoryEntry, ReviewProject, ReviewSession, WeeklyReview } from '../types.js';
 import type { Storage } from '../storage/db.js';
@@ -178,11 +179,13 @@ export async function weeklyReview(storage: Storage, start: number, end: number)
     range: { start, end, dayCount: agg.dayCount },
     totals: { ...agg.totals, costUsd: projects.reduce((sum, p) => sum + p.costUsd, 0) },
     projects,
+    cards: await worklogForWeek(start, end),
     caliber: {
       active: '活跃 = 我发出的 prompt(history.jsonl ∪ 璇玑派发流水,本地时区日界),后台 agent 自跑不计',
       prompts: `prompt 样本每会话封顶 ${PROMPTS_PER_SESSION} 条、每条 ${PROMPT_CHARS} 字符,计数不受封顶影响`,
       cost: '窗口内 assistant usage 按 message.id 去重、按记录时间过滤;牌价口径同 /usage/today',
       commits: 'git log --all --no-merges 窗口内题目,封顶 50 条;含所有分支(worktree 开发含在内)',
+      cards: '任务总结按卡片 date 落在窗口内计入(wrapup skill 产出,只读扫 ~/.claude/worklog)',
     },
     computedAt: Date.now(),
   };

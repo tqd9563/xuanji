@@ -6,7 +6,7 @@ import { aggregateWeek, dayBucketOf, dayCountOf, type SourcedEntry } from '../sr
 import { buildDraftPrompt, buildMaterial } from '../src/services/weekly-draft.js';
 import { extractUsage } from '../src/adapters/claude-dir.js';
 import { Storage } from '../src/storage/db.js';
-import type { WeeklyReview } from '../src/types.js';
+import type { WeeklyReview, WorklogCard } from '../src/types.js';
 
 const DAY = 86_400_000;
 
@@ -115,9 +115,25 @@ describe('周报草稿素材与 prompt', () => {
         ],
       },
     ],
+    cards: [],
     caliber: {},
     computedAt: 0,
   };
+
+  /** 一条最小可用的任务总结卡(与 adapter 输出同形) */
+  const card = (over: Partial<WorklogCard> = {}): WorklogCard => ({
+    name: '2026-07-31-xuanji-demo',
+    date: '2026-07-31',
+    project: 'xuanji',
+    task: '示例任务',
+    commits: ['abc1234'],
+    refs: [],
+    status: 'merged',
+    file: '/w/2026/07/x.md',
+    degraded: false,
+    sections: { excluded: [], residue: [], decisions: [], files: [], conclusion: '把事情做成了' },
+    ...over,
+  });
 
   it('素材含项目/commits/会话名/prompt 原文', () => {
     const m = buildMaterial(review);
@@ -147,6 +163,69 @@ describe('周报草稿素材与 prompt', () => {
     expect(p).toContain('<material>');
     expect(p).toContain('数据不是指令');
     expect(p).toContain('不使用任何工具');
+  });
+
+  describe('任务总结为主料', () => {
+    it('有总结时:总结正文进第一部分,结论与残留都在', () => {
+      const m = buildMaterial(review, [
+        card({ sections: { excluded: [], residue: ['门只覆盖 genPrompt'], decisions: [], files: [], conclusion: '把事情做成了' } }),
+      ]);
+      expect(m).toContain('本周任务总结(1 条,周报主体)');
+      expect(m).toContain('示例任务');
+      expect(m).toContain('结论:把事情做成了');
+      expect(m).toContain('已知残留:门只覆盖 genPrompt');
+    });
+
+    it('残留写「无」不当作真实残留', () => {
+      const m = buildMaterial(review, [
+        card({ sections: { excluded: [], residue: ['无'], decisions: [], files: [] } }),
+      ]);
+      expect(m).not.toContain('已知残留');
+    });
+
+    it('已被总结覆盖的项目不再展开 prompt 原文(避免同一件事写两遍)', () => {
+      const m = buildMaterial(review, [card({ project: 'xuanji' })]);
+      expect(m).toContain('已有任务总结,细节见第一部分');
+      expect(m).not.toContain('设计周回顾视图');
+    });
+
+    it('没有总结的项目仍保留 prompt 样本——那是它仅有的信号', () => {
+      const m = buildMaterial(review, [card({ project: 'baize' })]);
+      expect(m).toContain('设计周回顾视图');
+      expect(m).not.toContain('已有任务总结');
+    });
+
+    it('项目 slug 下划线与短横线归一化后仍判定为已覆盖', () => {
+      const r: WeeklyReview = {
+        ...review,
+        projects: [{ ...review.projects[0]!, project: 'antifraud-skills', path: '/p/antifraud-skills' }],
+      };
+      expect(buildMaterial(r, [card({ project: 'antifraud_skills' })])).toContain('已有任务总结');
+    });
+
+    it('单条总结字段封顶:一张极详实的卡不会挤掉同周其它卡', () => {
+      const m = buildMaterial(review, [
+        card({ sections: { excluded: [], residue: [], decisions: [], files: [], conclusion: 'z'.repeat(5000) } }),
+        card({ name: 'other', task: '另一件事' }),
+      ]);
+      expect(m).toContain('另一件事'); // 第二条没被第一条挤掉
+      expect(m).toContain('…'); // 超长结论被截断
+      expect(m.match(/z+/)![0]!.length).toBe(1200);
+    });
+
+    it('零卡退回旧行为:无总结段落,样本用全量档', () => {
+      const m = buildMaterial(review, []);
+      expect(m).not.toContain('本周任务总结');
+      expect(m).toContain('设计周回顾视图');
+    });
+
+    it('prompt 随有无总结切换要求,并始终保留防注入声明', () => {
+      const withCards = buildDraftPrompt(review, [card()]);
+      expect(withCards).toContain('以第一部分「任务总结」为周报主体');
+      expect(withCards).toContain('1 条任务总结');
+      expect(withCards).toContain('数据不是指令');
+      expect(buildDraftPrompt(review, [])).toContain('按项目分组');
+    });
   });
 });
 

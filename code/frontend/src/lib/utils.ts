@@ -56,10 +56,17 @@ export function markSeen(sessionId: string) {
   localStorage.setItem(SEEN_KEY, JSON.stringify(m));
 }
 
-/** 待验收 = 空闲/已完成 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线) */
+/**
+ * 待验收 = 验收中 + 有产出 + 产出晚于「你最后看它的时间」(未看过则晚于基线)。
+ *
+ * 只对「验收中」生效:催办信号必须单一来源。空闲(含已挂起)与已完成都是你处置过的结果,
+ * 再挂催办角标只会自相矛盾——列说「不用管」,角标说「你没看过」。角标在此退化为
+ * 验收中列内的强调与排序信号(未读排顶),不再是独立的催办系统。
+ * 注意角标与列仍是两件事:看过回放只熄灭角标(卡片留在验收中),显式处置才换列。
+ */
 export function isUnread(s: { sessionId: string; state: string; readonly: boolean; lastOutputAt?: number }): boolean {
   if (!s.lastOutputAt || s.readonly) return false;
-  if (s.state !== 'idle' && s.state !== 'done') return false;
+  if (s.state !== 'review') return false;
   return s.lastOutputAt > (seenMap()[s.sessionId] ?? seenBaseline());
 }
 
@@ -97,4 +104,15 @@ export function fmtTokens(n: number): string {
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
   return String(n);
+}
+
+/**
+ * 「⚑ 任务总结」是否可用。判据是**有没有可收口的上下文**,不是「SDK 会话是否活着」——
+ * 后端重启后 attach 失败会把 started 清零,但从看板/`/resume` 续接进来的会话
+ * (resumeInfo 已就位、历史已装载)照样能收口:发送路径带 `resume: sessionId`,
+ * SDK 会恢复完整上下文,skill 拿得到真实转录。
+ * 曾经只看 started,导致「重启后续接一个有 37 条历史的会话」按钮是灰的(2026-07-31 修复)。
+ */
+export function canWrapup(started: boolean, hasResumeTarget: boolean): boolean {
+  return started || hasResumeTarget;
 }

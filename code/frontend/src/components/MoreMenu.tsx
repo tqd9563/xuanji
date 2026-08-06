@@ -12,6 +12,8 @@ const ICONS: Record<string, string> = {
   skills: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z',
   memory: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4',
   review: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12',
+  worklog: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
+  todo: 'M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2',
   wallpaper: 'M2 4h20v16H2zM8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM3 18l5.5-5.5 3.5 3.5 4.5-5 4.5 5.5',
 };
 
@@ -40,6 +42,8 @@ export function MoreMenu({
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const { data: skillsData } = usePoll(api.skills, 60_000);
   const { data: memData } = usePoll(api.memories, 60_000);
+  const { data: wlData } = usePoll(api.worklog, 60_000);
+  const { data: todoData } = usePoll(api.todos, 60_000);
 
   const skillsOn = skillsData?.skills.filter((s) => s.enabled).length;
 
@@ -53,6 +57,13 @@ export function MoreMenu({
         <Row id="skills" label="技能" hint={skillsData ? `${skillsOn} 启用 · ${skillsData.skills.length} 共` : undefined} onClick={() => onNav('skills')} />
         <Row id="memory" label="经验" hint={memData ? `${memData.memories.length} 条` : undefined} onClick={() => onNav('memory')} />
         <Row id="review" label="回顾" onClick={() => onNav('review')} />
+        <Row id="worklog" label="总结" hint={wlData ? `${wlData.cards.length} 条` : undefined} onClick={() => onNav('worklog')} />
+        <Row
+          id="todo"
+          label="待办"
+          hint={todoData ? `${todoData.todos.filter((t) => t.status !== 'done').length} 条未完成` : undefined}
+          onClick={() => onNav('todo')}
+        />
       </div>
       <div className="more-list">
         {/* 壁纸设置沿用桌面版词汇(面板/预设缩略图/多组滑杆),移动端触屏交互留待后续迭代;

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProper
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { cn, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
@@ -65,7 +65,7 @@ function StreamMd({ text }: { text: string }) {
  * 目标文本非纯追加(reset/attach 后按 index 复用的行拿到全新内容)时直接跳到全文。
  */
 const MIN_CHARS_PER_FRAME = 2; // 放字下限 ~120 字/s(60fps):慢流时保持匀速打字感
-const CATCH_UP_FRAMES = 24; // 追赶窗口:积压字符在 ~24 帧(0.4s)内放完,落后有上界
+const CATCH_UP_FRAMES = 84; // 追赶窗口:积压在 ~84 帧(1.4s)内放完;需大于上游 delta 块间隔才能填平"放完干等"的卡顿
 
 function useTypewriter(target: string, animate: boolean): string {
   const [shown, setShown] = useState(() => (animate ? '' : target));
@@ -173,6 +173,11 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
+/** ⚑ 任务总结的固定触发语。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
+ *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
+const WRAPUP_PROMPT =
+  '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
+
 /** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
 const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
 /** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
@@ -228,6 +233,8 @@ export function Dispatch({ active }: { active: boolean }) {
     lastChatTopRef.current = 0;
     lastChatHeightRef.current = 0;
   };
+  /** 本次派发由哪条待办发起(待办页「开工」跳来):拿到 sessionId 后回填,横幅可解除关联 */
+  const [fromTodo, setFromTodo] = useState<{ id: number; title: string } | null>(null);
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
   const [sessCtx, setSessCtx] = useState<SessCtx | null>(null);
@@ -339,6 +346,9 @@ export function Dispatch({ active }: { active: boolean }) {
       setFromBoard(true);
       applyResume(intent.resume);
     }
+    // 待办「开工」:全新派发,带着待办的项目目录与内容进来(内容只预填,发不发由人决定)
+    if (intent?.cwd) setCwd(intent.cwd);
+    if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
     if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
     // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
     // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
@@ -389,6 +399,15 @@ export function Dispatch({ active }: { active: boolean }) {
     setSessCtx((prev) => (prev && prev.id === null ? { ...prev, id: d.sessionId } : prev));
   }, [d.sessionId]);
 
+  // 待办发起的会话:SDK 分配 sessionId(= 真的发出去了)后把这条待办转「进行中」并挂上锚点。
+  // 只在拿到 sessionId 时回填,所以「开工后又没发」不会污染待办状态;完成与否仍由人手动勾。
+  useEffect(() => {
+    if (!fromTodo || !d.sessionId) return;
+    const todoId = fromTodo.id;
+    setFromTodo(null);
+    void api.updateTodo(todoId, { status: 'doing', sessionId: d.sessionId }).catch(() => {});
+  }, [fromTodo, d.sessionId]);
+
   // 兜底:刷新页面后 useDispatch 内部静默 attach 回存活会话(不经过看板意图),
   // 本组件没有 name/project 可用,按 sessionId 查一次会话看板补全。
   useEffect(() => {
@@ -429,8 +448,18 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
-  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车(见 submit() 同名分支),
-  // 直接开对应弹窗而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
+  /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
+  const wrapupRef = useRef<() => void>(() => {});
+  wrapupRef.current = () => {
+    if (!canWrapup(d.started, !!resumeInfo)) {
+      toast('这里还没有可收口的上下文,先派发或续接一个会话');
+      return;
+    }
+    void submit(WRAPUP_PROMPT);
+  };
+
+  // ⌘M 切换模型 / ⌘D 切换工作目录 / ⌘⏎ 任务总结:仅派发页生效,等同于在输入框敲 /model、/wd、/wrapup 回车
+  // (见 submit() 同名分支),直接执行而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
@@ -445,6 +474,10 @@ export function Dispatch({ active }: { active: boolean }) {
         taRef.current?.blur();
         setWdQuery('');
         setWdPalette(true);
+      } else if (e.key === 'Enter' && !e.isComposing) {
+        // isComposing:中文输入法候选窗里的回车不劫持(否则选词就变成发总结)
+        e.preventDefault();
+        wrapupRef.current();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -489,17 +522,37 @@ export function Dispatch({ active }: { active: boolean }) {
     ta.setSelectionRange(pos, pos);
   };
 
-  const submit = async () => {
+  /** override:不经输入框直接发一段文本(⚑ 任务总结按钮与 ⌘⏎ 走这条路,与手打 /wrapup 完全等价) */
+  const submit = async (override?: string) => {
     const ta = taRef.current;
-    const text = ta?.value.trim();
+    const text = override ?? ta?.value.trim();
     if (!text || !effectiveCwd) return;
-    ta!.value = '';
-    resetHistoryBrowse();
+    if (!override) {
+      ta!.value = '';
+      resetHistoryBrowse();
+    }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       // blur 派发框:弹窗期间不让输入框吃字符,也避免输入框焦点环与弹窗玉色选中环同屏双环
       ta?.blur();
       setResumePalette(true);
+      return;
+    }
+    // /clear 清空上下文:SDK 环境下原生 /clear 会被当普通 prompt 发给模型(白烧一轮 token 且上下文照旧),
+    // 故拦截为璇玑等价语义 —— 丢弃当前会话上下文另起一轮,工作目录/模型/权限档等派发设置保持不变(等同 ⌘N)。
+    // 旧会话不 kill:仍在跑的留在后台,可在「会话」页接回。
+    if (/^\/clear\b/.test(text)) {
+      const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
+      newSession();
+      toast(wasLive ? '已清空上下文;上一个会话仍在后台运行,可在「会话」页接回' : '已清空上下文,开始新会话');
+      return;
+    }
+    // /wrapup 任务总结:把刚完成的任务沉淀成一张卡落到 ~/.claude/worklog/(见「总结」视图)。
+    // skill 靠语义触发、SDK 没有原生 slash,所以拦下来换成一句固定触发语发出去——固定措辞保证命中率,
+    // 也避免每次靠临场措辞碰运气。璇玑自己不写盘,出卡动作全在会话内由 skill 完成(架构铁律 2)。
+    if (/^\/wrapup\b/.test(text)) {
+      if (!canWrapup(d.started, !!resumeInfo)) return toast('这里还没有可收口的上下文,先派发或续接一个会话');
+      void submit(WRAPUP_PROMPT);
       return;
     }
     // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
@@ -649,6 +702,7 @@ export function Dispatch({ active }: { active: boolean }) {
   })();
 
   const showCwdNote = d.started && sessionCwd && effectiveCwd !== sessionCwd;
+  const nowTick = useMinuteTick();
 
   return (
     <>
@@ -694,9 +748,21 @@ export function Dispatch({ active }: { active: boolean }) {
         <div className="chat-status">
           {!isMobile && sessCtx && <SessCtxBadge ctx={sessCtx} />}
           <span className="u-chips">
-            <Chip label="Context" pct={d.chips.contextPct} />
-            <Chip label="Usage" pct={d.chips.fiveHourPct} resetsAt={d.chips.fiveHourResetsAt} />
-            <Chip label="Weekly" pct={d.chips.sevenDayPct} resetsAt={d.chips.sevenDayResetsAt} />
+            <Chip label="Context" pct={d.chips.contextPct} now={nowTick} />
+            <Chip
+              label="Usage"
+              pct={d.chips.fiveHourPct}
+              resetsAt={d.chips.fiveHourResetsAt}
+              windowMs={FIVE_HOUR_MS}
+              now={nowTick}
+            />
+            <Chip
+              label="Weekly"
+              pct={d.chips.sevenDayPct}
+              resetsAt={d.chips.sevenDayResetsAt}
+              windowMs={SEVEN_DAY_MS}
+              now={nowTick}
+            />
           </span>
           <span className={cn('cs-state', statusText.cls)}>
             <span className="cs-dot" />
@@ -704,13 +770,23 @@ export function Dispatch({ active }: { active: boolean }) {
           </span>
         </div>
 
+        {/* 待办来源横幅:说明本次派发由哪条待办发起(发送后它转「进行中」);✕ 解除关联 = 当普通新会话发 */}
+        {fromTodo && (
+          <div className="from-todo">
+            ✦ 来自待办:「{fromTodo.title}」 · 发送后此待办转为进行中
+            <button className="x" onClick={() => setFromTodo(null)} title="解除关联" aria-label="解除关联">✕</button>
+          </div>
+        )}
+
         <div className="composer">
           <textarea
             ref={taRef}
             rows={2}
             placeholder="描述要派发的任务…"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
+              // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
+              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
                 e.preventDefault();
                 void submit();
               }
@@ -744,6 +820,20 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
           />
           <div className="c-bar">
+            {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
+                但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}
+            <button
+              className="wrapup-btn"
+              onClick={() => wrapupRef.current()}
+              disabled={!canWrapup(d.started, !!resumeInfo)}
+              title={
+                canWrapup(d.started, !!resumeInfo)
+                  ? '⌘⏎ · 把本会话刚完成的任务沉淀成一张收口卡,落到 ~/.claude/worklog/(等同输入 /wrapup);边界由 Claude 识别后与你确认'
+                  : '这里还没有可收口的上下文,先派发或续接一个会话'
+              }
+            >
+              <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
+            </button>
             <span className="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
@@ -891,6 +981,10 @@ export function Dispatch({ active }: { active: boolean }) {
   );
 }
 
+/** 两个配额窗口的时长(与 Claude 订阅口径一致):用于把 resetsAt 反推成「窗口已过去多少」 */
+const FIVE_HOUR_MS = 5 * 60 * 60 * 1000;
+const SEVEN_DAY_MS = 7 * 24 * 60 * 60 * 1000;
+
 /** 用量三档取色:<50% 玉(健康)/ 50–75% 琥珀(注意)/ ≥75% 红(告警) */
 function usageColor(pct: number | null): string | undefined {
   if (pct === null) return undefined;
@@ -900,14 +994,38 @@ function usageColor(pct: number | null): string | undefined {
 }
 
 /** 剩余重置时长:resetsAt(ms) → 「Xh Ym 后重置」/「Ym 后重置」 */
-function untilReset(resetsAt: number | null | undefined): string | null {
+function untilReset(resetsAt: number | null | undefined, now = Date.now()): string | null {
   if (!resetsAt) return null;
-  const ms = resetsAt - Date.now();
+  const ms = resetsAt - now;
   if (ms <= 0) return '即将重置';
   const totalMin = Math.round(ms / 60000);
   const h = Math.floor(totalMin / 60);
   const m = totalMin % 60;
   return `${h > 0 ? `${h}h ` : ''}${m}m 后重置`;
+}
+
+/** 紧凑倒计时(常驻状态条,不能占太宽):「2h41m」/「3d4h」/「41m」 */
+function untilResetShort(resetsAt: number | null | undefined, now = Date.now()): string | null {
+  if (!resetsAt) return null;
+  const ms = resetsAt - now;
+  if (ms <= 0) return '即将重置';
+  const totalMin = Math.floor(ms / 60000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  if (d > 0) return `${d}d${h}h`;
+  if (h > 0) return `${h}h${m}m`;
+  return `${m}m`;
+}
+
+/** 分钟级心跳:倒计时与时间刻度靠它自走,不再依赖流式事件顺带触发的重渲染 */
+function useMinuteTick(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  return now;
 }
 
 /** 会话标识:名称按项目色荧光呈现,id 未到手前只显名称+项目;悬停给出完整信息(未命名时提示原因)。 */
@@ -925,27 +1043,51 @@ function SessCtxBadge({ ctx }: { ctx: SessCtx }) {
   );
 }
 
+/**
+ * 用量芯片:轨道本身即「配额窗口」,填充是已用比例,轨上那道亮刻度是当前时刻在窗口中的位置——
+ * 填充越过刻度即「烧超了」,不读数字也一眼可见。紧凑倒计时常驻在百分比后作为兜底
+ * (此前只写在 title 里,必须悬停才看得见,移动端根本摸不到)。
+ * windowMs 缺省(Context 无重置窗口)时不画刻度、不显倒计时。
+ */
 function Chip({
   label,
   pct,
   resetsAt,
+  windowMs,
+  now,
 }: {
   label: string;
   pct: number | null;
   resetsAt?: number | null;
+  windowMs?: number;
+  now: number;
 }) {
   const color = usageColor(pct);
   const alert = pct !== null && pct >= 50;
-  const reset = untilReset(resetsAt);
+  const reset = untilReset(resetsAt, now);
+  // 窗口时间进度:剩余时长反推已流逝比例;数据异常(reset 早于/远超窗口)时夹到 0–100 不画到轨外
+  const timePct =
+    resetsAt && windowMs ? Math.min(100, Math.max(0, ((windowMs - (resetsAt - now)) / windowMs) * 100)) : null;
+  const overspent = pct !== null && timePct !== null && pct > timePct + 5;
   const title =
-    pct === null ? '会话产生用量数据后显示' : [`${label} ${pct}%`, reset].filter(Boolean).join(' · ');
+    pct === null
+      ? '会话产生用量数据后显示'
+      : [
+          `${label} ${pct}%`,
+          reset,
+          timePct === null ? null : `窗口已过去 ${Math.round(timePct)}%${overspent ? ' · 用量领先于时间' : ''}`,
+        ]
+          .filter(Boolean)
+          .join(' · ');
   return (
     <span className="u-chip" title={title}>
-      {label}{' '}
+      <span className="u-lab">{label}</span>
       <span className="u-bar">
         <i style={{ width: `${pct ?? 0}%`, background: color }} />
+        {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
       </span>
       <b style={alert ? { color } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
+      {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
     </span>
   );
 }

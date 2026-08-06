@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { desc, eq } from 'drizzle-orm';
-import type { Memory, ScheduledJob, ScheduledRun, WeeklyDraft } from '../types.js';
+import type { Memory, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -41,6 +41,30 @@ export const sessionNamesTable = sqliteTable('session_names', {
 export const hiddenSessionsTable = sqliteTable('hidden_sessions', {
   sessionId: text('session_id').primaryKey(),
   hiddenAt: integer('hidden_at').notNull(),
+});
+
+/**
+ * 手动归档:用户把卡片拖到「已完成」列的覆盖表(自有数据,可逆)。
+ * 记下归档瞬间的 lastOutputAt,之后会话一旦重新活跃(推导态转 running/blocked,
+ * 或产出时间前进)即自动失效——归档是人工判断,不该盖住真实进展。
+ */
+export const sessionArchivesTable = sqliteTable('session_archives', {
+  sessionId: text('session_id').primaryKey(),
+  archivedAt: integer('archived_at').notNull(),
+  /** 归档时该会话的最近产出时间;无产出记为 0 */
+  markedLastOutputAt: integer('marked_last_output_at').notNull(),
+});
+
+/**
+ * 显式挂起:用户在「验收中」点「挂起」= 看过了、暂时不处理,把卡放回空闲停车场。
+ * 与归档同构——记下挂起瞬间的 lastOutputAt,会话一旦重新产出即自动失效回到验收中,
+ * 免得挂起变成「永久静音」把新产出也一起埋掉。
+ */
+export const sessionSuspendsTable = sqliteTable('session_suspends', {
+  sessionId: text('session_id').primaryKey(),
+  suspendedAt: integer('suspended_at').notNull(),
+  /** 挂起时该会话的最近产出时间;无产出记为 0 */
+  markedLastOutputAt: integer('marked_last_output_at').notNull(),
 });
 
 /** 项目分类色调色板:首次出现顺序分配序号并固定(前 N 个项目互不撞色,全端一致) */
@@ -107,6 +131,23 @@ export const weeklyDraftsTable = sqliteTable('weekly_drafts', {
   finishedAt: integer('finished_at'),
 });
 
+/**
+ * 待办(自有数据):临时想法收集箱。与 ~/.claude 无任何映射关系,纯璇玑自有,
+ * 因此可以放心写——不违反只读铁律(铁律约束的是他人格式的文件)。
+ */
+export const todosTable = sqliteTable('todos', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  title: text('title').notNull(),
+  cwd: text('cwd'),
+  project: text('project'),
+  status: text('status').notNull(), // open | doing | done
+  sessionId: text('session_id'),
+  createdAt: integer('created_at').notNull(),
+  startedAt: integer('started_at'),
+  doneAt: integer('done_at'),
+  source: text('source').notNull(), // web | external
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -130,6 +171,14 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS hidden_sessions (
         session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_archives (
+        session_id TEXT PRIMARY KEY, archived_at INTEGER NOT NULL,
+        marked_last_output_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_suspends (
+        session_id TEXT PRIMARY KEY, suspended_at INTEGER NOT NULL,
+        marked_last_output_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS palette (
         name TEXT PRIMARY KEY, idx INTEGER NOT NULL
@@ -159,6 +208,14 @@ export class Storage {
         status TEXT NOT NULL, session_id TEXT, cost_usd REAL, duration_ms INTEGER, error TEXT
       );
       CREATE INDEX IF NOT EXISTS idx_scheduled_runs_job ON scheduled_runs(job_id, id DESC);
+      CREATE TABLE IF NOT EXISTS todos (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL, cwd TEXT, project TEXT,
+        status TEXT NOT NULL, session_id TEXT,
+        created_at INTEGER NOT NULL, started_at INTEGER, done_at INTEGER,
+        source TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, id DESC);
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
@@ -271,6 +328,71 @@ export class Storage {
     return this.orm.select().from(hiddenSessionsTable).all();
   }
 
+  /** 手动归档(拖到「已完成」):记下当时的最近产出时间,作为日后自动失效的基准 */
+  archiveSession(sessionId: string, lastOutputAt?: number) {
+    const marked = lastOutputAt ?? 0;
+    this.orm
+      .insert(sessionArchivesTable)
+      .values({ sessionId, archivedAt: Date.now(), markedLastOutputAt: marked })
+      .onConflictDoUpdate({
+        target: sessionArchivesTable.sessionId,
+        set: { archivedAt: Date.now(), markedLastOutputAt: marked },
+      })
+      .run();
+  }
+
+  /** sessionId → 归档基准(archivedAt / 归档时的 lastOutputAt) */
+  sessionArchives(): Map<string, { archivedAt: number; markedLastOutputAt: number }> {
+    const rows = this.orm.select().from(sessionArchivesTable).all();
+    return new Map(
+      rows.map((r) => [r.sessionId, { archivedAt: r.archivedAt, markedLastOutputAt: r.markedLastOutputAt }]),
+    );
+  }
+
+  /** 撤销归档:手动撤销与「会话重新活跃」的自动失效共用此入口 */
+  unarchiveSession(sessionId: string) {
+    this.orm.delete(sessionArchivesTable).where(eq(sessionArchivesTable.sessionId, sessionId)).run();
+  }
+
+  /** 显式挂起(验收中 →「挂起」):与归档同构,记下当时的最近产出时间作为失效基准 */
+  suspendSession(sessionId: string, lastOutputAt?: number) {
+    const marked = lastOutputAt ?? 0;
+    this.orm
+      .insert(sessionSuspendsTable)
+      .values({ sessionId, suspendedAt: Date.now(), markedLastOutputAt: marked })
+      .onConflictDoUpdate({
+        target: sessionSuspendsTable.sessionId,
+        set: { suspendedAt: Date.now(), markedLastOutputAt: marked },
+      })
+      .run();
+  }
+
+  /** sessionId → 挂起基准(suspendedAt / 挂起时的 lastOutputAt) */
+  sessionSuspends(): Map<string, { suspendedAt: number; markedLastOutputAt: number }> {
+    const rows = this.orm.select().from(sessionSuspendsTable).all();
+    return new Map(
+      rows.map((r) => [r.sessionId, { suspendedAt: r.suspendedAt, markedLastOutputAt: r.markedLastOutputAt }]),
+    );
+  }
+
+  /** 撤销挂起:手动复位与「会话重新产出」的自动失效共用此入口 */
+  unsuspendSession(sessionId: string) {
+    this.orm.delete(sessionSuspendsTable).where(eq(sessionSuspendsTable.sessionId, sessionId)).run();
+  }
+
+  /**
+   * 「验收中」启用基线:首次调用即钉住当前时刻并持久化。
+   * 只有产出时间晚于基线的会话才会被收进验收中——否则功能一上线,
+   * 历史上几十个早就了结的空闲/已完成会话会集体涌入,验收列当场失去意义。
+   */
+  reviewBaseline(): number {
+    const cached = this.getMeta('review_baseline_at');
+    if (cached) return Number(cached);
+    const now = Date.now();
+    this.setMeta('review_baseline_at', String(now));
+    return now;
+  }
+
   /** 调色板:已有的保持不变,新名字按当前最大序号顺延(首次出现即永久固定) */
   assignPalette(names: string[]): Map<string, number> {
     const rows = this.orm.select().from(paletteTable).all();
@@ -316,6 +438,40 @@ export class Storage {
          FROM weekly_drafts ORDER BY id DESC LIMIT ?`,
       )
       .all(limit) as WeeklyDraft[];
+  }
+
+  // ---------- 待办 ----------
+
+  createTodo(input: { title: string; cwd?: string | null; project?: string | null; source: Todo['source'] }): Todo {
+    const r = this.orm
+      .insert(todosTable)
+      .values({
+        title: input.title,
+        cwd: input.cwd ?? null,
+        project: input.project ?? null,
+        status: 'open',
+        createdAt: Date.now(),
+        source: input.source,
+      })
+      .run();
+    return this.getTodo(Number(r.lastInsertRowid))!;
+  }
+
+  getTodo(id: number): Todo | null {
+    return (this.orm.select().from(todosTable).where(eq(todosTable.id, id)).get() as Todo | undefined) ?? null;
+  }
+
+  /** 全部待办,新建的在前;过滤/分组交给前端(总量是几十到几百条量级) */
+  listTodos(): Todo[] {
+    return this.orm.select().from(todosTable).orderBy(desc(todosTable.id)).all() as Todo[];
+  }
+
+  updateTodo(id: number, patch: Partial<Omit<Todo, 'id' | 'createdAt'>>) {
+    this.orm.update(todosTable).set(patch).where(eq(todosTable.id, id)).run();
+  }
+
+  deleteTodo(id: number) {
+    this.orm.delete(todosTable).where(eq(todosTable.id, id)).run();
   }
 
   getMeta(key: string): string | null {

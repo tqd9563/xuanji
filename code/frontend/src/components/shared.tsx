@@ -1,4 +1,4 @@
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
@@ -7,38 +7,148 @@ import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
 
-/** 外链点击:能力检测而非环境嗅探(Pake 壳 UA 伪装成完整 Safari,UA 嗅探不可靠)。
- *  统一 window.open:真浏览器返回窗口句柄(成功);Pake/Tauri 的 WKWebView 没有
- *  新窗口代理时返回 null(新窗口请求被吞),此时且为本机访问(壳固定加载
- *  127.0.0.1:7777)才走后端 /api/open-url 在宿主 mac 唤起系统默认浏览器。
- *  stopPropagation 阻断壳注入的 body 级 target=_blank 监听,避免其 IPC 可用时双开。 */
-function onMdLinkClick(e: MouseEvent<HTMLAnchorElement>) {
-  const href = e.currentTarget.href;
-  if (!href) return;
-  // 修饰键点击(⌘/Ctrl/Shift/中键)交给浏览器默认行为
-  if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
-  e.preventDefault();
-  e.stopPropagation();
-  const w = window.open(href, '_blank');
-  if (w) {
-    w.opener = null; // 防 reverse tabnabbing(会话内容按不可信数据处理)
-  } else if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
-    void api.openUrl(href).catch(() => {});
+/** 外链点击统一在 window 捕获阶段接管(installExternalLinkHandler)。
+ *  为什么不挂在 React 的 onClick 上:Pake 壳在 document 上注入了自己的 a[target=_blank]
+ *  拦截器,它先 preventDefault 再走 Tauri IPC,IPC 不可用时就"点了没反应";React 的委托
+ *  监听器挂在根容器上,壳的 document 捕获监听跑在它之前。捕获阶段顺序是 window → document,
+ *  所以只有 window 捕获监听能抢在壳前面。
+ *  打开方式:本机访问(壳固定加载 127.0.0.1:7777)一律交后端 `open <url>` 唤起系统默认浏览器
+ *  —— window.open 在 WKWebView 里会返回一个什么都不做的桩窗口,返回值不能当能力检测用。 */
+function externalHref(target: EventTarget | null): string | null {
+  const a = (target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+  if (!a) return null;
+  let url: URL;
+  try {
+    url = new URL(a.href, window.location.href);
+  } catch {
+    return null;
   }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  if (url.origin === window.location.origin) return null; // 站内链接不接管
+  return url.href;
 }
 
-// 链接一律新窗口打开:浏览器里避免同窗导航把 SPA 整页带走;
-// Pake/Tauri WKWebView 里同窗跨域导航会被吞,new-window 请求才会转交系统浏览器。
+function openExternal(href: string) {
+  if (['127.0.0.1', 'localhost'].includes(window.location.hostname)) {
+    void api.openUrl(href).catch(() => {});
+    return;
+  }
+  const w = window.open(href, '_blank');
+  if (w) w.opener = null; // 防 reverse tabnabbing(会话内容按不可信数据处理)
+}
+
+// 修饰键点击(⌘/Ctrl/Shift/中键)交给默认行为
+function isPlainPrimary(e: globalThis.MouseEvent | PointerEvent) {
+  return !(e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0);
+}
+
+/** 触摸板轻触在 WKWebView 里首次不派发 click(2026-08-05 屏幕探针实测:首次轻触只有
+ *  pointerup/mouseup,连配对的 pointerdown 都没有,第二次才是完整的 down→up→click)。
+ *  所以主通道走 pointerdown/pointerup,click 只兜底键盘激活,并吞掉 pointer 之后补发的
+ *  那次 click 以免双开。用 pointerup 而非 pointerdown:拖拽选中文字时可按位移取消。 */
+let pointerStart: { href: string; x: number; y: number } | null = null;
+let swallowNextClick = false;
+
+function onPointerDown(e: PointerEvent) {
+  pointerStart = null;
+  if (!isPlainPrimary(e)) return;
+  const href = externalHref(e.target);
+  if (href) pointerStart = { href, x: e.clientX, y: e.clientY };
+}
+
+function onPointerUp(e: PointerEvent) {
+  const start = pointerStart;
+  pointerStart = null;
+  if (!isPlainPrimary(e)) return;
+  let href: string | null;
+  if (start) {
+    // 只按位移判定:pointerup 的 target 可能因 blur/重排换了元素,拿它当判据会漏触发
+    if (Math.abs(e.clientX - start.x) > 6 || Math.abs(e.clientY - start.y) > 6) return; // 拖拽选中,不当点击
+    href = start.href;
+  } else {
+    // 触摸板首次轻触(尤其焦点在输入框时)WKWebView 只派发 pointerup,没有配对的 pointerdown;
+    // 没有 down 就不可能是拖拽选中,直接当一次点击处理。
+    href = externalHref(e.target);
+    if (!href) return;
+  }
+  e.preventDefault();
+  swallowNextClick = true;
+  // 若浏览器没有补发 click(preventDefault 可能已抑制),及时撤销标记,免得吞掉下一次无关点击
+  window.setTimeout(() => {
+    swallowNextClick = false;
+  }, 400);
+  openExternal(href);
+}
+
+function onClick(e: globalThis.MouseEvent) {
+  if (swallowNextClick) {
+    swallowNextClick = false;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    return;
+  }
+  if (!isPlainPrimary(e)) return;
+  const href = externalHref(e.target);
+  if (!href) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  openExternal(href);
+}
+
+/** 在应用入口调用一次:全局接管外链点击(捕获阶段,抢在 Pake 壳注入的 document 拦截器前) */
+export function installExternalLinkHandler() {
+  window.addEventListener('pointerdown', onPointerDown, true);
+  window.addEventListener('pointerup', onPointerUp, true);
+  window.addEventListener('click', onClick, true);
+}
+
+// 链接一律标记新窗口:浏览器里避免同窗导航把 SPA 整页带走。
 const MD_COMPONENTS: Components = {
-  a: ({ node: _node, ...props }) => (
-    <a {...props} target="_blank" rel="noopener noreferrer" onClick={onMdLinkClick} />
-  ),
+  a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
 };
 
-/** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 外链新窗口打开 */
+/** 裸 URL 自动成链的尾部修剪:GFM 的 autolink 只认 ASCII 标点作终止符,中文正文里
+ *  「…/merge_requests/102(`feature/x`」会把全角括号、反引号、中文一并吞进 href。
+ *  规则:遇到第一个非 ASCII 可见字符即连同其后全部截断,再剔掉尾部反引号;ASCII 段交给 GFM。
+ *  代价:含未转义中文路径的 URL 会被截断——Claude 输出里几乎都是 percent-encoded,可接受。 */
+export function trimAutolinkTail(url: string): string {
+  return url.replace(/[^!-~][\s\S]*$/, '').replace(/`+$/, '');
+}
+
+type MdNode = { type: string; url?: string; value?: string; children?: MdNode[] };
+
+/** remark 插件:把 autolink 误吞的尾巴从 link 里退回成普通文本 */
+function remarkTrimAutolink() {
+  return (tree: MdNode) => {
+    const walk = (node: MdNode) => {
+      const kids = node.children;
+      if (!kids) return;
+      for (let i = 0; i < kids.length; i++) {
+        const child = kids[i];
+        if (!child) continue;
+        const text = child.children?.length === 1 ? child.children[0] : undefined;
+        // 只处理 autolink(链接文本与 url 完全一致),显式 [文本](url) 不动
+        if (child.type === 'link' && child.url && text?.type === 'text' && text.value === child.url) {
+          const trimmed = trimAutolinkTail(child.url);
+          if (trimmed && trimmed !== child.url) {
+            const rest = child.url.slice(trimmed.length);
+            child.url = trimmed;
+            text.value = trimmed;
+            kids.splice(i + 1, 0, { type: 'text', value: rest });
+            i++;
+          }
+        }
+        walk(child);
+      }
+    };
+    walk(tree);
+  };
+}
+
+/** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 尾巴修剪 + 外链新窗口打开 */
 export function Md({ children }: { children: string }) {
   return (
-    <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS}>
+    <Markdown remarkPlugins={[remarkGfm, remarkTrimAutolink]} components={MD_COMPONENTS}>
       {children}
     </Markdown>
   );
@@ -49,6 +159,7 @@ export function Md({ children }: { children: string }) {
 const PILL: Record<SessionState | 'err', { cls: string; label: string }> = {
   running: { cls: 'pill-run', label: '运行中' },
   blocked: { cls: 'pill-blk', label: '等待输入' },
+  review: { cls: 'pill-rev', label: '验收中' },
   idle: { cls: 'pill-idle', label: '空闲' },
   done: { cls: 'pill-done', label: '已完成' },
   err: { cls: 'pill-err', label: '错误' },

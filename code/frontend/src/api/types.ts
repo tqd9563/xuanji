@@ -18,7 +18,8 @@ export interface Project {
   git: GitStatus | null;
 }
 
-export type SessionState = 'running' | 'blocked' | 'idle' | 'done';
+/** 'review'(验收中)由后端推导:已产出、非进行态、未处置的会话都在这列 */
+export type SessionState = 'running' | 'blocked' | 'review' | 'idle' | 'done';
 
 export interface AgentSession {
   id: string;
@@ -38,6 +39,10 @@ export interface AgentSession {
   dispatchId?: string;
   /** 最近一次产出时间:与本地已读表比较,标「待验收」 */
   lastOutputAt?: number;
+  /** 手动拖到「已完成」的归档卡:提供撤销入口 */
+  archived?: boolean;
+  /** 在验收中显式「挂起」的卡:落在空闲列,提供回验收入口 */
+  suspended?: boolean;
 }
 
 export type ReplayEvent =
@@ -73,6 +78,34 @@ export interface Memory {
   file: string;
   body: string;
   links: string[];
+}
+
+/** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
+export interface WorklogCard {
+  name: string;
+  date: string;
+  project: string;
+  task: string;
+  branch?: string;
+  commits: string[];
+  mr?: string;
+  refs: string[];
+  status: 'merged' | 'pending-merge' | 'unresolved' | 'unknown';
+  session?: string;
+  coversUntil?: string;
+  file: string;
+  sections: WorklogSections;
+  degraded: boolean;
+}
+
+export interface WorklogSections {
+  problem?: string;
+  conclusion?: string;
+  excluded: string[];
+  residue: string[];
+  decisions: string[];
+  files: string[];
+  raw?: string;
 }
 
 export interface ModelUsage {
@@ -120,6 +153,20 @@ export interface ClosedSession {
   cwd: string;
   project: string;
   hiddenAt: number;
+}
+
+/** 待办(自有数据,与后端 types.ts 镜像):随手记的想法,可带着项目与内容一键进派发页 */
+export interface Todo {
+  id: number;
+  title: string;
+  cwd: string | null;
+  project: string | null;
+  status: 'open' | 'doing' | 'done';
+  sessionId: string | null;
+  createdAt: number;
+  startedAt: number | null;
+  doneAt: number | null;
+  source: 'web' | 'external';
 }
 
 export interface ProjectsResult {
@@ -231,6 +278,8 @@ export interface WeeklyReview {
   range: { start: number; end: number; dayCount: number };
   totals: { prompts: number; sessions: number; projects: number; activeDays: number; costUsd: number };
   projects: ReviewProject[];
+  /** 本周任务总结(worklog 卡):周报草稿的主料,回顾页也直接展示 */
+  cards: WorklogCard[];
   caliber: Record<string, string>;
   computedAt: number;
 }

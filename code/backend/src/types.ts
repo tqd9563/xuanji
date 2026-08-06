@@ -26,7 +26,12 @@ export interface Project {
   git: GitStatus | null;
 }
 
-export type SessionState = 'running' | 'blocked' | 'idle' | 'done';
+/**
+ * 看板列。'review'(验收中)不由任何适配器上报,而是在 sessionsBoard 里推导:
+ * 已产出、非进行态、未被处置的会话都落在这里,只有显式处置(挂起→idle / 归档→done)
+ * 才离开;「看过回放」只熄灭前端的未读角标,不改变归属。
+ */
+export type SessionState = 'running' | 'blocked' | 'review' | 'idle' | 'done';
 
 export interface AgentSession {
   id: string;
@@ -50,6 +55,10 @@ export interface AgentSession {
   dispatchId?: string;
   /** 最近一次产出时间:前端据此与本地已读时间比较,标「待验收」 */
   lastOutputAt?: number;
+  /** 用户手动拖到「已完成」的归档卡:state 已被覆盖为 done,前端据此给出撤销入口 */
+  archived?: boolean;
+  /** 用户在验收中显式「挂起」的卡:state 已被覆盖为 idle,前端据此给出复位入口 */
+  suspended?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */
@@ -91,6 +100,45 @@ export interface Memory {
   body: string;
   /** [[wikilink]] 引用 */
   links: string[];
+}
+
+/** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
+export interface WorklogCard {
+  /** 文件名去扩展名,全局唯一键 */
+  name: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** 项目 slug(卡里只记 slug,不记绝对路径) */
+  project: string;
+  /** 一句话任务主题 */
+  task: string;
+  branch?: string;
+  commits: string[];
+  mr?: string;
+  /** 外部锚点:issue id / request_id / 样例文件路径 */
+  refs: string[];
+  status: 'merged' | 'pending-merge' | 'unresolved' | 'unknown';
+  /** 出卡会话 id,直连只读回放 */
+  session?: string;
+  /** ISO8601,下一张卡据此续接划界 */
+  coversUntil?: string;
+  file: string;
+  /** 正文分段;解析不出任何段落时 raw 保留全文(降级不丢卡) */
+  sections: WorklogSections;
+  /** frontmatter 缺失/损坏的降级标记 */
+  degraded: boolean;
+}
+
+export interface WorklogSections {
+  problem?: string;
+  conclusion?: string;
+  /** 排除项 / 已知残留:逐条 bullet(卡片最值钱的两段) */
+  excluded: string[];
+  residue: string[];
+  decisions: string[];
+  files: string[];
+  /** 一个已知段落都没识别出来时的全文兜底 */
+  raw?: string;
 }
 
 export interface HistoryEntry {
@@ -145,6 +193,8 @@ export interface WeeklyReview {
     costUsd: number;
   };
   projects: ReviewProject[];
+  /** 本周任务总结(worklog 卡):周报草稿的主料,回顾页也直接展示 */
+  cards: WorklogCard[];
   caliber: Record<string, string>;
   computedAt: number;
 }
@@ -162,6 +212,29 @@ export interface WeeklyDraft {
   sessionId: string | null;
   createdAt: number;
   finishedAt: number | null;
+}
+
+/**
+ * 待办(自有数据,SQLite):临时想法的收集箱,不映射 ~/.claude 任何文件。
+ * 生命周期 open → doing(已开工,挂上派发会话)→ done;完成与否始终由人判断,
+ * 会话结束不自动完成——一次会话未必真把事做完。
+ */
+export interface Todo {
+  id: number;
+  title: string;
+  /** 项目工作目录绝对路径;未指定为 null(开工时再选) */
+  cwd: string | null;
+  /** cwd 末段短名,列表展示用;未指定为 null */
+  project: string | null;
+  status: 'open' | 'doing' | 'done';
+  /** 开工后绑定的派发会话,可直连只读回放 */
+  sessionId: string | null;
+  createdAt: number;
+  /** 首次开工时间 */
+  startedAt: number | null;
+  doneAt: number | null;
+  /** 来源:web 界面 / Raycast 等外部脚本(仅作展示,不影响行为) */
+  source: 'web' | 'external';
 }
 
 export interface ModelUsage {

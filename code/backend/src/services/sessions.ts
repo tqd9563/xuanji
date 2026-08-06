@@ -21,6 +21,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
     idle: [],
     running: [],
     blocked: [],
+    review: [],
     done: [],
   };
   // 本进程存活的派发会话:agents CLI 把它们列为 interactive+活 pid(名字还是自动生成的),
@@ -103,8 +104,92 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       source: 'web',
     });
   }
+  applyArchives(columns, storage);
+  promoteReview(columns, storage);
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);
   return { ok: agents.ok, error: agents.error, columns, refreshedAt: Date.now() };
+}
+
+/**
+ * 套用手动归档覆盖:把用户拖到「已完成」的卡从推导列搬到 done。
+ *
+ * 自动失效两条件(命中任一即删除归档记录,卡片回归推导态):
+ *  1) 推导态是 running / blocked —— 会话正在跑或在等你,归档显然过期了;
+ *  2) lastOutputAt 比归档时前进 —— 你进去接着聊过,轮询间隙里它可能已经聊完又回到 idle,
+ *     只看状态会漏判,故以产出时间兜底。
+ * 归档态本身是 done 的会话不改归属,但保留记录以便前端给撤销入口。
+ */
+function applyArchives(columns: Record<SessionState, AgentSession[]>, storage?: Storage) {
+  const archives = storage?.sessionArchives();
+  if (!archives?.size) return;
+  for (const state of Object.keys(columns) as SessionState[]) {
+    const keep: AgentSession[] = [];
+    for (const s of columns[state]) {
+      const a = archives.get(s.sessionId);
+      if (!a) {
+        keep.push(s);
+        continue;
+      }
+      const revived =
+        state === 'running' || state === 'blocked' || (s.lastOutputAt ?? 0) > a.markedLastOutputAt;
+      if (revived) {
+        storage?.unarchiveSession(s.sessionId);
+        keep.push(s);
+        continue;
+      }
+      s.archived = true;
+      if (state === 'done') keep.push(s);
+      else {
+        s.state = 'done';
+        columns.done.push(s);
+      }
+    }
+    columns[state] = keep;
+  }
+}
+
+/**
+ * 把「跑完了但还没处置」的会话从 idle/done 提升到验收中。
+ *
+ * 收进验收中的四个条件(全满足):
+ *  1) 推导态是 idle 或 done —— running/blocked 是真实进行态,没什么可验收;
+ *  2) 有 lastOutputAt 且晚于启用基线 —— 从没产出的会话不占验收位,
+ *     基线以前的历史存量也不倒灌(否则功能上线当天验收列直接堆几十张);
+ *  3) 不是终端存活的只读会话 —— 那是别人的会话,璇玑只旁观不验收;
+ *  4) 未被显式处置 —— 归档(archived)= 已验收,挂起(suspends)= 看过暂不处理。
+ *
+ * 挂起与归档同构地自动失效:挂起后会话又有新产出,说明它重新需要你,撤销挂起回验收中。
+ */
+function promoteReview(columns: Record<SessionState, AgentSession[]>, storage?: Storage) {
+  if (!storage) return;
+  const baseline = storage.reviewBaseline();
+  const suspends = storage.sessionSuspends();
+  for (const state of ['idle', 'done'] as const) {
+    const keep: AgentSession[] = [];
+    for (const s of columns[state]) {
+      if (s.archived || s.readonly || !s.lastOutputAt || s.lastOutputAt <= baseline) {
+        keep.push(s);
+        continue;
+      }
+      const sus = suspends.get(s.sessionId);
+      if (sus) {
+        if (s.lastOutputAt <= sus.markedLastOutputAt) {
+          // 挂起仍然有效:留在空闲停车场,并打标让前端给「回验收」入口
+          s.suspended = true;
+          if (state === 'idle') keep.push(s);
+          else {
+            s.state = 'idle';
+            columns.idle.push(s);
+          }
+          continue;
+        }
+        storage.unsuspendSession(s.sessionId); // 有新产出 → 挂起过期
+      }
+      s.state = 'review';
+      columns.review.push(s);
+    }
+    columns[state] = keep;
+  }
 }
 
 export async function sessionReplay(sessionId: string): Promise<Replay | null> {
