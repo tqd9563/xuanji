@@ -114,6 +114,22 @@ export default function App() {
         nav('dispatch');
         return;
       }
+      // ⌥⌘←/→ 在侧栏顺序里前后挪一格(首尾相接)。长按连跳靠浏览器自身的按键重复,
+      // 不拦 e.repeat 即可;输入框里也放行,这个组合键不产生字符。
+      // ⌃⌥←/→ 是浏览器里的等价别名:Chrome/Safari 把 ⌥⌘←/→ 占作「切换标签页」,
+      // 那是浏览器层的加速键,preventDefault 拦不住(桌面壳无标签页,主组合键照常可用)。
+      const navArrow =
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
+        e.altKey &&
+        !e.shiftKey &&
+        ((e.metaKey && !e.ctrlKey) || (e.ctrlKey && !e.metaKey));
+      if (navArrow) {
+        e.preventDefault();
+        const cur = VIEW_IDS.indexOf(view);
+        const step = e.key === 'ArrowRight' ? 1 : -1;
+        nav(VIEW_IDS[(cur + step + VIEW_IDS.length) % VIEW_IDS.length]!);
+        return;
+      }
       const i = parseInt(e.key, 10);
       if (!(i >= 1 && i <= VIEW_IDS.length)) return;
       if (e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
@@ -126,7 +142,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [nav]);
+  }, [nav, view]);
 
   const goSession = useCallback(
     (sessionId: string) => {
@@ -171,7 +187,7 @@ export default function App() {
             <button
               key={n.id}
               className={view === n.id ? 'active' : ''}
-              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1})`}
+              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1});⌥⌘←/→ 在侧栏前后切换`}
               onClick={() => nav(n.id)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
