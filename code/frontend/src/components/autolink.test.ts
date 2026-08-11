@@ -16,6 +16,15 @@ describe("trimAutolinkTail", () => {
     );
   });
 
+  it("剔除加粗/斜体闭合符被吞进链接的尾巴", () => {
+    // **url** 的闭合 ** 被 autolink 吞进 href,非法端口令 new URL 抛错,点击无响应
+    expect(trimAutolinkTail("http://localhost:35174**")).toBe(
+      "http://localhost:35174",
+    );
+    expect(trimAutolinkTail("https://g.com/a/b*")).toBe("https://g.com/a/b");
+    expect(trimAutolinkTail("https://g.com/a/b**`")).toBe("https://g.com/a/b");
+  });
+
   it("不动纯 ASCII 的正常链接", () => {
     for (const u of [
       "https://g.com/a/b",

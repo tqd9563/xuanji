@@ -109,10 +109,13 @@ const MD_COMPONENTS: Components = {
 
 /** 裸 URL 自动成链的尾部修剪:GFM 的 autolink 只认 ASCII 标点作终止符,中文正文里
  *  「…/merge_requests/102(`feature/x`」会把全角括号、反引号、中文一并吞进 href。
- *  规则:遇到第一个非 ASCII 可见字符即连同其后全部截断,再剔掉尾部反引号;ASCII 段交给 GFM。
- *  代价:含未转义中文路径的 URL 会被截断——Claude 输出里几乎都是 percent-encoded,可接受。 */
+ *  规则:遇到第一个非 ASCII 可见字符即连同其后全部截断,再剔掉尾部反引号与星号
+ *  (加粗写法 `**url**` 的闭合 `**` 也会被吞,得到的非法端口让 new URL 抛错,
+ *  外链接管与默认导航都放弃,表现为「点了没反应」——2026-08-11 实测)。
+ *  代价:含未转义中文路径或以 `*` 结尾的 URL 会被截断——Claude 输出里几乎都是
+ *  percent-encoded,可接受。 */
 export function trimAutolinkTail(url: string): string {
-  return url.replace(/[^!-~][\s\S]*$/, '').replace(/`+$/, '');
+  return url.replace(/[^!-~][\s\S]*$/, '').replace(/[`*]+$/, '');
 }
 
 type MdNode = { type: string; url?: string; value?: string; children?: MdNode[] };
