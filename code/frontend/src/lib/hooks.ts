@@ -77,6 +77,15 @@ export function useHashRoute(): [ViewId, (v: ViewId) => void] {
   return [view, nav];
 }
 
+/** 事件目标是否为「用户正在打字」的输入控件——各视图键盘快捷键据此让位。
+ *  必须校验可见性:视图切换用 display:none 隐藏,WebKit(Pake 壳)不像 Chrome 那样自动
+ *  blur 被隐藏的元素,派发页输入框会带着焦点藏起来,看板的空格/方向键全被它吞掉,
+ *  表现为「壳里按键全失灵,发条消息(焦点恰好离开)又好了」(2026-08-11 实测)。
+ *  getClientRects 为空 = display:none 链上,此时它收不到用户输入,不算打字目标。 */
 export function isTypingTarget(el: EventTarget | null): boolean {
-  return el instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(el.tagName);
+  return (
+    el instanceof HTMLElement &&
+    /INPUT|TEXTAREA|SELECT/.test(el.tagName) &&
+    el.getClientRects().length > 0
+  );
 }

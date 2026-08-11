@@ -95,6 +95,14 @@ export default function App() {
   // ws 变更订阅(M1 仅日志级消费:轮询已覆盖刷新;保留通道供 M2 扩展)
   useEffect(() => subscribeChanges(() => {}), []);
 
+  // 视图切走后把藏在 display:none 里的焦点收走:WebKit(Pake 壳)不像 Chrome 会自动 blur
+  // 被隐藏的元素,残留焦点会让后续按键打进看不见的输入框(isTypingTarget 的可见性校验
+  // 挡住了快捷键被吞,这里进一步防止字符键悄悄写进隐藏的派发草稿)。
+  useEffect(() => {
+    const el = document.activeElement;
+    if (el instanceof HTMLElement && el.getClientRects().length === 0 && el !== document.body) el.blur();
+  }, [view]);
+
   // 视图切换双通道:⌘+数字任何时候可用(含输入框聚焦,Pake 壳主用);
   // 裸数字在非输入状态保留(普通浏览器里 ⌘+数字被标签页快捷键占用时的兜底)
   useEffect(() => {
