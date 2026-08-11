@@ -618,27 +618,36 @@ export function Sessions({
         }
         return;
       }
-      if (![' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+      // 空格按物理键位(e.code)识别:中文输入法全角空格等场景下 e.key 不是 ' ',
+      // 表现为「空格进不去、回车可以」(2026-08-11 反馈)
+      const key = e.code === 'Space' ? ' ' : e.key;
+      if (![' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(key)) return;
       e.preventDefault();
       let pos = kbRef.current.kbPos;
       if (!pos) {
+        // 无选中时首按:方向键只落位选中;Space/Enter 直接进入首卡——
+        // 「按空格没反应(其实只是选中了),换回车就行(第二下)」的错觉即来源于旧的两段式
         const c = COLS.findIndex((_, i) => cardsIn(i).length > 0);
         if (c === -1) return;
         setKbPos({ c, r: 0 });
+        if (key === ' ' || key === 'Enter') {
+          const s = cardsIn(c)[0];
+          if (s) smartOpen(s, (id, sess) => void openReplay(id, sess));
+        }
         return;
       }
       pos = { ...pos };
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        const dir = e.key === 'ArrowLeft' ? -1 : 1;
+      if (key === 'ArrowLeft' || key === 'ArrowRight') {
+        const dir = key === 'ArrowLeft' ? -1 : 1;
         let c = pos.c;
         do {
           c += dir;
         } while (c >= 0 && c < COLS.length && cardsIn(c).length === 0);
         if (c < 0 || c >= COLS.length || cardsIn(c).length === 0) return;
         pos = { c, r: Math.min(pos.r, cardsIn(c).length - 1) };
-      } else if (e.key === 'ArrowUp') {
+      } else if (key === 'ArrowUp') {
         pos.r = Math.max(0, pos.r - 1);
-      } else if (e.key === 'ArrowDown') {
+      } else if (key === 'ArrowDown') {
         pos.r = Math.min(cardsIn(pos.c).length - 1, pos.r + 1);
       } else {
         // Space / Enter:智能进入(可续接 → 派发,只读 → 回放)
@@ -713,6 +722,12 @@ export function Sessions({
               // 运行中/等待输入是真实进行态,不给拖;验收中(→空闲/已完成)与空闲(→已完成)可拖
               const card = (s: AgentSession, ri: number) => {
                 const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, DRAGGABLE_COLS.includes(col.key));
+                // 点击卡片同步键盘选中位:此后 Space/Enter 从鼠标停留处继续,而非跳回首卡
+                const baseOpen = p.onOpen;
+                p.onOpen = () => {
+                  setKbPos({ c: ci, r: ri });
+                  baseOpen();
+                };
                 if (stowed) return <CompactCard key={s.id} {...p} />;
                 // 验收中用中密度卡:压低单卡高度,让列长如实反映积压量(该列刻意不折叠)
                 return col.key === 'review' ? <MidCard key={s.id} {...p} /> : <FullCard key={s.id} {...p} />;

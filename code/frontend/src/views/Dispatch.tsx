@@ -388,9 +388,15 @@ export function Dispatch({ active }: { active: boolean }) {
   // 打字机放字发生在 items 不变的帧里,只靠 items 触发会在回合尾部停止跟滚。
   useEffect(followScroll, [d.items, followScroll]);
 
-  // 正在看着这个会话 = 已验收到当下:之后若有新产出会重新点亮「待验收」
+  // 正在看着这个会话跑 = 已验收到当下:之后若有新产出会重新点亮「待验收」。
+  // 只在回合进行中(working/awaiting-permission)标已读,回合收尾那一拍不标——
+  // 收尾时 lastOutputAt 刚落在 result 上,继续标会把最后一笔产出也盖掉,卡片首次进
+  // 「验收中」就没有角标(2026-08-11 反馈:是否盯着派发页跑完决定角标亮不亮)。
+  // 收尾产出的已读交回显式动作:看板开回放 / 续接装载(applyResume)。
   useEffect(() => {
-    if (active && d.sessionId) markSeen(d.sessionId);
+    if (!active || !d.sessionId) return;
+    if (d.status.state !== 'working' && d.status.state !== 'awaiting-permission') return;
+    markSeen(d.sessionId);
   }, [active, d.sessionId, d.status.state, d.costUsd]);
 
   // SDK 分配 sessionId(init 事件)后补上会话标识里悬空的 id——新会话首次发送、attach 重放 init 均走这里
