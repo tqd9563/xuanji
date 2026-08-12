@@ -1031,9 +1031,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .td-item.done .title { color: var(--faint); text-decoration: line-through; }
 .td-item .age { font-size: 0.6875rem; color: var(--faint); flex: none; }
 .td-noproj { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
-/* 勾选框:未完成时中性描边,悬停才透出绿意——完成是奖励,不是默认期待 */
+.td-item.kb-sel { background: var(--hover); outline: 2px solid var(--jade); outline-offset: -2px; }
+.td-item.kb-sel .td-del { opacity: 1; }
+.td-edit-input { flex: 1; min-width: 0; font-size: 0.8125rem; padding: 2px 8px; }
+/* 勾选框:未完成时中性描边(--line 在深色底上几乎看不见,故用 --faint),悬停才透出绿意 */
 .td-item .chk {
-  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--line);
+  width: 16px; height: 16px; border-radius: 4px; border: 1.5px solid var(--faint);
   flex: none; display: grid; place-items: center; color: transparent; font-size: 0.6875rem;
   transition: border-color 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
 }
