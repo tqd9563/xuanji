@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
@@ -214,6 +214,7 @@ export function Drawer({
   title,
   meta,
   foot,
+  bodyRef,
   children,
 }: {
   open: boolean;
@@ -221,6 +222,8 @@ export function Drawer({
   title: ReactNode;
   meta?: ReactNode;
   foot?: ReactNode;
+  /** 滚动体的 ref:会话内查找(⌘F)需要拿它做查找作用域与高亮定位父级 */
+  bodyRef?: RefObject<HTMLDivElement>;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -247,7 +250,7 @@ export function Drawer({
                 ✕
               </button>
             </div>
-            <div className="drawer-body">{children}</div>
+            <div className="drawer-body" ref={bodyRef}>{children}</div>
             {foot && <div className="drawer-foot">{foot}</div>}
           </>
         )}

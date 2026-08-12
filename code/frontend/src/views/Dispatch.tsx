@@ -7,6 +7,7 @@ import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
 import { Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { FindBar, useFindInPage } from '@/components/FindBar';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /**
@@ -126,9 +127,12 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   return <StreamMd text={shown} />;
 }
 
-/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
+/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。 */
+const CHAT_SEED_LIMIT = 200;
+
+/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
-  return events.slice(-200).map((ev, i): ChatItem => {
+  return events.slice(-CHAT_SEED_LIMIT).map((ev, i): ChatItem => {
     if (ev.kind === 'user') return { t: 'user', text: ev.text };
     if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
     if (ev.kind === 'tool')
@@ -224,6 +228,8 @@ export function Dispatch({ active }: { active: boolean }) {
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
+  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 replayToChat)
+  const find = useFindInPage(chatRef);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
   const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
@@ -724,6 +730,12 @@ export function Dispatch({ active }: { active: boolean }) {
       </div>
       <div className="dispatch">
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
+          <FindBar
+            scopeRef={chatRef}
+            state={find}
+            placeholder="在本次对话中查找"
+            note={d.items.length >= CHAT_SEED_LIMIT ? `仅搜索已加载的 ${CHAT_SEED_LIMIT} 条` : undefined}
+          />
           {/* 移动端:会话标识挪进消息区顶部随内容滚动,让出状态条的横向空间给用量条(见下方 .chat-status)——
               桌面维持原样(标识常驻状态条最左端),两端各显示一份,靠 CSS 二选一(2026-07-16 真机反馈修复:
               状态条三段挤在一行导致 Context/Usage/Weekly 用量条被推出可视区、只能横滑才看得见)。 */}

@@ -17,6 +17,7 @@ import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
 import { Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
@@ -388,6 +389,9 @@ export function Sessions({
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 会话内查找(⌘F):作用域是回放抽屉的滚动体,只在抽屉打开时接管快捷键
+  const drawerBodyRef = useRef<HTMLDivElement>(null);
+  const find = useFindInPage(drawerBodyRef, drawerOpen);
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   /** 收纳列(空闲/已完成)的展开状态:两列各自独立折叠 */
   const [openCols, setOpenCols] = useState<Set<SessionState>>(() => new Set());
@@ -838,6 +842,7 @@ export function Sessions({
       <Drawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        bodyRef={drawerBodyRef}
         title={replay?.title ?? replayFor?.name ?? '会话回放'}
         meta={
           replayFor && (
@@ -893,6 +898,7 @@ export function Sessions({
           </>
         }
       >
+        <FindBar scopeRef={drawerBodyRef} state={find} placeholder="在本次回放中查找" />
         {!replay && <Empty><p>回放加载中…</p></Empty>}
         {replay?.events.map((ev, i) => {
           if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
