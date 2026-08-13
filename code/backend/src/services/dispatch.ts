@@ -77,7 +77,7 @@ export type DispatchEvent =
   | { ev: 'question'; requestId: string; questions: QuestionSpec[] }
   | { ev: 'question-answered'; requestId: string; answers: Record<string, string> }
   | { ev: 'result'; costUsd: number; contextTokens: number; contextPct: number; durationMs: number }
-  | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number }
+  | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number; model?: string }
   | { ev: 'context'; pct: number }
   | { ev: 'user-echo'; text: string }
   | { ev: 'forked'; from: string; to: string }
@@ -453,6 +453,20 @@ export class DispatchSession {
               resetsAt: w.resets_at ? Date.parse(w.resets_at) : undefined,
             });
           }
+        }
+        // 模型级周窗口:优先服务端 model_scoped[](自带 display_name,如 Fable),
+        // 缺失时兜底老字段 seven_day_opus。kind 固定 model_weekly,不能以 seven_day 开头——
+        // 前端按 startsWith('seven_day') 归并 all-models 条,撞上会互相覆盖。
+        const scoped = rl.model_scoped?.find((m) => m.utilization != null);
+        const mw = scoped ?? (rl.seven_day_opus?.utilization != null ? rl.seven_day_opus : null);
+        if (mw?.utilization != null) {
+          this.emit({
+            ev: 'rate-limit',
+            kind: 'model_weekly',
+            utilization: Math.max(0, Math.min(100, mw.utilization)),
+            resetsAt: mw.resets_at ? Date.parse(mw.resets_at) : undefined,
+            model: scoped ? scoped.display_name : 'Opus',
+          });
         }
       })
       .catch(() => {});
