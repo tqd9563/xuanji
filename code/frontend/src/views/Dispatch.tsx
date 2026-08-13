@@ -6,7 +6,7 @@ import { canWrapup, cn, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
@@ -137,10 +137,8 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
     if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
     if (ev.kind === 'tool')
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
-    if (ev.kind === 'compact') {
-      const stat = ev.preTokens != null ? `:压缩前 ${ev.preTokens.toLocaleString()} tokens` : '';
-      return { t: 'note', text: `🗜 ${ev.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩'}${stat}` };
-    }
+    if (ev.kind === 'compact')
+      return { t: 'compact', trigger: ev.trigger, preTokens: ev.preTokens, durationMs: ev.durationMs, summary: ev.summary };
     return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
   });
 }
@@ -1324,6 +1322,8 @@ const ChatRow = memo(function ChatRow({
     );
   }
   if (item.t === 'note') return <div className="resume-note">{item.text}</div>;
+  if (item.t === 'compact')
+    return <CompactionCard trigger={item.trigger} preTokens={item.preTokens} durationMs={item.durationMs} summary={item.summary} />;
   return (
     <div className="raw-event">
       <div className="note">⚠ {item.text}</div>
