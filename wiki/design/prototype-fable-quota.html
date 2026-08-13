@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>璇玑 · Weekly 限额 Fable 单独配比原型</title>
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface: oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --jade-dim: oklch(0.68 0.10 115);
+    --amber: oklch(0.78 0.14 80);
+    --red: oklch(0.68 0.19 25);
+    --blue: oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --tint-muted: oklch(0.27 0.010 120 / 0.55);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-s: 6px; --r-m: 10px; --r-chip: 4px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); font-size: 0.875rem; line-height: 1.6;
+    padding: 40px 32px 80px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin: 0 0 6px; }
+  .lede { color: var(--muted); max-width: 68ch; margin: 0 0 40px; text-wrap: pretty; }
+  code { font-family: var(--mono); font-size: 0.8125em; color: var(--ink); background: var(--surface); padding: 1px 5px; border-radius: var(--r-chip); }
+  section { margin-bottom: 48px; }
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+  .sec-head h2 { font-size: 1rem; font-weight: 600; margin: 0; }
+  .sec-head .tag {
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+    border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent);
+    border-radius: var(--r-chip); padding: 1px 6px;
+  }
+  .sec-note { color: var(--muted); font-size: 0.8125rem; margin: 0 0 14px; max-width: 72ch; }
+  .sec-note b { color: var(--ink); font-weight: 600; }
+
+  /* 真实语境:派发页状态条(样式对齐生产 index.css 的 .chat-status / .u-chip / .u-bar) */
+  .stage {
+    border: 1px solid var(--line-soft); border-radius: var(--r-m);
+    background: var(--surface-2); padding: 0 18px 4px;
+  }
+  .stage .fake-chat {
+    height: 54px; display: flex; align-items: center;
+    color: var(--faint); font-size: 0.75rem; border-bottom: 1px dashed var(--line-soft);
+  }
+  .chat-status {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 0 8px; font-size: 0.6875rem; color: var(--muted);
+  }
+  .sess-ctx { display: flex; align-items: center; gap: 8px; flex: none; }
+  .sc-title { font-size: 0.9375rem; font-weight: 600; color: oklch(0.82 0.155 300); text-shadow: 0 0 12px oklch(0.82 0.155 300 / 0.4); }
+  .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+  .cs-state { display: flex; align-items: center; gap: 7px; margin-left: auto; white-space: nowrap; }
+  .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .u-chips { display: flex; align-items: center; gap: 14px; }
+
+  /* 生产现行芯片语法(上轮已批的方案 C):10px 刻度轨 + 紧凑倒计时 */
+  .u-chip { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .u-chip .u-lab { color: var(--muted); }
+  .u-chip b { font-family: var(--mono); font-weight: 500; font-size: 0.75rem; color: var(--ink); }
+  .u-chip .u-reset { font-family: var(--mono); font-style: normal; font-size: 0.6875rem; color: var(--faint); }
+  .u-bar {
+    position: relative; width: 88px; height: 10px; border-radius: 3px;
+    background: var(--tint-muted); overflow: hidden; display: inline-block; flex: none;
+  }
+  .u-bar i { display: block; height: 100%; transition: width 400ms var(--ease); }
+  .u-bar .u-tick { position: absolute; top: -1px; bottom: -1px; width: 2px; border-radius: 1px; background: var(--ink); opacity: 0.55; }
+
+  /* ---------- A 第四芯片 ---------- */
+  .vA .u-chip.fable .u-lab { color: var(--violet); }
+
+  /* ---------- B Weekly 合并双轨 ---------- */
+  .vB .wk2 { display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+  .vB .wk2 .u-lab { color: var(--muted); }
+  .vB .wk2 .bars { display: grid; gap: 2px; flex: none; }
+  .vB .wk2 .u-bar { height: 8px; }
+  .vB .wk2 .u-bar.fb { height: 5px; border-radius: 2px; }
+  .vB .wk2 .vals { display: grid; line-height: 1.25; text-align: left; }
+  .vB .wk2 .vals b { font-family: var(--mono); font-weight: 500; font-size: 0.75rem; color: var(--ink); }
+  .vB .wk2 .vals .fv { font-family: var(--mono); font-size: 0.625rem; color: var(--violet); }
+
+  /* ---------- C 纯文字追加 ---------- */
+  .vC .fnum { font-family: var(--mono); font-size: 0.75rem; }
+  .vC .fnum .fl { color: var(--violet); font-size: 0.6875rem; margin-right: 3px; }
+
+  /* 移动端并排展示 */
+  .phones { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 18px; }
+  .phone {
+    width: 330px; border: 1px solid var(--line); border-radius: 20px;
+    background: var(--surface-2); padding: 14px 12px;
+  }
+  .phone .cap { font-size: 0.6875rem; color: var(--faint); font-family: var(--mono); margin-bottom: 10px; }
+  .phone .chat-status { gap: 8px; }
+  .phone .u-chips { flex: 1; min-width: 0; justify-content: space-between; gap: 8px; }
+  .phone .cs-state, .phone .sess-ctx { display: none; }
+  .phone .u-lab { display: none; }
+  .phone .u-bar { width: 44px; }
+  .phone .u-chip .u-reset { display: none; }
+  .phone .vB .u-bar { width: 60px; }
+  .phone .vC .u-bar { width: 52px; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-top: 12px; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend i { width: 18px; height: 6px; border-radius: 99px; display: block; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Weekly 限额的 Fable 单独配比 · 派发页状态条</h1>
+  <p class="lede">
+    Agent SDK 的 usage 接口除 <code>seven_day</code>(all models)外还下发按模型桶拆分的周窗口(<code>model_scoped[]</code>,标签如 Fable)。
+    两个窗口共用同一个重置时刻,但利用率独立——Fable 往往烧得更快。
+    下面三个方案演示同一组数值:Context 34%、Usage 62%(2h41m)、Weekly all 58%、<b style="color:var(--violet)">Fable 84%</b>(同为 3d4h 后重置,窗口时间已过 62%)。
+    芯片语法沿用现行方案(10px 刻度轨:填充=已用,亮刻度=此刻在窗口中的位置);紫色(<code>--violet</code>)与模型下拉同源,只作模型身份标识,填充色仍按 50/75 阈值取玉/琥珀/红。
+    服务端未下发 Fable 数据时,新增部分整体隐藏,回退为现状三条。
+  </p>
+
+  <!-- 对照组 -->
+  <section>
+    <div class="sec-head"><h2>现状</h2><span class="tag">对照</span></div>
+    <p class="sec-note">三芯片:Context / Usage(5h)/ Weekly(7d,all models)。Fable 的独立周限额完全不可见——all models 只有 58% 时,Fable 可能已经 84%。</p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip"><span class="u-lab">Context</span><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+          <span class="u-chip"><span class="u-lab">Usage</span><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b><em class="u-reset">2h41m</em></span>
+          <span class="u-chip"><span class="u-lab">Weekly</span><span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--amber)">58%</b><em class="u-reset">3d4h</em></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- A -->
+  <section>
+    <div class="sec-head"><h2>方案 A · 第四芯片 Fable</h2><span class="tag">语法零新增</span></div>
+    <p class="sec-note">
+      与 Weekly 完全同语法再来一条,标签 <b style="color:var(--violet)">Fable</b> 用紫色标识模型身份。
+      零学习成本、信息全平铺;代价是状态条横向再吃约 150px,且倒计时与 Weekly 重复(同一重置时刻写两遍)。
+      桌面宽屏无压力,窄屏四条挤(见底部真机形态)。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vA">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip"><span class="u-lab">Context</span><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+          <span class="u-chip"><span class="u-lab">Usage</span><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b><em class="u-reset">2h41m</em></span>
+          <span class="u-chip"><span class="u-lab">Weekly</span><span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--amber)">58%</b><em class="u-reset">3d4h</em></span>
+          <span class="u-chip fable"><span class="u-lab">Fable</span><span class="u-bar"><i style="width:84%;background:var(--red)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--red)">84%</b><em class="u-reset">3d4h</em></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- B -->
+  <section>
+    <div class="sec-head"><h2>方案 B · Weekly 合并双轨</h2><span class="tag">推荐</span></div>
+    <p class="sec-note">
+      两个周窗口共用一个重置时刻,本就该是<b>同一个芯片</b>:上轨 8px 是 all models,下轨 5px 是 Fable,右侧两个数值上下对齐(Fable 值恒紫小字),倒计时只写一遍。
+      两轨同刻度线,上下一比即知「Fable 烧得比大盘快多少」。
+      横向占用只比现状多约 40px;代价是芯片长高 5px、下轨偏细(但它是次级信息,数值兜底)。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vB">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip"><span class="u-lab">Context</span><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+          <span class="u-chip"><span class="u-lab">Usage</span><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b><em class="u-reset">2h41m</em></span>
+          <span class="wk2">
+            <span class="u-lab">Weekly</span>
+            <span class="bars">
+              <span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span>
+              <span class="u-bar fb"><i style="width:84%;background:var(--red)"></i><span class="u-tick" style="left:62%"></span></span>
+            </span>
+            <span class="vals"><b style="color:var(--amber)">58%</b><span class="fv">F 84%</span></span>
+            <em class="u-reset" style="font-style:normal">3d4h</em>
+          </span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--amber)"></i>上轨 · all models 周限额</span>
+      <span><i style="background:var(--red);height:4px"></i>下轨 · Fable 周限额</span>
+      <span><i style="background:var(--ink);opacity:.55;width:2px;height:12px;border-radius:1px"></i>此刻 / 窗口时间进度(两轨共用)</span>
+    </div>
+  </section>
+
+  <!-- C -->
+  <section>
+    <div class="sec-head"><h2>方案 C · 纯文字追加</h2><span class="tag">最省空间</span></div>
+    <p class="sec-note">
+      不加轨道,只在 Weekly 数值后追加 <b style="color:var(--violet)">F</b> 前缀的等宽数字(按阈值取色)。
+      横向只多约 45px,状态条结构完全不动;代价是 Fable 失去「填充 vs 刻度」的一眼超支判断,只剩数字,且小字号紫色 F 需要认一次。
+      完整口径(「Fable 周限额 84% · …」)进 title 悬浮。
+    </p>
+    <div class="stage">
+      <div class="fake-chat">…会话消息区…</div>
+      <div class="chat-status vC">
+        <span class="sess-ctx"><span class="sc-title">端口探测修复</span><span class="sc-id">a3f9c1</span></span>
+        <span class="u-chips">
+          <span class="u-chip"><span class="u-lab">Context</span><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+          <span class="u-chip"><span class="u-lab">Usage</span><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b><em class="u-reset">2h41m</em></span>
+          <span class="u-chip"><span class="u-lab">Weekly</span><span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--amber)">58%</b><span class="fnum"><span class="fl">F</span><b style="color:var(--red)">84%</b></span><em class="u-reset">3d4h</em></span>
+        </span>
+        <span class="cs-state"><span class="cs-dot"></span>思考中…</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 移动端 -->
+  <section>
+    <div class="sec-head"><h2>窄屏(330px)三方案并排</h2><span class="tag">真机形态</span></div>
+    <p class="sec-note">
+      移动端标签与倒计时本就隐藏、条宽压到 44px。方案 A 四条并排每条只剩约 70px,最挤;
+      B 双轨在窄屏反而占优(纵向扩展不吃横向);C 只多一个数字,几乎无感。
+    </p>
+    <div class="phones">
+      <div class="phone">
+        <div class="cap">A · 第四芯片</div>
+        <div class="chat-status vA">
+          <span class="u-chips">
+            <span class="u-chip"><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--amber)">58%</b></span>
+            <span class="u-chip fable"><span class="u-bar"><i style="width:84%;background:var(--red)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--red)">84%</b></span>
+          </span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="cap">B · Weekly 合并双轨</div>
+        <div class="chat-status vB">
+          <span class="u-chips">
+            <span class="u-chip"><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b></span>
+            <span class="wk2">
+              <span class="bars">
+                <span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span>
+                <span class="u-bar fb"><i style="width:84%;background:var(--red)"></i><span class="u-tick" style="left:62%"></span></span>
+              </span>
+              <span class="vals"><b style="color:var(--amber)">58%</b><span class="fv">F 84%</span></span>
+            </span>
+          </span>
+        </div>
+      </div>
+      <div class="phone">
+        <div class="cap">C · 纯文字追加</div>
+        <div class="chat-status vC">
+          <span class="u-chips">
+            <span class="u-chip"><span class="u-bar"><i style="width:34%;background:var(--jade-dim)"></i></span><b>34%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:62%;background:var(--amber)"></i><span class="u-tick" style="left:46%"></span></span><b style="color:var(--amber)">62%</b></span>
+            <span class="u-chip"><span class="u-bar"><i style="width:58%;background:var(--amber)"></i><span class="u-tick" style="left:62%"></span></span><b style="color:var(--amber)">58%</b><span class="fnum"><span class="fl">F</span><b style="color:var(--red)">84%</b></span></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</body>
+</html>
