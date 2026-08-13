@@ -774,11 +774,11 @@ export function Dispatch({ active }: { active: boolean }) {
               windowMs={FIVE_HOUR_MS}
               now={nowTick}
             />
-            <Chip
-              label="Weekly"
+            <WeeklyChip
               pct={d.chips.sevenDayPct}
+              modelPct={d.chips.modelWeeklyPct}
+              modelName={d.chips.modelWeeklyName}
               resetsAt={d.chips.sevenDayResetsAt}
-              windowMs={SEVEN_DAY_MS}
               now={nowTick}
             />
           </span>
@@ -1105,6 +1105,69 @@ function Chip({
         {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
       </span>
       <b style={alert ? { color } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
+      {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
+    </span>
+  );
+}
+
+/**
+ * Weekly 合并双轨芯片(原型 prototype-fable-quota.html 方案 B):
+ * all models 与模型级周窗口(如 Fable)共用同一重置时刻,故并为一个芯片——
+ * 上轨是 all models,下轨是模型级,两轨共用一道时间刻度,倒计时只写一遍。
+ * 服务端未下发模型级窗口(modelPct 为 null)时退回单轨,与旧 Weekly 芯片等价。
+ */
+function WeeklyChip({
+  pct,
+  modelPct,
+  modelName,
+  resetsAt,
+  now,
+}: {
+  pct: number | null;
+  modelPct: number | null;
+  modelName: string | null;
+  resetsAt?: number | null;
+  now: number;
+}) {
+  if (modelPct === null) {
+    return <Chip label="Weekly" pct={pct} resetsAt={resetsAt} windowMs={SEVEN_DAY_MS} now={now} />;
+  }
+  const color = usageColor(pct);
+  const mColor = usageColor(modelPct);
+  const reset = untilReset(resetsAt, now);
+  const timePct = resetsAt
+    ? Math.min(100, Math.max(0, ((SEVEN_DAY_MS - (resetsAt - now)) / SEVEN_DAY_MS) * 100))
+    : null;
+  const name = modelName ?? 'Model';
+  const title = [
+    `Weekly(all models)${pct === null ? ' —' : ` ${pct}%`}`,
+    `${name} 周限额 ${modelPct}%`,
+    reset,
+    timePct === null ? null : `窗口已过去 ${Math.round(timePct)}%`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <span className="u-chip wk2" title={title}>
+      <span className="u-lab">Weekly</span>
+      <span className="wk2-bars">
+        <span className="u-bar">
+          <i style={{ width: `${pct ?? 0}%`, background: color }} />
+          {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
+        </span>
+        <span className="u-bar wk2-fb">
+          <i style={{ width: `${modelPct}%`, background: mColor }} />
+          {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
+        </span>
+      </span>
+      <span className="wk2-vals">
+        <b style={pct !== null && pct >= 50 ? { color } : undefined}>
+          <span className="wk2-pfx">A</span> {pct === null ? '—' : `${pct}%`}
+        </b>
+        <b style={modelPct >= 50 ? { color: mColor } : undefined}>
+          <span className="wk2-pfx fb">{name.charAt(0)}</span> {modelPct}%
+        </b>
+      </span>
       {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
     </span>
   );

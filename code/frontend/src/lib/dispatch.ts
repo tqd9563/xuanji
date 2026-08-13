@@ -31,6 +31,9 @@ export interface UsageChips {
   /** 限额窗口重置时间(ms epoch),悬停显示「还有多久重置」 */
   fiveHourResetsAt: number | null;
   sevenDayResetsAt: number | null;
+  /** 模型级周窗口(如 Fable 单独配额):与 seven_day 同一重置时刻,利用率独立;服务端未下发时保持 null */
+  modelWeeklyPct: number | null;
+  modelWeeklyName: string | null;
 }
 
 export interface DispatchIntent {
@@ -86,7 +89,7 @@ function sealThinking(prev: ChatItem[]): ChatItem[] {
 export function useDispatch() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [status, setStatus] = useState<AgentStatus>({ state: 'none' });
-  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
@@ -250,7 +253,12 @@ export function useDispatch() {
         const pct = Math.round(Number(e.utilization ?? 0)); // 后端统一 0-100
         const resetsAt = typeof e.resetsAt === 'number' ? e.resetsAt : null;
         if (e.kind === 'five_hour') setChips((c) => ({ ...c, fiveHourPct: pct, fiveHourResetsAt: resetsAt }));
-        if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct, sevenDayResetsAt: resetsAt }));
+        // model_weekly 先于 seven_day 前缀判断:模型级窗口不并入 all-models 条
+        if (e.kind === 'model_weekly') {
+          setChips((c) => ({ ...c, modelWeeklyPct: pct, modelWeeklyName: typeof e.model === 'string' ? e.model : null }));
+        } else if (String(e.kind).startsWith('seven_day')) {
+          setChips((c) => ({ ...c, sevenDayPct: pct, sevenDayResetsAt: resetsAt }));
+        }
         break;
       }
       case 'model-changed':
@@ -346,7 +354,7 @@ export function useDispatch() {
       setItems([]);
       setStatus({ state: 'none' });
       setCostUsd(0);
-      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
     },
@@ -424,7 +432,7 @@ export function useDispatch() {
     setSessionId(null);
     setModel(null);
     setCostUsd(0);
-    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
   }, [clearPendingDelta]);
 
   const pushNote = useCallback((text: string) => {
