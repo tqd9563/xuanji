@@ -779,6 +779,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .u-chip.wk2 .u-bar.wk2-fb { height: 5px; border-radius: 2px; }
 .u-chip.wk2 .wk2-vals { display: grid; line-height: 1.25; }
 .u-chip.wk2 .wk2-fv { font-family: var(--mono); font-size: 0.625rem; color: var(--violet); }
+/* 上排 all models 的对称前缀:A 对 F。faint 灰而非紫——紫只标模型身份 */
+.u-chip.wk2 .wk2-pfx { font-size: 0.625rem; color: var(--faint); }
 /* min-height:0 是经典 flexbox 坑的修复:flex 子项默认 min-height:auto,在部分内核
    (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
    形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到

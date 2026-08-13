@@ -1161,7 +1161,9 @@ function WeeklyChip({
         </span>
       </span>
       <span className="wk2-vals">
-        <b style={pct !== null && pct >= 50 ? { color } : undefined}>{pct === null ? '—' : `${pct}%`}</b>
+        <b style={pct !== null && pct >= 50 ? { color } : undefined}>
+          <span className="wk2-pfx">A</span> {pct === null ? '—' : `${pct}%`}
+        </b>
         <span className="wk2-fv" style={modelPct >= 50 ? { color: mColor } : undefined}>
           {name.charAt(0)} {modelPct}%
         </span>
