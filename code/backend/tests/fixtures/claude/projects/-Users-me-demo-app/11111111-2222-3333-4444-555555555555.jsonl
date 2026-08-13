@@ -10,3 +10,5 @@
 {"type":"x-future-event","payload":{"pct":62}}
 this line is not json at all
 {"type":"system","subtype":"info","content":"tick"}
+{"type":"system","subtype":"compact_boundary","content":"Conversation compacted","timestamp":"2026-07-08T10:02:00.000Z","compactMetadata":{"trigger":"manual","preTokens":526679,"durationMs":136678}}
+{"type":"user","isCompactSummary":true,"isVisibleInTranscriptOnly":true,"message":{"role":"user","content":"This session is being continued from a previous conversation.\n\nSummary:\n1. 用户要求扫描高风险 IP"},"timestamp":"2026-07-08T10:02:01.000Z"}

@@ -583,6 +583,25 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .thinkcard.live .tk-body, .thinkcard.live .tk-head .ico, .thinkcard .caret { animation: none; }
 }
 
+/* 「上下文已压缩」卡片:时间线分界感(虚线边框)+ 可展开摘要 */
+.compactcard {
+  border: 1px dashed var(--line); border-radius: var(--r-s); margin: 12px 0; max-width: 68ch;
+}
+.compactcard .cc-head {
+  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px;
+  background: none; border: none; cursor: pointer; text-align: left;
+  font-size: 0.75rem; color: var(--muted);
+}
+.compactcard .cc-head:disabled { cursor: default; }
+.compactcard .cc-head .label { font-weight: 600; }
+.compactcard .cc-head .stats { color: var(--faint); }
+.compactcard .cc-head .chev { margin-left: auto; color: var(--faint); transition: transform 0.15s var(--ease); }
+.compactcard.open .cc-head .chev { transform: rotate(180deg); }
+.compactcard .cc-body {
+  border-top: 1px dashed var(--line); padding: 10px 12px;
+  font-size: 0.8125rem; color: var(--muted); max-height: 480px; overflow-y: auto;
+}
+
 .raw-event {
   border: 1px dashed var(--line); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0;
   font-family: var(--mono); font-size: 0.71875rem; color: var(--faint); max-width: 68ch;

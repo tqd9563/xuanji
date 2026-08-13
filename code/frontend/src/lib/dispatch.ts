@@ -17,6 +17,8 @@ export type ChatItem =
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
   | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
   | { t: 'note'; text: string }
+  /** 上下文压缩点:历史装载时带摘要可展开;实时压缩事件无摘要则仅一行 */
+  | { t: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string }
   | { t: 'error'; text: string };
 
 export interface AgentStatus {
@@ -275,11 +277,14 @@ export function useDispatch() {
         ]);
         break;
       case 'compact': {
-        const pre = Number(e.preTokens ?? 0);
-        const post = typeof e.postTokens === 'number' ? Number(e.postTokens) : undefined;
-        const label = e.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
-        const stat = post != null ? `:${pre.toLocaleString()} → ${post.toLocaleString()} tokens` : '';
-        setItems((prev) => [...prev, { t: 'note', text: `🗜 ${label}${stat}` }]);
+        setItems((prev) => [
+          ...prev,
+          {
+            t: 'compact',
+            trigger: typeof e.trigger === 'string' ? e.trigger : undefined,
+            preTokens: typeof e.preTokens === 'number' ? e.preTokens : undefined,
+          },
+        ]);
         break;
       }
       case 'bg-dispatched':
