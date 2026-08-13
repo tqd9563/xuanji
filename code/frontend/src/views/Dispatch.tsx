@@ -1164,9 +1164,9 @@ function WeeklyChip({
         <b style={pct !== null && pct >= 50 ? { color } : undefined}>
           <span className="wk2-pfx">A</span> {pct === null ? '—' : `${pct}%`}
         </b>
-        <span className="wk2-fv" style={modelPct >= 50 ? { color: mColor } : undefined}>
-          {name.charAt(0)} {modelPct}%
-        </span>
+        <b style={modelPct >= 50 ? { color: mColor } : undefined}>
+          <span className="wk2-pfx fb">{name.charAt(0)}</span> {modelPct}%
+        </b>
       </span>
       {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
     </span>
