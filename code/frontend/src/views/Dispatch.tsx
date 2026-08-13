@@ -137,6 +137,10 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
     if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
     if (ev.kind === 'tool')
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
+    if (ev.kind === 'compact') {
+      const stat = ev.preTokens != null ? `:压缩前 ${ev.preTokens.toLocaleString()} tokens` : '';
+      return { t: 'note', text: `🗜 ${ev.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩'}${stat}` };
+    }
     return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
   });
 }

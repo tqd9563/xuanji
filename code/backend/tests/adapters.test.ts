@@ -39,7 +39,12 @@ describe('parseReplay', () => {
     expect(replay.skippedLines).toBe(1); // "this line is not json at all"
 
     const kinds = replay.events.map((e) => e.kind);
-    expect(kinds).toEqual(['user', 'assistant', 'tool', 'assistant', 'assistant', 'raw']);
+    expect(kinds).toEqual(['user', 'assistant', 'tool', 'assistant', 'assistant', 'raw', 'compact']);
+
+    // compact_boundary 出卡,随后的 isCompactSummary 伪 user 消息回填摘要而非混入普通消息
+    const compact = replay.events.find((e) => e.kind === 'compact');
+    expect(compact).toMatchObject({ trigger: 'manual', preTokens: 526679, durationMs: 136678 });
+    expect((compact as any).summary).toContain('扫描高风险 IP');
 
     const tool = replay.events.find((e) => e.kind === 'tool');
     expect(tool).toMatchObject({ name: 'Grep', input: 'SignalL3' });

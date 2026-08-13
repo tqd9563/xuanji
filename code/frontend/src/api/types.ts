@@ -49,7 +49,8 @@ export type ReplayEvent =
   | { kind: 'user'; text: string; ts?: string }
   | { kind: 'assistant'; text: string; model?: string; ts?: string }
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
-  | { kind: 'raw'; type: string; json: string };
+  | { kind: 'raw'; type: string; json: string }
+  | { kind: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string; ts?: string };
 
 export interface Replay {
   sessionId: string;

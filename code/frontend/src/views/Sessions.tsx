@@ -16,7 +16,7 @@ import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
-import { Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { CompactionCard, Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -902,6 +902,7 @@ export function Sessions({
         {!replay && <Empty><p>回放加载中…</p></Empty>}
         {replay?.events.map((ev, i) => {
           if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
+          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
           if (ev.kind === 'raw')
             return (
               <div className="raw-event" key={i}>

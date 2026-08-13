@@ -409,6 +409,43 @@ export function ThinkingCard({ text, streaming, durationMs }: { text: string; st
   );
 }
 
+/** 回放时间线里的「上下文已压缩」卡片:头部一行元信息,展开看压缩摘要全文 */
+export function CompactionCard({
+  trigger,
+  preTokens,
+  durationMs,
+  summary,
+}: {
+  trigger?: string;
+  preTokens?: number;
+  durationMs?: number;
+  summary?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
+  const stats = [
+    preTokens != null && `压缩前 ${preTokens.toLocaleString()} tokens`,
+    durationMs != null && `耗时 ${(durationMs / 1000).toFixed(1)}s`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <div className={cn('compactcard', open && 'open')}>
+      <button className="cc-head" onClick={() => summary && setOpen(!open)} disabled={!summary}>
+        <span className="ico">🗜</span>
+        <span className="label">{label}</span>
+        {stats && <span className="stats">{stats}</span>}
+        {summary && <span className="chev">▾</span>}
+      </button>
+      {open && summary && (
+        <div className="cc-body md">
+          <Md>{summary}</Md>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ToolCard({ name, input, output, isError }: { name: string; input: string; output?: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
   return (

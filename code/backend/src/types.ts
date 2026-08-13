@@ -66,7 +66,19 @@ export type ReplayEvent =
   | { kind: 'user'; text: string; ts?: string }
   | { kind: 'assistant'; text: string; model?: string; ts?: string }
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
-  | { kind: 'raw'; type: string; json: string };
+  | { kind: 'raw'; type: string; json: string }
+  | {
+      kind: 'compact';
+      /** manual(/compact) 或 auto(上下文自动压缩) */
+      trigger?: string;
+      /** 压缩前上下文 token 数 */
+      preTokens?: number;
+      /** 压缩耗时(ms) */
+      durationMs?: number;
+      /** 压缩摘要全文(isCompactSummary 记录回填) */
+      summary?: string;
+      ts?: string;
+    };
 
 export interface Replay {
   sessionId: string;
