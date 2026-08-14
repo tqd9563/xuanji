@@ -187,7 +187,7 @@ export default function App() {
           </svg>
           <div className="brand-text">
             <span className="zh">璇玑</span>
-            <span className="brand-meta"><span className="version">v1.4.0</span></span>
+            <span className="brand-meta"><span className="version">v{__APP_VERSION__}</span></span>
           </div>
         </div>
         <nav className="nav">
