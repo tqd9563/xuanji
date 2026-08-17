@@ -58,8 +58,32 @@ export function isStale(t: Todo): boolean {
  * 开工:带着项目 cwd 与待办内容跳派发页。内容预填进输入框但不自动发送——
  * 待办往往只是半句话想法,直接发质量不高,留一步给人补充。
  * 发送后由派发页把 sessionId 回填到这条待办(见 Dispatch 里的 todoId 处理)。
+ *
+ * 「继续」(进行中且已挂会话)走续接而非全新派发:后端存活的派发会话 attach 接回,
+ * 已退出的可续接会话 resume 恢复上下文(与看板 smartOpen 同一套语义)。
+ * 此前这里不分状态一律全新派发,「继续」变成把标题重发一遍、原会话上下文全丢。
+ * 会话已不在看板 / 不可续接时回落到全新派发——上下文找不回来,至少把内容带过去。
  */
-export function startTodo(t: Todo) {
+export async function startTodo(t: Todo) {
+  if (t.status === 'doing' && t.sessionId) {
+    try {
+      const board = await api.sessions();
+      const s = Object.values(board.columns).flat().find((x) => x.sessionId === t.sessionId);
+      if (s?.dispatchId) {
+        setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+        location.hash = 'dispatch';
+        return;
+      }
+      if (s && !s.readonly && (await api.canResume(t.sessionId)).ok) {
+        setDispatchIntent({ resume: { sessionId: t.sessionId, name: s.name, cwd: s.cwd, project: s.project } });
+        location.hash = 'dispatch';
+        return;
+      }
+      toast('原会话已不可续接,按全新派发开工');
+    } catch {
+      // 看板/预检查询失败:不挡「开工」这个主动作,回落全新派发
+    }
+  }
   setDispatchIntent({ cwd: t.cwd ?? undefined, prefill: t.title, todoId: t.id });
   location.hash = 'dispatch';
 }
@@ -197,7 +221,7 @@ export function Todos() {
         void toggleDone(t);
       } else if (key === 'Enter') {
         e.preventDefault();
-        if (t.status !== 'done') startTodo(t);
+        if (t.status !== 'done') void startTodo(t);
       } else if (key === 'e' || key === 'E') {
         e.preventDefault();
         setEditId(t.id);
@@ -327,7 +351,7 @@ export function Todos() {
                     {STATUS[t.status].label}
                   </span>
                   {t.status !== 'done' && (
-                    <button className="td-go" onClick={() => startTodo(t)}>
+                    <button className="td-go" onClick={() => void startTodo(t)}>
                       {t.status === 'doing' ? '继续 ▶' : '开工 ▶'}
                     </button>
                   )}

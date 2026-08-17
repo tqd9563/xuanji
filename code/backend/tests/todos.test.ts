@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { Storage } from '../src/storage/db.js';
 import { isTodoStatus, shortName, statusPatch, validateTitle, TITLE_MAX } from '../src/services/todos.js';
+import { syncTodosWithBoard } from '../src/services/sessions.js';
+import type { AgentSession, SessionState } from '../src/types.js';
 
 let dir: string;
 let storage: Storage;
@@ -100,5 +102,55 @@ describe('入参校验', () => {
   it('短名取路径末段,尾斜杠不影响', () => {
     expect(shortName('/Users/x/work/baize')).toBe('baize');
     expect(shortName('/Users/x/work/baize/')).toBe('baize');
+  });
+});
+
+describe('看板同步自动完成(syncTodosWithBoard)', () => {
+  const card = (sessionId: string, state: SessionState): AgentSession =>
+    ({ id: sessionId.slice(0, 8), sessionId, name: sessionId, cwd: '/tmp/p', project: 'p', kind: 'background', state, startedAt: 1, readonly: false, source: 'web' }) as AgentSession;
+  const cols = (fill?: Partial<Record<SessionState, AgentSession[]>>): Record<SessionState, AgentSession[]> =>
+    ({ idle: [], running: [], blocked: [], review: [], done: [], ...fill });
+
+  const startDoing = (sessionId: string) => {
+    const t = storage.createTodo({ title: `任务-${sessionId}`, source: 'web' });
+    storage.updateTodo(t.id, { ...statusPatch('doing'), sessionId });
+    return t.id;
+  };
+
+  it('会话进 done 列 → 进行中的待办自动转已完成', () => {
+    const id = startDoing('s-done');
+    syncTodosWithBoard(cols({ done: [card('s-done', 'done')] }), true, storage);
+    const t = storage.getTodo(id)!;
+    expect(t.status).toBe('done');
+    expect(t.doneAt).toBeGreaterThan(0);
+  });
+
+  it('会话从看板彻底消失 → 同样自动完成', () => {
+    const id = startDoing('s-gone');
+    syncTodosWithBoard(cols(), true, storage);
+    expect(storage.getTodo(id)!.status).toBe('done');
+  });
+
+  it('会话仍在 running/review 等活跃列 → 待办不动', () => {
+    const a = startDoing('s-run');
+    const b = startDoing('s-review');
+    syncTodosWithBoard(cols({ running: [card('s-run', 'running')], review: [card('s-review', 'review')] }), true, storage);
+    expect(storage.getTodo(a)!.status).toBe('doing');
+    expect(storage.getTodo(b)!.status).toBe('doing');
+  });
+
+  it('agents CLI 失败(ok=false)时整轮跳过,防「消失」误判', () => {
+    const id = startDoing('s-cli-down');
+    syncTodosWithBoard(cols(), false, storage);
+    expect(storage.getTodo(id)!.status).toBe('doing');
+  });
+
+  it('open/done 待办与未挂会话的 doing 待办不受影响', () => {
+    const open = storage.createTodo({ title: '还没开工', source: 'web' });
+    const noSession = storage.createTodo({ title: '开工但没发过消息', source: 'web' });
+    storage.updateTodo(noSession.id, statusPatch('doing'));
+    syncTodosWithBoard(cols(), true, storage);
+    expect(storage.getTodo(open.id)!.status).toBe('open');
+    expect(storage.getTodo(noSession.id)!.status).toBe('doing');
   });
 });

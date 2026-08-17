@@ -353,7 +353,19 @@ export function Dispatch({ active }: { active: boolean }) {
     } else if (intent?.resume) {
       setFromBoard(true);
       applyResume(intent.resume);
+    } else if (intent && (d.started || d.items.length > 0)) {
+      // 待办「开工」等全新派发意图:残留的旧会话必须清干净,否则发送会串进旧会话,
+      // 且旧会话已有的 sessionId 会立刻把这条待办错绑到不相干的会话上
+      d.reset();
+      repin();
+      resetHistoryBrowse();
+      setResumeInfo(null);
+      setSessionCwd(null);
+      setSessCtx(null);
     }
+    // 「来自待办」横幅只属于带 todoId 的这一次进入:换任何别的方式进来都清掉,
+    // 否则横幅跨会话残留,后续无关派发拿到 sessionId 还会把那条待办错绑过去
+    if (entered && intent?.todoId === undefined) setFromTodo(null);
     // 待办「开工」:全新派发,带着待办的项目目录与内容进来(内容只预填,发不发由人决定)
     if (intent?.cwd) setCwd(intent.cwd);
     if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
