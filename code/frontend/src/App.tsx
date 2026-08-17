@@ -274,7 +274,7 @@ export default function App() {
           onCreated={(todo, andStart) => {
             notifyTodosChanged(); // 待办页/仪表盘卡立刻显示刚记的这条,不等下一次轮询
             // ⌘↩ = 存下来顺手就开工;普通 ↩ 只落库,吐一条 toast 说明去哪找它
-            if (andStart) startTodo(todo);
+            if (andStart) void startTodo(todo);
             else toast(`已记入待办${todo.project ? `(${todo.project})` : ''}`);
           }}
         />

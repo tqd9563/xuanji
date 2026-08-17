@@ -228,8 +228,9 @@ export interface WeeklyDraft {
 
 /**
  * 待办(自有数据,SQLite):临时想法的收集箱,不映射 ~/.claude 任何文件。
- * 生命周期 open → doing(已开工,挂上派发会话)→ done;完成与否始终由人判断,
- * 会话结束不自动完成——一次会话未必真把事做完。
+ * 生命周期 open → doing(已开工,挂上派发会话)→ done。完成有两条路:
+ * 人手动勾,或挂靠会话被归档/从看板消失后由看板同步自动补上
+ * (见 sessions.syncTodosWithBoard;会话仅仅跑完仍不算完——验收处置才算)。
  */
 export interface Todo {
   id: number;

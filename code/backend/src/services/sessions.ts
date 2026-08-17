@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { listAgents } from '../adapters/agents-cli.js';
 import { findSessionFile, parseReplay, readJobStates } from '../adapters/claude-dir.js';
 import { dispatchBoardState, liveDispatches } from './dispatch.js';
+import { statusPatch } from './todos.js';
 import type { AgentSession, Replay, SessionState } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
@@ -106,8 +107,27 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   }
   applyArchives(columns, storage);
   promoteReview(columns, storage);
+  syncTodosWithBoard(columns, agents.ok, storage);
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);
   return { ok: agents.ok, error: agents.error, columns, refreshedAt: Date.now() };
+}
+
+/**
+ * 待办状态跟着挂靠会话走:进行中的待办,其会话已归档进 done 列、或已从看板上
+ * 彻底消失(被关闭/转录被清理/老到掉出列表)→ 自动转「已完成」。
+ * 仍在 idle/running/blocked/review 的会话不动待办——会话没跑完或还没验收,事就没算完。
+ * agents CLI 失败(ok=false)时列表可能残缺,「消失」不可信,整轮跳过防误判。
+ */
+export function syncTodosWithBoard(columns: Record<SessionState, AgentSession[]>, ok: boolean, storage?: Storage) {
+  if (!storage || !ok) return;
+  const active = new Set<string>();
+  for (const state of ['idle', 'running', 'blocked', 'review'] as const) {
+    for (const s of columns[state]) active.add(s.sessionId);
+  }
+  for (const t of storage.listTodos()) {
+    if (t.status !== 'doing' || !t.sessionId) continue;
+    if (!active.has(t.sessionId)) storage.updateTodo(t.id, statusPatch('done'));
+  }
 }
 
 /**
