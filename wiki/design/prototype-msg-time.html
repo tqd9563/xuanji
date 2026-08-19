@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璇玑 · 消息发送时间 · 方案对比原型</title>
+<style>
+/* ============================================================
+   以下 token 与组件样式逐字取自 code/frontend/src/styles/index.css
+   （生产样式），只为「时间显示」新增的样式集中在文件末尾并注明。
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --on-jade:   oklch(0.18 0.02 120);
+  --amber: oklch(0.78 0.14 80);
+  --blue:  oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
+  --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
+  --tool-exec:  oklch(0.78 0.13 180);
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-s: 6px;
+  --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--sans); background: var(--bg); color: var(--ink);
+  font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+}
+.mono { font-family: var(--mono); font-size: 0.8em; }
+
+/* —— 派发页聊天流（生产样式原文） —— */
+.chat { overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+.chat-msg { margin-bottom: 20px; }
+.chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.chat-msg.user .who { color: var(--jade); }
+.chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+.chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; overflow-wrap: anywhere; word-break: break-word; }
+.chat-msg.user .body { background: var(--tint-jade); border-radius: var(--r-m); padding: 10px 14px; display: inline-block; max-width: 72%; }
+
+/* —— 回放抽屉时间线（生产样式原文） —— */
+.replay-msg { margin-bottom: 18px; }
+.replay-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+.replay-msg .who.u { color: var(--jade); }
+.replay-msg .body { font-size: 0.8125rem; color: var(--ink); max-width: 68ch; text-wrap: pretty; }
+.toolcard { border: 1px solid var(--line-soft); border-radius: var(--r-s); background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch; }
+.toolcard .tc-head { display: flex; align-items: center; gap: 8px; padding: 7px 12px; font-family: var(--mono); font-size: 0.75rem; color: var(--muted); cursor: pointer; width: 100%; }
+.toolcard .tc-head:hover { background: var(--hover); }
+.toolcard .tc-head .fn { color: var(--blue); }
+.toolcard .tc-head .fn[data-cat="exec"] { color: var(--tool-exec); }
+.toolcard .tc-head .chev { margin-left: auto; color: var(--faint); }
+.compactcard { border: 1px dashed var(--line); border-radius: var(--r-s); margin: 12px 0; max-width: 68ch; }
+.compactcard .cc-head { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px; background: none; border: none; text-align: left; font-size: 0.75rem; color: var(--muted); }
+.compactcard .cc-head .label { font-weight: 600; }
+.compactcard .cc-head .stats { color: var(--faint); }
+.compactcard .cc-head .chev { margin-left: auto; color: var(--faint); }
+
+/* ============================================================
+   原型页面自身的外壳（对比布局用，非生产样式）
+   ============================================================ */
+.page { max-width: 1240px; margin: 0 auto; padding: 32px clamp(20px, 3vw, 48px) 80px; }
+.page > header h1 { font-size: 1.25rem; font-weight: 600; margin-bottom: 6px; }
+.page > header p { color: var(--muted); font-size: 0.8125rem; max-width: 68ch; }
+.page > header .src { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-top: 4px; }
+.variant { margin-top: 44px; }
+.variant > .v-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 4px; }
+.variant > .v-head .v-tag { font-family: var(--mono); font-size: 0.75rem; font-weight: 600; color: var(--jade); background: var(--tint-jade); border-radius: 4px; padding: 1px 8px; flex: none; }
+.variant > .v-head h2 { font-size: 1rem; font-weight: 600; }
+.variant > .v-note { color: var(--muted); font-size: 0.8125rem; max-width: 78ch; margin-bottom: 14px; }
+.variant > .v-note b { color: var(--ink); font-weight: 600; }
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .duo { grid-template-columns: 1fr; } }
+.pane-label { font-size: 0.75rem; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+.pane-label .hint { font-weight: 400; color: var(--faint); }
+/* 回放抽屉的容器模拟（drawer-body 底色） */
+.replay-pane { border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 24px; }
+
+/* ============================================================
+   ★ 新增样式：消息发送时间（唯一为本需求新写的部分）
+   共同取舍：HH:MM 精度、mono + tabular-nums、--faint 层级
+   （时间是元信息，必须落在 who(muted/jade) 之下、不与正文抢注意力；
+   tool 事件源数据无 ts，不显示时间，与数据契约一致）
+   ============================================================ */
+
+/* —— 方案 A：who 行内联时间 —— */
+.va .msg-ts {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 8px; font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+/* —— 方案 B：hover 才现身（复用 A 的位置与字形，加透明度门） —— */
+.vb .msg-ts {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 8px; font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0; transition: opacity 150ms var(--ease);
+}
+.vb .chat-msg:hover .msg-ts, .vb .replay-msg:hover .msg-ts { opacity: 1; }
+@media (hover: none) { .vb .msg-ts { opacity: 1; } } /* 触屏无 hover：常显兜底 */
+
+/* —— 方案 C：右缘时间戳（who 行两端分布） —— */
+.vc .chat-msg .who, .vc .replay-msg .who {
+  display: flex; align-items: baseline; gap: 8px; max-width: 68ch;
+}
+.vc .chat-msg .who { max-width: none; }
+.vc .msg-ts {
+  margin-left: auto; font-family: var(--mono); font-size: 0.6875rem;
+  font-weight: 400; color: var(--faint); font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+/* 用户消息右对齐车道：who 行整体已靠右，时间放在名字左侧避免贴出气泡外缘 */
+.vc .chat-msg.user .who { flex-direction: row-reverse; }
+.vc .chat-msg.user .msg-ts { margin-left: 0; margin-right: auto; }
+
+/* —— 方案 D：日期分隔线 + who 行时间 —— */
+.vd .msg-ts {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 8px; font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.vd .day-sep {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 18px; color: var(--faint);
+  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.vd .day-sep::before, .vd .day-sep::after {
+  content: ""; flex: 1; height: 1px; background: var(--line-soft);
+}
+.vd .day-sep:first-child { margin-top: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <h1>消息发送时间 · 方案对比</h1>
+  <p>数据源：回放事件的 <span class="mono">ts</span>（ISO 字符串，user / assistant / compact 有，tool 无——故工具卡一律不带时间）。四个方案每个都同时给出派发页聊天流与回放抽屉两条渲染链路的效果；样式与 DOM 结构照抄生产 <span class="mono">index.css</span>，只新增时间部分。</p>
+  <p class="src">悬停在方案 B 的消息上可验证 hover 交互。</p>
+</header>
+
+<!-- ============ 方案 A ============ -->
+<section class="variant va">
+  <div class="v-head"><span class="v-tag">方案 A</span><h2>who 行内联淡色时间（推荐）</h2></div>
+  <p class="v-note"><b>「你 &nbsp;14:32」</b>——时间紧跟角色名，mono + faint，永远可见。改动最小、扫视成本最低；代价是每条消息多一点常驻元信息。</p>
+  <div class="duo">
+    <div>
+      <div class="pane-label">派发页聊天流 <span class="hint">.chat-msg</span></div>
+      <div class="chat">
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:32</span></div><div class="body">帮我把回放抽屉里的压缩卡片默认折叠，只显示统计行</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:32</span></div><div class="body">好的。压缩卡片目前在 ReplayEvent 渲染链路里默认展开，我先看一下 Sessions.tsx 的对应分支再动手。</div></div>
+        <div class="toolcard"><div class="tc-head"><span class="fn">Read</span><span>Sessions.tsx</span><span class="chev">▾</span></div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:35</span></div><div class="body">已改为默认折叠，点击统计行可展开摘要。tsc 与 vitest 均通过。</div></div>
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:41</span></div><div class="body">可以，顺便把展开动效也对齐工具卡</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="pane-label">回放抽屉时间线 <span class="hint">.replay-msg</span></div>
+      <div class="replay-pane">
+        <div class="replay-msg"><div class="who u">你<span class="msg-ts">09:14</span></div><div class="body">扫描 baize 项目里所有未加索引的查询</div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">09:14</span></div><div class="body">开始扫描 SQL 调用点，先列出全部 query 入口。</div></div>
+        <div class="toolcard"><div class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>grep -rn "db.query" src/</span><span class="chev">▾</span></div></div>
+        <div class="compactcard"><div class="cc-head"><span class="label">上下文已压缩</span><span class="stats">14:02 · 128k → 18k</span><span class="chev">▾</span></div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">14:05</span></div><div class="body">共发现 6 处全表扫描，已在报告中按耗时排序。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 方案 B ============ -->
+<section class="variant vb">
+  <div class="v-head"><span class="v-tag">方案 B</span><h2>hover 才显示</h2></div>
+  <p class="v-note">位置与字形同方案 A，但默认隐藏、<b>悬停该条消息时淡入</b>。界面保持现状的零噪音；代价是「扫一眼对时间」做不到，且触屏端退化为常显（原型已含此兜底）。</p>
+  <div class="duo">
+    <div>
+      <div class="pane-label">派发页聊天流 <span class="hint">悬停消息试试</span></div>
+      <div class="chat">
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:32</span></div><div class="body">帮我把回放抽屉里的压缩卡片默认折叠，只显示统计行</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:32</span></div><div class="body">好的。压缩卡片目前在 ReplayEvent 渲染链路里默认展开，我先看一下 Sessions.tsx 的对应分支再动手。</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:35</span></div><div class="body">已改为默认折叠，点击统计行可展开摘要。tsc 与 vitest 均通过。</div></div>
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:41</span></div><div class="body">可以，顺便把展开动效也对齐工具卡</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="pane-label">回放抽屉时间线</div>
+      <div class="replay-pane">
+        <div class="replay-msg"><div class="who u">你<span class="msg-ts">09:14</span></div><div class="body">扫描 baize 项目里所有未加索引的查询</div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">09:14</span></div><div class="body">开始扫描 SQL 调用点，先列出全部 query 入口。</div></div>
+        <div class="toolcard"><div class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>grep -rn "db.query" src/</span><span class="chev">▾</span></div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">14:05</span></div><div class="body">共发现 6 处全表扫描，已在报告中按耗时排序。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 方案 C ============ -->
+<section class="variant vc">
+  <div class="v-head"><span class="v-tag">方案 C</span><h2>右缘对齐时间戳</h2></div>
+  <p class="v-note">who 行拉成两端分布：角色名在内容侧、时间推到消息区块的另一缘。时间自成一列、纵向可对齐扫读；代价是 who 行变宽后视线要横跳，且用户消息（右对齐车道）需要镜像处理。</p>
+  <div class="duo">
+    <div>
+      <div class="pane-label">派发页聊天流</div>
+      <div class="chat">
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:32</span></div><div class="body">帮我把回放抽屉里的压缩卡片默认折叠，只显示统计行</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:32</span></div><div class="body">好的。压缩卡片目前在 ReplayEvent 渲染链路里默认展开，我先看一下 Sessions.tsx 的对应分支再动手。</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">14:35</span></div><div class="body">已改为默认折叠，点击统计行可展开摘要。tsc 与 vitest 均通过。</div></div>
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">14:41</span></div><div class="body">可以，顺便把展开动效也对齐工具卡</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="pane-label">回放抽屉时间线</div>
+      <div class="replay-pane">
+        <div class="replay-msg"><div class="who u">你<span class="msg-ts">09:14</span></div><div class="body">扫描 baize 项目里所有未加索引的查询</div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">09:14</span></div><div class="body">开始扫描 SQL 调用点，先列出全部 query 入口。</div></div>
+        <div class="toolcard"><div class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>grep -rn "db.query" src/</span><span class="chev">▾</span></div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">14:05</span></div><div class="body">共发现 6 处全表扫描，已在报告中按耗时排序。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 方案 D ============ -->
+<section class="variant vd">
+  <div class="v-head"><span class="v-tag">方案 D</span><h2>日期分隔线 + who 行时间</h2></div>
+  <p class="v-note">在方案 A 之上叠加<b>跨天分隔线</b>：时间只显示 HH:MM，跨天由分隔线交代日期。长会话（隔夜后台任务、多天续接）里最能还原时间脉络；单日短会话则与 A 等价、无额外噪音。</p>
+  <div class="duo">
+    <div>
+      <div class="pane-label">派发页聊天流</div>
+      <div class="chat">
+        <div class="day-sep">2026-08-18 · 周二</div>
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">23:47</span></div><div class="body">后台跑一下全量索引重建，明早我看结果</div></div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">23:48</span></div><div class="body">已切后台执行，预计 3 小时，完成后写入报告。</div></div>
+        <div class="day-sep">2026-08-19 · 周三</div>
+        <div class="chat-msg"><div class="who">Claude<span class="msg-ts">02:51</span></div><div class="body">重建完成：41 张表、耗时 2h58m，两张表跳过（快照锁），详情见报告。</div></div>
+        <div class="chat-msg user"><div class="who">你<span class="msg-ts">09:12</span></div><div class="body">跳过的两张补跑一下</div></div>
+      </div>
+    </div>
+    <div>
+      <div class="pane-label">回放抽屉时间线</div>
+      <div class="replay-pane">
+        <div class="day-sep">2026-08-18 · 周二</div>
+        <div class="replay-msg"><div class="who u">你<span class="msg-ts">23:47</span></div><div class="body">后台跑一下全量索引重建，明早我看结果</div></div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">23:48</span></div><div class="body">已切后台执行，预计 3 小时，完成后写入报告。</div></div>
+        <div class="toolcard"><div class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>pnpm rebuild:index --all</span><span class="chev">▾</span></div></div>
+        <div class="day-sep">2026-08-19 · 周三</div>
+        <div class="replay-msg"><div class="who">Claude<span class="msg-ts">02:51</span></div><div class="body">重建完成：41 张表、耗时 2h58m，两张表跳过（快照锁），详情见报告。</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

@@ -8,9 +8,11 @@ export interface QuestionSpec {
   options: { label: string; description?: string }[];
 }
 
+/** 消息发送时间(ms epoch)。实时消息在到达时打点,历史消息取 session jsonl 的 ts;
+ *  工具卡/审批等非对话事件无此字段(源数据本就没有时间),不显示时间也不参与跨天分隔。 */
 export type ChatItem =
-  | { t: 'user'; text: string }
-  | { t: 'assistant'; text: string; streaming: boolean }
+  | { t: 'user'; text: string; ts?: number }
+  | { t: 'assistant'; text: string; streaming: boolean; ts?: number }
   /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
   | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
@@ -130,7 +132,8 @@ export function useDispatch() {
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      return [...prev, { t: 'assistant', text, streaming: true }];
+      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移
+      return [...prev, { t: 'assistant', text, streaming: true, ts: Date.now() }];
     });
   }, []);
 
@@ -159,7 +162,7 @@ export function useDispatch() {
         setStatus({ state: e.state as AgentStatus['state'], detail: e.detail as string | undefined });
         break;
       case 'user-echo':
-        setItems((prev) => [...prev, { t: 'user', text: String(e.text) }]);
+        setItems((prev) => [...prev, { t: 'user', text: String(e.text), ts: Date.now() }]);
         break;
       case 'delta':
         pendingDeltaRef.current += String(e.text);
@@ -189,9 +192,10 @@ export function useDispatch() {
           const prev = sealThinking(prev0);
           const last = prev[prev.length - 1];
           if (last?.t === 'assistant' && last.streaming) {
-            return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false }];
+            // 保留流开始时打的点,不改写成本轮结束时刻
+            return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false, ts: last.ts }];
           }
-          return [...prev, { t: 'assistant', text: String(e.text), streaming: false }];
+          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: Date.now() }];
         });
         break;
       case 'tool':

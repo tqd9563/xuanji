@@ -98,6 +98,47 @@ export function clock(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+/** 会话消息时间戳:ms epoch 或 session jsonl 的 ISO 串 → HH:MM;无时间(如 tool 事件)返回 null */
+export function msgClock(ts: number | string | null | undefined): string | null {
+  if (ts == null) return null;
+  const ms = typeof ts === 'number' ? ts : Date.parse(ts);
+  if (!Number.isFinite(ms)) return null;
+  return clock(ms);
+}
+
+const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+/** 消息时间归一为本地日历日的序号(非 UTC:跨天要按用户所在时区判定) */
+function dayIndex(ts: number | string): number | null {
+  const ms = typeof ts === 'number' ? ts : Date.parse(ts);
+  if (!Number.isFinite(ms)) return null;
+  const d = new Date(ms);
+  return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+}
+
+/** 日期分隔线文案:「2026-08-19 · 周三」 */
+export function dayLabel(ts: number | string): string {
+  const d = new Date(typeof ts === 'number' ? ts : Date.parse(ts));
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} · ${WEEKDAY[d.getDay()]}`;
+}
+
+/**
+ * 跨天分隔线判定:返回本条消息之前应插入的日期文案,不需要则 null。
+ * 会话首条带时间的消息之前总是插一条(交代这段对话发生在哪天);
+ * 之后只在与上一条带时间的消息跨自然日时插。无时间的事件(工具卡等)不参与,
+ * 故调用方需自行维护「上一条有时间的消息」的游标而非简单取前一项。
+ */
+export function daySeparator(prev: number | string | null | undefined, cur: number | string | null | undefined): string | null {
+  if (cur == null) return null;
+  const curDay = dayIndex(cur);
+  if (curDay === null) return null;
+  if (prev == null) return dayLabel(cur);
+  const prevDay = dayIndex(prev);
+  if (prevDay === null) return dayLabel(cur);
+  return prevDay === curDay ? null : dayLabel(cur);
+}
+
 export const fmtCost = (usd: number) => '$' + usd.toFixed(2);
 
 export function fmtTokens(n: number): string {
