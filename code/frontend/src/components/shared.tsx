@@ -2,7 +2,7 @@ import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'rea
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
-import { cn, projBg, projColor } from '@/lib/utils';
+import { cn, msgClock, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
@@ -193,6 +193,18 @@ export function ProjChip({ name, path }: { name: string; path?: string }) {
       {name}
     </span>
   );
+}
+
+/**
+ * 消息发送时间:紧跟角色名的 HH:MM。派发页聊天流与回放抽屉共用同一枚,
+ * 保证两条渲染链路的时间样式不会各写各的(2026-08 压缩卡片改一处漏一处的老坑)。
+ * 无时间的事件(工具卡、老会话缺 ts)不渲染任何占位。悬停可见完整日期时间。
+ */
+export function MsgTime({ ts }: { ts: number | string | null | undefined }) {
+  const hhmm = msgClock(ts);
+  if (!hhmm) return null;
+  const full = new Date(typeof ts === 'number' ? ts : Date.parse(String(ts))).toLocaleString('zh-CN');
+  return <span className="msg-ts" title={full}>{hhmm}</span>;
 }
 
 // ---------- 空态 ----------

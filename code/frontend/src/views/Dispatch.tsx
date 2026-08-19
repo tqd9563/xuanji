@@ -1,12 +1,12 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { canWrapup, cn, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
@@ -132,11 +132,18 @@ const CHAT_SEED_LIMIT = 200;
 /** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
 const TA_MIN_H = 56;
 
+/** session jsonl 的 ISO 时间串 → ms epoch;老会话可能缺 ts,解析不出就当无时间 */
+function parseTs(iso: string | undefined): number | undefined {
+  if (!iso) return undefined;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
   return events.slice(-CHAT_SEED_LIMIT).map((ev, i): ChatItem => {
-    if (ev.kind === 'user') return { t: 'user', text: ev.text };
-    if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
+    if (ev.kind === 'user') return { t: 'user', text: ev.text, ts: parseTs(ev.ts) };
+    if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false, ts: parseTs(ev.ts) };
     if (ev.kind === 'tool')
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
     if (ev.kind === 'compact')
@@ -412,6 +419,18 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
+  // 跨天分隔线:与消息列表等长,daySeps[i] 非空表示第 i 条消息之前要插一条日期。
+  // 工具卡/审批等无时间的条目不参与判定,故游标记的是「上一条有时间的消息」而非前一项。
+  const daySeps = useMemo(() => {
+    let prev: number | undefined;
+    return d.items.map((it) => {
+      const ts = it.t === 'user' || it.t === 'assistant' ? it.ts : undefined;
+      if (ts == null) return null;
+      const sep = daySeparator(prev, ts);
+      prev = ts;
+      return sep;
+    });
+  }, [d.items]);
   const followScroll = useCallback(() => {
     if (pinnedRef.current && scrollRafRef.current === null) {
       scrollRafRef.current = requestAnimationFrame(() => {
@@ -792,7 +811,10 @@ export function Dispatch({ active }: { active: boolean }) {
             </div>
           )}
           {d.items.map((item, i) => (
-            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
+            <Fragment key={i}>
+              {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
+              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
+            </Fragment>
           ))}
         </div>
 
@@ -1314,14 +1336,14 @@ const ChatRow = memo(function ChatRow({
   if (item.t === 'user')
     return (
       <div className="chat-msg user">
-        <div className="who">你</div>
+        <div className="who">你<MsgTime ts={item.ts} /></div>
         <div className="body">{item.text}</div>
       </div>
     );
   if (item.t === 'assistant')
     return (
       <div className="chat-msg">
-        <div className="who">Claude</div>
+        <div className="who">Claude<MsgTime ts={item.ts} /></div>
         <div className="body md">
           <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
