@@ -504,6 +504,25 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
 
+/* ============ 消息发送时间(派发页聊天流 + 回放抽屉共用) ============ */
+/* 时间是元信息:落在 who(muted/jade)之下的 faint 层,mono + tabular-nums 保证
+   HH:MM 逐位对齐、分钟跳动不抖版。tool/raw 事件源数据无时间,不渲染也不占位。 */
+.msg-ts {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 8px;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+/* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
+   靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
+.day-sep {
+  display: flex; align-items: center; gap: 12px;
+  margin: 22px 0 18px; color: var(--faint);
+  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.day-sep::before, .day-sep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
+.day-sep:first-child { margin-top: 0; }
+
 /* 回放 */
 .replay-msg { margin-bottom: 18px; }
 .replay-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
