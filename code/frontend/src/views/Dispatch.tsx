@@ -129,6 +129,8 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
 
 /** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。 */
 const CHAT_SEED_LIMIT = 200;
+/** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
+const TA_MIN_H = 56;
 
 /** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
@@ -224,6 +226,20 @@ export function Dispatch({ active }: { active: boolean }) {
   const [modelPalette, setModelPalette] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
+  // 给(12 行或 40vh 取小),触顶后转 textarea 内部滚动并由 .at-max 亮出底部渐隐提示。
+  // `.value =` 赋值不触发 input 事件,所以每个程序化写入点(预填/交接/建议词/历史回溯/清空)
+  // 都要手动调一次,否则高度停在上一次的值。
+  const growTa = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto'; // 先归零,否则 scrollHeight 只增不减
+    const max = parseFloat(getComputedStyle(ta).maxHeight) || Infinity;
+    const target = Math.max(TA_MIN_H, ta.scrollHeight);
+    ta.style.height = `${Math.min(target, max)}px`;
+    composerRef.current?.classList.toggle('at-max', target > max + 1);
+  };
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
   // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
@@ -369,7 +385,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 待办「开工」:全新派发,带着待办的项目目录与内容进来(内容只预填,发不发由人决定)
     if (intent?.cwd) setCwd(intent.cwd);
     if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
-    if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
+    if (intent?.prefill && taRef.current) { taRef.current.value = intent.prefill; growTa(); }
     // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
     // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
     // 顶掉 /wd 等弹窗内输入框的焦点(2026-07-16 真机确认)
@@ -544,6 +560,7 @@ export function Dispatch({ active }: { active: boolean }) {
       }
     }
     ta.value = historyIdxRef.current === null ? historyDraftRef.current : hist[historyIdxRef.current]!;
+    growTa();
     const pos = ta.value.length;
     ta.setSelectionRange(pos, pos);
   };
@@ -555,6 +572,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!text || !effectiveCwd) return;
     if (!override) {
       ta!.value = '';
+      growTa();
       resetHistoryBrowse();
     }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
@@ -701,6 +719,7 @@ export function Dispatch({ active }: { active: boolean }) {
       d.pushNote(`⇢ 已从「${from}」携带交接摘要,新会话将运行在 ${target}。摘要已注入,直接描述要继续的工作。`);
       if (taRef.current) {
         taRef.current.value = `以下是上一会话的交接摘要:\n${summary}\n\n请基于以上上下文继续:`;
+        growTa();
         taRef.current.focus();
       }
     } catch (e) {
@@ -766,9 +785,9 @@ export function Dispatch({ active }: { active: boolean }) {
                 转后台的任务建议写全任务描述并放宽权限模式,避免无人值守时卡在审批上。
               </p>
               <div className="sugg">
-                <button onClick={() => { taRef.current!.value = '扫描近 7 天的高风险 IP,输出报告'; taRef.current?.focus(); }}>扫描高风险 IP</button>
-                <button onClick={() => { taRef.current!.value = '用 baize 对昨日收入异动做归因,结果发飞书卡片'; taRef.current?.focus(); }}>收入异动归因</button>
-                <button onClick={() => { taRef.current!.value = '把本周会话里踩过的坑提炼成 memory 草稿'; taRef.current?.focus(); }}>提炼本周经验</button>
+                <button onClick={() => { taRef.current!.value = '扫描近 7 天的高风险 IP,输出报告'; growTa(); taRef.current?.focus(); }}>扫描高风险 IP</button>
+                <button onClick={() => { taRef.current!.value = '用 baize 对昨日收入异动做归因,结果发飞书卡片'; growTa(); taRef.current?.focus(); }}>收入异动归因</button>
+                <button onClick={() => { taRef.current!.value = '把本周会话里踩过的坑提炼成 memory 草稿'; growTa(); taRef.current?.focus(); }}>提炼本周经验</button>
               </div>
             </div>
           )}
@@ -810,7 +829,7 @@ export function Dispatch({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className="composer">
+        <div className="composer" ref={composerRef}>
           <textarea
             ref={taRef}
             rows={2}
@@ -849,8 +868,11 @@ export function Dispatch({ active }: { active: boolean }) {
             onInput={() => {
               // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
               historyIdxRef.current = null;
+              growTa();
             }}
           />
+          {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
+          <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
             {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
                 但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}

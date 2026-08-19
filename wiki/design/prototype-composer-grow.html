@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 输入框长文本自适应抬高 原型</title>
+<style>
+/* ============================================================
+   以下为真实前端样式表 code/frontend/src/styles/index.css 全量内联,
+   保证原型与线上派发页视觉 1:1;新功能样式见文件底部「PROTO」区块。
+   ============================================================ */
 @import "tailwindcss";
 
 /* ============================================================
@@ -834,25 +845,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
-/* 高度跟随内容:由 Dispatch.tsx 的 growTa() 写 inline height(WebKit 尚不支持 field-sizing)。
-   下限 56px 与 TA_MIN_H 同值(改一处必须改另一处);上限取 12 行正文与 40vh 的小者,
-   触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
   padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
-  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
-  overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
-/* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
-.composer .grow-fade {
-  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--surface));
-  opacity: 0; transition: opacity 150ms var(--ease);
-}
-.composer.at-max .grow-fade { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 /* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
@@ -1546,3 +1543,132 @@ body.wall-glass .dd-menu {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ============================================================
+   PROTO · 输入框长文本自适应抬高
+   规则:
+   - 高度跟随内容:JS 把 height 设为 scrollHeight(field-sizing 尚不可依赖 WebKit)
+   - 下限不变:min-height 56px,与现状完全一致——短输入零视觉变化
+   - 上限:min(40vh, 内容 12 行),到顶后 textarea 内部滚动,光标始终可见
+   - 消息区(.chat)是 flex:1,composer 抬高时它自然让位,无需额外处理
+   - 不给 height 加 transition:逐键动画会抖,瞬时跟手才是「原生输入框」手感
+   ============================================================ */
+.composer textarea.auto-grow {
+  height: 56px;                     /* JS 接管前的初始值 = 现状 min-height */
+  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px)); /* 12 行正文 + 上下 padding */
+  overflow-y: auto;                 /* 到达上限后内部滚动 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+/* 到顶提示:贴 c-bar 处一条极淡的渐隐,暗示「下面还有内容」;未到顶时不出现 */
+.composer .grow-fade {
+  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
+  background: linear-gradient(to bottom, transparent, var(--surface));
+  opacity: 0; transition: opacity 150ms var(--ease);
+}
+.composer.at-max .grow-fade { opacity: 1; }
+
+/* ---- 原型页自身的演示外壳(非交付样式) ---- */
+.proto-note {
+  max-width: 960px; margin: 20px auto 0; padding: 12px 16px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  background: var(--surface-2); color: var(--muted); font-size: 0.8125rem; line-height: 1.6;
+}
+.proto-note b { color: var(--ink); }
+.proto-note .demo-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.proto-stage { max-width: 960px; margin: 12px auto 32px; height: min(78vh, 720px); display: flex; }
+.proto-stage .dispatch { flex: 1; display: flex; flex-direction: column; min-height: 0; height: auto; }
+.proto-hud { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="proto-note">
+  <b>原型 · 输入框长文本自适应抬高</b> —— 直接在下面输入/粘贴多行文本体验:高度逐行跟手抬高,
+  消息区自动让位;到 <b>12 行或 40vh</b> 上限后转为内部滚动并出现底部渐隐提示;删空即回落到现状的两行高度。
+  短输入与现状零差异。
+  <div class="demo-btns">
+    <button class="btn btn-sm" id="d-short">填入短文本</button>
+    <button class="btn btn-sm" id="d-mid">填入 6 行</button>
+    <button class="btn btn-sm" id="d-long">填入超长文本(触顶)</button>
+    <button class="btn btn-sm" id="d-clear">清空</button>
+    <span class="proto-hud" id="hud"></span>
+  </div>
+</div>
+
+<div class="proto-stage">
+<div class="dispatch">
+  <div class="chat">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">扫描近 7 天的高风险 IP,输出报告</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="body">好的,我先拉取近 7 天的登录日志,按 ipapi.is / proxycheck 双源交叉评估风险等级,完成后输出 Markdown 报告。预计涉及约 1.2 万条记录。</div>
+    </div>
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">机房 IP 单独列一节,附证据字段</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="body">已完成:共识别高风险 IP 47 个,其中机房 IP 31 个(单独成节,附 asn_type / company_type / proxy 三个证据字段)。报告已写入 reports/ip-risk-0819.md。</div>
+    </div>
+  </div>
+
+  <div class="chat-status">
+    <span class="u-chips" style="display:flex;gap:10px;">
+      <span style="color:var(--muted)">Context 34%</span>
+      <span style="color:var(--muted)">Usage 51%</span>
+      <span style="color:var(--muted)">Weekly 62%</span>
+    </span>
+    <span class="cs-state" style="margin-left:auto;color:var(--jade)"><span class="cs-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--jade);margin-right:6px;"></span>就绪</span>
+  </div>
+
+  <div class="composer" id="composer">
+    <textarea id="ta" class="auto-grow" rows="2" placeholder="描述要派发的任务…"></textarea>
+    <div class="grow-fade"></div>
+    <div class="c-bar">
+      <button class="wrapup-btn"><span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span></button>
+      <span class="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
+      <label class="bg-opt"><span class="switch"></span><span class="bg-opt-label">转后台(--bg)</span></label>
+      <button class="btn btn-primary send-btn"><span class="send-btn-label">发送</span></button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const ta = document.getElementById('ta');
+const composer = document.getElementById('composer');
+const hud = document.getElementById('hud');
+const MIN = 56;
+
+function grow() {
+  ta.style.height = 'auto';                       // 先归零量 scrollHeight
+  const max = parseFloat(getComputedStyle(ta).maxHeight);
+  const target = Math.max(MIN, ta.scrollHeight);
+  ta.style.height = Math.min(target, max) + 'px';
+  const atMax = target > max + 1;
+  composer.classList.toggle('at-max', atMax);
+  hud.textContent = `height: ${Math.round(Math.min(target, max))}px${atMax ? ' (触顶,内部滚动)' : ''}`;
+}
+ta.addEventListener('input', grow);
+
+function fill(text) { ta.value = text; grow(); ta.focus(); ta.scrollTop = ta.scrollHeight; }
+document.getElementById('d-short').onclick = () => fill('用 baize 对昨日收入异动做归因');
+document.getElementById('d-mid').onclick = () => fill(
+`帮我做一次周度巡检,按下面顺序:
+1. 扫描近 7 天高风险 IP,机房 IP 单独列节
+2. 用 baize 对收入异动做归因,交叉验证业务事件
+3. 把结论汇成飞书卡片发到风控群
+4. 有需要人工决策的点单独列出来
+5. 全程只读,不做任何写操作
+完成后给我一份 Markdown 汇总`);
+document.getElementById('d-long').onclick = () => fill(
+Array.from({length: 22}, (_, i) => `第 ${i+1} 条上下文:这是一段较长的任务背景描述,用来验证输入框触顶后的内部滚动与底部渐隐提示是否符合预期。`).join('\n'));
+document.getElementById('d-clear').onclick = () => fill('');
+grow();
+</script>
+</body>
+</html>
