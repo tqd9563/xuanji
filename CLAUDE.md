@@ -14,11 +14,6 @@
 - 前端:React + Vite + Tailwind + shadcn/ui
 - Claude 集成:Agent SDK(`@anthropic-ai/claude-agent-sdk`)为主,`claude agents --json` / `--bg` / `-p` 子进程为辅
 
-### project-init 适配约定
-- 使用 project-init skill 时**只遵守结构不变量**:`code/backend` + `code/frontend`、`wiki/{api,business,design,tech}/`、README 要素、原型关卡、执行清单
-- skill 中所有 Python/uv/FastAPI/pytest/ruff 细节替换为上述 Node 等价物,`.gitignore` 用 Node 版
-- 项目 agent 规则文件用本文件(CLAUDE.md),不再另建 AGENTS.md
-
 ### 架构铁律(详见 product-plan.md §3)
 1. 所有非公开格式(session jsonl、jobs/state.json、history.jsonl)的解析只允许存在于 Adapter 层
 2. 只读优先:能只读实现的功能绝不写 `~/.claude`;例外仅二(2026-07-08 用户批准):① 经验沉淀模块写 memory md;② 用户在界面显式触发、带二次确认的管理操作(如技能启停 = 在 `skills/` 与 `skills-disabled/` 间移动技能目录,可逆且不改文件内容)
