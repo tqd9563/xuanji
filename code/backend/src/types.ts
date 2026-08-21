@@ -1,5 +1,37 @@
 /** 内部领域模型 —— adapter 之上的所有层只认这些类型,不认 ~/.claude 原始格式。 */
 
+/** 随派发消息内联发送的图片(用户在输入框粘贴的截图)。data 是不带 data: 前缀的 base64。 */
+export interface InlineImage {
+  media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  data: string;
+}
+
+/** Anthropic 接受的图片 media type;粘贴进来的其它格式一律拒收,不做转码。 */
+export const INLINE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+/** 单图上限 5MB(Anthropic 硬限),按 base64 解码后的字节数算 */
+export const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+/** 单条消息最多带几张图 */
+export const INLINE_IMAGE_MAX_COUNT = 8;
+
+/** 校验并归一化来自 WS 的图片数组;任一张不合法即返回错误原因,不做部分接受。 */
+export function parseInlineImages(raw: unknown): { ok: true; images: InlineImage[] } | { ok: false; reason: string } {
+  if (raw === undefined || raw === null) return { ok: true, images: [] };
+  if (!Array.isArray(raw)) return { ok: false, reason: 'images 必须是数组' };
+  if (raw.length > INLINE_IMAGE_MAX_COUNT) return { ok: false, reason: `一条消息最多带 ${INLINE_IMAGE_MAX_COUNT} 张图片` };
+  const images: InlineImage[] = [];
+  for (const item of raw) {
+    const mt = (item as InlineImage)?.media_type;
+    const data = (item as InlineImage)?.data;
+    if (typeof data !== 'string' || !data) return { ok: false, reason: '图片数据为空' };
+    if (!(INLINE_IMAGE_TYPES as readonly string[]).includes(mt)) return { ok: false, reason: `不支持的图片格式:${String(mt)}` };
+    // base64 每 4 字符 → 3 字节,末尾 = 号是填充不计入
+    const bytes = Math.floor((data.length * 3) / 4) - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0);
+    if (bytes > INLINE_IMAGE_MAX_BYTES) return { ok: false, reason: `单张图片不能超过 ${INLINE_IMAGE_MAX_BYTES / 1024 / 1024}MB` };
+    images.push({ media_type: mt, data });
+  }
+  return { ok: true, images };
+}
+
 export interface GitStatus {
   branch: string;
   /** zsh 风格:! 已修改(含暂存) */
