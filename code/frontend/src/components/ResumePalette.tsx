@@ -10,6 +10,20 @@ import { cn, timeAgo } from '@/lib/utils';
 import { hitParts, matchScore } from '@/lib/fuzzy';
 import type { ClosedSession } from '@/api/types';
 
+/** 列表里 sessionId 只露前 8 位,匹配口径也只认这 8 位 + 整串前缀(粘贴完整 id 的场景)。
+ *  不把完整 uuid 交给 matchScore 的 path 通道:那样命中片段会落在界面根本没显示的中后段
+ *  (搜得到却看不出为什么),且 uuid 的子序列匹配假阳性极高(「abc」子序列命中 a1b2c3d4)。 */
+export function scoreSession(query: string, name: string, sessionId: string): number | null {
+  const q = query.trim();
+  if (!q) return 0;
+  // path 传空串 = 关掉 matchScore 的路径通道,只按会话名分层(前缀 100 / 中段 80 / 子序列 60)
+  const byName = matchScore(q, name, '');
+  if (byName !== null) return byName;
+  const id = sessionId.toLowerCase();
+  const lq = q.toLowerCase();
+  return id.slice(0, 8).includes(lq) || id.startsWith(lq) ? 40 : null;
+}
+
 /** 命中片段玉色高亮;未连续命中时等价于原样文本 */
 function Hit({ text, query }: { text: string; query: string }) {
   const { before, hit, after } = hitParts(text, query);
@@ -51,7 +65,7 @@ export function ResumePalette({
     if (!sessions) return [];
     if (!query.trim()) return sessions;
     return sessions
-      .map((s, i) => ({ s, i, score: matchScore(query.trim(), s.name, s.sessionId) }))
+      .map((s, i) => ({ s, i, score: scoreSession(query, s.name, s.sessionId) }))
       .filter((x): x is { s: ClosedSession; i: number; score: number } => x.score !== null)
       .sort((a, b) => b.score - a.score || a.i - b.i)
       .map((x) => x.s);
@@ -78,7 +92,7 @@ export function ResumePalette({
       el.focus();
     }, 50);
     return () => clearInterval(timer);
-  }, [sessions]);
+  }, []);
 
   // 键盘导航:capture + stopImmediatePropagation 吃掉整个按键,
   // 不拦截的话 Esc/← 会继续传给派发页的「返回看板」监听(ConfirmHost 同款处理)。
@@ -126,8 +140,11 @@ export function ResumePalette({
   }, []);
 
   const q = query.trim();
-  // 搜索框只在「确实有已关闭会话」时出现:一条都没有时搜索框是纯噪音,空态文案已说明去处
-  const searchable = !error && !!sessions?.length;
+  // 搜索框从加载中就渲染:等列表回来再挂输入框,这段窗口里焦点无处可去、用户抢先打的字直接丢失
+  // (真机实测确有此窗口)。只有「加载失败」与「一条已关闭会话都没有」两种终态不给搜索框——
+  // 此时它是纯噪音,空态文案已说明去处。
+  const searchable = !error && sessions?.length !== 0;
+  const hasList = !error && !!sessions?.length;
 
   return (
     <div className="confirm-mask" onClick={onClose}>
@@ -154,8 +171,8 @@ export function ResumePalette({
         {!error && sessions?.length === 0 && (
           <div className="rp-empty">当前项目没有已关闭的会话(看板 × 关闭的会话会出现在这里)</div>
         )}
-        {searchable && filtered.length === 0 && <div className="rp-empty">没有匹配「{q}」的已关闭会话</div>}
-        {searchable && filtered.length > 0 && (
+        {hasList && filtered.length === 0 && <div className="rp-empty">没有匹配「{q}」的已关闭会话</div>}
+        {hasList && filtered.length > 0 && (
           <div className="rp-list" ref={listRef}>
             {filtered.map((s, i) => (
               <button
