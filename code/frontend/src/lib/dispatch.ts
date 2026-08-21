@@ -10,8 +10,14 @@ export interface QuestionSpec {
 
 /** 消息发送时间(ms epoch)。实时消息在到达时打点,历史消息取 session jsonl 的 ts;
  *  工具卡/审批等非对话事件无此字段(源数据本就没有时间),不显示时间也不参与跨天分隔。 */
+/** 随消息内联发送的图片(输入框里粘贴的截图)。data 是不带 data: 前缀的 base64。 */
+export interface InlineImage {
+  media_type: string;
+  data: string;
+}
+
 export type ChatItem =
-  | { t: 'user'; text: string; ts?: number }
+  | { t: 'user'; text: string; ts?: number; images?: InlineImage[] }
   | { t: 'assistant'; text: string; streaming: boolean; ts?: number }
   /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
   | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
@@ -162,7 +168,10 @@ export function useDispatch() {
         setStatus({ state: e.state as AgentStatus['state'], detail: e.detail as string | undefined });
         break;
       case 'user-echo':
-        setItems((prev) => [...prev, { t: 'user', text: String(e.text), ts: Date.now() }]);
+        setItems((prev) => [
+          ...prev,
+          { t: 'user', text: String(e.text ?? ''), ts: Date.now(), images: e.images as InlineImage[] | undefined },
+        ]);
         break;
       case 'delta':
         pendingDeltaRef.current += String(e.text);
@@ -384,9 +393,11 @@ export function useDispatch() {
   }, [attach]);
 
   const send = useCallback(
-    async (text: string, opts: StartOpts & { bg?: boolean }) => {
+    async (text: string, opts: StartOpts & { bg?: boolean; images?: InlineImage[] }) => {
       const ws = await ensureWs();
+      const images = opts.images?.length ? opts.images : undefined;
       if (opts.bg) {
+        // 后台会话走 claude CLI 子进程,没有内联图片通道 —— 图片在此丢弃(UI 已提前拦截)
         setItems((prev) => [...prev, { t: 'user', text }]);
         ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text }));
         return;
@@ -404,10 +415,11 @@ export function useDispatch() {
             resume: opts.resume,
             name: opts.name,
             prompt: text,
+            images,
           }),
         );
       } else {
-        ws.send(JSON.stringify({ op: 'send', text }));
+        ws.send(JSON.stringify({ op: 'send', text, images }));
       }
     },
     [ensureWs],

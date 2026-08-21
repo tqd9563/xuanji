@@ -16,6 +16,7 @@ import { invalidateUsageCache } from './services/usage.js';
 import { canResume, createDispatch, getDispatch, parseEffort, type DispatchSession } from './services/dispatch.js';
 import { bgDispatch } from './adapters/agents-cli.js';
 import type { Storage } from './storage/db.js';
+import { parseInlineImages } from './types.js';
 
 export function attachWs(server: Server, storage: Storage) {
   const changesWss = new WebSocketServer({ noServer: true });
@@ -96,7 +97,11 @@ export function attachWs(server: Server, storage: Storage) {
         try {
           switch (msg.op) {
             case 'start': {
-              if (typeof msg.cwd !== 'string' || typeof msg.prompt !== 'string' || !msg.prompt.trim()) {
+              const startImgs = parseInlineImages(msg.images);
+              if (!startImgs.ok) return send({ ev: 'error', message: startImgs.reason });
+              // 带图时允许 prompt 为空:一张截图本身就是完整的诉求
+              const hasStartPrompt = typeof msg.prompt === 'string' && (msg.prompt.trim() || startImgs.images.length);
+              if (typeof msg.cwd !== 'string' || !hasStartPrompt) {
                 return send({ ev: 'error', message: 'start 需要 cwd 与 prompt' });
               }
               // 不存在的 cwd 会让 SDK spawn ENOENT,报错极具误导性("原生二进制启动失败"),前置拦截
@@ -119,7 +124,7 @@ export function attachWs(server: Server, storage: Storage) {
                 name: msg.name || undefined,
               });
               attach(s, false);
-              s.send(msg.prompt);
+              s.send(msg.prompt, startImgs.images);
               break;
             }
             case 'attach': {
@@ -128,10 +133,16 @@ export function attachWs(server: Server, storage: Storage) {
               attach(s, true);
               break;
             }
-            case 'send':
+            case 'send': {
               if (!session) return send({ ev: 'error', message: '尚未开始会话' });
-              if (typeof msg.text === 'string' && msg.text.trim()) session.send(msg.text);
+              const imgs = parseInlineImages(msg.images);
+              if (!imgs.ok) return send({ ev: 'error', message: imgs.reason });
+              // 只带图不带字也算一条有效消息
+              if (typeof msg.text === 'string' && (msg.text.trim() || imgs.images.length)) {
+                session.send(msg.text, imgs.images);
+              }
               break;
+            }
             case 'permission':
               session?.resolvePermission(String(msg.requestId), msg.decision);
               break;

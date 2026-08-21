@@ -132,6 +132,43 @@ const CHAT_SEED_LIMIT = 200;
 /** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
 const TA_MIN_H = 56;
 
+/** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
+const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const IMG_MAX_BYTES = 5 * 1024 * 1024;
+const IMG_MAX_COUNT = 8;
+
+/** 待发送图片:base64 供上行,url(dataURL)供缩略图/灯箱渲染 */
+interface PastedImage {
+  id: string;
+  media_type: string;
+  data: string;
+  url: string;
+  bytes: number;
+}
+
+/** Blob → base64(去掉 dataURL 前缀);FileReader 而非 arrayBuffer+btoa,避免大图爆栈 */
+function blobToPasted(blob: Blob): Promise<PastedImage> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('图片读取失败'));
+    fr.onload = () => {
+      const url = String(fr.result);
+      resolve({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        media_type: blob.type,
+        data: url.slice(url.indexOf(',') + 1),
+        url,
+        bytes: blob.size,
+      });
+    };
+    fr.readAsDataURL(blob);
+  });
+}
+
+function fmtBytes(n: number): string {
+  return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
 /** session jsonl 的 ISO 时间串 → ms epoch;老会话可能缺 ts,解析不出就当无时间 */
 function parseTs(iso: string | undefined): number | undefined {
   if (!iso) return undefined;
@@ -232,6 +269,10 @@ export function Dispatch({ active }: { active: boolean }) {
   const [wdQuery, setWdQuery] = useState('');
   const [modelPalette, setModelPalette] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
+  /** 待发送的粘贴图片(缩略图显示在输入框上方、composer 边框内);发送成功后清空 */
+  const [attachments, setAttachments] = useState<PastedImage[]>([]);
+  /** 灯箱查看的原图 dataURL,null 为关闭 */
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
   // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
@@ -509,6 +550,19 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
 
+  // 灯箱 Esc 关闭:捕获阶段拦截,免得同一下 Esc 又被 composer/看板返回逻辑吃掉
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLightbox(null);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [lightbox]);
+
   /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
   const wrapupRef = useRef<() => void>(() => {});
   wrapupRef.current = () => {
@@ -587,8 +641,10 @@ export function Dispatch({ active }: { active: boolean }) {
   /** override:不经输入框直接发一段文本(⚑ 任务总结按钮与 ⌘⏎ 走这条路,与手打 /wrapup 完全等价) */
   const submit = async (override?: string) => {
     const ta = taRef.current;
-    const text = override ?? ta?.value.trim();
-    if (!text || !effectiveCwd) return;
+    const text = override ?? ta?.value.trim() ?? '';
+    // 程序化调用(/wrapup 等)不带图;用户手动发送时,只有图片没有文字也算一条有效消息
+    const images = override ? [] : attachments;
+    if ((!text && !images.length) || !effectiveCwd) return;
     if (!override) {
       ta!.value = '';
       growTa();
@@ -677,8 +733,10 @@ export function Dispatch({ active }: { active: boolean }) {
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
     // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
+    // 只发图不发字时没有可用作会话名的文本,退回一句占位(SDK 分配 id 后看板仍可改名)
+    const autoName = text.slice(0, 40) || `图片消息 ×${images.length}`;
     if (!resumeInfo && !sessCtx) {
-      setSessCtx({ id: null, name: text.slice(0, 40), project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
+      setSessCtx({ id: null, name: autoName, project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
     }
     repin(); // 发消息 = 主动回到「看最新」
     try {
@@ -694,8 +752,11 @@ export function Dispatch({ active }: { active: boolean }) {
         model: modelSel === MODELS[0] ? undefined : modelSel,
         effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
-        name: resumeInfo?.name ?? text.slice(0, 40),
+        name: resumeInfo?.name ?? autoName,
+        images: images.map((im) => ({ media_type: im.media_type, data: im.data })),
       });
+      // 送达才清空:发送抛错时图片留在输入框,不用重新截一次
+      if (images.length) setAttachments([]);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e));
     }
@@ -813,7 +874,7 @@ export function Dispatch({ active }: { active: boolean }) {
           {d.items.map((item, i) => (
             <Fragment key={i}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
-              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
+              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} onZoom={setLightbox} />
             </Fragment>
           ))}
         </div>
@@ -851,11 +912,71 @@ export function Dispatch({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className="composer" ref={composerRef}>
+        <div className={cn('composer', attachments.length && 'has-attach')} ref={composerRef}>
+          {/* 待发送图片条:在 textarea 上方、composer 边框之内 —— 图片与文字同属一条待发消息 */}
+          {attachments.length > 0 && (
+            <div className="attach-strip">
+              {attachments.map((im) => (
+                <div
+                  key={im.id}
+                  className="attach-chip"
+                  title={`图片 · ${fmtBytes(im.bytes)} · 点击查看原图`}
+                  onClick={() => setLightbox(im.url)}
+                >
+                  <img src={im.url} alt="待发送图片" />
+                  <button
+                    className="rm"
+                    aria-label="移除图片"
+                    title="移除"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAttachments((prev) => prev.filter((x) => x.id !== im.id));
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={taRef}
             rows={2}
             placeholder="描述要派发的任务…"
+            onPaste={(e) => {
+              const files = [...e.clipboardData.items]
+                .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+                .map((it) => it.getAsFile())
+                .filter((f): f is File => !!f);
+              if (!files.length) return; // 纯文本粘贴走默认行为
+              e.preventDefault();
+              if (bg) return toast('后台任务(--bg)走 CLI 通道,不支持粘贴图片;关掉「转后台」再试');
+              void (async () => {
+                // 名额按「本次渲染已有的张数」预扣:异步读图期间不能靠 setState 回读当前长度
+                let slots = IMG_MAX_COUNT - attachments.length;
+                for (const f of files) {
+                  if (slots <= 0) {
+                    toast(`一条消息最多带 ${IMG_MAX_COUNT} 张图片`);
+                    break;
+                  }
+                  if (!IMG_TYPES.includes(f.type)) {
+                    toast(`不支持的图片格式:${f.type || '未知'}`);
+                    continue;
+                  }
+                  if (f.size > IMG_MAX_BYTES) {
+                    toast(`「${fmtBytes(f.size)}」超过单张 ${IMG_MAX_BYTES / 1024 / 1024}MB 上限`);
+                    continue;
+                  }
+                  slots -= 1;
+                  try {
+                    const img = await blobToPasted(f);
+                    setAttachments((prev) => (prev.length >= IMG_MAX_COUNT ? prev : [...prev, img]));
+                  } catch {
+                    toast('图片读取失败');
+                  }
+                }
+              })();
+            }}
             onKeyDown={(e) => {
               // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
               // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
@@ -1042,6 +1163,17 @@ export function Dispatch({ active }: { active: boolean }) {
               taRef.current?.focus();
             }}
           />
+        )}
+        {/* 图片灯箱:点缩略图看原图,点任意处或 Esc 关闭 */}
+        {lightbox && (
+          <div
+            className="lightbox open"
+            role="dialog"
+            aria-label="查看原图"
+            onClick={() => setLightbox(null)}
+          >
+            <img src={lightbox} alt="原图" />
+          </div>
         )}
         {showCwdNote && (
           <div className="cwd-note">
@@ -1326,18 +1458,35 @@ const ChatRow = memo(function ChatRow({
   onDecide,
   onAnswer,
   onGrow,
+  onZoom,
 }: {
   item: ChatItem;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
   onGrow?: () => void;
+  /** 点击消息里的图片缩略图 → 开灯箱看原图 */
+  onZoom?: (url: string) => void;
 }) {
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
     return (
       <div className="chat-msg user">
         <div className="who">你<MsgTime ts={item.ts} /></div>
-        <div className="body">{item.text}</div>
+        <div className="body">
+          {item.images && item.images.length > 0 && (
+            <div className="msg-imgs">
+              {item.images.map((im, i) => (
+                <img
+                  key={i}
+                  src={`data:${im.media_type};base64,${im.data}`}
+                  alt="图片"
+                  onClick={() => onZoom?.(`data:${im.media_type};base64,${im.data}`)}
+                />
+              ))}
+            </div>
+          )}
+          {item.text}
+        </div>
       </div>
     );
   if (item.t === 'assistant')

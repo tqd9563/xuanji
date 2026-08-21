@@ -15,7 +15,7 @@ import {
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { listAgents } from '../adapters/agents-cli.js';
-import type { AgentSession } from '../types.js';
+import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { Storage } from '../storage/db.js';
 
@@ -79,7 +79,7 @@ export type DispatchEvent =
   | { ev: 'result'; costUsd: number; contextTokens: number; contextPct: number; durationMs: number }
   | { ev: 'rate-limit'; kind: string; utilization: number; resetsAt?: number; model?: string }
   | { ev: 'context'; pct: number }
-  | { ev: 'user-echo'; text: string }
+  | { ev: 'user-echo'; text: string; images?: InlineImage[] }
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'model-changed'; model: string }
   | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
@@ -543,15 +543,30 @@ export class DispatchSession {
 
   // ---------- 输入 / 控制 ----------
 
-  send(text: string) {
+  send(text: string, images?: InlineImage[]) {
     // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
     this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
     this.turnEnded = false; // 新一轮开始:之前 result 后的后台任务压制状态作废,交回正常事件流
-    this.emit({ ev: 'user-echo', text });
+    // 图片跟着回显走:user-echo 是所有已连接客户端(含中途 attach 的)唯一的用户消息来源,
+    // 发送端若自行本地渲染会与它重复,故图片同走这条链路。
+    this.emit({ ev: 'user-echo', text, images });
     this.emit({ ev: 'status', state: 'working' });
+    // 无图时保持纯字符串 content(与既有行为一致);有图转 content-block 数组,
+    // 图片块排在文字前 —— 模型先看图再读诉求。
     this.input.push({
       type: 'user',
-      message: { role: 'user', content: text },
+      message: {
+        role: 'user',
+        content: images?.length
+          ? [
+              ...images.map((im) => ({
+                type: 'image' as const,
+                source: { type: 'base64' as const, media_type: im.media_type, data: im.data },
+              })),
+              ...(text ? [{ type: 'text' as const, text }] : []),
+            ]
+          : text,
+      },
       parent_tool_use_id: null,
     } as SDKUserMessage);
   }
