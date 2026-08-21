@@ -33,6 +33,17 @@ export function matchScore(query: string, label: string, path: string): number |
   return null;
 }
 
+/** 把 text 按 query 的连续命中片段切成 [前, 命中, 后] 三段(大小写不敏感);
+ *  未连续命中(含空 query)时 hit 为空串,调用方原样渲染 before 即可。
+ *  只高亮连续片段而不高亮子序列命中:子序列的散点高亮在中文会话名里是视觉噪音,
+ *  而打分仍走 matchScore,故「能搜到但没高亮」是允许的状态。 */
+export function hitParts(text: string, query: string): { before: string; hit: string; after: string } {
+  const q = query.trim();
+  const idx = q ? text.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (idx < 0) return { before: text, hit: '', after: '' };
+  return { before: text.slice(0, idx), hit: text.slice(idx, idx + q.length), after: text.slice(idx + q.length) };
+}
+
 /** 所有候选共有的目录前缀(截到最后一个 "/",含斜杠);无 "/" 或单候选时返回 ""。
  *  /model 复用 WdPalette 时选项是模型名(无斜杠),自动退化为不剥前缀。 */
 export function commonDirPrefix(paths: string[]): string {
