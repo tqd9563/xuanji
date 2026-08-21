@@ -48,9 +48,10 @@ export interface UsageChips {
 
 export interface DispatchIntent {
   resume?: { sessionId: string; name: string; cwd: string; project: string };
-  /** 后端存活的派发会话:直接 attach 回原事件流(不新开 SDK 会话)。name/project 由发起方(看板已持有的 AgentSession)
-   *  随手带过来,省一趟按 dispatchId 反查的请求;派发页只管展示,不关心其来源。 */
-  attach?: { dispatchId: string; cwd: string; name: string; project: string };
+  /** 后端存活的派发会话:直接 attach 回原事件流(不新开 SDK 会话)。name/project/sessionId 由发起方(看板已持有的
+   *  AgentSession)随手带过来,省一趟按 dispatchId 反查的请求;派发页只管展示,不关心其来源。
+   *  sessionId 仅用于进入时标已读(会话标识里的 id 仍等 attach 重放 init 事件后补)。 */
+  attach?: { dispatchId: string; sessionId: string; cwd: string; name: string; project: string };
   prefill?: string;
   /** 全新派发的工作目录(待办「开工」带过来;attach/resume 自带 cwd,不走这里) */
   cwd?: string;

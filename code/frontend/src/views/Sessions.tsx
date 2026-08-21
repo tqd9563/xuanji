@@ -22,7 +22,7 @@ import { FindBar, useFindInPage } from '@/components/FindBar';
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
   if (s.dispatchId) {
-    setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+    setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
     location.hash = 'dispatch';
     return;
   }

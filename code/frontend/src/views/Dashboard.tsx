@@ -108,7 +108,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   const reviewable = data.reviewCandidates ?? [];
   const goSession = (s: (typeof reviewable)[number]) => {
     if (s.dispatchId) {
-      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+      setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
       location.hash = 'dispatch';
       return;
     }
