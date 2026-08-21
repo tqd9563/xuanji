@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原型 · /resume 恢复会话弹窗搜索</title>
+<style>
+/* ============================================================
+   token 与组件样式内联自 code/frontend/src/styles/index.css(生产同源),
+   仅为本原型新增 .rp-mark(命中高亮)与演示外壳样式。
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-s: 6px;
+  --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--sans); background: var(--bg); color: var(--ink);
+  font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+.mono { font-family: var(--mono); }
+
+.input {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem;
+  transition: border-color 150ms var(--ease);
+}
+.input:hover { border-color: var(--muted); }
+.input:focus { outline: none; border-color: var(--jade); }
+
+.confirm-mask {
+  position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--bg) 62%, transparent); backdrop-filter: blur(2px);
+}
+.rp-box {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  width: min(520px, calc(100vw - 48px)); box-shadow: 0 18px 48px rgb(0 0 0 / 0.5); overflow: hidden;
+}
+.rp-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 14px 18px 12px; font-size: 0.8125rem; font-weight: 600;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rp-hint { font-size: 0.6875rem; font-weight: 400; color: var(--faint); }
+.rp-empty { padding: 22px 18px; font-size: 0.8125rem; color: var(--muted); line-height: 1.7; }
+.rp-list { max-height: 320px; overflow-y: auto; padding: 6px; }
+.rp-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 12px; border: 0; border-radius: var(--r-s); background: none;
+  color: var(--ink); font-size: 0.8125rem; cursor: pointer;
+}
+.rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
+.rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
+
+/* WdPalette 同款搜索框容器(生产已有类,原样复用) */
+.wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.wd-search .input { width: 100%; }
+
+/* 本次新增:搜索命中片段高亮 —— 玉色字重,不加底色(避免与选中环双重强调) */
+.rp-mark { color: var(--jade); font-weight: 600; }
+
+/* ============ 以下仅原型演示外壳 ============ */
+.demo-note {
+  position: fixed; left: 24px; bottom: 24px; z-index: 95;
+  max-width: 340px; background: var(--surface-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-m); padding: 14px 16px; font-size: 0.75rem; color: var(--muted); line-height: 1.8;
+}
+.demo-note b { color: var(--ink); font-weight: 600; }
+.demo-note .k {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+  background: var(--tint-jade); border-radius: 4px; padding: 0 5px;
+}
+@media (max-width: 720px) { .demo-note { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="confirm-mask">
+  <div class="rp-box" role="dialog" aria-modal="true" aria-label="恢复已关闭会话">
+    <div class="rp-head">
+      恢复已关闭会话
+      <span class="rp-hint">↑↓/Tab 选择 · Enter 续接 · Esc 关闭</span>
+    </div>
+    <div class="wd-search">
+      <input id="q" class="input" type="text" placeholder="搜索会话名或 id…(如 待办)" autocomplete="off" aria-label="搜索已关闭会话">
+    </div>
+    <div class="rp-list" id="list"></div>
+    <div class="rp-empty" id="empty" hidden></div>
+  </div>
+</div>
+
+<div class="demo-note">
+  <b>原型说明</b><br>
+  在 ResumePalette 头部下方加一条 WdPalette 同款搜索框,打开即聚焦、直接打字过滤;
+  匹配片段<span class="rp-mark">玉色加粗</span>高亮。<br>
+  <span class="k">↑↓</span> <span class="k">Tab</span> 在结果内选择 ·
+  <span class="k">Enter</span> 续接选中项 · <span class="k">Esc</span> 关闭。<br>
+  试试输入 <span class="k">todo</span>、<span class="k">日志</span> 或 8 位 id 前缀 <span class="k">c3a</span>。
+</div>
+
+<script>
+// mock 数据:口径与 GET /api/sessions/closed 一致(name / sessionId / hiddenAt)
+const SESSIONS = [
+  { name: '待办与派发会话联动:续接、横幅错绑修复',      sessionId: 'c3a91f04', ago: '2 小时前' },
+  { name: 'todo 看板空格键失灵排查',                    sessionId: '7be20d15', ago: '5 小时前' },
+  { name: '会话消息显示发送时间与跨天分隔线',            sessionId: '4f88ac2e', ago: '昨天' },
+  { name: '派发输入框长文本自适应抬高',                  sessionId: '91d3e6b7', ago: '昨天' },
+  { name: '日志字段质量验收脚本改造',                    sessionId: 'ab04c9d8', ago: '2 天前' },
+  { name: '/compact 压缩点在 web 出可展开卡片',          sessionId: '5c17f2a9', ago: '3 天前' },
+  { name: '⌘F 会话内查找实现',                          sessionId: 'e2906b3a', ago: '4 天前' },
+  { name: 'preview.sh 验收环境端口顺延修复',             sessionId: '38d5a1cb', ago: '5 天前' },
+  { name: 'Pake 壳白屏 Tauri ACL 定位',                 sessionId: 'f6b32e4c', ago: '上周' },
+  { name: '远程访问 VPN 鉴权改造(已回滚)',             sessionId: '0a7e94dd', ago: '上周' },
+];
+
+const q = document.getElementById('q'), list = document.getElementById('list'), empty = document.getElementById('empty');
+let filtered = SESSIONS, sel = 0;
+
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// 高亮:大小写不敏感的连续子串命中(实现时换用 lib/fuzzy 的 fuzzyRank 同口径)
+function mark(text, kw) {
+  if (!kw) return esc(text);
+  const i = text.toLowerCase().indexOf(kw.toLowerCase());
+  if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + '<span class="rp-mark">' + esc(text.slice(i, i + kw.length)) + '</span>' + esc(text.slice(i + kw.length));
+}
+
+function render() {
+  const kw = q.value.trim();
+  filtered = kw ? SESSIONS.filter(s => (s.name + ' ' + s.sessionId).toLowerCase().includes(kw.toLowerCase())) : SESSIONS;
+  sel = Math.min(sel, Math.max(0, filtered.length - 1));
+  empty.hidden = filtered.length > 0;
+  if (!filtered.length) empty.textContent = '没有匹配「' + kw + '」的已关闭会话';
+  list.innerHTML = filtered.map((s, i) =>
+    '<button class="rp-item' + (i === sel ? ' sel' : '') + '" tabindex="-1" data-i="' + i + '">' +
+      '<span class="rp-name">' + mark(s.name, kw) + '</span>' +
+      '<span class="rp-meta mono">' + mark(s.sessionId, kw) + '</span>' +
+      '<span class="rp-meta">关闭于 ' + esc(s.ago) + '</span>' +
+    '</button>').join('');
+}
+q.addEventListener('input', () => { sel = 0; render(); });
+list.addEventListener('mouseover', (e) => {
+  const btn = e.target.closest('.rp-item');
+  if (btn && +btn.dataset.i !== sel) { sel = +btn.dataset.i; render(); }
+});
+list.addEventListener('click', (e) => {
+  const btn = e.target.closest('.rp-item');
+  if (btn) alert('续接:' + filtered[+btn.dataset.i].name);
+});
+document.addEventListener('keydown', (e) => {
+  if (!filtered.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+    e.preventDefault();
+    sel = e.key === 'Tab'
+      ? (e.shiftKey ? (sel - 1 + filtered.length) % filtered.length : (sel + 1) % filtered.length)
+      : (e.key === 'ArrowDown' ? Math.min(sel + 1, filtered.length - 1) : Math.max(sel - 1, 0));
+    render();
+    list.children[sel]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (filtered[sel]) alert('续接:' + filtered[sel].name);
+  }
+});
+// 支持 #关键词 直达过滤态,便于演示(如 …html#todo)
+if (location.hash) q.value = decodeURIComponent(location.hash.slice(1));
+q.focus();
+render();
+</script>
+</body>
+</html>
