@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { Todo } from '@/api/types';
-import { usePoll, useIsMobile } from '@/lib/hooks';
+import { usePoll, useIsMobile, isTypingTarget } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { timeAgo } from '@/lib/utils';
 import { confirmBox, Empty, ProjChip, toast } from '@/components/shared';
@@ -58,8 +58,32 @@ export function isStale(t: Todo): boolean {
  * 开工:带着项目 cwd 与待办内容跳派发页。内容预填进输入框但不自动发送——
  * 待办往往只是半句话想法,直接发质量不高,留一步给人补充。
  * 发送后由派发页把 sessionId 回填到这条待办(见 Dispatch 里的 todoId 处理)。
+ *
+ * 「继续」(进行中且已挂会话)走续接而非全新派发:后端存活的派发会话 attach 接回,
+ * 已退出的可续接会话 resume 恢复上下文(与看板 smartOpen 同一套语义)。
+ * 此前这里不分状态一律全新派发,「继续」变成把标题重发一遍、原会话上下文全丢。
+ * 会话已不在看板 / 不可续接时回落到全新派发——上下文找不回来,至少把内容带过去。
  */
-export function startTodo(t: Todo) {
+export async function startTodo(t: Todo) {
+  if (t.status === 'doing' && t.sessionId) {
+    try {
+      const board = await api.sessions();
+      const s = Object.values(board.columns).flat().find((x) => x.sessionId === t.sessionId);
+      if (s?.dispatchId) {
+        setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
+        location.hash = 'dispatch';
+        return;
+      }
+      if (s && !s.readonly && (await api.canResume(t.sessionId)).ok) {
+        setDispatchIntent({ resume: { sessionId: t.sessionId, name: s.name, cwd: s.cwd, project: s.project } });
+        location.hash = 'dispatch';
+        return;
+      }
+      toast('原会话已不可续接,按全新派发开工');
+    } catch {
+      // 看板/预检查询失败:不挡「开工」这个主动作,回落全新派发
+    }
+  }
   setDispatchIntent({ cwd: t.cwd ?? undefined, prefill: t.title, todoId: t.id });
   location.hash = 'dispatch';
 }
@@ -106,6 +130,15 @@ export function Todos() {
     return [...m.entries()];
   }, [rows]);
 
+  /**
+   * 键盘选中按 id 记(不按下标):轮询 30s 刷一次,新记的待办插在最前会把下标整体顶掉,
+   * 按 id 记则选中始终跟着同一条走。选中项被筛掉/删掉时回落到第一条。
+   */
+  const [kbId, setKbId] = useState<number | null>(null);
+  const [editId, setEditId] = useState<number | null>(null);
+  const editRef = useRef<HTMLInputElement>(null);
+  const rowRefs = useRef(new Map<number, HTMLDivElement>());
+
   const undone = todos.filter((t) => t.status !== 'done').length;
   const stale = todos.filter(isStale).length;
   const cwdOptions = useMemo(() => (projectsData?.projects ?? []).map((p) => p.path), [projectsData]);
@@ -147,6 +180,67 @@ export function Todos() {
       toast(e instanceof Error ? e.message : '删除失败');
     }
   };
+
+  /** 就地改标题:空标题视为放弃(不落库,也不当删除处理),内容没变则直接收起不打接口 */
+  const saveEdit = async (t: Todo) => {
+    const next = (editRef.current?.value ?? '').trim();
+    setEditId(null);
+    if (!next || next === t.title) return;
+    try {
+      await api.updateTodo(t.id, { title: next });
+      notifyTodosChanged();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '重命名失败');
+    }
+  };
+
+  /**
+   * 键盘导航:↑↓ 选中,Space 勾选,Enter 开工,E 改标题,⌫ 删除。
+   * 编辑态与项目选择器打开时整体让出按键(否则打字会被当快捷键吃掉)。
+   */
+  const kbRef = useRef({ rows, kbId, editId, wdOpen });
+  kbRef.current = { rows, kbId, editId, wdOpen };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const { rows: list, kbId: cur, editId: ed, wdOpen: wd } = kbRef.current;
+      if (ed !== null || wd || isTypingTarget(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (list.length === 0) return;
+      const key = e.code === 'Space' ? ' ' : e.key;
+      const idx = list.findIndex((t) => t.id === cur);
+      if (key === 'ArrowDown' || key === 'ArrowUp') {
+        e.preventDefault();
+        // 未选中时首按落在第一条;选中项已被筛掉(idx=-1)同样回到第一条
+        const next = idx === -1 ? 0 : Math.min(list.length - 1, Math.max(0, idx + (key === 'ArrowDown' ? 1 : -1)));
+        setKbId(list[next]!.id);
+        return;
+      }
+      if (idx === -1) return;
+      const t = list[idx]!;
+      if (key === ' ') {
+        e.preventDefault();
+        void toggleDone(t);
+      } else if (key === 'Enter') {
+        e.preventDefault();
+        if (t.status !== 'done') void startTodo(t);
+      } else if (key === 'e' || key === 'E') {
+        e.preventDefault();
+        setEditId(t.id);
+      } else if (key === 'Backspace' || key === 'Delete') {
+        e.preventDefault();
+        void remove(t);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, []);
+
+  // 选中项滚进视野;进入编辑态时把光标放到行内输入框并全选(改标题多为整句重写)
+  useEffect(() => {
+    if (kbId !== null) rowRefs.current.get(kbId)?.scrollIntoView({ block: 'nearest' });
+  }, [kbId]);
+  useEffect(() => {
+    if (editId !== null) editRef.current?.select();
+  }, [editId]);
 
   return (
     <>
@@ -191,6 +285,14 @@ export function Todos() {
         自有数据(SQLite),与 <span className="mono">~/.claude</span> 无关 · 任意页面按{' '}
         <span className="mono">⌘J</span> 速记 · 也可从 Raycast 用全局热键记入(见{' '}
         <span className="mono">wiki/tech/todo-raycast.md</span>)
+        {!isMobile && (
+          <>
+            {' '}
+            · <span className="mono">↑ ↓</span> 选中,<span className="mono">Space</span> 勾选,
+            <span className="mono">Enter</span> 开工,<span className="mono">E</span> 改标题,
+            <span className="mono">⌫</span> 删除
+          </>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -204,7 +306,15 @@ export function Todos() {
             <div key={day} className="td-group" style={gi > 0 ? { borderTop: '1px solid var(--line-soft)' } : undefined}>
               <h2>{day}</h2>
               {list.map((t) => (
-                <div key={t.id} className={`td-item${t.status === 'done' ? ' done' : ''}`}>
+                <div
+                  key={t.id}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(t.id, el);
+                    else rowRefs.current.delete(t.id);
+                  }}
+                  className={`td-item${t.status === 'done' ? ' done' : ''}${kbId === t.id ? ' kb-sel' : ''}`}
+                  onClick={() => setKbId(t.id)}
+                >
                   <button
                     className="chk"
                     onClick={() => void toggleDone(t)}
@@ -213,7 +323,25 @@ export function Todos() {
                   >
                     ✓
                   </button>
-                  <span className="title" title={t.title}>{t.title}</span>
+                  {editId === t.id ? (
+                    <Input
+                      ref={editRef}
+                      className="td-edit-input"
+                      defaultValue={t.title}
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.nativeEvent.isComposing) return;
+                        if (e.key === 'Enter') void saveEdit(t);
+                        else if (e.key === 'Escape') setEditId(null);
+                        e.stopPropagation();
+                      }}
+                      onBlur={() => void saveEdit(t)}
+                    />
+                  ) : (
+                    <span className="title" title={t.title} onDoubleClick={() => setEditId(t.id)}>
+                      {t.title}
+                    </span>
+                  )}
                   {t.project ? <ProjChip name={t.project} path={t.cwd ?? undefined} /> : <span className="td-noproj">未指定</span>}
                   <span className="age mono" title={new Date(t.createdAt).toLocaleString('zh-CN')}>
                     {timeAgo(t.createdAt)}
@@ -223,10 +351,13 @@ export function Todos() {
                     {STATUS[t.status].label}
                   </span>
                   {t.status !== 'done' && (
-                    <button className="td-go" onClick={() => startTodo(t)}>
+                    <button className="td-go" onClick={() => void startTodo(t)}>
                       {t.status === 'doing' ? '继续 ▶' : '开工 ▶'}
                     </button>
                   )}
+                  <button className="td-del" onClick={() => setEditId(t.id)} aria-label="编辑" title="编辑标题(E)">
+                    ✎
+                  </button>
                   <button className="td-del" onClick={() => void remove(t)} aria-label="删除" title="删除">
                     ✕
                   </button>

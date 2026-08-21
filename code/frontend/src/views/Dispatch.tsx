@@ -1,12 +1,13 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { canWrapup, cn, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { Md, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { FindBar, useFindInPage } from '@/components/FindBar';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /**
@@ -126,13 +127,64 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   return <StreamMd text={shown} />;
 }
 
-/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 200 条) */
+/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。 */
+const CHAT_SEED_LIMIT = 200;
+/** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
+const TA_MIN_H = 56;
+
+/** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
+const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const IMG_MAX_BYTES = 5 * 1024 * 1024;
+const IMG_MAX_COUNT = 8;
+
+/** 待发送图片:base64 供上行,url(dataURL)供缩略图/灯箱渲染 */
+interface PastedImage {
+  id: string;
+  media_type: string;
+  data: string;
+  url: string;
+  bytes: number;
+}
+
+/** Blob → base64(去掉 dataURL 前缀);FileReader 而非 arrayBuffer+btoa,避免大图爆栈 */
+function blobToPasted(blob: Blob): Promise<PastedImage> {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('图片读取失败'));
+    fr.onload = () => {
+      const url = String(fr.result);
+      resolve({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        media_type: blob.type,
+        data: url.slice(url.indexOf(',') + 1),
+        url,
+        bytes: blob.size,
+      });
+    };
+    fr.readAsDataURL(blob);
+  });
+}
+
+function fmtBytes(n: number): string {
+  return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
+}
+
+/** session jsonl 的 ISO 时间串 → ms epoch;老会话可能缺 ts,解析不出就当无时间 */
+function parseTs(iso: string | undefined): number | undefined {
+  if (!iso) return undefined;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : undefined;
+}
+
+/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
-  return events.slice(-200).map((ev, i): ChatItem => {
-    if (ev.kind === 'user') return { t: 'user', text: ev.text };
-    if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false };
+  return events.slice(-CHAT_SEED_LIMIT).map((ev, i): ChatItem => {
+    if (ev.kind === 'user') return { t: 'user', text: ev.text, ts: parseTs(ev.ts) };
+    if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false, ts: parseTs(ev.ts) };
     if (ev.kind === 'tool')
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
+    if (ev.kind === 'compact')
+      return { t: 'compact', trigger: ev.trigger, preTokens: ev.preTokens, durationMs: ev.durationMs, summary: ev.summary };
     return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
   });
 }
@@ -217,13 +269,33 @@ export function Dispatch({ active }: { active: boolean }) {
   const [wdQuery, setWdQuery] = useState('');
   const [modelPalette, setModelPalette] = useState(false);
   const [modelQuery, setModelQuery] = useState('');
+  /** 待发送的粘贴图片(缩略图显示在输入框上方、composer 边框内);发送成功后清空 */
+  const [attachments, setAttachments] = useState<PastedImage[]>([]);
+  /** 灯箱查看的原图 dataURL,null 为关闭 */
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
+  // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
+  // 给(12 行或 40vh 取小),触顶后转 textarea 内部滚动并由 .at-max 亮出底部渐隐提示。
+  // `.value =` 赋值不触发 input 事件,所以每个程序化写入点(预填/交接/建议词/历史回溯/清空)
+  // 都要手动调一次,否则高度停在上一次的值。
+  const growTa = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto'; // 先归零,否则 scrollHeight 只增不减
+    const max = parseFloat(getComputedStyle(ta).maxHeight) || Infinity;
+    const target = Math.max(TA_MIN_H, ta.scrollHeight);
+    ta.style.height = `${Math.min(target, max)}px`;
+    composerRef.current?.classList.toggle('at-max', target > max + 1);
+  };
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
   // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
+  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 replayToChat)
+  const find = useFindInPage(chatRef);
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
   const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
@@ -331,6 +403,9 @@ export function Dispatch({ active }: { active: boolean }) {
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
     }
     if (intent?.attach) {
+      // 接回 = 已浏览产出,立即标已读(同 applyResume)。派发页兜底的 markSeen 只在回合进行中生效,
+      // 接回一个已收尾的「验收中」会话不会触发,不在此标则角标切回看板依旧亮着。
+      markSeen(intent.attach.sessionId);
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
       resetHistoryBrowse();
@@ -345,11 +420,23 @@ export function Dispatch({ active }: { active: boolean }) {
     } else if (intent?.resume) {
       setFromBoard(true);
       applyResume(intent.resume);
+    } else if (intent && (d.started || d.items.length > 0)) {
+      // 待办「开工」等全新派发意图:残留的旧会话必须清干净,否则发送会串进旧会话,
+      // 且旧会话已有的 sessionId 会立刻把这条待办错绑到不相干的会话上
+      d.reset();
+      repin();
+      resetHistoryBrowse();
+      setResumeInfo(null);
+      setSessionCwd(null);
+      setSessCtx(null);
     }
+    // 「来自待办」横幅只属于带 todoId 的这一次进入:换任何别的方式进来都清掉,
+    // 否则横幅跨会话残留,后续无关派发拿到 sessionId 还会把那条待办错绑过去
+    if (entered && intent?.todoId === undefined) setFromTodo(null);
     // 待办「开工」:全新派发,带着待办的项目目录与内容进来(内容只预填,发不发由人决定)
     if (intent?.cwd) setCwd(intent.cwd);
     if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
-    if (intent?.prefill && taRef.current) taRef.current.value = intent.prefill;
+    if (intent?.prefill && taRef.current) { taRef.current.value = intent.prefill; growTa(); }
     // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
     // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
     // 顶掉 /wd 等弹窗内输入框的焦点(2026-07-16 真机确认)
@@ -376,6 +463,18 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
   };
+  // 跨天分隔线:与消息列表等长,daySeps[i] 非空表示第 i 条消息之前要插一条日期。
+  // 工具卡/审批等无时间的条目不参与判定,故游标记的是「上一条有时间的消息」而非前一项。
+  const daySeps = useMemo(() => {
+    let prev: number | undefined;
+    return d.items.map((it) => {
+      const ts = it.t === 'user' || it.t === 'assistant' ? it.ts : undefined;
+      if (ts == null) return null;
+      const sep = daySeparator(prev, ts);
+      prev = ts;
+      return sep;
+    });
+  }, [d.items]);
   const followScroll = useCallback(() => {
     if (pinnedRef.current && scrollRafRef.current === null) {
       scrollRafRef.current = requestAnimationFrame(() => {
@@ -404,6 +503,26 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!d.sessionId) return;
     setSessCtx((prev) => (prev && prev.id === null ? { ...prev, id: d.sessionId } : prev));
   }, [d.sessionId]);
+
+  // 接回存活会话时垫入更早的历史对话:attach 回放的内存事件只覆盖后端本进程生命周期,
+  // 后端重启后续接过的会话再接回,重启前的上下文只存在于会话 jsonl 里(看板点击与刷新静默接回同走这里)。
+  // 去重按时间戳切:before(= dispatch 创建时刻)之后的消息已在内存事件流里,只垫之前的;
+  // 全新派发的会话没有更早历史(全部事件都晚于 before),过滤后为空,自动无操作。
+  useEffect(() => {
+    if (!d.attachedHistory) return;
+    const { sessionId, before } = d.attachedHistory;
+    void api
+      .replay(sessionId)
+      .then((r) => {
+        const cut = r.events.findIndex((ev) => {
+          const ts = parseTs((ev as { ts?: string }).ts);
+          return ts !== undefined && ts >= before;
+        });
+        const past = cut === -1 ? r.events : r.events.slice(0, cut);
+        if (past.length) d.seedHistory(replayToChat(past));
+      })
+      .catch(() => {}); // 会话记录被清理时垫不了历史,保持现状即可
+  }, [d.attachedHistory]);
 
   // 待办发起的会话:SDK 分配 sessionId(= 真的发出去了)后把这条待办转「进行中」并挂上锚点。
   // 只在拿到 sessionId 时回填,所以「开工后又没发」不会污染待办状态;完成与否仍由人手动勾。
@@ -453,6 +572,19 @@ export function Dispatch({ active }: { active: boolean }) {
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [active, fromBoard]);
+
+  // 灯箱 Esc 关闭:捕获阶段拦截,免得同一下 Esc 又被 composer/看板返回逻辑吃掉
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      e.stopPropagation();
+      setLightbox(null);
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
+  }, [lightbox]);
 
   /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
   const wrapupRef = useRef<() => void>(() => {});
@@ -524,6 +656,7 @@ export function Dispatch({ active }: { active: boolean }) {
       }
     }
     ta.value = historyIdxRef.current === null ? historyDraftRef.current : hist[historyIdxRef.current]!;
+    growTa();
     const pos = ta.value.length;
     ta.setSelectionRange(pos, pos);
   };
@@ -531,10 +664,13 @@ export function Dispatch({ active }: { active: boolean }) {
   /** override:不经输入框直接发一段文本(⚑ 任务总结按钮与 ⌘⏎ 走这条路,与手打 /wrapup 完全等价) */
   const submit = async (override?: string) => {
     const ta = taRef.current;
-    const text = override ?? ta?.value.trim();
-    if (!text || !effectiveCwd) return;
+    const text = override ?? ta?.value.trim() ?? '';
+    // 程序化调用(/wrapup 等)不带图;用户手动发送时,只有图片没有文字也算一条有效消息
+    const images = override ? [] : attachments;
+    if ((!text && !images.length) || !effectiveCwd) return;
     if (!override) {
       ta!.value = '';
+      growTa();
       resetHistoryBrowse();
     }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
@@ -620,8 +756,10 @@ export function Dispatch({ active }: { active: boolean }) {
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
     // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
+    // 只发图不发字时没有可用作会话名的文本,退回一句占位(SDK 分配 id 后看板仍可改名)
+    const autoName = text.slice(0, 40) || `图片消息 ×${images.length}`;
     if (!resumeInfo && !sessCtx) {
-      setSessCtx({ id: null, name: text.slice(0, 40), project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
+      setSessCtx({ id: null, name: autoName, project: curProject?.name ?? effectiveCwd, cwd: effectiveCwd });
     }
     repin(); // 发消息 = 主动回到「看最新」
     try {
@@ -637,8 +775,11 @@ export function Dispatch({ active }: { active: boolean }) {
         model: modelSel === MODELS[0] ? undefined : modelSel,
         effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
-        name: resumeInfo?.name ?? text.slice(0, 40),
+        name: resumeInfo?.name ?? autoName,
+        images: images.map((im) => ({ media_type: im.media_type, data: im.data })),
       });
+      // 送达才清空:发送抛错时图片留在输入框,不用重新截一次
+      if (images.length) setAttachments([]);
     } catch (e) {
       toast(e instanceof Error ? e.message : String(e));
     }
@@ -681,6 +822,7 @@ export function Dispatch({ active }: { active: boolean }) {
       d.pushNote(`⇢ 已从「${from}」携带交接摘要,新会话将运行在 ${target}。摘要已注入,直接描述要继续的工作。`);
       if (taRef.current) {
         taRef.current.value = `以下是上一会话的交接摘要:\n${summary}\n\n请基于以上上下文继续:`;
+        growTa();
         taRef.current.focus();
       }
     } catch (e) {
@@ -724,6 +866,12 @@ export function Dispatch({ active }: { active: boolean }) {
       </div>
       <div className="dispatch">
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
+          <FindBar
+            scopeRef={chatRef}
+            state={find}
+            placeholder="在本次对话中查找"
+            note={d.items.length >= CHAT_SEED_LIMIT ? `仅搜索已加载的 ${CHAT_SEED_LIMIT} 条` : undefined}
+          />
           {/* 移动端:会话标识挪进消息区顶部随内容滚动,让出状态条的横向空间给用量条(见下方 .chat-status)——
               桌面维持原样(标识常驻状态条最左端),两端各显示一份,靠 CSS 二选一(2026-07-16 真机反馈修复:
               状态条三段挤在一行导致 Context/Usage/Weekly 用量条被推出可视区、只能横滑才看得见)。 */}
@@ -740,14 +888,17 @@ export function Dispatch({ active }: { active: boolean }) {
                 转后台的任务建议写全任务描述并放宽权限模式,避免无人值守时卡在审批上。
               </p>
               <div className="sugg">
-                <button onClick={() => { taRef.current!.value = '扫描近 7 天的高风险 IP,输出报告'; taRef.current?.focus(); }}>扫描高风险 IP</button>
-                <button onClick={() => { taRef.current!.value = '用 baize 对昨日收入异动做归因,结果发飞书卡片'; taRef.current?.focus(); }}>收入异动归因</button>
-                <button onClick={() => { taRef.current!.value = '把本周会话里踩过的坑提炼成 memory 草稿'; taRef.current?.focus(); }}>提炼本周经验</button>
+                <button onClick={() => { taRef.current!.value = '扫描近 7 天的高风险 IP,输出报告'; growTa(); taRef.current?.focus(); }}>扫描高风险 IP</button>
+                <button onClick={() => { taRef.current!.value = '用 baize 对昨日收入异动做归因,结果发飞书卡片'; growTa(); taRef.current?.focus(); }}>收入异动归因</button>
+                <button onClick={() => { taRef.current!.value = '把本周会话里踩过的坑提炼成 memory 草稿'; growTa(); taRef.current?.focus(); }}>提炼本周经验</button>
               </div>
             </div>
           )}
           {d.items.map((item, i) => (
-            <ChatRow key={i} item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} />
+            <Fragment key={i}>
+              {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
+              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} onZoom={setLightbox} />
+            </Fragment>
           ))}
         </div>
 
@@ -762,11 +913,11 @@ export function Dispatch({ active }: { active: boolean }) {
               windowMs={FIVE_HOUR_MS}
               now={nowTick}
             />
-            <Chip
-              label="Weekly"
+            <WeeklyChip
               pct={d.chips.sevenDayPct}
+              modelPct={d.chips.modelWeeklyPct}
+              modelName={d.chips.modelWeeklyName}
               resetsAt={d.chips.sevenDayResetsAt}
-              windowMs={SEVEN_DAY_MS}
               now={nowTick}
             />
           </span>
@@ -784,11 +935,71 @@ export function Dispatch({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className="composer">
+        <div className={cn('composer', attachments.length && 'has-attach')} ref={composerRef}>
+          {/* 待发送图片条:在 textarea 上方、composer 边框之内 —— 图片与文字同属一条待发消息 */}
+          {attachments.length > 0 && (
+            <div className="attach-strip">
+              {attachments.map((im) => (
+                <div
+                  key={im.id}
+                  className="attach-chip"
+                  title={`图片 · ${fmtBytes(im.bytes)} · 点击查看原图`}
+                  onClick={() => setLightbox(im.url)}
+                >
+                  <img src={im.url} alt="待发送图片" />
+                  <button
+                    className="rm"
+                    aria-label="移除图片"
+                    title="移除"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setAttachments((prev) => prev.filter((x) => x.id !== im.id));
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <textarea
             ref={taRef}
             rows={2}
             placeholder="描述要派发的任务…"
+            onPaste={(e) => {
+              const files = [...e.clipboardData.items]
+                .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
+                .map((it) => it.getAsFile())
+                .filter((f): f is File => !!f);
+              if (!files.length) return; // 纯文本粘贴走默认行为
+              e.preventDefault();
+              if (bg) return toast('后台任务(--bg)走 CLI 通道,不支持粘贴图片;关掉「转后台」再试');
+              void (async () => {
+                // 名额按「本次渲染已有的张数」预扣:异步读图期间不能靠 setState 回读当前长度
+                let slots = IMG_MAX_COUNT - attachments.length;
+                for (const f of files) {
+                  if (slots <= 0) {
+                    toast(`一条消息最多带 ${IMG_MAX_COUNT} 张图片`);
+                    break;
+                  }
+                  if (!IMG_TYPES.includes(f.type)) {
+                    toast(`不支持的图片格式:${f.type || '未知'}`);
+                    continue;
+                  }
+                  if (f.size > IMG_MAX_BYTES) {
+                    toast(`「${fmtBytes(f.size)}」超过单张 ${IMG_MAX_BYTES / 1024 / 1024}MB 上限`);
+                    continue;
+                  }
+                  slots -= 1;
+                  try {
+                    const img = await blobToPasted(f);
+                    setAttachments((prev) => (prev.length >= IMG_MAX_COUNT ? prev : [...prev, img]));
+                  } catch {
+                    toast('图片读取失败');
+                  }
+                }
+              })();
+            }}
             onKeyDown={(e) => {
               // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
               // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
@@ -823,8 +1034,11 @@ export function Dispatch({ active }: { active: boolean }) {
             onInput={() => {
               // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
               historyIdxRef.current = null;
+              growTa();
             }}
           />
+          {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
+          <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
             {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
                 但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}
@@ -973,6 +1187,17 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
           />
         )}
+        {/* 图片灯箱:点缩略图看原图,点任意处或 Esc 关闭 */}
+        {lightbox && (
+          <div
+            className="lightbox open"
+            role="dialog"
+            aria-label="查看原图"
+            onClick={() => setLightbox(null)}
+          >
+            <img src={lightbox} alt="原图" />
+          </div>
+        )}
         {showCwdNote && (
           <div className="cwd-note">
             <span className="dot" />
@@ -1098,6 +1323,69 @@ function Chip({
   );
 }
 
+/**
+ * Weekly 合并双轨芯片(原型 prototype-fable-quota.html 方案 B):
+ * all models 与模型级周窗口(如 Fable)共用同一重置时刻,故并为一个芯片——
+ * 上轨是 all models,下轨是模型级,两轨共用一道时间刻度,倒计时只写一遍。
+ * 服务端未下发模型级窗口(modelPct 为 null)时退回单轨,与旧 Weekly 芯片等价。
+ */
+function WeeklyChip({
+  pct,
+  modelPct,
+  modelName,
+  resetsAt,
+  now,
+}: {
+  pct: number | null;
+  modelPct: number | null;
+  modelName: string | null;
+  resetsAt?: number | null;
+  now: number;
+}) {
+  if (modelPct === null) {
+    return <Chip label="Weekly" pct={pct} resetsAt={resetsAt} windowMs={SEVEN_DAY_MS} now={now} />;
+  }
+  const color = usageColor(pct);
+  const mColor = usageColor(modelPct);
+  const reset = untilReset(resetsAt, now);
+  const timePct = resetsAt
+    ? Math.min(100, Math.max(0, ((SEVEN_DAY_MS - (resetsAt - now)) / SEVEN_DAY_MS) * 100))
+    : null;
+  const name = modelName ?? 'Model';
+  const title = [
+    `Weekly(all models)${pct === null ? ' —' : ` ${pct}%`}`,
+    `${name} 周限额 ${modelPct}%`,
+    reset,
+    timePct === null ? null : `窗口已过去 ${Math.round(timePct)}%`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <span className="u-chip wk2" title={title}>
+      <span className="u-lab">Weekly</span>
+      <span className="wk2-bars">
+        <span className="u-bar">
+          <i style={{ width: `${pct ?? 0}%`, background: color }} />
+          {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
+        </span>
+        <span className="u-bar wk2-fb">
+          <i style={{ width: `${modelPct}%`, background: mColor }} />
+          {timePct !== null && <span className="u-tick" style={{ left: `${timePct}%` }} aria-hidden="true" />}
+        </span>
+      </span>
+      <span className="wk2-vals">
+        <b style={pct !== null && pct >= 50 ? { color } : undefined}>
+          <span className="wk2-pfx">A</span> {pct === null ? '—' : `${pct}%`}
+        </b>
+        <b style={modelPct >= 50 ? { color: mColor } : undefined}>
+          <span className="wk2-pfx fb">{name.charAt(0)}</span> {modelPct}%
+        </b>
+      </span>
+      {reset && <em className="u-reset">{untilResetShort(resetsAt, now)}</em>}
+    </span>
+  );
+}
+
 /** agent 提问卡:单选点击即答;多问/多选/自定义 → 选完提交 */
 function QuestionCard({
   item,
@@ -1193,24 +1481,41 @@ const ChatRow = memo(function ChatRow({
   onDecide,
   onAnswer,
   onGrow,
+  onZoom,
 }: {
   item: ChatItem;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
   onGrow?: () => void;
+  /** 点击消息里的图片缩略图 → 开灯箱看原图 */
+  onZoom?: (url: string) => void;
 }) {
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
     return (
       <div className="chat-msg user">
-        <div className="who">你</div>
-        <div className="body">{item.text}</div>
+        <div className="who">你<MsgTime ts={item.ts} /></div>
+        <div className="body">
+          {item.images && item.images.length > 0 && (
+            <div className="msg-imgs">
+              {item.images.map((im, i) => (
+                <img
+                  key={i}
+                  src={`data:${im.media_type};base64,${im.data}`}
+                  alt="图片"
+                  onClick={() => onZoom?.(`data:${im.media_type};base64,${im.data}`)}
+                />
+              ))}
+            </div>
+          )}
+          {item.text}
+        </div>
       </div>
     );
   if (item.t === 'assistant')
     return (
       <div className="chat-msg">
-        <div className="who">Claude</div>
+        <div className="who">Claude<MsgTime ts={item.ts} /></div>
         <div className="body md">
           <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
@@ -1245,6 +1550,8 @@ const ChatRow = memo(function ChatRow({
     );
   }
   if (item.t === 'note') return <div className="resume-note">{item.text}</div>;
+  if (item.t === 'compact')
+    return <CompactionCard trigger={item.trigger} preTokens={item.preTokens} durationMs={item.durationMs} summary={item.summary} />;
   return (
     <div className="raw-event">
       <div className="note">⚠ {item.text}</div>

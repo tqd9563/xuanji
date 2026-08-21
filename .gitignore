@@ -37,3 +37,6 @@ Thumbs.db
 
 # 规划文档含内网拓扑与威胁模型,不进公开仓库
 .planning/
+
+# Pake 打包产物
+*.dmg

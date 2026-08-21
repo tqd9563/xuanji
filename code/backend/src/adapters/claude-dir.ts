@@ -164,6 +164,8 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
   let title: string | undefined;
   /** tool_use id → 事件索引,用于回填 tool_result */
   const toolIndex = new Map<string, number>();
+  /** 最近一条 compact_boundary 事件索引,用于回填随后的 isCompactSummary 摘要 */
+  let pendingCompactIdx = -1;
 
   const rl = readline.createInterface({
     input: fs.createReadStream(jsonlPath, { encoding: 'utf8' }),
@@ -191,6 +193,17 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
         break;
       case 'user': {
         const c = j.message?.content;
+        // compact 摘要伪 user 消息:回填到 compact 卡片,不作为普通消息展示
+        if (j.isCompactSummary === true) {
+          const summary = typeof c === 'string' ? c : stringifyToolResult(c);
+          const pending = events[pendingCompactIdx];
+          if (pending?.kind === 'compact' && !pending.summary) {
+            pending.summary = summary;
+          } else {
+            events.push({ kind: 'compact', summary, ts: j.timestamp });
+          }
+          break;
+        }
         if (typeof c === 'string') {
           events.push({ kind: 'user', text: c, ts: j.timestamp });
         } else if (Array.isArray(c)) {
@@ -234,8 +247,21 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
       case 'mode':
       case 'permission-mode':
       case 'file-history-snapshot':
-      case 'attachment':
       case 'system':
+        // 压缩边界:出「上下文已压缩」卡片,摘要由随后的 isCompactSummary 记录回填
+        if (j.subtype === 'compact_boundary') {
+          const m = j.compactMetadata ?? {};
+          events.push({
+            kind: 'compact',
+            trigger: typeof m.trigger === 'string' ? m.trigger : undefined,
+            preTokens: typeof m.preTokens === 'number' ? m.preTokens : undefined,
+            durationMs: typeof m.durationMs === 'number' ? m.durationMs : undefined,
+            ts: j.timestamp,
+          });
+          pendingCompactIdx = events.length - 1;
+        }
+        break;
+      case 'attachment':
       case 'last-prompt':
       case 'queue-operation':
         break;

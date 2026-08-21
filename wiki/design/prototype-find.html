@@ -1,4 +1,11 @@
-@import "tailwindcss";
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · ⌘F 会话内查找 原型</title>
+<style>
+
 
 /* ============================================================
    以下 token 与组件样式提取自获批原型 wiki/design/prototype.html,
@@ -472,8 +479,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
-/* 搜索命中片段:玉色加粗,不加底色——底色会与 .rp-item.sel 的玉色描边环在同一行双重强调 */
-.rp-mark { color: var(--jade); font-weight: 600; }
 
 /* /wd·/model 模糊搜索弹窗(WdPalette,复用 rp-box/rp-list/rp-item;仅补搜索框与右侧完整值列) */
 .wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
@@ -505,25 +510,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   background: var(--surface-2); margin-bottom: 16px;
 }
 .notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
-
-/* ============ 消息发送时间(派发页聊天流 + 回放抽屉共用) ============ */
-/* 时间是元信息:落在 who(muted/jade)之下的 faint 层,mono + tabular-nums 保证
-   HH:MM 逐位对齐、分钟跳动不抖版。tool/raw 事件源数据无时间,不渲染也不占位。 */
-.msg-ts {
-  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
-  color: var(--faint); margin-left: 8px;
-  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-}
-/* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
-   靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
-.day-sep {
-  display: flex; align-items: center; gap: 12px;
-  margin: 22px 0 18px; color: var(--faint);
-  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-.day-sep::before, .day-sep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.day-sep:first-child { margin-top: 0; }
 
 /* 回放 */
 .replay-msg { margin-bottom: 18px; }
@@ -604,122 +590,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .thinkcard.live .tk-body, .thinkcard.live .tk-head .ico, .thinkcard .caret { animation: none; }
 }
 
-/* 「上下文已压缩」卡片:时间线分界感(虚线边框)+ 可展开摘要 */
-.compactcard {
-  border: 1px dashed var(--line); border-radius: var(--r-s); margin: 12px 0; max-width: 68ch;
-}
-.compactcard .cc-head {
-  display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px;
-  background: none; border: none; cursor: pointer; text-align: left;
-  font-size: 0.75rem; color: var(--muted);
-}
-.compactcard .cc-head:disabled { cursor: default; }
-.compactcard .cc-head .label { font-weight: 600; }
-.compactcard .cc-head .stats { color: var(--faint); }
-.compactcard .cc-head .chev { margin-left: auto; color: var(--faint); transition: transform 0.15s var(--ease); }
-.compactcard.open .cc-head .chev { transform: rotate(180deg); }
-.compactcard .cc-body {
-  border-top: 1px dashed var(--line); padding: 10px 12px;
-  font-size: 0.8125rem; color: var(--muted); max-height: 480px; overflow-y: auto;
-}
-
 .raw-event {
   border: 1px dashed var(--line); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0;
   font-family: var(--mono); font-size: 0.71875rem; color: var(--faint); max-width: 68ch;
 }
 .raw-event .note { font-family: var(--sans); color: var(--amber); font-size: 0.6875rem; margin-bottom: 4px; }
-
-/* ============ 会话内查找(⌘F) ============ */
-/* 被搜索的滚动容器:查找条与高亮层的定位父级 */
-.drawer-body, .chat { position: relative; }
-
-/* 零高度 sticky 锚点。查找条不能直接 absolute 挂在滚动内容里——那样它属于内容流,
-   跳转命中时会被内容一起卷走,顶边还会被容器边缘裁掉(原型阶段实测)。 */
-.find-anchor { position: sticky; top: 0; height: 0; z-index: var(--z-sticky); }
-
-/* 查找条 = 悬浮控件层,必须明显浮在会话内容之上。底色取 --bg(0.145),比它盖住的
-   --surface-2 / --surface 更暗:深色 UI 里「更暗 + 更硬的边 + 更重的投影」才读作抬起。 */
-.findbar {
-  position: absolute; top: 10px; right: 18px; z-index: var(--z-sticky);
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 8px;
-  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-s);
-  box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px oklch(0.03 0 0 / 0.5);
-  animation: fb-summon 620ms var(--ease);
-}
-/* 唤出瞬间闪一圈玉色轮廓,替代「用户自己找搜索框在哪」;不留常驻装饰 */
-@keyframes fb-summon {
-  0%   { box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px var(--jade), 0 0 0 6px var(--tint-jade); }
-  100% { box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px oklch(0.03 0 0 / 0.5), 0 0 0 6px transparent; }
-}
-/* 输入框是独立控件,聚焦上玉色环(与 .composer:focus-within 同一套焦点语言) */
-.find-field {
-  display: flex; align-items: center; gap: 8px;
-  background: var(--surface); border: 1px solid var(--line);
-  border-radius: var(--r-s); padding: 4px 8px 4px 10px;
-  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
-}
-.find-field:focus-within { border-color: var(--jade); box-shadow: 0 0 0 2px color-mix(in oklab, var(--jade) 26%, transparent); }
-.find-field.nores { border-color: color-mix(in oklab, var(--red) 55%, transparent); }
-.find-field.nores:focus-within { border-color: var(--red); box-shadow: 0 0 0 2px color-mix(in oklab, var(--red) 26%, transparent); }
-.findbar input {
-  width: 172px; background: none; border: none; outline: none;
-  font-size: 0.8125rem; color: var(--ink); caret-color: var(--jade);
-}
-.findbar input::-webkit-search-cancel-button { display: none; }
-/* 定宽:计数在「无结果 / 3/17 / 12/128」间变化时,右对齐的查找条会被推着横向抖动 */
-.find-count {
-  font-size: 0.75rem; color: var(--muted); flex: none;
-  white-space: nowrap; font-variant-numeric: tabular-nums;
-  min-width: 4.25rem; text-align: center;
-}
-.find-count.num { font-family: var(--mono); }
-.find-count.zero { color: var(--red); }
-.find-sep { width: 1px; height: 17px; background: var(--line); flex: none; margin: 0 1px; }
-.find-btn {
-  width: 23px; height: 23px; border-radius: 4px; color: var(--muted);
-  display: grid; place-items: center; font-size: 0.75rem; line-height: 1; flex: none;
-  transition: background 150ms var(--ease), color 150ms var(--ease);
-}
-.find-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
-.find-btn:disabled { color: oklch(0.40 0.008 110); cursor: default; }
-.find-field .find-btn { width: 20px; height: 20px; }
-.find-btn.toggle[aria-pressed="true"] { background: var(--tint-jade); color: var(--jade); }
-.find-btn .g { font-family: var(--mono); font-weight: 600; font-size: 0.6875rem; }
-.find-scope-note {
-  position: absolute; top: calc(100% + 5px); right: 0;
-  font-size: 0.6875rem; color: var(--faint); white-space: nowrap;
-  background: var(--bg); border: 1px solid var(--line-soft); border-radius: 4px; padding: 2px 8px;
-}
-
-/* 命中高亮层:量出来画上去,不改一个文本节点(见 FindBar.tsx 的取舍说明)。
-   用半透明玉色水洗而非实心块——命中的字要照常读得清,当前命中另加一圈实边区分。 */
-.find-hl-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; z-index: 1; }
-.find-hl {
-  position: absolute; border-radius: 2px;
-  background: color-mix(in oklab, var(--jade) 26%, transparent);
-}
-.find-hl.cur {
-  background: color-mix(in oklab, var(--jade) 42%, transparent);
-  box-shadow: 0 0 0 1px var(--jade);
-}
-
-/* 折叠工具卡里的命中:卡头打角标,避免「计数 12、看得见 5」的失信。
-   attr() 只能读 ::after 所在元素身上的属性,故数量写在 .tc-head 上而不是卡上。 */
-.toolcard:not(.open) .tc-head[data-find-hits]::after {
-  content: attr(data-find-hits) " 处";
-  order: 1; margin-left: auto; flex: none;
-  font-family: var(--sans); font-size: 0.6875rem; font-weight: 600;
-  color: var(--jade); background: var(--tint-jade); border-radius: 99px; padding: 0 7px;
-}
-.toolcard:not(.open) .tc-head[data-find-hits] .chev { order: 2; margin-left: 8px; }
-
-@media (max-width: 560px) {
-  .findbar { left: 12px; right: 12px; }
-  .findbar input { flex: 1; width: auto; min-width: 0; }
-  .find-scope-note { display: none; }
-}
-@media (prefers-reduced-motion: reduce) { .findbar { animation: none; } }
 
 /* ============ 派发 ============ */
 .dispatch { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; }
@@ -811,16 +686,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 刻度上下各溢出 1px 顶到轨道边缘,窄轨上才看得出是「一道标线」而非填充的一段 */
 .u-bar .u-tick { position: absolute; top: -1px; bottom: -1px; width: 2px; border-radius: 1px; background: var(--ink); opacity: 0.55; }
 @media (prefers-reduced-motion: reduce) { .u-bar i { transition: none; } }
-/* Weekly 合并双轨(原型 prototype-fable-quota.html 方案 B):all models 与模型级周窗口同一重置时刻,
-   并为一个芯片——上轨 8px all models、下轨 5px 模型级(如 Fable),共用时间刻度,倒计时只写一遍。
-   模型级数值恒以紫色小字前缀标识模型身份(与模型下拉同源),填充色仍按 50/75 阈值。 */
-.u-chip.wk2 .wk2-bars { display: grid; gap: 2px; flex: none; }
-.u-chip.wk2 .u-bar { height: 8px; }
-.u-chip.wk2 .u-bar.wk2-fb { height: 5px; border-radius: 2px; }
-.u-chip.wk2 .wk2-vals { display: grid; line-height: 1.25; }
-/* 两排数值同字号(0.75rem b),只靠字母前缀区分:A(faint 灰)对 F(紫,紫只标模型身份) */
-.u-chip.wk2 .wk2-pfx { font-size: 0.625rem; color: var(--faint); }
-.u-chip.wk2 .wk2-pfx.fb { color: var(--violet); }
 /* min-height:0 是经典 flexbox 坑的修复:flex 子项默认 min-height:auto,在部分内核
    (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
    形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到
@@ -855,67 +720,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
-
-/* 粘贴图片附件条:在 textarea 上方、composer 边框之内——图片与文字视觉上同属一条待发消息。
-   缩略图 56px 方块 cover 裁切,多张换行不横滚(横滚会藏图,数量本就封顶 8 张)。 */
-.composer .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
-.composer.has-attach textarea { padding-top: 10px; } /* 附件条已给了呼吸感,顶部留白略收 */
-.attach-chip {
-  position: relative; width: 56px; height: 56px; flex: none;
-  border: 1px solid var(--line); border-radius: var(--r-s);
-  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
-  animation: chip-in 150ms var(--ease);
-}
-@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
-.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.attach-chip .rm {
-  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
-  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease); cursor: pointer;
-}
-.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
-/* 触屏无 hover:粗指针设备上 ✕ 常驻,否则图片没法移除 */
-@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
-
-/* 已发送消息里的图片:缩略图排在文字上方,点击开灯箱 */
-.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.chat-msg.user .msg-imgs { justify-content: flex-end; }
-.chat-msg .msg-imgs img {
-  width: 88px; height: 88px; object-fit: cover;
-  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
-}
-
-/* 灯箱:点缩略图看原图 */
-.lightbox {
-  position: fixed; inset: 0; z-index: var(--z-backdrop);
-  display: none; align-items: center; justify-content: center;
-  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
-}
-.lightbox.open { display: flex; }
-.lightbox img {
-  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
-  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
-}
-/* 高度跟随内容:由 Dispatch.tsx 的 growTa() 写 inline height(WebKit 尚不支持 field-sizing)。
-   下限 56px 与 TA_MIN_H 同值(改一处必须改另一处);上限取 12 行正文与 40vh 的小者,
-   触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
   padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
-  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
-  overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
-/* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
-.composer .grow-fade {
-  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--surface));
-  opacity: 0; transition: opacity 150ms var(--ease);
-}
-.composer.at-max .grow-fade { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 /* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
@@ -1516,9 +1325,6 @@ body.wall-glass .dd-menu {
   .u-chip .u-lab { display: none; }
   .u-bar { width: 44px; }
   .u-chip b { font-size: 0.6875rem; }
-  /* 双轨 Weekly 窄屏:轨道略加宽补偿双轨变矮,倒计时让位(与其它芯片同规则,完整信息在 title) */
-  .u-chip.wk2 .u-bar { width: 56px; }
-  .u-chip.wk2 .u-reset { display: none; }
   .cs-state { flex: none; }
   .composer textarea { font-size: 1rem; min-height: 44px; }
   .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
@@ -1609,3 +1415,588 @@ body.wall-glass .dd-menu {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* ============================================================
+   ⌘F 会话内查找 —— 本原型新增的唯一一族样式
+   只用既有 token,不引入新色值/新圆角。
+   ============================================================ */
+
+/* 被搜索的滚动容器需要定位上下文(命中刻度按 offsetTop 换算) */
+.drawer-body, .chat { position: relative; }
+
+/* 查找条 = 悬浮控件层,必须明显浮在会话内容之上(VSCode find widget 的层级关系):
+   1. 底色用 --bg(0.145),比它盖住的 --surface-2(0.165)/--surface(0.185) 更暗 ——
+      深色 UI 里「更暗 + 更硬的边 + 更重的投影」才读作抬起,继续往亮里堆只会糊成一片;
+   2. 输入框是独立控件(不是裸 input),自带面与边,聚焦时上玉色环 —— 焦点在哪一目了然;
+   3. 整条 ⌘F 唤出时闪一次玉色轮廓,替代「用户得自己找搜索框在哪」。 */
+/* 钉住的锚点:零高度 sticky,作为查找条的定位父级。
+   查找条不能直接 absolute 挂在滚动容器里 —— 那样它属于内容流,
+   跳转命中时会被内容一起卷走(顶边还会被容器边缘裁掉)。
+   锚点零高度,不占位、不撑开滚动高度,滚多远查找条都钉在同一像素上。 */
+.find-anchor { position: sticky; top: 0; height: 0; z-index: var(--z-sticky); }
+
+.findbar {
+  position: absolute; top: 10px; right: 18px; z-index: var(--z-sticky);
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  background: var(--bg); border: 1px solid var(--line);
+  border-radius: var(--r-s);
+  box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px oklch(0.03 0 0 / 0.5);
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+}
+.findbar[hidden] { display: none; }
+.findbar.enter { opacity: 0; transform: translateY(-6px); }
+/* 唤出瞬间的定位提示:一圈玉色轮廓扩散后消失,不留常驻装饰 */
+.findbar.summon { animation: fb-summon 620ms var(--ease); }
+@keyframes fb-summon {
+  0%   { box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px var(--jade), 0 0 0 6px var(--tint-jade); }
+  100% { box-shadow: 0 10px 30px oklch(0.03 0 0 / 0.66), 0 0 0 1px oklch(0.03 0 0 / 0.5), 0 0 0 6px transparent; }
+}
+
+/* 输入框:独立控件面 + 聚焦玉环(项目既有焦点语言 —— .composer:focus-within 同款) */
+.find-field {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: 4px 8px 4px 10px;
+  transition: border-color 150ms var(--ease), box-shadow 150ms var(--ease);
+}
+.find-field:focus-within {
+  border-color: var(--jade);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--jade) 26%, transparent);
+}
+.find-field.nores { border-color: color-mix(in oklab, var(--red) 55%, transparent); }
+.find-field.nores:focus-within {
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--red) 26%, transparent);
+}
+.findbar input {
+  width: 172px; background: none; border: none; outline: none;
+  font-size: 0.8125rem; color: var(--ink); caret-color: var(--jade);
+}
+.findbar input::-webkit-search-cancel-button { display: none; }
+.find-count {
+  font-size: 0.75rem; color: var(--muted); flex: none;
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+  /* 定宽:计数在「无结果 / 3/17 / 12/128」间变化时,右对齐的查找条会被推着横向抖动 */
+  min-width: 4.25rem; text-align: center;
+}
+.find-count.num { font-family: var(--mono); }
+.find-count.zero { color: var(--red); }
+.find-sep { width: 1px; height: 17px; background: var(--line); flex: none; margin: 0 1px; }
+.find-btn {
+  width: 23px; height: 23px; border-radius: 4px; color: var(--muted);
+  display: grid; place-items: center; font-size: 0.75rem; line-height: 1; flex: none;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.find-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.find-btn:disabled { color: oklch(0.40 0.008 110); cursor: default; }
+/* 选项开关在输入框内(Aa / .*),尺寸更小,与导航按钮拉开层级 */
+.find-field .find-btn { width: 20px; height: 20px; }
+.find-btn.toggle[aria-pressed="true"] { background: var(--tint-jade); color: var(--jade); }
+.find-btn .g { font-family: var(--mono); font-weight: 600; font-size: 0.6875rem; }
+.find-scope-note {
+  position: absolute; top: calc(100% + 5px); right: 0;
+  font-size: 0.6875rem; color: var(--faint); white-space: nowrap;
+  background: var(--bg); border: 1px solid var(--line-soft);
+  border-radius: 4px; padding: 2px 8px;
+}
+
+/* 命中高亮:全部命中淡染,当前命中实心玉——强调永远只有一个 */
+mark.hit { background: var(--tint-jade); color: inherit; border-radius: 2px; padding: 0 1px; scroll-margin: 90px; }
+mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600; }
+
+/* 折叠工具卡里的命中:在卡头打角标,避免计数与可见高亮对不上 */
+.toolcard .tc-hits {
+  margin-left: auto; margin-right: 8px; flex: none;
+  font-family: var(--sans); font-size: 0.6875rem; font-weight: 600;
+  color: var(--jade); background: var(--tint-jade); border-radius: 99px; padding: 0 7px;
+}
+
+/* 命中在会话里的散布刻度(贴滚动条内侧) */
+.tickrail { position: fixed; width: 5px; z-index: var(--z-sticky); pointer-events: none; }
+.tickrail[hidden] { display: none; }
+.tick { position: absolute; right: 0; width: 5px; height: 2px; border-radius: 2px; background: var(--jade-dim); opacity: .5; }
+.tick.cur { background: var(--jade); opacity: 1; height: 3px; width: 9px; }
+
+/* ---- 原型脚手架(非产品 UI) ---- */
+.proto-hint {
+  position: fixed; left: 16px; bottom: 16px; z-index: var(--z-toast);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 10px 14px; font-size: 0.75rem; color: var(--muted);
+  box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); max-width: 300px;
+}
+.proto-hint b { color: var(--jade); font-size: 0.6875rem; letter-spacing: .04em; display: block; margin-bottom: 6px; }
+.proto-hint .keys { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.proto-hint kbd {
+  font-family: var(--mono); font-size: 0.625rem; padding: 1px 5px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--muted);
+}
+.proto-hint .sw { margin-top: 8px; display: flex; gap: 6px; }
+.proto-hint .sw button { border: 1px solid var(--line); border-radius: var(--r-s); padding: 3px 9px; font-size: 0.6875rem; color: var(--muted); }
+.proto-hint .sw button[aria-pressed="true"] { background: var(--tint-jade); color: var(--jade); border-color: transparent; }
+
+@media (max-width: 720px) {
+  .findbar { left: 12px; right: 12px; top: 8px; }
+  .findbar input { flex: 1; width: auto; }
+  .find-scope-note { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="-66.9 -53.29 1438.85 1438.85" aria-hidden="true" focusable="false">
+            <g transform="translate(129.962149,1193.807683) scale(0.100000,-0.100000)" fill="currentColor" stroke="none">
+              <path d="M4950 8329 c-153 -11 -376 -50 -531 -93 -344 -95 -676 -262 -946 -476 -730 -579 -1116 -1564 -957 -2443 14 -74 19 -87 33 -82 9 4 49 15 90 26 207 53 421 -8 576 -165 81 -82 123 -149 159 -256 80 -240 9 -478 -169 -565 -180 -89 -415 16 -415 185 0 124 117 201 236 155 25 -9 48 -14 52 -10 4 3 6 33 6 65 -2 111 -86 228 -191 264 -61 21 -186 21 -249 -1 -157 -53 -283 -199 -328 -384 -21 -84 -21 -261 -1 -368 94 -492 577 -1127 1150 -1511 347 -232 711 -373 1132 -437 156 -24 537 -24 698 0 399 59 803 210 1130 424 138 91 356 265 345 276 -3 3 -30 17 -60 32 -160 80 -306 216 -366 341 -89 185 -82 424 18 604 100 179 244 290 424 327 222 45 425 -89 441 -291 6 -66 -16 -136 -55 -180 -41 -46 -138 -69 -199 -45 -57 21 -113 93 -113 144 0 14 -6 25 -13 25 -22 0 -100 -55 -136 -95 -58 -67 -76 -118 -76 -220 0 -80 3 -97 31 -155 53 -113 168 -204 309 -246 79 -24 236 -23 324 0 83 22 201 83 273 140 277 221 504 788 568 1420 27 259 2 625 -60 906 -209 942 -807 1756 -1567 2134 -72 37 -138 66 -146 66 -12 0 -13 -7 -6 -37 24 -103 2 -240 -54 -348 -38 -73 -143 -180 -217 -222 -81 -46 -188 -73 -291 -73 -389 0 -662 327 -476 571 41 54 124 99 182 99 56 0 123 -36 146 -80 32 -58 19 -153 -24 -189 -25 -20 -21 -29 21 -47 24 -11 65 -17 117 -18 70 0 86 3 134 29 89 49 131 118 147 241 7 61 -15 155 -53 226 -15 28 -60 80 -99 117 -142 133 -320 197 -609 221 -141 11 -167 11 -335 -1z m371 -2228 c270 -69 498 -296 570 -567 28 -105 30 -289 5 -389 -76 -292 -306 -522 -593 -592 -96 -23 -267 -23 -363 1 -294 73 -525 302 -597 593 -24 99 -22 285 5 384 79 295 329 527 629 584 98 18 241 13 344 -14z" />
+            </g>
+          </svg>
+      <div class="brand-text">
+        <span class="zh">璇玑</span>
+        <span class="brand-meta"><span class="version">v1.5.1</span></span>
+      </div>
+    </div>
+    <nav class="nav">
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/></svg>仪表盘</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7l3-4h5l2 3h8v13H3z"/></svg>项目</button>
+      <button id="nav-sessions" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/></svg>会话<span class="count">12</span></button>
+      <button id="nav-dispatch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z"/></svg>技能</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4"/></svg>经验</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2"/></svg>定时</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12"/></svg>回顾</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg>总结</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2"/></svg>待办<span class="count">3</span></button>
+    </nav>
+    <div class="side-foot">
+      <div class="row"><span class="ok"></span>claude 2.0.14 · 就绪</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ============ 会话看板(抽屉的背景) ============ -->
+    <section class="view active" id="view-sessions">
+      <div class="view-head">
+        <h1>会话</h1>
+        <span class="sub">12 个会话 · 1 个等待输入</span>
+        <span class="spacer"></span>
+        <button class="btn btn-sm">刷新</button>
+        <button class="btn">新会话</button>
+      </div>
+      <div class="board">
+        <div>
+          <div class="col-head">运行中<span class="n">2</span></div>
+          <div class="col-body">
+            <div class="scard">
+              <div class="top"><span class="pill pill-run"><span class="dot"></span>运行中</span><span class="tag">后台</span></div>
+              <div>标签梳理写入多维表</div>
+              <div class="cwd mono" style="color:var(--faint);font-size:0.75rem">~/work/go-antifraud</div>
+            </div>
+            <div class="scard">
+              <div class="top"><span class="pill pill-run"><span class="dot"></span>运行中</span></div>
+              <div>周报草稿构建对照</div>
+              <div class="cwd mono" style="color:var(--faint);font-size:0.75rem">~/xuanji</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="col-head">等待输入<span class="n">1</span></div>
+          <div class="col-body">
+            <div class="scard blk">
+              <div class="top"><span class="pill pill-blk"><span class="dot"></span>等待输入</span><span class="tag t-unread">等你回话</span></div>
+              <div>IP 风险批量扫描</div>
+              <div class="cwd mono" style="color:var(--faint);font-size:0.75rem">~/work/risk</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="col-head">验收中<span class="n">3</span></div>
+          <div class="col-body">
+            <div class="scard mid kb-sel">
+              <div class="top"><span class="pill pill-rev"><span class="dot"></span>验收中</span></div>
+              <div>周报草稿改以收口卡为主料</div>
+              <div class="foot mono" style="color:var(--faint);font-size:0.75rem">~/xuanji · 37 条事件</div>
+            </div>
+            <div class="scard mid">
+              <div class="top"><span class="pill pill-rev"><span class="dot"></span>验收中</span></div>
+              <div>看板空格键失灵排查</div>
+              <div class="foot mono" style="color:var(--faint);font-size:0.75rem">~/xuanji · 84 条事件</div>
+            </div>
+            <div class="scard mid">
+              <div class="top"><span class="pill pill-rev"><span class="dot"></span>验收中</span><span class="tag t-susp">已挂起</span></div>
+              <div>Pake 壳白屏定位</div>
+              <div class="foot mono" style="color:var(--faint);font-size:0.75rem">~/xuanji · 129 条事件</div>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div class="col-head">已完成<span class="n">6</span></div>
+          <div class="col-body">
+            <div class="scard compact"><div class="top"><span class="pill pill-done"><span class="dot"></span>已完成</span><span class="ctime">08-11</span></div><div>HTML 入口 no-cache</div></div>
+            <div class="scard compact"><div class="top"><span class="pill pill-done"><span class="dot"></span>已完成</span><span class="ctime">08-11</span></div><div>键盘守卫补可见性校验</div></div>
+            <div class="scard compact"><div class="top"><span class="pill pill-done"><span class="dot"></span>已完成</span><span class="ctime">08-08</span></div><div>Pake 打包脚本固化</div></div>
+            <button class="col-more">更早 3 条</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 派发 ============ -->
+    <section class="view" id="view-dispatch">
+      <div class="view-head">
+        <h1>派发</h1>
+        <button class="btn btn-sm">‹ 会话看板</button>
+        <span class="spacer"></span>
+        <button class="btn">新会话</button>
+      </div>
+      <div class="dispatch">
+
+        <div class="chat" id="scope-b">
+          <div class="find-anchor"><div class="findbar" id="fb-b" hidden>
+            <span class="find-field" data-find-field>
+              <input type="search" placeholder="在本次对话中查找" aria-label="在本次对话中查找" data-find-input>
+              <button class="find-btn toggle" data-find-case aria-pressed="false" aria-label="区分大小写" title="区分大小写"><span class="g">Aa</span></button>
+              <button class="find-btn toggle" data-find-re aria-pressed="false" aria-label="使用正则表达式" title="使用正则表达式"><span class="g">.*</span></button>
+            </span>
+            <span class="find-count" data-find-count>无结果</span>
+            <button class="find-btn" data-find-prev aria-label="上一条命中" title="上一条 ⇧Enter"><span class="g">↑</span></button>
+            <button class="find-btn" data-find-next aria-label="下一条命中" title="下一条 Enter"><span class="g">↓</span></button>
+            <span class="find-sep"></span>
+            <button class="find-btn" data-find-close aria-label="关闭查找" title="关闭 Esc">✕</button>
+            <span class="find-scope-note">仅搜索已加载的 200 条</span>
+          </div></div>
+
+          <div class="chat-msg user"><div class="who">你</div><div class="body">看板空格键进不去卡片,网页端正常、Pake 壳里失灵,排查一下。</div></div>
+          <div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>先确认是不是构建产物没更新——壳加载的是远程地址,前端改动理论上不需要重装 APK,但要确认 <code>restart.sh</code> 已经把新构建捡起来了。</p></div></div>
+
+          <div class="thinkcard"><button class="tk-head"><svg class="ico" width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="4.6" stroke="currentColor" stroke-width="1.1" stroke-dasharray="2.3 2.1"/></svg><span class="tk-label">思考</span><span class="tk-meta">12 秒</span><span class="chev">▾</span></button><div class="tk-body"><p>壳内没有 devtools,纯推理容易连错几轮;先要拿到真实的事件流,而不是猜判据。上一轮已经在缓存和构建方向连错两次了。</p></div></div>
+
+          <div class="chat-msg user"><div class="who">你</div><div class="body">补充一个规律:我随便发一条消息之后,空格就恢复正常了。</div></div>
+          <div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>这个规律很关键,它把方向从「构建 / 缓存」拨到了「焦点」。发消息会让输入框重新拿到并释放焦点。怀疑是派发页的输入框在 <code>display:none</code> 之后仍然持有 activeElement,把全部按键吞掉了。</p></div></div>
+
+          <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>注入探针 · 打印 document.activeElement</span><span class="chev">▾</span></button><div class="tc-body">[probe] activeElement = &lt;textarea class="composer-input"&gt;
+[probe] getClientRects().length = 0
+[probe] offsetParent = null   // 处于 display:none 子树内
+[probe] keydown target = 同上,事件从未冒到 window 守卫</div></div>
+
+          <div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>定位完成:WebKit 不会在元素被 <code>display:none</code> 时清除焦点,Chrome 会——这就是网页端正常、壳内全失灵的原因。修法是把 <code>isTypingTarget</code> 的判据补上可见性校验 <code>getClientRects().length &gt; 0</code>,并在视图切换后主动 blur 残留焦点。</p></div></div>
+
+          <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="write">Edit</span><span>src/lib/hooks.ts</span><span class="chev">▾</span></button><div class="tc-body">- const isTypingTarget = (el) =&gt; /input|textarea/i.test(el.tagName)
++ const isTypingTarget = (el) =&gt;
++   /input|textarea/i.test(el.tagName) &amp;&amp; el.getClientRects().length &gt; 0</div></div>
+
+          <div class="approval resolved">
+            <div class="a-head">⏸ 权限审批 · canUseTool</div>
+            <div class="a-tool">Edit(code/frontend/src/lib/hooks.ts)</div>
+            <div class="a-actions"><span style="font-size:0.75rem;color:var(--muted)">✓ 已允许(本次会话内不再询问)</span></div>
+          </div>
+
+          <div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>已排除的方向记录在案:回滚滚错、外链修复丢失、Pake CLI 版本、需要重启后端。顺带修掉了空格首按两段式、角标被收尾标已读盖掉两个既有缺陷。</p></div></div>
+
+          <div class="chat-msg user"><div class="who">你</div><div class="body">合了之后要我自己跑 restart.sh 才生效吧?</div></div>
+          <div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>是的。我是派发会话(<code>XUANJI_DISPATCH=1</code>),后端是我的宿主进程,不能自己重启;这一步留给你或非派发会话执行。我这边的验证以 <code>tsc --noEmit</code>、eslint、vitest、<code>pnpm build</code> 四道门为准,已全绿。</p><p>另外建议顺手出一张收口卡(worklog),把「靠用户给的规律定位」这条经验锚下来——这次纯推理连错了三轮,规律一给出来一次就中。</p></div></div>
+        </div>
+
+        <div class="chat-status">
+          <span class="sess-ctx"><span class="sc-title sc-named" style="--ph:115">看板空格键失灵排查</span><span class="sc-id">a3f9c1</span></span>
+          <span class="u-chips">
+            <span class="u-chip">Context<span class="u-bar"><i style="width:42%"></i></span><b>42%</b></span>
+            <span class="u-chip">Usage<span class="u-bar"><i style="width:18%"></i></span><b>18%</b></span>
+            <span class="u-chip">Weekly<span class="u-bar"><i style="width:63%"></i></span><b>63%</b></span>
+          </span>
+          <span class="cs-state"><span class="cs-dot"></span>空闲 · 回合结束</span>
+        </div>
+
+        <div class="composer">
+          <textarea rows="2" placeholder="描述要派发的任务…"></textarea>
+          <div class="c-bar">
+            <button class="wrapup-btn"><span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span></button>
+            <span class="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
+            <label class="bg-opt"><span class="switch" role="switch" aria-checked="false"></span><span class="bg-opt-label">转后台(--bg)</span></label>
+            <button class="btn btn-primary send-btn"><span class="send-btn-label">发送</span></button>
+          </div>
+        </div>
+
+        <div class="term-line">
+          <span class="dd"><button class="dd-btn" id="cwd-dd-btn"><span class="dd-val">~/xuanji</span><span class="caret">▾</span></button></span>
+          <span class="branch mono" title="git 状态">⎇ fix/hidden-focus-guard<span class="gs-m"> !2</span><span class="gs-a"> ↑1</span></span>
+          <span class="spacer"></span>
+          <span class="dd" id="model-dd"><button class="dd-btn"><span class="dd-val">opus</span><span class="caret">▾</span></button></span>
+          <span class="dd dim"><button class="dd-btn"><span class="dd-val">effort: high</span><span class="caret">▾</span></button></span>
+          <span class="dd dim"><button class="dd-btn"><span class="dd-val">acceptEdits</span><span class="caret">▾</span></button></span>
+          <span class="tag">settingSources: user</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ 会话回放抽屉 ============ -->
+<div class="backdrop show" id="backdrop"></div>
+<aside class="drawer show" id="drawer" role="dialog" aria-modal="true">
+  <div class="drawer-head">
+    <div style="min-width:0;flex:1">
+      <h2>周报草稿改以收口卡为主料</h2>
+      <div class="meta">
+        <span class="pill pill-rev"><span class="dot"></span>验收中</span>
+        <span class="tag">后台</span>
+        <span class="mono">~/xuanji</span>
+        <span class="mono">session 7e3a91c4</span>
+      </div>
+    </div>
+    <button class="x-btn" aria-label="关闭">✕</button>
+  </div>
+
+  <div class="drawer-body" id="scope-a">
+    <div class="find-anchor"><div class="findbar" id="fb-a" hidden>
+      <span class="find-field" data-find-field>
+        <input type="search" placeholder="在本次回放中查找" aria-label="在本次回放中查找" data-find-input>
+        <button class="find-btn toggle" data-find-case aria-pressed="false" aria-label="区分大小写" title="区分大小写"><span class="g">Aa</span></button>
+        <button class="find-btn toggle" data-find-re aria-pressed="false" aria-label="使用正则表达式" title="使用正则表达式"><span class="g">.*</span></button>
+      </span>
+      <span class="find-count" data-find-count>无结果</span>
+      <button class="find-btn" data-find-prev aria-label="上一条命中" title="上一条 ⇧Enter"><span class="g">↑</span></button>
+      <button class="find-btn" data-find-next aria-label="下一条命中" title="下一条 Enter"><span class="g">↓</span></button>
+      <span class="find-sep"></span>
+      <button class="find-btn" data-find-close aria-label="关闭查找" title="关闭 Esc">✕</button>
+    </div></div>
+
+    <div class="replay-msg"><div class="who u">你</div><div class="body">周报草稿现在是把整周的 session 摘要塞给模型,token 烧得厉害。能不能改成以收口卡(worklog)为主料,只在没有卡的项目上回退到 session 摘要?</div></div>
+
+    <div class="replay-msg"><div class="who">Claude</div><div class="body md"><p>可以。收口卡本身就是「一次任务一张卡」的结构化产物,比原始 session 摘要信息密度高。我先确认 worklog 目录的实际组织方式,再决定拼装 prompt 的策略。</p></div></div>
+
+    <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>ls ~/.claude/worklog</span><span class="chev">▾</span></button><div class="tc-body">INDEX.md
+2026/07/2026-07-31-xuanji-weekly-draft-from-cards.md
+2026/07/2026-07-31-xuanji-wrapup-resumed-session.md
+2026/08/2026-08-05-xuanji-board-four-columns.md
+2026/08/2026-08-11-xuanji-board-space-key-dead.md</div></div>
+
+    <div class="replay-msg"><div class="who">Claude</div><div class="body md"><p>目录按年月分层,<code>INDEX.md</code> 是扁平索引。策略定为:先读 INDEX.md 拿到近 7 天的卡片路径,再逐张读正文,把「结论 / 排除项 / 残留」三段抽出来作为周报主料;未覆盖到的项目才回退到 session 摘要采样。</p></div></div>
+
+    <div class="replay-msg"><div class="who u">你</div><div class="body">未覆盖项目保留 session 采样这点,跟原方案是有偏离的,记得在验证里写清楚。另外我要看真实的 token 对比数字,不要估算。</div></div>
+
+    <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="write">Edit</span><span>skills/weekly-report/build_prompt.ts</span><span class="chev">▾</span></button><div class="tc-body">- const material = await collectSessionDigests(range)
++ const cards = await collectWorklogCards(range)
++ const uncovered = projects.filter(p =&gt; !cards.some(c =&gt; c.project === p))
++ const material = [...cards, ...await collectSessionDigests(range, uncovered)]</div></div>
+
+    <div class="replay-msg"><div class="who">Claude</div><div class="body md"><p>改完跑了一次真实构建做对照。这里必须说清楚:立项时预期的「更省 token」被实测推翻了——旧路径 prompt 5455 字符,新路径 8714 字符,不降反增。原因是收口卡正文完整保留了结论与排除项,比 session 摘要更长。</p></div></div>
+
+    <div class="toolcard"><button class="tc-head"><span class="fn" data-cat="exec">Bash</span><span>pnpm weekly:dry-run --range 7d --diff-prompt</span><span class="chev">▾</span></button><div class="tc-body">[old] material=session-digests  chars=5455  projects=6
+[new] material=worklog-cards    chars=8714  projects=6 (cards=9, fallback=2)
+delta: +3259 chars (+59.7%)
+accuracy spot-check: 9/9 卡片结论被正确引用,0 处编造</div></div>
+
+    <div class="replay-msg"><div class="who u">你</div><div class="body">那真实收益只剩准确率。可以接受,但把这个结论写进收口卡,别让以后的自己再按「省 token」去立项一次。</div></div>
+
+    <div class="replay-msg"><div class="who">Claude</div><div class="body md"><p>已写入 2026-07-31 那张卡的「结论」段:预期收益(省 token)被实测推翻,真实收益是归因准确率与引用可追溯;未覆盖项目保留 session 采样是对原方案的有意偏离。</p></div></div>
+
+    <div class="raw-event"><div class="note">⚠ 未知事件类型「system_hint」,已按原始文本降级展示(adapter 兜底)</div>{"type":"system_hint","hint":"worklog index refreshed"}</div>
+
+    <div class="replay-msg"><div class="who u">你</div><div class="body">好。顺手确认一下这个改动不需要跑 restart.sh 吧?</div></div>
+
+    <div class="replay-msg"><div class="who">Claude</div><div class="body md"><p>不需要。改动只在 skill 侧,不涉及璇玑后端进程;<code>restart.sh</code> 只在 <code>code/backend</code> 有变更时才需要执行。</p></div></div>
+  </div>
+
+  <div class="drawer-foot">
+    <button class="btn btn-sm btn-primary">继续</button>
+    <button class="btn btn-sm">挂起</button>
+    <button class="btn btn-sm">归档</button>
+    <span style="font-size:0.75rem;color:var(--muted)">只读回放 · source of truth 在 ~/.claude</span>
+  </div>
+</aside>
+
+<div class="tickrail" id="rail" hidden></div>
+
+<div class="proto-hint">
+  <b>原型 · ⌘F 会话内查找</b>
+  在当前面板里查找,不是全局搜索。试搜「归因」「restart」「worklog」。
+  <div class="keys"><kbd>⌘F</kbd><kbd>Enter</kbd><kbd>⇧Enter</kbd><kbd>Esc</kbd></div>
+  <div class="sw">
+    <button id="sw-a" aria-pressed="true">回放抽屉</button>
+    <button id="sw-b" aria-pressed="false">派发聊天</button>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   查找控制器 —— 一个滚动容器 + 一条 findbar 为一组
+   落地要点:
+   1. 只处理文本节点,用 <mark class="hit"> 包裹;关闭时 unwrap + normalize(),不留残渣;
+   2. 折叠 toolcard 里的命中照样计数,卡头打「N 处」角标,跳到它时自动展开;
+   3. 当前命中唯一实心玉,其余淡染;
+   4. 右侧刻度轨按 offsetTop/scrollHeight 换算,长会话一眼知道命中在哪几段。
+   ============================================================ */
+const rail = document.getElementById('rail');
+
+function createFinder(scope, bar, opts) {
+  const input = bar.querySelector('[data-find-input]');
+  const countEl = bar.querySelector('[data-find-count]');
+  const field = bar.querySelector('[data-find-field]');
+  let hits = [], cur = -1, cs = false, re = false, bad = false;
+
+  const clear = () => {
+    scope.querySelectorAll('mark.hit').forEach(m => m.replaceWith(document.createTextNode(m.textContent)));
+    scope.querySelectorAll('.tc-hits').forEach(b => b.remove());
+    scope.normalize();
+    hits = []; cur = -1;
+  };
+
+  const run = (q) => {
+    clear();
+    bad = false;
+    let rx = null;
+    if (q) {
+      try {
+        rx = new RegExp(re ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), cs ? 'g' : 'gi');
+      } catch { bad = true; }   // 正则写坏时不报错弹窗,只把输入框边框转红
+    }
+    if (q && !bad) {
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, {
+        acceptNode: n => (n.nodeValue.trim() && !n.parentElement.closest('.findbar'))
+          ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT
+      });
+      const nodes = []; let n;
+      while ((n = walker.nextNode())) nodes.push(n);
+      for (const node of nodes) {
+        const raw = node.nodeValue;
+        rx.lastIndex = 0;
+        let m, from = 0, frag = null;
+        while ((m = rx.exec(raw))) {
+          if (m[0] === '') { rx.lastIndex++; continue; }   // 空匹配(如 a*)不死循环
+          frag = frag || document.createDocumentFragment();
+          if (m.index > from) frag.appendChild(document.createTextNode(raw.slice(from, m.index)));
+          const mk = document.createElement('mark');
+          mk.className = 'hit';
+          mk.textContent = m[0];
+          frag.appendChild(mk); hits.push(mk);
+          from = m.index + m[0].length;
+        }
+        if (!frag) continue;
+        if (from < raw.length) frag.appendChild(document.createTextNode(raw.slice(from)));
+        node.replaceWith(frag);
+      }
+      scope.querySelectorAll('.toolcard').forEach(tc => {
+        const n = tc.querySelectorAll('.tc-body mark.hit').length;
+        if (n && !tc.classList.contains('open')) {
+          const b = document.createElement('span');
+          b.className = 'tc-hits'; b.textContent = n + ' 处';
+          tc.querySelector('.tc-head').insertBefore(b, tc.querySelector('.chev'));
+        }
+      });
+      if (hits.length) { cur = 0; focus(false); }
+    }
+    render();
+  };
+
+  const focus = (smooth = true) => {
+    hits.forEach(h => h.classList.remove('cur'));
+    const el = hits[cur]; if (!el) return;
+    const tc = el.closest('.toolcard');
+    if (tc && !tc.classList.contains('open')) { tc.classList.add('open'); tc.querySelector('.tc-hits')?.remove(); }
+    el.classList.add('cur');
+    el.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' });
+  };
+
+  const render = () => {
+    const t = hits.length;
+    countEl.textContent = bad ? '正则无效' : t ? (cur + 1) + '/' + t : '无结果';
+    countEl.classList.toggle('num', !bad && t > 0);
+    countEl.classList.toggle('zero', bad || (!!input.value && !t));
+    field.classList.toggle('nores', bad || (!!input.value && !t));
+    bar.querySelector('[data-find-prev]').disabled = t < 2;
+    bar.querySelector('[data-find-next]').disabled = t < 2;
+    drawRail();
+  };
+
+  const drawRail = () => {
+    rail.innerHTML = '';
+    rail.hidden = bar.hidden || hits.length < 2;
+    if (rail.hidden) return;
+    const r = scope.getBoundingClientRect();
+    rail.style.top = r.top + 'px';
+    rail.style.height = r.height + 'px';
+    rail.style.left = (r.right - 9) + 'px';
+    const H = scope.scrollHeight;
+    hits.forEach((m, i) => {
+      if (!m.offsetParent) return;           // 折叠区里的命中不画刻度
+      const t = document.createElement('div');
+      t.className = 'tick' + (i === cur ? ' cur' : '');
+      t.style.top = (m.offsetTop / H * 100).toFixed(2) + '%';
+      rail.appendChild(t);
+    });
+  };
+
+  const step = (d) => { if (!hits.length) return; cur = (cur + d + hits.length) % hits.length; focus(); render(); };
+  const open = () => {
+    const first = bar.hidden;
+    bar.hidden = false;
+    if (first) {
+      bar.classList.add('enter');
+      requestAnimationFrame(() => bar.classList.remove('enter'));
+    }
+    // 已打开时再按 ⌘F:不重新入场,只闪一次轮廓把视线拉回来(VSCode 同款行为)
+    bar.classList.remove('summon');
+    void bar.offsetWidth;
+    bar.classList.add('summon');
+    input.focus(); input.select();
+    if (input.value) run(input.value); else render();
+  };
+  const close = () => { clear(); bar.hidden = true; rail.hidden = true; };
+
+  input.addEventListener('input', () => run(input.value));
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); }
+    if (e.key === 'Escape') { e.preventDefault(); close(); }
+  });
+  bar.querySelector('[data-find-next]').addEventListener('click', () => step(1));
+  bar.querySelector('[data-find-prev]').addEventListener('click', () => step(-1));
+  bar.querySelector('[data-find-close]').addEventListener('click', close);
+  bar.querySelector('[data-find-case]').addEventListener('click', e => {
+    cs = !cs; e.currentTarget.setAttribute('aria-pressed', String(cs));
+    run(input.value); input.focus();
+  });
+  bar.querySelector('[data-find-re]').addEventListener('click', e => {
+    re = !re; e.currentTarget.setAttribute('aria-pressed', String(re));
+    run(input.value); input.focus();
+  });
+  scope.addEventListener('scroll', () => { if (!rail.hidden) drawRail(); }, { passive: true });
+  window.addEventListener('resize', () => { if (!rail.hidden) drawRail(); });
+
+  return { open, close, isOpen: () => !bar.hidden, redraw: drawRail };
+}
+
+const F = {
+  a: createFinder(document.getElementById('scope-a'), document.getElementById('fb-a')),
+  b: createFinder(document.getElementById('scope-b'), document.getElementById('fb-b')),
+};
+let active = 'a';
+
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); F[active].open(); return; }
+  if (e.key === 'Escape' && F[active].isOpen()) F[active].close();
+});
+
+/* toolcard 展开(与真实组件一致:整个卡头可点) */
+document.querySelectorAll('.toolcard .tc-head, .thinkcard .tk-head').forEach(h =>
+  h.addEventListener('click', () => h.parentElement.classList.toggle('open')));
+
+/* 场景切换(原型脚手架) */
+const setScene = (k) => {
+  F[active].close(); active = k;
+  document.getElementById('sw-a').setAttribute('aria-pressed', String(k === 'a'));
+  document.getElementById('sw-b').setAttribute('aria-pressed', String(k === 'b'));
+  document.getElementById('view-sessions').classList.toggle('active', k === 'a');
+  document.getElementById('view-dispatch').classList.toggle('active', k === 'b');
+  document.getElementById('nav-sessions').classList.toggle('active', k === 'a');
+  document.getElementById('nav-dispatch').classList.toggle('active', k === 'b');
+  document.getElementById('drawer').classList.toggle('show', k === 'a');
+  document.getElementById('backdrop').classList.toggle('show', k === 'a');
+};
+document.getElementById('sw-a').addEventListener('click', () => setScene('a'));
+document.getElementById('sw-b').addEventListener('click', () => setScene('b'));
+</script>
+</body>
+</html>

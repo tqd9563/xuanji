@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   DragOverlay,
@@ -15,13 +15,14 @@ import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock, isUnread, markSeen, timeAgo } from '@/lib/utils';
-import { Drawer, Empty, Md, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { clock, daySeparator, isUnread, markSeen, timeAgo } from '@/lib/utils';
+import { CompactionCard, Drawer, Empty, Md, MsgTime, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
   if (s.dispatchId) {
-    setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+    setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
     location.hash = 'dispatch';
     return;
   }
@@ -388,6 +389,23 @@ export function Sessions({
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // 会话内查找(⌘F):作用域是回放抽屉的滚动体,只在抽屉打开时接管快捷键
+  const drawerBodyRef = useRef<HTMLDivElement>(null);
+  const find = useFindInPage(drawerBodyRef, drawerOpen);
+  // 跨天分隔线:与事件列表等长,replayDaySeps[i] 非空表示第 i 条事件之前要插一条日期。
+  // 只有对话消息(user/assistant)参与:工具卡/raw 本就无时间,而 compact 虽带 ts,却在
+  // 下面的 map 里提前 return 成卡片、渲染不到分隔线——让它参与游标会把那一天的日期头
+  // 算在一个不渲染的位置上,整天的分界凭空消失(2026-08-19 用真实跨天会话仿真时暴露)。
+  const replayDaySeps = useMemo(() => {
+    let prev: string | undefined;
+    return (replay?.events ?? []).map((ev) => {
+      const ts = ev.kind === 'user' || ev.kind === 'assistant' ? ev.ts : undefined;
+      if (ts == null) return null;
+      const sep = daySeparator(prev, ts);
+      prev = ts;
+      return sep;
+    });
+  }, [replay]);
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   /** 收纳列(空闲/已完成)的展开状态:两列各自独立折叠 */
   const [openCols, setOpenCols] = useState<Set<SessionState>>(() => new Set());
@@ -838,6 +856,7 @@ export function Sessions({
       <Drawer
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        bodyRef={drawerBodyRef}
         title={replay?.title ?? replayFor?.name ?? '会话回放'}
         meta={
           replayFor && (
@@ -893,9 +912,11 @@ export function Sessions({
           </>
         }
       >
+        <FindBar scopeRef={drawerBodyRef} state={find} placeholder="在本次回放中查找" />
         {!replay && <Empty><p>回放加载中…</p></Empty>}
         {replay?.events.map((ev, i) => {
           if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
+          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
           if (ev.kind === 'raw')
             return (
               <div className="raw-event" key={i}>
@@ -904,16 +925,22 @@ export function Sessions({
               </div>
             );
           return (
-            <div className="replay-msg" key={i}>
-              <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>{ev.kind === 'user' ? '你' : 'Claude'}</div>
-              {ev.kind === 'assistant' ? (
-                <div className="body md">
-                  <Md>{ev.text}</Md>
+            <Fragment key={i}>
+              {replayDaySeps[i] && <div className="day-sep">{replayDaySeps[i]}</div>}
+              <div className="replay-msg">
+                <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>
+                  {ev.kind === 'user' ? '你' : 'Claude'}
+                  <MsgTime ts={ev.ts} />
                 </div>
-              ) : (
-                <div className="body">{ev.text}</div>
-              )}
-            </div>
+                {ev.kind === 'assistant' ? (
+                  <div className="body md">
+                    <Md>{ev.text}</Md>
+                  </div>
+                ) : (
+                  <div className="body">{ev.text}</div>
+                )}
+              </div>
+            </Fragment>
           );
         })}
         {replay && replay.events.length === 0 && <Empty><p>此会话没有可回放的事件。</p></Empty>}

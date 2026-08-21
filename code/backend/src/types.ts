@@ -1,5 +1,37 @@
 /** 内部领域模型 —— adapter 之上的所有层只认这些类型,不认 ~/.claude 原始格式。 */
 
+/** 随派发消息内联发送的图片(用户在输入框粘贴的截图)。data 是不带 data: 前缀的 base64。 */
+export interface InlineImage {
+  media_type: 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp';
+  data: string;
+}
+
+/** Anthropic 接受的图片 media type;粘贴进来的其它格式一律拒收,不做转码。 */
+export const INLINE_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'] as const;
+/** 单图上限 5MB(Anthropic 硬限),按 base64 解码后的字节数算 */
+export const INLINE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+/** 单条消息最多带几张图 */
+export const INLINE_IMAGE_MAX_COUNT = 8;
+
+/** 校验并归一化来自 WS 的图片数组;任一张不合法即返回错误原因,不做部分接受。 */
+export function parseInlineImages(raw: unknown): { ok: true; images: InlineImage[] } | { ok: false; reason: string } {
+  if (raw === undefined || raw === null) return { ok: true, images: [] };
+  if (!Array.isArray(raw)) return { ok: false, reason: 'images 必须是数组' };
+  if (raw.length > INLINE_IMAGE_MAX_COUNT) return { ok: false, reason: `一条消息最多带 ${INLINE_IMAGE_MAX_COUNT} 张图片` };
+  const images: InlineImage[] = [];
+  for (const item of raw) {
+    const mt = (item as InlineImage)?.media_type;
+    const data = (item as InlineImage)?.data;
+    if (typeof data !== 'string' || !data) return { ok: false, reason: '图片数据为空' };
+    if (!(INLINE_IMAGE_TYPES as readonly string[]).includes(mt)) return { ok: false, reason: `不支持的图片格式:${String(mt)}` };
+    // base64 每 4 字符 → 3 字节,末尾 = 号是填充不计入
+    const bytes = Math.floor((data.length * 3) / 4) - (data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0);
+    if (bytes > INLINE_IMAGE_MAX_BYTES) return { ok: false, reason: `单张图片不能超过 ${INLINE_IMAGE_MAX_BYTES / 1024 / 1024}MB` };
+    images.push({ media_type: mt, data });
+  }
+  return { ok: true, images };
+}
+
 export interface GitStatus {
   branch: string;
   /** zsh 风格:! 已修改(含暂存) */
@@ -66,7 +98,19 @@ export type ReplayEvent =
   | { kind: 'user'; text: string; ts?: string }
   | { kind: 'assistant'; text: string; model?: string; ts?: string }
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
-  | { kind: 'raw'; type: string; json: string };
+  | { kind: 'raw'; type: string; json: string }
+  | {
+      kind: 'compact';
+      /** manual(/compact) 或 auto(上下文自动压缩) */
+      trigger?: string;
+      /** 压缩前上下文 token 数 */
+      preTokens?: number;
+      /** 压缩耗时(ms) */
+      durationMs?: number;
+      /** 压缩摘要全文(isCompactSummary 记录回填) */
+      summary?: string;
+      ts?: string;
+    };
 
 export interface Replay {
   sessionId: string;
@@ -216,8 +260,9 @@ export interface WeeklyDraft {
 
 /**
  * 待办(自有数据,SQLite):临时想法的收集箱,不映射 ~/.claude 任何文件。
- * 生命周期 open → doing(已开工,挂上派发会话)→ done;完成与否始终由人判断,
- * 会话结束不自动完成——一次会话未必真把事做完。
+ * 生命周期 open → doing(已开工,挂上派发会话)→ done。完成有两条路:
+ * 人手动勾,或挂靠会话被归档/从看板消失后由看板同步自动补上
+ * (见 sessions.syncTodosWithBoard;会话仅仅跑完仍不算完——验收处置才算)。
  */
 export interface Todo {
   id: number;

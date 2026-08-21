@@ -1,8 +1,8 @@
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
-import { cn, projBg, projColor } from '@/lib/utils';
+import { cn, msgClock, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
@@ -195,6 +195,18 @@ export function ProjChip({ name, path }: { name: string; path?: string }) {
   );
 }
 
+/**
+ * 消息发送时间:紧跟角色名的 HH:MM。派发页聊天流与回放抽屉共用同一枚,
+ * 保证两条渲染链路的时间样式不会各写各的(2026-08 压缩卡片改一处漏一处的老坑)。
+ * 无时间的事件(工具卡、老会话缺 ts)不渲染任何占位。悬停可见完整日期时间。
+ */
+export function MsgTime({ ts }: { ts: number | string | null | undefined }) {
+  const hhmm = msgClock(ts);
+  if (!hhmm) return null;
+  const full = new Date(typeof ts === 'number' ? ts : Date.parse(String(ts))).toLocaleString('zh-CN');
+  return <span className="msg-ts" title={full}>{hhmm}</span>;
+}
+
 // ---------- 空态 ----------
 
 export function Empty({ children }: { children: ReactNode }) {
@@ -214,6 +226,7 @@ export function Drawer({
   title,
   meta,
   foot,
+  bodyRef,
   children,
 }: {
   open: boolean;
@@ -221,6 +234,8 @@ export function Drawer({
   title: ReactNode;
   meta?: ReactNode;
   foot?: ReactNode;
+  /** 滚动体的 ref:会话内查找(⌘F)需要拿它做查找作用域与高亮定位父级 */
+  bodyRef?: RefObject<HTMLDivElement>;
   children: ReactNode;
 }) {
   useEffect(() => {
@@ -247,7 +262,7 @@ export function Drawer({
                 ✕
               </button>
             </div>
-            <div className="drawer-body">{children}</div>
+            <div className="drawer-body" ref={bodyRef}>{children}</div>
             {foot && <div className="drawer-foot">{foot}</div>}
           </>
         )}
@@ -402,6 +417,43 @@ export function ThinkingCard({ text, streaming, durationMs }: { text: string; st
           <button className="tk-more" onClick={() => setFull(true)}>展开全文</button>
         )}
       </div>
+    </div>
+  );
+}
+
+/** 回放时间线里的「上下文已压缩」卡片:头部一行元信息,展开看压缩摘要全文 */
+export function CompactionCard({
+  trigger,
+  preTokens,
+  durationMs,
+  summary,
+}: {
+  trigger?: string;
+  preTokens?: number;
+  durationMs?: number;
+  summary?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
+  const stats = [
+    preTokens != null && `压缩前 ${preTokens.toLocaleString()} tokens`,
+    durationMs != null && `耗时 ${(durationMs / 1000).toFixed(1)}s`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  return (
+    <div className={cn('compactcard', open && 'open')}>
+      <button className="cc-head" onClick={() => summary && setOpen(!open)} disabled={!summary}>
+        <span className="ico">🗜</span>
+        <span className="label">{label}</span>
+        {stats && <span className="stats">{stats}</span>}
+        {summary && <span className="chev">▾</span>}
+      </button>
+      {open && summary && (
+        <div className="cc-body md">
+          <Md>{summary}</Md>
+        </div>
+      )}
     </div>
   );
 }

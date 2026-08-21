@@ -8,15 +8,25 @@ export interface QuestionSpec {
   options: { label: string; description?: string }[];
 }
 
+/** 消息发送时间(ms epoch)。实时消息在到达时打点,历史消息取 session jsonl 的 ts;
+ *  工具卡/审批等非对话事件无此字段(源数据本就没有时间),不显示时间也不参与跨天分隔。 */
+/** 随消息内联发送的图片(输入框里粘贴的截图)。data 是不带 data: 前缀的 base64。 */
+export interface InlineImage {
+  media_type: string;
+  data: string;
+}
+
 export type ChatItem =
-  | { t: 'user'; text: string }
-  | { t: 'assistant'; text: string; streaming: boolean }
+  | { t: 'user'; text: string; ts?: number; images?: InlineImage[] }
+  | { t: 'assistant'; text: string; streaming: boolean; ts?: number }
   /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
   | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
   | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
   | { t: 'note'; text: string }
+  /** 上下文压缩点:历史装载时带摘要可展开;实时压缩事件无摘要则仅一行 */
+  | { t: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string }
   | { t: 'error'; text: string };
 
 export interface AgentStatus {
@@ -31,13 +41,17 @@ export interface UsageChips {
   /** 限额窗口重置时间(ms epoch),悬停显示「还有多久重置」 */
   fiveHourResetsAt: number | null;
   sevenDayResetsAt: number | null;
+  /** 模型级周窗口(如 Fable 单独配额):与 seven_day 同一重置时刻,利用率独立;服务端未下发时保持 null */
+  modelWeeklyPct: number | null;
+  modelWeeklyName: string | null;
 }
 
 export interface DispatchIntent {
   resume?: { sessionId: string; name: string; cwd: string; project: string };
-  /** 后端存活的派发会话:直接 attach 回原事件流(不新开 SDK 会话)。name/project 由发起方(看板已持有的 AgentSession)
-   *  随手带过来,省一趟按 dispatchId 反查的请求;派发页只管展示,不关心其来源。 */
-  attach?: { dispatchId: string; cwd: string; name: string; project: string };
+  /** 后端存活的派发会话:直接 attach 回原事件流(不新开 SDK 会话)。name/project/sessionId 由发起方(看板已持有的
+   *  AgentSession)随手带过来,省一趟按 dispatchId 反查的请求;派发页只管展示,不关心其来源。
+   *  sessionId 仅用于进入时标已读(会话标识里的 id 仍等 attach 重放 init 事件后补)。 */
+  attach?: { dispatchId: string; sessionId: string; cwd: string; name: string; project: string };
   prefill?: string;
   /** 全新派发的工作目录(待办「开工」带过来;attach/resume 自带 cwd,不走这里) */
   cwd?: string;
@@ -86,10 +100,14 @@ function sealThinking(prev: ChatItem[]): ChatItem[] {
 export function useDispatch() {
   const [items, setItems] = useState<ChatItem[]>([]);
   const [status, setStatus] = useState<AgentStatus>({ state: 'none' });
-  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+  const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
+  /** 接回存活会话时后端随 attached 事件下发的垫历史元信息:内存事件只覆盖后端本进程
+   *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
+   *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
+  const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
   const restoringRef = useRef(false);
@@ -125,7 +143,8 @@ export function useDispatch() {
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      return [...prev, { t: 'assistant', text, streaming: true }];
+      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移
+      return [...prev, { t: 'assistant', text, streaming: true, ts: Date.now() }];
     });
   }, []);
 
@@ -145,6 +164,9 @@ export function useDispatch() {
       case 'attached':
         restoringRef.current = false;
         sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
+        if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
+          setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
+        }
         break;
       case 'init':
         setSessionId(String(e.sessionId));
@@ -154,7 +176,10 @@ export function useDispatch() {
         setStatus({ state: e.state as AgentStatus['state'], detail: e.detail as string | undefined });
         break;
       case 'user-echo':
-        setItems((prev) => [...prev, { t: 'user', text: String(e.text) }]);
+        setItems((prev) => [
+          ...prev,
+          { t: 'user', text: String(e.text ?? ''), ts: Date.now(), images: e.images as InlineImage[] | undefined },
+        ]);
         break;
       case 'delta':
         pendingDeltaRef.current += String(e.text);
@@ -184,9 +209,10 @@ export function useDispatch() {
           const prev = sealThinking(prev0);
           const last = prev[prev.length - 1];
           if (last?.t === 'assistant' && last.streaming) {
-            return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false }];
+            // 保留流开始时打的点,不改写成本轮结束时刻
+            return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false, ts: last.ts }];
           }
-          return [...prev, { t: 'assistant', text: String(e.text), streaming: false }];
+          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: Date.now() }];
         });
         break;
       case 'tool':
@@ -250,7 +276,12 @@ export function useDispatch() {
         const pct = Math.round(Number(e.utilization ?? 0)); // 后端统一 0-100
         const resetsAt = typeof e.resetsAt === 'number' ? e.resetsAt : null;
         if (e.kind === 'five_hour') setChips((c) => ({ ...c, fiveHourPct: pct, fiveHourResetsAt: resetsAt }));
-        if (String(e.kind).startsWith('seven_day')) setChips((c) => ({ ...c, sevenDayPct: pct, sevenDayResetsAt: resetsAt }));
+        // model_weekly 先于 seven_day 前缀判断:模型级窗口不并入 all-models 条
+        if (e.kind === 'model_weekly') {
+          setChips((c) => ({ ...c, modelWeeklyPct: pct, modelWeeklyName: typeof e.model === 'string' ? e.model : null }));
+        } else if (String(e.kind).startsWith('seven_day')) {
+          setChips((c) => ({ ...c, sevenDayPct: pct, sevenDayResetsAt: resetsAt }));
+        }
         break;
       }
       case 'model-changed':
@@ -267,11 +298,14 @@ export function useDispatch() {
         ]);
         break;
       case 'compact': {
-        const pre = Number(e.preTokens ?? 0);
-        const post = typeof e.postTokens === 'number' ? Number(e.postTokens) : undefined;
-        const label = e.trigger === 'auto' ? '上下文自动压缩' : '上下文已压缩';
-        const stat = post != null ? `:${pre.toLocaleString()} → ${post.toLocaleString()} tokens` : '';
-        setItems((prev) => [...prev, { t: 'note', text: `🗜 ${label}${stat}` }]);
+        setItems((prev) => [
+          ...prev,
+          {
+            t: 'compact',
+            trigger: typeof e.trigger === 'string' ? e.trigger : undefined,
+            preTokens: typeof e.preTokens === 'number' ? e.preTokens : undefined,
+          },
+        ]);
         break;
       }
       case 'bg-dispatched':
@@ -346,7 +380,7 @@ export function useDispatch() {
       setItems([]);
       setStatus({ state: 'none' });
       setCostUsd(0);
-      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+      setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
     },
@@ -367,9 +401,11 @@ export function useDispatch() {
   }, [attach]);
 
   const send = useCallback(
-    async (text: string, opts: StartOpts & { bg?: boolean }) => {
+    async (text: string, opts: StartOpts & { bg?: boolean; images?: InlineImage[] }) => {
       const ws = await ensureWs();
+      const images = opts.images?.length ? opts.images : undefined;
       if (opts.bg) {
+        // 后台会话走 claude CLI 子进程,没有内联图片通道 —— 图片在此丢弃(UI 已提前拦截)
         setItems((prev) => [...prev, { t: 'user', text }]);
         ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text }));
         return;
@@ -387,10 +423,11 @@ export function useDispatch() {
             resume: opts.resume,
             name: opts.name,
             prompt: text,
+            images,
           }),
         );
       } else {
-        ws.send(JSON.stringify({ op: 'send', text }));
+        ws.send(JSON.stringify({ op: 'send', text, images }));
       }
     },
     [ensureWs],
@@ -424,7 +461,8 @@ export function useDispatch() {
     setSessionId(null);
     setModel(null);
     setCostUsd(0);
-    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null });
+    setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
+    setAttachedHistory(null);
   }, [clearPendingDelta]);
 
   const pushNote = useCallback((text: string) => {
@@ -437,5 +475,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
+  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
 }

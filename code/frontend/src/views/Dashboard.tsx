@@ -80,7 +80,7 @@ function DashTodos() {
           <span className="t" title={t.title}>{t.title}</span>
           {t.project && <ProjChip name={t.project} path={t.cwd ?? undefined} />}
           <span className="age mono" title={new Date(t.createdAt).toLocaleString('zh-CN')}>{timeAgo(t.createdAt)}</span>
-          <button className="td-go" onClick={() => startTodo(t)}>
+          <button className="td-go" onClick={() => void startTodo(t)}>
             {t.status === 'doing' ? '继续 ▶' : '开工 ▶'}
           </button>
         </div>
@@ -108,7 +108,7 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
   const reviewable = data.reviewCandidates ?? [];
   const goSession = (s: (typeof reviewable)[number]) => {
     if (s.dispatchId) {
-      setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+      setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
       location.hash = 'dispatch';
       return;
     }

@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 输入框长文本自适应抬高 原型</title>
+<style>
+/* ============================================================
+   以下为真实前端样式表 code/frontend/src/styles/index.css 全量内联,
+   保证原型与线上派发页视觉 1:1;新功能样式见文件底部「PROTO」区块。
+   ============================================================ */
 @import "tailwindcss";
 
 /* ============================================================
@@ -472,8 +483,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
-/* 搜索命中片段:玉色加粗,不加底色——底色会与 .rp-item.sel 的玉色描边环在同一行双重强调 */
-.rp-mark { color: var(--jade); font-weight: 600; }
 
 /* /wd·/model 模糊搜索弹窗(WdPalette,复用 rp-box/rp-list/rp-item;仅补搜索框与右侧完整值列) */
 .wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
@@ -505,25 +514,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   background: var(--surface-2); margin-bottom: 16px;
 }
 .notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
-
-/* ============ 消息发送时间(派发页聊天流 + 回放抽屉共用) ============ */
-/* 时间是元信息:落在 who(muted/jade)之下的 faint 层,mono + tabular-nums 保证
-   HH:MM 逐位对齐、分钟跳动不抖版。tool/raw 事件源数据无时间,不渲染也不占位。 */
-.msg-ts {
-  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
-  color: var(--faint); margin-left: 8px;
-  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-}
-/* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
-   靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
-.day-sep {
-  display: flex; align-items: center; gap: 12px;
-  margin: 22px 0 18px; color: var(--faint);
-  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-.day-sep::before, .day-sep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.day-sep:first-child { margin-top: 0; }
 
 /* 回放 */
 .replay-msg { margin-bottom: 18px; }
@@ -855,67 +845,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
-
-/* 粘贴图片附件条:在 textarea 上方、composer 边框之内——图片与文字视觉上同属一条待发消息。
-   缩略图 56px 方块 cover 裁切,多张换行不横滚(横滚会藏图,数量本就封顶 8 张)。 */
-.composer .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
-.composer.has-attach textarea { padding-top: 10px; } /* 附件条已给了呼吸感,顶部留白略收 */
-.attach-chip {
-  position: relative; width: 56px; height: 56px; flex: none;
-  border: 1px solid var(--line); border-radius: var(--r-s);
-  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
-  animation: chip-in 150ms var(--ease);
-}
-@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
-.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.attach-chip .rm {
-  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
-  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease); cursor: pointer;
-}
-.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
-/* 触屏无 hover:粗指针设备上 ✕ 常驻,否则图片没法移除 */
-@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
-
-/* 已发送消息里的图片:缩略图排在文字上方,点击开灯箱 */
-.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.chat-msg.user .msg-imgs { justify-content: flex-end; }
-.chat-msg .msg-imgs img {
-  width: 88px; height: 88px; object-fit: cover;
-  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
-}
-
-/* 灯箱:点缩略图看原图 */
-.lightbox {
-  position: fixed; inset: 0; z-index: var(--z-backdrop);
-  display: none; align-items: center; justify-content: center;
-  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
-}
-.lightbox.open { display: flex; }
-.lightbox img {
-  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
-  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
-}
-/* 高度跟随内容:由 Dispatch.tsx 的 growTa() 写 inline height(WebKit 尚不支持 field-sizing)。
-   下限 56px 与 TA_MIN_H 同值(改一处必须改另一处);上限取 12 行正文与 40vh 的小者,
-   触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
   padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
-  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
-  overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
-/* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
-.composer .grow-fade {
-  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--surface));
-  opacity: 0; transition: opacity 150ms var(--ease);
-}
-.composer.at-max .grow-fade { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 /* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
@@ -1609,3 +1543,236 @@ body.wall-glass .dd-menu {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* ============================================================
+   PROTO · 输入框粘贴图片
+   规则:
+   - 附件条(.attach-strip)出现在 textarea 上方、composer 边框之内:
+     图片与文字同属一次待发送的输入,放同一容器内视觉上才是"一条消息"
+   - 缩略图 56px 方块,object-fit:cover;数量多时换行,不横向滚动
+   - 每个缩略图右上角 ✕ 可移除;hover 才现出,不干扰扫视
+   - 缩略图入场 150ms 淡入微缩放,克制;reduced-motion 下自动禁用(全局规则已覆盖)
+   - 点缩略图开灯箱看原图(Esc / 点击任意处关闭)
+   - 发送后的用户消息里,图片以同规格缩略图排在文字上方
+   ============================================================ */
+.composer .attach-strip {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px 16px 0;
+}
+.composer .attach-strip:empty { display: none; }
+.attach-chip {
+  position: relative; width: 56px; height: 56px; flex: none;
+  border: 1px solid var(--line); border-radius: var(--r-s);
+  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
+  animation: chip-in 150ms var(--ease);
+}
+@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
+.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-chip .rm {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
+  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease);
+  cursor: pointer;
+}
+.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
+/* 触屏无 hover:粗指针设备上 ✕ 常驻 */
+@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
+
+/* textarea 上方有附件时,textarea 顶部留白略收(附件条已提供呼吸感) */
+.composer.has-attach textarea { padding-top: 10px; }
+
+/* 灯箱:点缩略图看原图 */
+.lightbox {
+  position: fixed; inset: 0; z-index: var(--z-backdrop);
+  display: none; align-items: center; justify-content: center;
+  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
+}
+.lightbox.open { display: flex; }
+.lightbox img {
+  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
+  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
+}
+
+/* 发送后的用户消息:图片缩略图排在文字上方,与气泡同宽约束 */
+.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.chat-msg.user .msg-imgs { justify-content: flex-end; }
+.chat-msg .msg-imgs img {
+  width: 88px; height: 88px; object-fit: cover;
+  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
+}
+
+/* ---- 原型页自身的演示外壳(非交付样式) ---- */
+.proto-note {
+  max-width: 960px; margin: 20px auto 0; padding: 12px 16px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  background: var(--surface-2); color: var(--muted); font-size: 0.8125rem; line-height: 1.6;
+}
+.proto-note b { color: var(--ink); }
+.proto-note .demo-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.proto-stage { max-width: 960px; margin: 12px auto 32px; height: min(78vh, 720px); display: flex; }
+.proto-stage .dispatch { flex: 1; display: flex; flex-direction: column; min-height: 0; height: auto; }
+.proto-hud { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="proto-note">
+  <b>原型 · 输入框粘贴图片</b> —— 直接 <b>⌘V 粘贴剪贴板里的图片</b>(先随便截个图)体验:
+  缩略图出现在输入框上方、边框之内,与文字同属一条待发送消息;hover 缩略图右上角 ✕ 移除,
+  点缩略图看原图;Enter 发送后图片与文字一起进入消息气泡。也可用下面按钮注入示例图。
+  <div class="demo-btns">
+    <button class="btn btn-sm" id="d-one">注入 1 张示例图</button>
+    <button class="btn btn-sm" id="d-many">注入 4 张(换行)</button>
+    <button class="btn btn-sm" id="d-clear">清空附件</button>
+    <span class="proto-hud" id="hud"></span>
+  </div>
+</div>
+
+<div class="proto-stage">
+<div class="dispatch">
+  <div class="chat" id="chat">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">扫描近 7 天的高风险 IP,输出报告</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="body">已完成:共识别高风险 IP 47 个,报告已写入 reports/ip-risk-0819.md。还需要我做什么?</div>
+    </div>
+  </div>
+
+  <div class="chat-status">
+    <span class="u-chips" style="display:flex;gap:10px;">
+      <span style="color:var(--muted)">Context 34%</span>
+      <span style="color:var(--muted)">Usage 51%</span>
+    </span>
+    <span class="cs-state" style="margin-left:auto;color:var(--jade)"><span class="cs-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--jade);margin-right:6px;"></span>就绪</span>
+  </div>
+
+  <div class="composer" id="composer">
+    <div class="attach-strip" id="strip"></div>
+    <textarea id="ta" class="auto-grow" rows="2" placeholder="描述要派发的任务…"></textarea>
+    <div class="grow-fade"></div>
+    <div class="c-bar">
+      <button class="wrapup-btn"><span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span></button>
+      <span class="hint">Enter 发送 · Shift+Enter 换行 · ⌘V 粘贴图片</span>
+      <label class="bg-opt"><span class="switch"></span><span class="bg-opt-label">转后台(--bg)</span></label>
+      <button class="btn btn-primary send-btn" id="send"><span class="send-btn-label">发送</span></button>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="lightbox" id="lightbox"><img id="lightbox-img" alt=""></div>
+
+<script>
+const ta = document.getElementById('ta');
+const composer = document.getElementById('composer');
+const strip = document.getElementById('strip');
+const chat = document.getElementById('chat');
+const hud = document.getElementById('hud');
+const lightbox = document.getElementById('lightbox');
+const lightboxImg = document.getElementById('lightbox-img');
+const MIN = 56;
+let attachments = [];   // [{url, size}]
+let seq = 0;
+
+function grow() {
+  ta.style.height = 'auto';
+  const max = parseFloat(getComputedStyle(ta).maxHeight);
+  const target = Math.max(MIN, ta.scrollHeight);
+  ta.style.height = Math.min(target, max) + 'px';
+  composer.classList.toggle('at-max', target > max + 1);
+}
+ta.addEventListener('input', grow);
+
+function fmtSize(n) { return n > 1048576 ? (n/1048576).toFixed(1)+' MB' : Math.round(n/1024)+' KB'; }
+function refreshHud() {
+  const total = attachments.reduce((s,a)=>s+a.size,0);
+  hud.textContent = attachments.length ? `${attachments.length} 张图片 · ${fmtSize(total)}` : '';
+  composer.classList.toggle('has-attach', attachments.length > 0);
+}
+
+function addImage(url, size) {
+  const item = { url, size };
+  attachments.push(item);
+  const chip = document.createElement('div');
+  chip.className = 'attach-chip';
+  chip.title = `图片 · ${fmtSize(size)} · 点击查看原图`;
+  const img = document.createElement('img');
+  img.src = url; img.alt = '待发送图片';
+  const rm = document.createElement('button');
+  rm.className = 'rm'; rm.textContent = '✕'; rm.title = '移除'; rm.setAttribute('aria-label','移除图片');
+  rm.onclick = (e) => { e.stopPropagation(); attachments = attachments.filter(a=>a!==item); chip.remove(); refreshHud(); };
+  chip.onclick = () => { lightboxImg.src = url; lightbox.classList.add('open'); };
+  chip.append(img, rm);
+  strip.appendChild(chip);
+  refreshHud();
+}
+
+// 真实粘贴:读剪贴板里的 image item
+ta.addEventListener('paste', (e) => {
+  const items = [...(e.clipboardData?.items ?? [])].filter(i => i.type.startsWith('image/'));
+  if (!items.length) return;      // 纯文本照常走默认粘贴
+  e.preventDefault();
+  for (const it of items) {
+    const blob = it.getAsFile();
+    if (blob) addImage(URL.createObjectURL(blob), blob.size);
+  }
+});
+
+// 示例图:canvas 生成,免依赖外部资源
+function sampleImage(i) {
+  const c = document.createElement('canvas'); c.width = 320; c.height = 220;
+  const g = c.getContext('2d');
+  const grad = g.createLinearGradient(0,0,320,220);
+  const hues = [[150,45],[260,50],[30,55],[200,45]];
+  const [h,s] = hues[i % hues.length];
+  grad.addColorStop(0, `hsl(${h} ${s}% 28%)`); grad.addColorStop(1, `hsl(${h+40} ${s}% 16%)`);
+  g.fillStyle = grad; g.fillRect(0,0,320,220);
+  g.fillStyle = 'rgba(255,255,255,0.85)'; g.font = '600 20px -apple-system,sans-serif';
+  g.fillText(`示例截图 ${i+1}`, 20, 40);
+  g.strokeStyle = 'rgba(255,255,255,0.25)';
+  for (let y=70; y<200; y+=24) { g.beginPath(); g.moveTo(20,y); g.lineTo(300 - (y%3)*40, y); g.stroke(); }
+  return c.toDataURL('image/png');
+}
+document.getElementById('d-one').onclick = () => addImage(sampleImage(seq++), 148*1024);
+document.getElementById('d-many').onclick = () => { for (let k=0;k<4;k++) addImage(sampleImage(seq++), (90+k*37)*1024); };
+document.getElementById('d-clear').onclick = () => { attachments = []; strip.innerHTML = ''; refreshHud(); };
+
+// 发送:图片 + 文字进入用户消息气泡
+function send() {
+  const text = ta.value.trim();
+  if (!text && !attachments.length) return;
+  const msg = document.createElement('div');
+  msg.className = 'chat-msg user';
+  msg.innerHTML = '<div class="who">你</div>';
+  const body = document.createElement('div'); body.className = 'body';
+  if (attachments.length) {
+    const imgs = document.createElement('div'); imgs.className = 'msg-imgs';
+    for (const a of attachments) {
+      const im = document.createElement('img'); im.src = a.url; im.alt = '图片';
+      im.onclick = () => { lightboxImg.src = a.url; lightbox.classList.add('open'); };
+      imgs.appendChild(im);
+    }
+    body.appendChild(imgs);
+  }
+  if (text) body.appendChild(document.createTextNode(text));
+  msg.appendChild(body);
+  chat.appendChild(msg);
+  chat.scrollTop = chat.scrollHeight;
+  attachments = []; strip.innerHTML = ''; refreshHud();
+  ta.value = ''; grow();
+}
+document.getElementById('send').onclick = send;
+ta.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) { e.preventDefault(); send(); }
+});
+
+lightbox.onclick = () => lightbox.classList.remove('open');
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') lightbox.classList.remove('open'); });
+grow();
+</script>
+</body>
+</html>
