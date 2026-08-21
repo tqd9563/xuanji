@@ -1,6 +1,6 @@
 {
   "name": "xuanji-mobile",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "璇玑 Android 原生壳工程(Capacitor,远程加载 Tailscale Serve 暴露的璇玑 Web UI)",
   "private": true,
   "scripts": {
