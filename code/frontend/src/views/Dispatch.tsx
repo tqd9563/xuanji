@@ -504,6 +504,26 @@ export function Dispatch({ active }: { active: boolean }) {
     setSessCtx((prev) => (prev && prev.id === null ? { ...prev, id: d.sessionId } : prev));
   }, [d.sessionId]);
 
+  // 接回存活会话时垫入更早的历史对话:attach 回放的内存事件只覆盖后端本进程生命周期,
+  // 后端重启后续接过的会话再接回,重启前的上下文只存在于会话 jsonl 里(看板点击与刷新静默接回同走这里)。
+  // 去重按时间戳切:before(= dispatch 创建时刻)之后的消息已在内存事件流里,只垫之前的;
+  // 全新派发的会话没有更早历史(全部事件都晚于 before),过滤后为空,自动无操作。
+  useEffect(() => {
+    if (!d.attachedHistory) return;
+    const { sessionId, before } = d.attachedHistory;
+    void api
+      .replay(sessionId)
+      .then((r) => {
+        const cut = r.events.findIndex((ev) => {
+          const ts = parseTs((ev as { ts?: string }).ts);
+          return ts !== undefined && ts >= before;
+        });
+        const past = cut === -1 ? r.events : r.events.slice(0, cut);
+        if (past.length) d.seedHistory(replayToChat(past));
+      })
+      .catch(() => {}); // 会话记录被清理时垫不了历史,保持现状即可
+  }, [d.attachedHistory]);
+
   // 待办发起的会话:SDK 分配 sessionId(= 真的发出去了)后把这条待办转「进行中」并挂上锚点。
   // 只在拿到 sessionId 时回填,所以「开工后又没发」不会污染待办状态;完成与否仍由人手动勾。
   useEffect(() => {

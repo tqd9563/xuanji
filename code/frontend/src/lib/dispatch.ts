@@ -104,6 +104,10 @@ export function useDispatch() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
+  /** 接回存活会话时后端随 attached 事件下发的垫历史元信息:内存事件只覆盖后端本进程
+   *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
+   *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
+  const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
   const restoringRef = useRef(false);
@@ -160,6 +164,9 @@ export function useDispatch() {
       case 'attached':
         restoringRef.current = false;
         sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
+        if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
+          setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
+        }
         break;
       case 'init':
         setSessionId(String(e.sessionId));
@@ -455,6 +462,7 @@ export function useDispatch() {
     setModel(null);
     setCostUsd(0);
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
+    setAttachedHistory(null);
   }, [clearPendingDelta]);
 
   const pushNote = useCallback((text: string) => {
@@ -467,5 +475,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
+  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
 }

@@ -135,7 +135,8 @@ export class DispatchSession {
   private storage: Storage;
   readonly cwd: string;
   private name: string;
-  private resumeFrom: string | null;
+  /** 续接来源会话:sessionId 尚未 init 时,attach 垫历史用它定位 jsonl */
+  readonly resumeFrom: string | null;
   private fork: boolean;
   readonly startedAt = Date.now();
   /** 最近一次 status 事件,供会话看板注入实时状态 */
