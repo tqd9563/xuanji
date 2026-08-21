@@ -70,7 +70,7 @@ export async function startTodo(t: Todo) {
       const board = await api.sessions();
       const s = Object.values(board.columns).flat().find((x) => x.sessionId === t.sessionId);
       if (s?.dispatchId) {
-        setDispatchIntent({ attach: { dispatchId: s.dispatchId, cwd: s.cwd, name: s.name, project: s.project } });
+        setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
         location.hash = 'dispatch';
         return;
       }

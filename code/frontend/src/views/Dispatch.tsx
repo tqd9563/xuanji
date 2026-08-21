@@ -362,6 +362,9 @@ export function Dispatch({ active }: { active: boolean }) {
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
     }
     if (intent?.attach) {
+      // 接回 = 已浏览产出,立即标已读(同 applyResume)。派发页兜底的 markSeen 只在回合进行中生效,
+      // 接回一个已收尾的「验收中」会话不会触发,不在此标则角标切回看板依旧亮着。
+      markSeen(intent.attach.sessionId);
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
       resetHistoryBrowse();
