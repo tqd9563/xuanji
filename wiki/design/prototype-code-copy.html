@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 代码块复制按钮 原型</title>
+<style>
+/* ============================================================
+   以下为真实前端样式表 code/frontend/src/styles/index.css 全量内联,
+   保证原型与线上派发页视觉 1:1;新功能样式见文件底部「PROTO」区块。
+   ============================================================ */
 @import "tailwindcss";
 
 /* ============================================================
@@ -436,33 +447,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
 
-/* 代码块复制按钮。定位壳套在 pre 外面而不是 pre 自己:pre 横向滚动,
-   absolute 子元素会跟着滚走,按钮必须钉在可视区右上角。 */
-.codeblock { position: relative; margin: 0 0 10px; }
-.codeblock pre { margin: 0; }
-.copy-btn {
-  position: absolute; top: 6px; right: 6px;
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 8px; border-radius: var(--r-s);
-  font-family: var(--mono); font-size: 0.6875rem; line-height: 1;
-  color: var(--muted);
-  background: color-mix(in oklab, var(--surface-2) 85%, transparent);
-  border: 1px solid var(--line-soft);
-  opacity: 0;
-  transition: opacity 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
-}
-.copy-btn svg { width: 12px; height: 12px; flex: none; }
-.codeblock:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
-.copy-btn:hover { color: var(--ink); background: var(--hover); }
-.copy-btn.copied {
-  opacity: 1; color: var(--jade);
-  border-color: color-mix(in oklab, var(--jade) 35%, var(--line-soft));
-  background: var(--tint-jade);
-}
-/* 触屏无 hover 态,常显 */
-@media (hover: none) { .copy-btn { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .copy-btn { transition: none; } }
-
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
   position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
@@ -499,8 +483,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
-/* 搜索命中片段:玉色加粗,不加底色——底色会与 .rp-item.sel 的玉色描边环在同一行双重强调 */
-.rp-mark { color: var(--jade); font-weight: 600; }
 
 /* /wd·/model 模糊搜索弹窗(WdPalette,复用 rp-box/rp-list/rp-item;仅补搜索框与右侧完整值列) */
 .wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
@@ -532,25 +514,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   background: var(--surface-2); margin-bottom: 16px;
 }
 .notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
-
-/* ============ 消息发送时间(派发页聊天流 + 回放抽屉共用) ============ */
-/* 时间是元信息:落在 who(muted/jade)之下的 faint 层,mono + tabular-nums 保证
-   HH:MM 逐位对齐、分钟跳动不抖版。tool/raw 事件源数据无时间,不渲染也不占位。 */
-.msg-ts {
-  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
-  color: var(--faint); margin-left: 8px;
-  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-}
-/* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
-   靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
-.day-sep {
-  display: flex; align-items: center; gap: 12px;
-  margin: 22px 0 18px; color: var(--faint);
-  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-.day-sep::before, .day-sep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.day-sep:first-child { margin-top: 0; }
 
 /* 回放 */
 .replay-msg { margin-bottom: 18px; }
@@ -882,67 +845,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
-
-/* 粘贴图片附件条:在 textarea 上方、composer 边框之内——图片与文字视觉上同属一条待发消息。
-   缩略图 56px 方块 cover 裁切,多张换行不横滚(横滚会藏图,数量本就封顶 8 张)。 */
-.composer .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
-.composer.has-attach textarea { padding-top: 10px; } /* 附件条已给了呼吸感,顶部留白略收 */
-.attach-chip {
-  position: relative; width: 56px; height: 56px; flex: none;
-  border: 1px solid var(--line); border-radius: var(--r-s);
-  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
-  animation: chip-in 150ms var(--ease);
-}
-@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
-.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.attach-chip .rm {
-  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
-  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease); cursor: pointer;
-}
-.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
-/* 触屏无 hover:粗指针设备上 ✕ 常驻,否则图片没法移除 */
-@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
-
-/* 已发送消息里的图片:缩略图排在文字上方,点击开灯箱 */
-.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.chat-msg.user .msg-imgs { justify-content: flex-end; }
-.chat-msg .msg-imgs img {
-  width: 88px; height: 88px; object-fit: cover;
-  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
-}
-
-/* 灯箱:点缩略图看原图 */
-.lightbox {
-  position: fixed; inset: 0; z-index: var(--z-backdrop);
-  display: none; align-items: center; justify-content: center;
-  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
-}
-.lightbox.open { display: flex; }
-.lightbox img {
-  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
-  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
-}
-/* 高度跟随内容:由 Dispatch.tsx 的 growTa() 写 inline height(WebKit 尚不支持 field-sizing)。
-   下限 56px 与 TA_MIN_H 同值(改一处必须改另一处);上限取 12 行正文与 40vh 的小者,
-   触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
   padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
-  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
-  overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
-/* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
-.composer .grow-fade {
-  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--surface));
-  opacity: 0; transition: opacity 150ms var(--ease);
-}
-.composer.at-max .grow-fade { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 /* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
@@ -1636,3 +1543,205 @@ body.wall-glass .dd-menu {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+
+/* ============================================================
+   PROTO · 输入框粘贴图片
+   规则:
+   - 附件条(.attach-strip)出现在 textarea 上方、composer 边框之内:
+     图片与文字同属一次待发送的输入,放同一容器内视觉上才是"一条消息"
+   - 缩略图 56px 方块,object-fit:cover;数量多时换行,不横向滚动
+   - 每个缩略图右上角 ✕ 可移除;hover 才现出,不干扰扫视
+   - 缩略图入场 150ms 淡入微缩放,克制;reduced-motion 下自动禁用(全局规则已覆盖)
+   - 点缩略图开灯箱看原图(Esc / 点击任意处关闭)
+   - 发送后的用户消息里,图片以同规格缩略图排在文字上方
+   ============================================================ */
+.composer .attach-strip {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 12px 16px 0;
+}
+.composer .attach-strip:empty { display: none; }
+.attach-chip {
+  position: relative; width: 56px; height: 56px; flex: none;
+  border: 1px solid var(--line); border-radius: var(--r-s);
+  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
+  animation: chip-in 150ms var(--ease);
+}
+@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
+.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.attach-chip .rm {
+  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
+  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease);
+  cursor: pointer;
+}
+.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
+/* 触屏无 hover:粗指针设备上 ✕ 常驻 */
+@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
+
+/* textarea 上方有附件时,textarea 顶部留白略收(附件条已提供呼吸感) */
+.composer.has-attach textarea { padding-top: 10px; }
+
+/* 灯箱:点缩略图看原图 */
+.lightbox {
+  position: fixed; inset: 0; z-index: var(--z-backdrop);
+  display: none; align-items: center; justify-content: center;
+  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
+}
+.lightbox.open { display: flex; }
+.lightbox img {
+  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
+  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
+}
+
+/* 发送后的用户消息:图片缩略图排在文字上方,与气泡同宽约束 */
+.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.chat-msg.user .msg-imgs { justify-content: flex-end; }
+.chat-msg .msg-imgs img {
+  width: 88px; height: 88px; object-fit: cover;
+  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
+}
+
+/* ---- 原型页自身的演示外壳(非交付样式) ---- */
+.proto-note {
+  max-width: 960px; margin: 20px auto 0; padding: 12px 16px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  background: var(--surface-2); color: var(--muted); font-size: 0.8125rem; line-height: 1.6;
+}
+.proto-note b { color: var(--ink); }
+.proto-note .demo-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.proto-stage { max-width: 960px; margin: 12px auto 32px; height: min(78vh, 720px); display: flex; }
+.proto-stage .dispatch { flex: 1; display: flex; flex-direction: column; min-height: 0; height: auto; }
+.proto-hud { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-left: auto; }
+
+/* ============================================================
+   ▼▼▼ 本次新增:代码块复制按钮 ▼▼▼
+   实现时落到 index.css「Markdown 正文」区块;其余样式均为线上原样
+   ============================================================ */
+
+/* react-markdown 的 pre 外包一层 .codeblock 定位壳,按钮绝对定位其上。
+   不直接给 pre 做 relative:pre 自身横向滚动,子元素会跟着滚出可视区。 */
+.md .codeblock { position: relative; margin: 0 0 10px; }
+.md .codeblock pre { margin: 0; }
+
+.copy-btn {
+  position: absolute; top: 6px; right: 6px;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 8px; border-radius: var(--r-s);
+  font-family: var(--mono); font-size: 0.6875rem; line-height: 1;
+  color: var(--muted);
+  background: color-mix(in oklab, var(--surface-2) 85%, transparent);
+  border: 1px solid var(--line-soft);
+  opacity: 0;
+  transition: opacity 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
+}
+.copy-btn svg { width: 12px; height: 12px; flex: none; }
+.md .codeblock:hover .copy-btn,
+.copy-btn:focus-visible { opacity: 1; }
+.copy-btn:hover { color: var(--ink); background: var(--hover); }
+.copy-btn.copied {
+  opacity: 1; color: var(--jade);
+  border-color: color-mix(in oklab, var(--jade) 35%, var(--line-soft));
+  background: var(--tint-jade);
+}
+@media (hover: none) { .copy-btn { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .copy-btn { transition: none; } }
+</style>
+</head>
+<body>
+<div class="proto-note">
+  <b>原型 · 代码块复制按钮</b> —— Claude 回复中的代码块,<b>悬停右上角浮现「复制」</b>(触屏常显);
+  点击复制整段代码,按钮变玉色「已复制 ✓」,1.5 秒后还原。行内 <code style="font-family:var(--mono);font-size:0.75rem;">code</code> 不加按钮。
+  派发页与回放抽屉共用 <b>.md pre</b> 样式,一处生效两处可用。超宽代码块横向滚动时按钮钉在可视区右上角不跟滚。
+</div>
+
+<div class="proto-stage">
+<div class="dispatch">
+  <div class="chat" id="chat">
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">帮我看下防抖为什么不生效,顺便给个数据库迁移脚本</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="body md">
+        <p>问题在旧定时器没清理。修正后的实现:</p>
+        <div class="codeblock">
+          <pre><code>function debounce&lt;T extends (...args: any[]) =&gt; void&gt;(fn: T, wait = 200) {
+  let timer: ReturnType&lt;typeof setTimeout&gt; | null = null;
+  return (...args: Parameters&lt;T&gt;) =&gt; {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() =&gt; fn(...args), wait);
+  };
+}</code></pre>
+        </div>
+        <p>另外配置里补一行 <code>strict: true</code> 即可 —— 行内代码不出复制按钮。迁移脚本:</p>
+        <div class="codeblock">
+          <pre><code>ALTER TABLE sessions ADD COLUMN seen_at INTEGER;
+UPDATE sessions SET seen_at = strftime('%s','now') WHERE status = 'done';</code></pre>
+        </div>
+      </div>
+    </div>
+    <div class="chat-msg user">
+      <div class="who">你</div>
+      <div class="body">再给我一条能直接跑的派发 curl</div>
+    </div>
+    <div class="chat-msg">
+      <div class="who">Claude</div>
+      <div class="body md">
+        <p>这条超宽,横向滚动时注意按钮位置:</p>
+        <div class="codeblock">
+          <pre><code>curl -sS -X POST 'http://localhost:7777/api/sessions/dispatch' -H 'Content-Type: application/json' -d '{"project":"xuanji","prompt":"给代码块加复制按钮","model":"claude-fable-5","permissionMode":"acceptEdits"}' | jq '.sessionId'</code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="chat-status">
+    <span class="u-chips" style="display:flex;gap:10px;">
+      <span style="color:var(--muted)">Context 34%</span>
+      <span style="color:var(--muted)">Usage 51%</span>
+    </span>
+    <span class="cs-state" style="margin-left:auto;color:var(--jade)"><span class="cs-dot" style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--jade);margin-right:6px;"></span>就绪</span>
+  </div>
+
+  <div class="composer" id="composer">
+    <textarea id="ta" class="auto-grow" rows="2" placeholder="描述要派发的任务…"></textarea>
+    <div class="grow-fade"></div>
+    <div class="c-bar">
+      <button class="wrapup-btn"><span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span></button>
+      <span class="hint">Enter 发送 · Shift+Enter 换行</span>
+      <label class="bg-opt"><span class="switch"></span><span class="bg-opt-label">转后台(--bg)</span></label>
+      <button class="btn btn-primary send-btn"><span class="send-btn-label">发送</span></button>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const ICON_COPY = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 5.5v-2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1.5"/></svg>';
+const ICON_OK = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 8.5 6.5 12 13 4.5"/></svg>';
+
+document.querySelectorAll('.md .codeblock').forEach((block) => {
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.setAttribute('aria-label', '复制代码');
+  btn.innerHTML = ICON_COPY + '<span>复制</span>';
+  let timer = null;
+  btn.addEventListener('click', async () => {
+    const text = block.querySelector('pre code')?.textContent ?? '';
+    try { await navigator.clipboard.writeText(text); } catch {}
+    btn.classList.add('copied');
+    btn.innerHTML = ICON_OK + '<span>已复制</span>';
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = ICON_COPY + '<span>复制</span>';
+    }, 1500);
+  });
+  block.appendChild(btn);
+});
+</script>
+</body>
+</html>
