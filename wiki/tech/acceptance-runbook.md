@@ -218,48 +218,53 @@ interface RunbookRun {
 // RunbookTemplate items(节选)
 [
   { "id": "dev-env", "type": "service", "title": "启动本地前后端",
-    "command": "./scripts/local_test.sh",
-    "readiness": { "kind": "http", "url": "http://localhost:8000/health" },
-    "links": [{ "title": "本地前端", "url": "http://localhost:5173" }] },
+    "command": "./scripts/local_test.sh --no-open",
+    "readiness": { "kind": "http", "url": "http://localhost:48163/health", "timeoutSec": 90 },
+    "links": [{ "title": "本地前端(自动 dev 登录)",
+                "url": "http://localhost:48164/api/auth/dev-login?email=dev@lilithgames.com" }] },
   { "id": "seed", "type": "command", "title": "灌入线上数据",
     "command": "./scripts/local_seed.sh", "dependsOn": ["dev-env"],
     "params": [
       { "key": "env",   "label": "数据源", "type": "enum", "options": ["prod", "dev"],
         "default": "prod", "required": true, "flag": "--env" },
       { "key": "start", "label": "开始日期", "type": "date", "required": true, "flag": "--start" },
-      { "key": "end",   "label": "结束日期", "type": "date", "required": true, "flag": "--end" } ] },
-  { "id": "stop", "type": "cleanup", "title": "停止本地环境", "command": "./scripts/local_test.sh --stop" }
+      { "key": "end",   "label": "结束日期", "type": "date", "required": true, "flag": "--end" } ] }
 ]
 ```
+
+> **本项目没有 cleanup 项**:`local_test.sh` 并不存在 `--stop` 参数(初版设计文档凭印象写了一条,2026-08-27 建模板抄源头时才发现),它靠 `trap cleanup EXIT INT TERM` 自清理——面板停止/归档时对进程组发 SIGTERM 恰好触发它。**脚本已有优雅退出机制时不要再造 cleanup 项**,写一条不存在的命令只会报错。
 
 ```jsonc
 // 某次交付的 .xuanji/runbook.json
 { "schemaVersion": 1,
-  "templateRef": { "id": "tpl_baize_std", "version": 3 },
-  "paramValues": { "seed": { "start": "2026-08-20", "end": "2026-08-25" } },
+  "templateRef": { "id": "tpl_baize_web_std", "version": 1 },
+  "paramValues": { "seed": { "env": "prod", "start": "2026-08-20", "end": "2026-08-25" } },
   "notes": "重点看 8-22 当天 ROI 异动卡片的下钻是否带出素材维度" }
 ```
 
+> 端口/入口 URL 均为 `scripts/local_test.sh` 的真值(后端 48163、前端 48164,入口是种 Cookie 的 dev-login 而非根路径);`--no-open` 必须带,否则脚本自己弹浏览器(入口链接由面板给)。**初版文档这里凭印象写了 8000/5173 与根路径,全是错的**——模板值一律去脚本源头 grep。
 > `--env` 默认值必须显式写 `prod`:脚本自身的默认是 `dev`,而验收要看的是线上数据,漏了这个参数会拉到一份对不上的数据、把验收引向错误结论。这类**「脚本默认值 ≠ 验收所需值」的参数是模板最该固化的东西**——正是它让模板比每次手敲更可靠。
 > 就绪判定的具体 URL、stop 方式以 baize_web 实际脚本为准,入库前由 agent 起草 + 用户核对。
 
 ### deep_baize(模板 + 本次预置请求)
 
 ```jsonc
-// 模板:仅一条 service
+// 模板:仅一条 service(实际入库为 tpl_deep_baize_std)
 [ { "id": "serve", "type": "service", "title": "启动本地服务", "command": "make serve",
-    "readiness": { "kind": "port", "port": 8080 } } ]
+    "readiness": { "kind": "http", "url": "http://localhost:8080/", "timeoutSec": 120 } } ]
 
 // 实例 extraItems:本次验收要打的请求(origin=session,首次执行需确认)
-{ "templateRef": { "id": "tpl_deepbaize_std", "version": 1 },
+{ "templateRef": { "id": "tpl_deep_baize_std", "version": 2 },
   "extraItems": [
     { "id": "req-funnel", "type": "request", "origin": "session",
       "title": "漏斗分析接口:新增 step 过滤", "method": "POST",
-      "url": "http://localhost:8080/analyze_funnel_v2",
+      "url": "http://localhost:8080/analyze/funnel/v2",
       "body": "{ \"game\": \"afk2\", \"steps\": [\"login\", \"pay\"] }",
       "expect": "返回 steps 数组含转化率字段,且 step 顺序与请求一致",
       "dependsOn": ["serve"] } ] }
 ```
+
+> 两处易错(2026-08-27 建模板时踩到):① 接口路径是 `/analyze/funnel/v2`,不是 `/analyze_funnel_v2`——真实路径见 `app/routers/baize.py`(router 无 prefix),别凭印象拼形状;② **`PORT` 不要做成参数**:`flag: "PORT="` 会被拼成 `PORT=` 与 `8080` 两个 argv(make 变量语法要求单 token,须改用 `{{port}}` 占位符),且改端口后写死 8080 的就绪探测会失配——参数化前先确认它与就绪判定是否联动。
 
 ### xuanji(隔离预览 + 布尔参数 + 黑名单,dogfooding)
 
