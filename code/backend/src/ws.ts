@@ -17,6 +17,7 @@ import { canResume, createDispatch, getDispatch, parseEffort, type DispatchSessi
 import { bgDispatch } from './adapters/agents-cli.js';
 import type { Storage } from './storage/db.js';
 import { parseInlineImages } from './types.js';
+import { replayRunbookLogs, resolveRunbook, runItem, stopItem, subscribeRunbook } from './services/runbook.js';
 
 export function attachWs(server: Server, storage: Storage) {
   const changesWss = new WebSocketServer({ noServer: true });
@@ -73,6 +74,9 @@ export function attachWs(server: Server, storage: Storage) {
   dispatchWss.on('connection', (ws) => {
     let session: DispatchSession | null = null;
     let unsubscribe: (() => void) | null = null;
+    // 验收面板的订阅独立于派发会话:面板要在会话早已结束(review 态)时照样能用,
+    // 而 attach 依赖内存里活着的 DispatchSession。两者按 sessionId 各自订阅,互不牵连。
+    let rbUnsubscribe: (() => void) | null = null;
 
     const send = (obj: object) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
@@ -173,6 +177,39 @@ export function attachWs(server: Server, storage: Storage) {
               send({ ev: 'bg-dispatched', ok: r.ok, output: r.output });
               break;
             }
+            // ---------- 验收面板 ----------
+            case 'rb-watch': {
+              // 订阅某会话的面板事件并回放仍在跑的进程的日志尾巴(刷新页面不丢上下文)
+              const sid = String(msg.sessionId ?? '');
+              if (!sid) return send({ ev: 'rb-error', message: 'rb-watch 需要 sessionId' });
+              rbUnsubscribe?.();
+              rbUnsubscribe = subscribeRunbook(sid, send);
+              replayRunbookLogs(sid, send);
+              break;
+            }
+            case 'rb-run': {
+              const sid = String(msg.sessionId ?? '');
+              const itemId = String(msg.itemId ?? '');
+              const cwd = String(msg.cwd ?? '');
+              if (!sid || !itemId || !cwd) {
+                return send({ ev: 'rb-error', message: 'rb-run 需要 sessionId / itemId / cwd' });
+              }
+              // 清单每次现读:worktree 里的文件可能被返工的会话改过,不吃缓存
+              const rb = resolveRunbook(storage, sid, cwd);
+              const item = rb?.items.find((i) => i.id === itemId);
+              if (!item) return send({ ev: 'rb-error', sessionId: sid, itemId, message: '清单项不存在' });
+              const params = (msg.params ?? {}) as Record<string, string>;
+              const r = runItem({ storage, sessionId: sid, cwd, item, params, confirmed: !!msg.confirmed });
+              if (!r.ok) send({ ev: 'rb-error', sessionId: sid, itemId, message: r.reason ?? '执行失败' });
+              break;
+            }
+            case 'rb-stop': {
+              const sid = String(msg.sessionId ?? '');
+              const itemId = String(msg.itemId ?? '');
+              const r = stopItem(storage, sid, itemId);
+              if (!r.ok) send({ ev: 'rb-error', sessionId: sid, itemId, message: r.reason ?? '停止失败' });
+              break;
+            }
             default:
               send({ ev: 'error', message: `unknown op ${msg.op}` });
           }
@@ -184,6 +221,9 @@ export function attachWs(server: Server, storage: Storage) {
 
     ws.on('close', () => {
       unsubscribe?.();
+      rbUnsubscribe?.();
+      // 面板起的进程不随连接关闭而终止:它们的生命周期跟会话处置走(归档时统一收尾),
+      // 否则关个标签页就把正在验收的 dev server 杀了
       // 会话不随连接关闭而终止:刷新页面可 attach 回来;闲置会话由进程生命周期管理
     });
   });
