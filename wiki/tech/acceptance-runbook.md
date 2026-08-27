@@ -224,6 +224,8 @@ interface RunbookRun {
   { "id": "seed", "type": "command", "title": "灌入线上数据",
     "command": "./scripts/local_seed.sh", "dependsOn": ["dev-env"],
     "params": [
+      { "key": "env",   "label": "数据源", "type": "enum", "options": ["prod", "dev"],
+        "default": "prod", "required": true, "flag": "--env" },
       { "key": "start", "label": "开始日期", "type": "date", "required": true, "flag": "--start" },
       { "key": "end",   "label": "结束日期", "type": "date", "required": true, "flag": "--end" } ] },
   { "id": "stop", "type": "cleanup", "title": "停止本地环境", "command": "./scripts/local_test.sh --stop" }
@@ -238,6 +240,7 @@ interface RunbookRun {
   "notes": "重点看 8-22 当天 ROI 异动卡片的下钻是否带出素材维度" }
 ```
 
+> `--env` 默认值必须显式写 `prod`:脚本自身的默认是 `dev`,而验收要看的是线上数据,漏了这个参数会拉到一份对不上的数据、把验收引向错误结论。这类**「脚本默认值 ≠ 验收所需值」的参数是模板最该固化的东西**——正是它让模板比每次手敲更可靠。
 > 就绪判定的具体 URL、stop 方式以 baize_web 实际脚本为准,入库前由 agent 起草 + 用户核对。
 
 ### deep_baize(模板 + 本次预置请求)

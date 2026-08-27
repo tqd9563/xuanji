@@ -1616,6 +1616,8 @@ body.wall-glass .dd-menu {
 .rb-param label .req { color: var(--amber); }
 .rb-param .input { padding: 3px 8px; font-size: 0.75rem; font-family: var(--mono); }
 .rb-param input[type="date"].input { color-scheme: dark; width: 138px; }
+/* 枚举下拉:补回 select.input 被 .rb-param .input 覆盖掉的右侧留白(否则箭头压住文字) */
+.rb-param select.input { padding: 3px 26px 3px 8px; }
 
 /* 就绪后点亮的入口链接:玉色 wikilink 同族词汇 */
 .rb-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0 18px; }
@@ -1784,9 +1786,10 @@ const SCENARIOS = {
         links:[{t:'本地前端(dev 登录)', u:'http://localhost:48164/api/auth/dev-login?email=dev@lilithgames.com'}],
         logs:['[backend] uvicorn running on :48163','[frontend] vite dev server on :48164','[backend] health check ok'] },
       { id:'seed', type:'command', title:'灌入线上数据', cmd:'./scripts/local_seed.sh', dependsOn:'dev-env',
-        params:[{k:'start',label:'开始日期',type:'date',v:'2026-08-20',flag:'--start',req:true},
+        params:[{k:'env',label:'数据源',type:'enum',v:'prod',options:['prod','dev'],flag:'--env',req:true},
+                {k:'start',label:'开始日期',type:'date',v:'2026-08-20',flag:'--start',req:true},
                 {k:'end',label:'结束日期',type:'date',v:'2026-08-25',flag:'--end',req:true}],
-        logs:['pulling metrics 2026-08-20 → 2026-08-25 …','seeded 6 days · 3 games · 41,208 rows'] },
+        logs:['pulling metrics from prod 2026-08-20 → 2026-08-25 …','seeded 6 days · 3 games · 41,208 rows'] },
       { id:'stop', type:'cleanup', title:'停止本地环境', cmd:'./scripts/local_test.sh --stop', auto:true },
     ],
   },
@@ -1920,6 +1923,9 @@ function render(){
           p.type === 'boolean'
           ? `<span class="rb-param"><input type="checkbox" id="p-${it.id}-${p.k}" ${p.v?'checked':''}>
              <label for="p-${it.id}-${p.k}">${esc(p.label)}</label></span>`
+          : p.type === 'enum'
+          ? `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
+             <select class="input" id="p-${it.id}-${p.k}">${p.options.map(o=>`<option ${o===p.v?'selected':''}>${esc(o)}</option>`).join('')}</select></span>`
           : `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
            <input class="input" type="${p.type}" id="p-${it.id}-${p.k}" value="${esc(p.v)}"></span>`).join('') + `</div>`;
       }
