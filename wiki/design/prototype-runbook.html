@@ -1771,9 +1771,9 @@ const SCENARIOS = {
     notes: '重点看 <b>8-22 当天 ROI 异动卡片</b>的下钻是否带出素材维度,数值与总览页口径一致。',
     items: [
       { id:'dev-env', type:'service', title:'启动本地前后端', cmd:'./scripts/local_test.sh',
-        readiness:'http://localhost:8000/health',
-        links:[{t:'本地前端', u:'http://localhost:5173'}],
-        logs:['[backend] uvicorn running on :8000','[frontend] vite dev server on :5173','[backend] health check ok'] },
+        readiness:'http://localhost:48163/health',
+        links:[{t:'本地前端', u:'http://localhost:48164'}],
+        logs:['[backend] uvicorn running on :48163','[frontend] vite dev server on :48164','[backend] health check ok'] },
       { id:'seed', type:'command', title:'灌入线上数据', cmd:'./scripts/local_seed.sh', dependsOn:'dev-env',
         params:[{k:'start',label:'开始日期',type:'date',v:'2026-08-20',flag:'--start',req:true},
                 {k:'end',label:'结束日期',type:'date',v:'2026-08-25',flag:'--end',req:true}],
