@@ -16,8 +16,9 @@ import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../ser
 import { todayUsage } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
+import { liveEnvironments, resolveRunbook, resolveSessionCleanup, runRequest } from '../services/runbook.js';
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
-import type { SessionState, WorklogCard } from '../types.js';
+import type { RunbookItem, RunbookTemplate, SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
 
 const DAY = 86_400_000;
@@ -270,7 +271,18 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
       return c.json({ error: '运行中/等待输入的会话不能归档' }, 409);
     }
     storage.archiveSession(sessionId, found.lastOutputAt);
-    return c.json({ ok: true });
+    // 验收通过 = 归档:先跑清单里的 cleanup 项,再兜底停掉本会话名下仍活着的验收环境。
+    // 放在这里而不是前端,是因为归档有多个入口(拖拽/按钮/快捷键),收尾必须在唯一的消费侧生效
+    // ——与「角标 markSeen 写在消费侧」同一教训(memory: unread-badge-multi-entry-paths)。
+    let cleaned: string[] = [];
+    if (found.cwd) {
+      try {
+        cleaned = await resolveSessionCleanup(storage, sessionId, found.cwd);
+      } catch (e) {
+        console.warn(`[runbook] 归档收尾失败 ${sessionId}:`, e);
+      }
+    }
+    return c.json({ ok: true, cleaned });
   });
 
   /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
@@ -477,6 +489,83 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   /** 一次性任务取消(尚未触发时);周期任务用 /pause */
   api.post('/schedules/:id/cancel', async (c) => {
     if (!scheduler.cancel(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
+    return c.json({ ok: true });
+  });
+
+  // ---------- 验收面板(Acceptance Runbook)----------
+
+  /** 会话在看板上的记录:面板所有操作都要先拿到它的 cwd(清单文件与执行目录都由它定) */
+  const findOnBoard = async (sessionId: string) => {
+    const board = await sessionsBoard(storage);
+    return (Object.keys(board.columns) as SessionState[])
+      .flatMap((k) => board.columns[k])
+      .find((s) => s.sessionId === sessionId);
+  };
+
+  /**
+   * 某会话的验收面板数据。404 与「没有清单」是两回事:
+   * 会话不在看板上才 404;有会话但没清单返回 {runbook:null},前端据此不渲染面板(退化路径)。
+   */
+  api.get('/sessions/:sessionId/runbook', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const found = await findOnBoard(sessionId);
+    if (!found?.cwd) return c.json({ error: '会话不在看板上' }, 404);
+    return c.json({ runbook: resolveRunbook(storage, sessionId, found.cwd) });
+  });
+
+  /** 执行预置 HTTP 请求。不走 WS:它是一问一答,没有流式输出 */
+  api.post('/sessions/:sessionId/runbook/request', async (c) => {
+    const sessionId = c.req.param('sessionId');
+    if (!/^[0-9a-f-]{8,64}$/i.test(sessionId)) return c.json({ error: 'bad sessionId' }, 400);
+    const body = (await c.req.json().catch(() => ({}))) as { itemId?: string; confirmed?: boolean };
+    const found = await findOnBoard(sessionId);
+    if (!found?.cwd) return c.json({ error: '会话不在看板上' }, 404);
+    const rb = resolveRunbook(storage, sessionId, found.cwd);
+    const item = rb?.items.find((i) => i.id === body.itemId && i.type === 'request');
+    if (!item) return c.json({ error: '请求项不存在' }, 404);
+    const r = await runRequest(item, body.confirmed);
+    return c.json(r, r.ok ? 200 : 400);
+  });
+
+  /** 仪表盘「运行中的验收环境」:跨会话列出仍活着的 service,防止攒僵尸进程占端口 */
+  api.get('/runbook/live', (c) => c.json({ items: liveEnvironments() }));
+
+  /** 项目级模板列表(?project=<真实路径>);不带 project 返回全部 */
+  api.get('/runbook/templates', (c) => {
+    const project = c.req.query('project');
+    return c.json({ templates: storage.listRunbookTemplates(project || undefined) });
+  });
+
+  /**
+   * 新建/更新模板。version 由后端递增而非调用方传:
+   * 实例按 (id, version) 锁定引用,版本号是这套引用的锚,不能让调用方自己编。
+   */
+  api.put('/runbook/templates/:id', async (c) => {
+    const id = c.req.param('id');
+    const body = (await c.req.json().catch(() => ({}))) as Partial<RunbookTemplate>;
+    if (!body.project || !body.name || !Array.isArray(body.items)) {
+      return c.json({ error: '需要 project / name / items' }, 400);
+    }
+    const prev = storage.getRunbookTemplate(id);
+    const now = Date.now();
+    const tpl: RunbookTemplate = {
+      id,
+      project: body.project,
+      name: body.name,
+      version: (prev?.version ?? 0) + 1,
+      status: body.status ?? prev?.status ?? 'draft',
+      source: body.source ?? prev?.source ?? 'user',
+      items: (body.items as RunbookItem[]).map((i) => ({ ...i, origin: 'template' as const })),
+      createdAt: prev?.createdAt ?? now,
+      updatedAt: now,
+    };
+    storage.upsertRunbookTemplate(tpl);
+    return c.json({ ok: true, template: tpl });
+  });
+
+  api.delete('/runbook/templates/:id', (c) => {
+    storage.deleteRunbookTemplate(c.req.param('id'));
     return c.json({ ok: true });
   });
 

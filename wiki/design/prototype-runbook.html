@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 验收面板(Acceptance Runbook)原型</title>
+<style>
+/* ============================================================
+   以下为真实前端样式表 code/frontend/src/styles/index.css 全量内联,
+   保证原型与线上派发页视觉 1:1;新功能样式见文件底部「PROTO」区块。
+   ============================================================ */
 @import "tailwindcss";
 
 /* ============================================================
@@ -436,33 +447,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
 
-/* 代码块复制按钮。定位壳套在 pre 外面而不是 pre 自己:pre 横向滚动,
-   absolute 子元素会跟着滚走,按钮必须钉在可视区右上角。 */
-.codeblock { position: relative; margin: 0 0 10px; }
-.codeblock pre { margin: 0; }
-.copy-btn {
-  position: absolute; top: 6px; right: 6px;
-  display: inline-flex; align-items: center; gap: 5px;
-  padding: 4px 8px; border-radius: var(--r-s);
-  font-family: var(--mono); font-size: 0.6875rem; line-height: 1;
-  color: var(--muted);
-  background: color-mix(in oklab, var(--surface-2) 85%, transparent);
-  border: 1px solid var(--line-soft);
-  opacity: 0;
-  transition: opacity 150ms var(--ease), color 150ms var(--ease), background 150ms var(--ease);
-}
-.copy-btn svg { width: 12px; height: 12px; flex: none; }
-.codeblock:hover .copy-btn, .copy-btn:focus-visible { opacity: 1; }
-.copy-btn:hover { color: var(--ink); background: var(--hover); }
-.copy-btn.copied {
-  opacity: 1; color: var(--jade);
-  border-color: color-mix(in oklab, var(--jade) 35%, var(--line-soft));
-  background: var(--tint-jade);
-}
-/* 触屏无 hover 态,常显 */
-@media (hover: none) { .copy-btn { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .copy-btn { transition: none; } }
-
 /* 应用内确认框(Pake/Tauri WKWebView 不支持 window.confirm) */
 .confirm-mask {
   position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
@@ -499,8 +483,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
 .rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
 .rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
-/* 搜索命中片段:玉色加粗,不加底色——底色会与 .rp-item.sel 的玉色描边环在同一行双重强调 */
-.rp-mark { color: var(--jade); font-weight: 600; }
 
 /* /wd·/model 模糊搜索弹窗(WdPalette,复用 rp-box/rp-list/rp-item;仅补搜索框与右侧完整值列) */
 .wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
@@ -532,25 +514,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   background: var(--surface-2); margin-bottom: 16px;
 }
 .notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
-
-/* ============ 消息发送时间(派发页聊天流 + 回放抽屉共用) ============ */
-/* 时间是元信息:落在 who(muted/jade)之下的 faint 层,mono + tabular-nums 保证
-   HH:MM 逐位对齐、分钟跳动不抖版。tool/raw 事件源数据无时间,不渲染也不占位。 */
-.msg-ts {
-  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
-  color: var(--faint); margin-left: 8px;
-  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
-}
-/* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
-   靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
-.day-sep {
-  display: flex; align-items: center; gap: 12px;
-  margin: 22px 0 18px; color: var(--faint);
-  font-family: var(--mono); font-size: 0.6875rem; letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-}
-.day-sep::before, .day-sep::after { content: ""; flex: 1; height: 1px; background: var(--line-soft); }
-.day-sep:first-child { margin-top: 0; }
 
 /* 回放 */
 .replay-msg { margin-bottom: 18px; }
@@ -882,67 +845,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 
 .composer { margin-top: 6px; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--surface); transition: border-color 150ms var(--ease); }
 .composer:focus-within { border-color: var(--jade); }
-
-/* 粘贴图片附件条:在 textarea 上方、composer 边框之内——图片与文字视觉上同属一条待发消息。
-   缩略图 56px 方块 cover 裁切,多张换行不横滚(横滚会藏图,数量本就封顶 8 张)。 */
-.composer .attach-strip { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 0; }
-.composer.has-attach textarea { padding-top: 10px; } /* 附件条已给了呼吸感,顶部留白略收 */
-.attach-chip {
-  position: relative; width: 56px; height: 56px; flex: none;
-  border: 1px solid var(--line); border-radius: var(--r-s);
-  overflow: hidden; background: var(--surface-2); cursor: zoom-in;
-  animation: chip-in 150ms var(--ease);
-}
-@keyframes chip-in { from { opacity: 0; transform: scale(0.92); } }
-.attach-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.attach-chip .rm {
-  position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
-  display: flex; align-items: center; justify-content: center;
-  border-radius: 50%; background: oklch(0.145 0.006 120 / 0.72); color: var(--ink);
-  font-size: 0.625rem; line-height: 1; opacity: 0; transition: opacity 120ms var(--ease); cursor: pointer;
-}
-.attach-chip:hover .rm, .attach-chip .rm:focus-visible { opacity: 1; }
-/* 触屏无 hover:粗指针设备上 ✕ 常驻,否则图片没法移除 */
-@media (pointer: coarse) { .attach-chip .rm { opacity: 1; } }
-
-/* 已发送消息里的图片:缩略图排在文字上方,点击开灯箱 */
-.chat-msg .msg-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.chat-msg.user .msg-imgs { justify-content: flex-end; }
-.chat-msg .msg-imgs img {
-  width: 88px; height: 88px; object-fit: cover;
-  border: 1px solid var(--line); border-radius: var(--r-s); cursor: zoom-in;
-}
-
-/* 灯箱:点缩略图看原图 */
-.lightbox {
-  position: fixed; inset: 0; z-index: var(--z-backdrop);
-  display: none; align-items: center; justify-content: center;
-  background: oklch(0.145 0.006 120 / 0.82); cursor: zoom-out;
-}
-.lightbox.open { display: flex; }
-.lightbox img {
-  max-width: 88vw; max-height: 88vh; border-radius: var(--r-m);
-  border: 1px solid var(--line); box-shadow: 0 24px 64px oklch(0 0 0 / 0.5);
-}
-/* 高度跟随内容:由 Dispatch.tsx 的 growTa() 写 inline height(WebKit 尚不支持 field-sizing)。
-   下限 56px 与 TA_MIN_H 同值(改一处必须改另一处);上限取 12 行正文与 40vh 的小者,
-   触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
   padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
-  max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
-  overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
-/* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
-.composer .grow-fade {
-  height: 14px; margin-top: -14px; position: relative; pointer-events: none;
-  background: linear-gradient(to bottom, transparent, var(--surface));
-  opacity: 0; transition: opacity 150ms var(--ease);
-}
-.composer.at-max .grow-fade { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
 /* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
@@ -1637,9 +1544,10 @@ body.wall-glass .dd-menu {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
+
 /* ============================================================
-   验收面板(Acceptance Runbook)
-   设计依据:wiki/tech/acceptance-runbook.md;原型 wiki/design/prototype-runbook.html
+   PROTO · 验收面板(Acceptance Runbook)
+   设计依据:wiki/tech/acceptance-runbook.md
    规则:
    - 面板挂在「待验收」会话的消息区与状态条之间:它是验收阶段的常驻工具,
      不是一条消息;可折叠,折叠后只剩一行头部
@@ -1785,3 +1693,446 @@ body.wall-glass .dd-menu {
   .rb-params { margin-left: 0; }
   .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
 }
+
+/* ---- 原型页自身的演示外壳(非交付样式) ---- */
+.proto-note {
+  max-width: 960px; margin: 20px auto 0; padding: 12px 16px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  background: var(--surface-2); color: var(--muted); font-size: 0.8125rem; line-height: 1.6;
+}
+.proto-note b { color: var(--ink); }
+.proto-note .demo-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+.proto-note .demo-btns .btn.on { border-color: var(--jade); color: var(--jade); background: var(--tint-jade); }
+.proto-stage { max-width: 960px; margin: 12px auto 32px; height: min(82vh, 760px); display: flex; }
+.proto-stage .dispatch { flex: 1; display: flex; flex-direction: column; min-height: 0; min-width: 0; height: auto; }
+</style>
+</head>
+<body>
+<div class="proto-note">
+  <b>原型 · 验收面板(Acceptance Runbook)</b> —— 「待验收」会话详情页里,消息区与输入框之间出现验收面板:
+  模板项(启动环境/灌数据/收尾)点按钮即执行,<b>日期参数由会话预填、可改</b>;会话生成的项(本次要打的请求)
+  首次执行弹完整命令确认。点「启动」体验状态灯流转与入口点亮;验收完在下方输入框直接回「验收通过」。
+  <div class="demo-btns">
+    场景:
+    <button class="btn btn-sm on" data-sc="baize">baize_web(模板+参数)</button>
+    <button class="btn btn-sm" data-sc="deep">deep_baize(模板+预置请求)</button>
+    <button class="btn btn-sm" data-sc="xuanji">xuanji(隔离预览+黑名单)</button>
+    <button class="btn btn-sm" data-sc="none">antifraud_skills(无清单,退化)</button>
+  </div>
+</div>
+
+<div class="proto-stage">
+<div class="dispatch">
+  <div class="chat" id="chat"></div>
+
+  <div class="runbook open" id="runbook" hidden>
+    <button class="rb-head" id="rb-toggle" aria-expanded="true">
+      <span class="rb-label">验收面板</span>
+      <span class="rb-tpl" id="rb-tpl"></span>
+      <span class="rb-sum" id="rb-sum"></span>
+      <span class="chev">▾</span>
+    </button>
+    <div class="rb-body">
+      <div class="rb-notes" id="rb-notes"></div>
+      <div id="rb-items"></div>
+    </div>
+  </div>
+
+  <div class="chat-status">
+    <span class="u-chips" style="display:flex;gap:10px;">
+      <span style="color:var(--muted)">Context 41%</span>
+      <span style="color:var(--muted)">Usage 58%</span>
+    </span>
+    <span class="cs-state" style="margin-left:auto;color:var(--violet)"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--violet);margin-right:6px;"></span>待验收</span>
+  </div>
+
+  <div class="composer" id="composer">
+    <textarea id="ta" rows="2" placeholder="验收通过 / 描述要返工的问题…"></textarea>
+    <div class="c-bar">
+      <button class="wrapup-btn"><span class="flag">⚑</span>任务总结<span class="kbd">⌘⏎</span></button>
+      <span class="hint">Enter 发送 · Shift+Enter 换行</span>
+      <button class="btn btn-primary send-btn" id="send"><span class="send-btn-label">发送</span></button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- extraItems 首次执行确认(复用应用内确认框) -->
+<div class="confirm-mask" id="cf-mask" hidden>
+  <div class="confirm-box" role="dialog" aria-modal="true" aria-labelledby="cf-title">
+    <div class="c-title" id="cf-title"><span class="rb-origin">会话生成</span>确认执行</div>
+    <div class="c-sub">这一项由本次派发会话生成、未经模板入库,首次执行前请核对完整内容;同一会话内再次执行不再确认。</div>
+    <div class="cmd-block" id="cf-cmd"></div>
+    <div class="confirm-actions">
+      <button class="btn" id="cf-cancel">取消</button>
+      <button class="btn btn-primary" id="cf-ok">确认执行</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- mock 数据(与 acceptance-runbook.md §7 示例同源) ---------------- */
+const SCENARIOS = {
+  baize: {
+    task: '白泽日报页:异动卡片下钻增加素材维度切片,ROI 口径与总览页对齐',
+    delivery: '开发完成:下钻抽屉新增「素材」tab,ROI 取数改走 overview 同一 SQL 模板,vitest 87 passed、tsc/eslint 干净。请按面板启动本地环境验收,重点看 8-22 当天 ROI 异动卡片的下钻。',
+    tpl: '标准验收 v3',
+    notes: '重点看 <b>8-22 当天 ROI 异动卡片</b>的下钻是否带出素材维度,数值与总览页口径一致。',
+    items: [
+      { id:'dev-env', type:'service', title:'启动本地前后端', cmd:'./scripts/local_test.sh',
+        readiness:'http://localhost:48163/health',
+        links:[{t:'本地前端(dev 登录)', u:'http://localhost:48164/api/auth/dev-login?email=dev@lilithgames.com'}],
+        logs:['[backend] uvicorn running on :48163','[frontend] vite dev server on :48164','[backend] health check ok'] },
+      { id:'seed', type:'command', title:'灌入线上数据', cmd:'./scripts/local_seed.sh', dependsOn:'dev-env',
+        params:[{k:'env',label:'数据源',type:'enum',v:'prod',options:['prod','dev'],flag:'--env',req:true},
+                {k:'start',label:'开始日期',type:'date',v:'2026-08-20',flag:'--start',req:true},
+                {k:'end',label:'结束日期',type:'date',v:'2026-08-25',flag:'--end',req:true}],
+        logs:['pulling metrics from prod 2026-08-20 → 2026-08-25 …','seeded 6 days · 3 games · 41,208 rows'] },
+      { id:'stop', type:'cleanup', title:'停止本地环境', cmd:'./scripts/local_test.sh --stop', auto:true },
+    ],
+  },
+  deep: {
+    task: 'deep_baize:漏斗分析接口支持 step 级过滤参数',
+    delivery: '开发完成:analyze_funnel_v2 新增 steps 数组参数,兼容旧调用,vitest 32 passed。面板里预置了本次验收要打的请求,起服务后直接发送比对响应。',
+    tpl: '标准验收 v1',
+    notes: '起 <b>make serve</b> 后发送预置请求;探索式调参仍走 Postman,此处只覆盖本次验收点。',
+    items: [
+      { id:'serve', type:'service', title:'启动本地服务', cmd:'make serve', readiness:'port 8080',
+        links:[], logs:['building …','deep-baize listening on :8080'] },
+      { id:'req-funnel', type:'request', origin:'session', title:'漏斗分析:新增 step 过滤', dependsOn:'serve',
+        method:'POST', url:'http://localhost:8080/analyze_funnel_v2',
+        body:'{\n  "game": "afk2",\n  "steps": ["login", "pay"]\n}',
+        expect:'返回 steps 数组含转化率字段,且 step 顺序与请求一致',
+        resp:'{\n  "code": 0,\n  "steps": [\n    { "name": "login", "uv": 182034, "cvr": 1.0 },\n    { "name": "pay",   "uv": 12881,  "cvr": 0.0708 }\n  ]\n}' },
+      { id:'req-compat', type:'request', origin:'session', title:'旧调用兼容:不带 steps', dependsOn:'serve',
+        method:'POST', url:'http://localhost:8080/analyze_funnel_v2',
+        body:'{ "game": "afk2" }',
+        expect:'与线上现行为一致,返回默认全漏斗',
+        resp:'{\n  "code": 0,\n  "steps": [ …默认 5 步全漏斗… ]\n}' },
+    ],
+  },
+  xuanji: {
+    task: '璇玑:会话看板卡片支持按项目筛选',
+    delivery: '开发完成:看板列头新增项目筛选下拉,vitest 40 passed、tsc/eslint/build 干净。已在 worktree 内过完质量门,请起隔离预览环境验收;改动要在常驻实例生效需你在终端跑 restart.sh(派发会话不得自斩)。',
+    tpl: '预览验收 v1',
+    notes: '预览环境端口自动顺延(永不碰 :7777 常驻后端),数据是宿主库快照,归档/挂起随便点、<b>不回流生产</b>。',
+    items: [
+      { id:'preview', type:'service', title:'启动隔离预览环境', cmd:'./preview.sh',
+        readiness:'http://127.0.0.1:37777/api/health',
+        params:[{k:'keepdb',label:'复用上轮快照(--keep-db)',type:'boolean',v:false,flag:'--keep-db'}],
+        links:[{t:'验收地址', u:'http://localhost:35173'}],
+        logs:['» 准备数据快照…','  已快照宿主库 → .preview/xuanji.db(验收中的写入不会回流生产)','» 启动后端(:37777)…','  ✓ 后端就绪','» 启动前端 dev server(:35173)…','━━━━━━━━━━━━━━━━━━━━━━━','  验收地址   http://localhost:35173','  分支       feature/board-project-filter'] },
+      { id:'restart', type:'command', origin:'session', title:'重启常驻后端使改动生效', cmd:'./restart.sh',
+        blocked:'命中执行层黑名单(防自斩铁律):restart.sh 会重启璇玑宿主后端,杀死本会话;请在终端手动执行' },
+      { id:'stop', type:'cleanup', title:'停止预览环境并清理临时数据', cmd:'./preview.sh --stop', auto:true },
+    ],
+  },
+  none: {
+    task: 'antifraud_skills:jueming 批量扫描输出补充关联实体计数',
+    delivery: '开发完成:报告尾部新增关联实体计数表,skill 自测通过(3 个样例 UID 输出比对无 diff)。本项目无本地服务,直接看会话里的自测输出即可,通过请直接回复。',
+    items: null, // 无清单 → 面板不出现
+  },
+};
+
+/* ---------------- 渲染 ---------------- */
+const chat = document.getElementById('chat');
+const panel = document.getElementById('runbook');
+const itemsEl = document.getElementById('rb-items');
+const state = {};       // itemId → { status, confirmed }
+let cur = 'baize';
+
+function esc(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function resolvedCmd(it){
+  if (!it.params) return esc(it.cmd);
+  const parts = it.params.map(p => {
+    const input = document.getElementById('p-'+it.id+'-'+p.k);
+    if (p.type === 'boolean'){
+      const on = input ? input.checked : p.v;
+      return on ? `<span class="p">${esc(p.flag)}</span>` : '';
+    }
+    const v = input ? input.value : p.v;
+    return `${esc(p.flag)} <span class="p">${esc(v)}</span>`;
+  }).filter(Boolean);
+  return esc(it.cmd) + (parts.length ? ' ' + parts.join(' ') : '');
+}
+
+function depReady(it){
+  return !it.dependsOn || state[it.dependsOn]?.status === 'ready' || state[it.dependsOn]?.status === 'ok';
+}
+
+function stateText(it){
+  const s = state[it.id]?.status || 'idle';
+  const map = { idle: it.type==='service' ? '未启动' : '', starting:'启动中…', running:'执行中…',
+                ready: it.type==='service' ? '就绪' : '', ok: it.type==='request' ? '已响应' : '完成 · exit 0', failed:'失败', exited:'已退出' };
+  if (s === 'idle' && it.dependsOn && !depReady(it)) return '等待 ' + (SCENARIOS[cur].items.find(x=>x.id===it.dependsOn)?.title || it.dependsOn);
+  return map[s] ?? '';
+}
+
+function render(){
+  const sc = SCENARIOS[cur];
+  chat.innerHTML =
+    `<div class="chat-msg user"><div class="who">你</div><div class="body">${esc(sc.task)}</div></div>` +
+    `<div class="chat-msg"><div class="who">Claude</div><div class="body md"><p>${esc(sc.delivery)}</p></div></div>`;
+
+  if (!sc.items) { panel.hidden = true; return; }   // 退化:无清单不出面板
+  panel.hidden = false;
+  document.getElementById('rb-tpl').textContent = sc.tpl;
+  document.getElementById('rb-notes').innerHTML = '验收要点:' + sc.notes;
+
+  itemsEl.innerHTML = '';
+  for (const it of sc.items){
+    const s = state[it.id] ?? (state[it.id] = { status:'idle', confirmed:false });
+    const div = document.createElement('div');
+    const wait = it.dependsOn && !depReady(it) && s.status==='idle';
+    div.className = 'rb-item' + (it.type==='cleanup' ? ' cleanup' : '') + (wait ? ' dep-wait' : '');
+    div.id = 'it-' + it.id;
+
+    if (it.type === 'cleanup'){
+      div.innerHTML = `<span class="rb-title">${esc(it.title)}</span>
+        <span class="rb-cmd" title="${esc(it.cmd)}">${esc(it.cmd)}</span>
+        <span class="auto-note">验收通过 / 归档时自动执行</span>
+        <span class="rb-actions"><button class="btn btn-sm" data-act="cleanup">执行</button></span>`;
+      itemsEl.appendChild(div); bind(div, it); continue;
+    }
+
+    const dotCls = { idle: wait?'':'', starting:'starting', running:'running', ready:'ready', ok:'ok', failed:'failed', exited:'exited' }[s.status] || '';
+    let head = `<div class="rb-row">
+      <span class="rb-dot ${dotCls}" id="dot-${it.id}"></span>`;
+    if (it.type === 'request')
+      head += `<span class="rb-method">${it.method}</span><span class="rb-title">${esc(it.title)}</span>`;
+    else
+      head += `<span class="rb-title">${esc(it.title)}</span>`;
+    if (it.origin === 'session') head += `<span class="rb-origin" title="本次会话生成,未经模板入库;首次执行需确认">会话生成</span>`;
+    head += `<span class="rb-state ${s.status}" id="st-${it.id}">${stateText(it)}</span>
+      <span class="rb-actions" id="act-${it.id}"></span></div>`;
+
+    let bodyHtml = '';
+    if (it.type === 'request'){
+      bodyHtml += `<div class="rb-cmd" title="${esc(it.url)}">${esc(it.url)}</div>`;
+      bodyHtml += `<div class="rb-out" id="out-${it.id}"><button class="rb-out-head"><span class="chev">▸</span>请求 body</button><pre>${esc(it.body)}</pre></div>`;
+      bodyHtml += `<div class="rb-expect"><b>预期:</b>${esc(it.expect)}</div>`;
+      bodyHtml += `<div class="rb-resp-meta" id="resp-meta-${it.id}" hidden></div>`;
+      bodyHtml += `<div class="rb-out open" id="resp-${it.id}" hidden><button class="rb-out-head"><span class="chev">▸</span>响应</button><pre id="resp-pre-${it.id}"></pre></div>`;
+    } else {
+      bodyHtml += `<div class="rb-cmd" id="cmd-${it.id}">${resolvedCmd(it)}</div>`;
+      if (it.params){
+        bodyHtml += `<div class="rb-params">` + it.params.map(p =>
+          p.type === 'boolean'
+          ? `<span class="rb-param"><input type="checkbox" id="p-${it.id}-${p.k}" ${p.v?'checked':''}>
+             <label for="p-${it.id}-${p.k}">${esc(p.label)}</label></span>`
+          : p.type === 'enum'
+          ? `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
+             <select class="input" id="p-${it.id}-${p.k}">${p.options.map(o=>`<option ${o===p.v?'selected':''}>${esc(o)}</option>`).join('')}</select></span>`
+          : `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
+           <input class="input" type="${p.type}" id="p-${it.id}-${p.k}" value="${esc(p.v)}"></span>`).join('') + `</div>`;
+      }
+      if (it.blocked) bodyHtml += `<div class="rb-blocked">⛔ ${esc(it.blocked)}</div>`;
+      if (it.links) bodyHtml += `<div class="rb-links ${s.status==='ready'?'':'off'}" id="lk-${it.id}">` +
+        it.links.map(l=>`<a href="${l.u}" target="_blank" rel="noreferrer">↗ ${esc(l.t)} <span style="color:var(--faint)">${esc(l.u)}</span></a>`).join('') + `</div>`;
+      bodyHtml += `<div class="rb-out" id="out-${it.id}"><button class="rb-out-head"><span class="chev">▸</span>${it.type==='service'?'日志':'输出'}</button><pre id="log-${it.id}"></pre></div>`;
+    }
+    div.innerHTML = head + bodyHtml;
+    itemsEl.appendChild(div);
+    bind(div, it);
+  }
+  refreshSummary();
+}
+
+function bind(div, it){
+  // 折叠块开合
+  div.querySelectorAll('.rb-out-head').forEach(b => b.onclick = () => b.parentElement.classList.toggle('open'));
+  // 参数改动 → 重算插值命令
+  if (it.params) it.params.forEach(p => {
+    const input = div.querySelector('#p-'+it.id+'-'+p.k);
+    if (input) input.oninput = input.onchange = () => { document.getElementById('cmd-'+it.id).innerHTML = resolvedCmd(it); };
+  });
+  renderActions(it);
+}
+
+function renderActions(it){
+  const box = document.getElementById('act-'+it.id);
+  const s = state[it.id];
+  if (it.type === 'cleanup'){
+    const btn = itemsEl.querySelector('#it-'+it.id+' [data-act]');
+    if (btn) btn.onclick = () => { toast('已执行收尾:' + it.cmd); stopAll(); };
+    return;
+  }
+  if (!box) return;
+  box.innerHTML = '';
+  const wait = it.dependsOn && !depReady(it);
+  if (it.type === 'service'){
+    if (s.status === 'ready' || s.status === 'starting'){
+      const b = mkBtn('停止', 'btn btn-sm btn-danger');
+      b.onclick = () => setStatus(it, 'exited');
+      box.appendChild(b);
+    } else {
+      const b = mkBtn(s.status==='exited'?'重新启动':'启动', 'btn btn-sm');
+      b.disabled = wait; b.onclick = () => runService(it);
+      box.appendChild(b);
+    }
+  } else if (it.type === 'command'){
+    if (it.blocked){
+      const b = mkBtn('已拦截', 'btn btn-sm');
+      b.disabled = true; b.title = it.blocked;
+      box.appendChild(b);
+      const dot = document.getElementById('dot-'+it.id);
+      if (dot) dot.className = 'rb-dot failed';
+      const lab = document.getElementById('st-'+it.id);
+      if (lab){ lab.className = 'rb-state failed'; lab.textContent = '黑名单拦截'; }
+      return;
+    }
+    const b = mkBtn(s.status==='ok'?'再次执行':'执行', 'btn btn-sm');
+    b.disabled = wait || s.status==='running';
+    b.onclick = () => guard(it, () => runCommand(it));
+    box.appendChild(b);
+  } else if (it.type === 'request'){
+    const b = mkBtn(s.status==='ok'?'重新发送':'发送', 'btn btn-sm');
+    b.disabled = wait || s.status==='running';
+    b.onclick = () => guard(it, () => runRequest(it));
+    box.appendChild(b);
+  }
+}
+
+function mkBtn(t, cls){ const b=document.createElement('button'); b.className=cls; b.textContent=t; return b; }
+
+/* origin=session 首次执行 → 完整命令确认 */
+const mask = document.getElementById('cf-mask');
+let pendingRun = null;
+function guard(it, run){
+  if (it.origin === 'session' && !state[it.id].confirmed){
+    document.getElementById('cf-cmd').textContent =
+      it.type==='request' ? `${it.method} ${it.url}\n\n${it.body}` : plainCmd(it);
+    pendingRun = () => { state[it.id].confirmed = true; run(); };
+    mask.hidden = false;
+  } else run();
+}
+function plainCmd(it){
+  let c = it.cmd;
+  if (it.params) it.params.forEach(p => {
+    const input = document.getElementById('p-'+it.id+'-'+p.k);
+    c += ` ${p.flag} ${input ? input.value : p.v}`;
+  });
+  return c;
+}
+document.getElementById('cf-cancel').onclick = () => { mask.hidden = true; pendingRun = null; };
+document.getElementById('cf-ok').onclick = () => { mask.hidden = true; pendingRun?.(); pendingRun = null; };
+document.addEventListener('keydown', e => { if (e.key==='Escape' && !mask.hidden){ mask.hidden = true; pendingRun = null; } });
+
+/* ---------------- 状态机(演示用 setTimeout 模拟) ---------------- */
+function setStatus(it, st){
+  state[it.id].status = st;
+  const dot = document.getElementById('dot-'+it.id), lab = document.getElementById('st-'+it.id);
+  if (dot) dot.className = 'rb-dot ' + ({starting:'starting',running:'running',ready:'ready',ok:'ok',failed:'failed',exited:'exited'}[st]||'');
+  if (lab){ lab.className = 'rb-state ' + st; lab.textContent = stateText(it); }
+  const lk = document.getElementById('lk-'+it.id);
+  if (lk) lk.classList.toggle('off', st !== 'ready');
+  // 依赖此项的条目刷新置灰/按钮态
+  SCENARIOS[cur].items?.forEach(o => {
+    if (o.dependsOn === it.id){
+      const row = document.getElementById('it-'+o.id);
+      const w = !depReady(o) && state[o.id].status==='idle';
+      row?.classList.toggle('dep-wait', w);
+      const ol = document.getElementById('st-'+o.id);
+      if (ol && state[o.id].status==='idle') ol.textContent = stateText(o);
+      renderActions(o);
+    }
+  });
+  renderActions(it);
+  refreshSummary();
+}
+
+function appendLog(it, lines, done){
+  const pre = document.getElementById('log-'+it.id);
+  const out = document.getElementById('out-'+it.id);
+  out?.classList.add('open');
+  let i = 0;
+  (function tick(){
+    if (i < lines.length){
+      pre.innerHTML += (pre.innerHTML?'\n':'') + esc(lines[i++]);
+      pre.scrollTop = pre.scrollHeight;
+      setTimeout(tick, 420);
+    } else done?.();
+  })();
+}
+
+function runService(it){
+  const pre = document.getElementById('log-'+it.id); if (pre) pre.innerHTML='';
+  setStatus(it, 'starting');
+  appendLog(it, it.logs, () => setStatus(it, 'ready'));
+}
+function runCommand(it){
+  const pre = document.getElementById('log-'+it.id); if (pre) pre.innerHTML='';
+  setStatus(it, 'running');
+  appendLog(it, it.logs, () => {
+    pre.innerHTML += '\n<span class="exit-ok">exit 0</span>';
+    setStatus(it, 'ok');
+  });
+}
+function runRequest(it){
+  setStatus(it, 'running');
+  setTimeout(() => {
+    document.getElementById('resp-meta-'+it.id).hidden = false;
+    document.getElementById('resp-meta-'+it.id).innerHTML = `<span class="code-ok">200 OK</span> · 87 ms`;
+    const box = document.getElementById('resp-'+it.id);
+    box.hidden = false; box.classList.add('open');
+    document.getElementById('resp-pre-'+it.id).textContent = it.resp;
+    setStatus(it, 'ok');
+  }, 900);
+}
+function stopAll(){
+  SCENARIOS[cur].items?.forEach(it => {
+    if (it.type==='service' && ['ready','starting'].includes(state[it.id]?.status)) setStatus(it, 'exited');
+  });
+}
+
+function refreshSummary(){
+  const sum = document.getElementById('rb-sum');
+  const items = SCENARIOS[cur].items || [];
+  const live = items.filter(it => it.type==='service' && state[it.id]?.status==='ready').length;
+  sum.innerHTML = live ? `<span class="on">● ${live} 个环境运行中</span>` : '环境未启动';
+}
+
+/* ---------------- 外壳交互 ---------------- */
+document.getElementById('rb-toggle').onclick = () => {
+  panel.classList.toggle('open');
+  document.getElementById('rb-toggle').setAttribute('aria-expanded', panel.classList.contains('open'));
+};
+
+document.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-sc]').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  cur = b.dataset.sc;
+  Object.keys(state).forEach(k => delete state[k]);
+  panel.classList.add('open');
+  render();
+});
+
+const ta = document.getElementById('ta');
+function send(){
+  const text = ta.value.trim(); if (!text) return;
+  chat.insertAdjacentHTML('beforeend', `<div class="chat-msg user"><div class="who">你</div><div class="body">${esc(text)}</div></div>`);
+  if (/验收通过|可以合了|没问题/.test(text)){
+    stopAll();
+    toast('验收通过:已执行收尾命令并停止验收环境');
+    chat.insertAdjacentHTML('beforeend', `<div class="chat-msg"><div class="who">Claude</div><div class="body">收到,开始合并与收尾。</div></div>`);
+  }
+  chat.scrollTop = chat.scrollHeight;
+  ta.value = '';
+}
+document.getElementById('send').onclick = send;
+ta.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey && !e.metaKey){ e.preventDefault(); send(); } });
+
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+
+render();
+</script>
+</body>
+</html>

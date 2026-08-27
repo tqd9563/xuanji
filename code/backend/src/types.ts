@@ -370,3 +370,122 @@ export interface ScheduledRun {
   durationMs: number | null;
   error: string | null;
 }
+
+// ============ 验收面板(Acceptance Runbook)============
+// 设计与取舍见 wiki/tech/acceptance-runbook.md。
+// 三层实体:模板(项目级骨架,自有 SQLite)→ 实例(一次交付的清单,worktree 内
+// .xuanji/runbook.json)→ 运行态(点了按钮之后的事,自有 SQLite)。
+
+export type RunbookItemType = 'service' | 'command' | 'request' | 'link' | 'cleanup';
+
+/** 参数定义:命令里可变的那部分。会话预填 default,用户在面板上改 */
+export interface RunbookParam {
+  key: string;
+  label: string;
+  type: 'string' | 'date' | 'number' | 'boolean' | 'enum';
+  required?: boolean;
+  default?: string;
+  /** type=enum 时的可选值 */
+  options?: string[];
+  description?: string;
+  /** 给出则按 `<flag> <value>` 追加;命令里出现 {{key}} 占位符时改为原地插值 */
+  flag?: string;
+}
+
+/** 就绪判定:service 从 running 转 ready 的依据 */
+export type RunbookReadiness =
+  | { kind: 'port'; port: number }
+  | { kind: 'http'; url: string; timeoutSec?: number }
+  | { kind: 'logPattern'; pattern: string };
+
+export interface RunbookLink {
+  title: string;
+  url: string;
+}
+
+export interface RunbookItem {
+  id: string;
+  type: RunbookItemType;
+  title: string;
+  description?: string;
+  /** 来源分级:template=用户确认入库过,点击即执行;session=会话本次生成,首次执行需确认 */
+  origin: 'template' | 'session';
+  command?: string;
+  /** 相对 worktree 根;逃逸出 cwd 的路径在执行层拒绝 */
+  cwd?: string;
+  params?: RunbookParam[];
+  env?: Record<string, string>;
+  readiness?: RunbookReadiness;
+  links?: RunbookLink[];
+  stopCommand?: string;
+  timeoutSec?: number;
+  /** 软约束:依赖项未就绪时按钮置灰,不做自动编排 */
+  dependsOn?: string[];
+  // --- request 专用 ---
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  url?: string;
+  headers?: Record<string, string>;
+  body?: string;
+  /** 自然语言预期要点,给人看的;不做自动断言(要断言就该进 vitest) */
+  expect?: string;
+  /** 命中执行层黑名单时由后端回填的拒绝原因(渲染时前置,不等点击才报错) */
+  blockedReason?: string;
+}
+
+/** 项目级验收模板:一次沉淀长期复用,变的只有参数 */
+export interface RunbookTemplate {
+  id: string;
+  /** 项目真实路径,与项目总览同源 */
+  project: string;
+  name: string;
+  /** 每次编辑 +1;实例按版本锁定引用,模板后续编辑不回溯已交付清单 */
+  version: number;
+  status: 'draft' | 'active' | 'archived';
+  /** agent 归纳生成的进 draft,用户界面确认后转 active */
+  source: 'user' | 'agent';
+  items: RunbookItem[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 一次交付的验收清单(worktree 内 .xuanji/runbook.json 的内容) */
+export interface AcceptanceRunbook {
+  schemaVersion: 1;
+  templateRef?: { id: string; version: number };
+  /** itemId → paramKey → 值,会话预填的本次默认 */
+  paramValues?: Record<string, Record<string, string>>;
+  /** 本次用不上的模板项 id(面板隐藏,非删除) */
+  omitItems?: string[];
+  /** 本次特有项(origin 恒为 session) */
+  extraItems?: RunbookItem[];
+  notes?: string;
+}
+
+/** 解析 + 模板实例化后交给前端的最终形态 */
+export interface ResolvedRunbook {
+  sessionId: string;
+  cwd: string;
+  templateName?: string;
+  templateVersion?: number;
+  notes?: string;
+  items: RunbookItem[];
+  /** 每项的当前运行态,itemId → run */
+  runs: Record<string, RunbookRun>;
+}
+
+export type RunbookRunStatus = 'running' | 'ready' | 'exited' | 'failed' | 'stopped' | 'ok';
+
+export interface RunbookRun {
+  id: number;
+  sessionId: string;
+  itemId: string;
+  /** 参数插值后的完整命令:审计与「用户点的到底是什么」的唯一事实 */
+  resolvedCommand: string;
+  status: RunbookRunStatus;
+  pid: number | null;
+  exitCode: number | null;
+  startedAt: number;
+  endedAt: number | null;
+  /** 输出落盘路径,面板 tail */
+  logPath: string | null;
+}
