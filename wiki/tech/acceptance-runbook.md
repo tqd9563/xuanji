@@ -206,7 +206,7 @@ interface RunbookRun {
 ## 6. 安全模型(与防自斩铁律的衔接)
 
 1. **来源分级确认**:`origin='template'` 的项 = 用户确认入库过,点击即执行;`origin='session'` 的项(extraItems)= agent 本次生成,**首次执行前弹完整命令确认**,同会话内二次执行免确认。
-2. **执行层黑名单(机械兜底,不靠 prompt)**:插值后命令匹配 `restart.sh`、`launchctl … com.xuanji.backend`、kill 7777 监听进程、`pnpm launchd:*` 等模式时直接拒绝执行并明示原因——防自斩铁律在执行层落地,对模板项同样生效(防止模板被会话起草时夹带)。
+2. **执行层黑名单(机械兜底,不靠 prompt)**:插值后命令匹配 `restart.sh`、`launchctl … com.xuanji.backend`、kill 7777 监听进程、`pnpm launchd:*` 等模式时直接拒绝执行并明示原因——防自斩铁律在执行层落地,对模板项同样生效(防止模板被会话起草时夹带)。**拦截应前置到渲染时**:清单解析时即对每项命令跑一遍黑名单匹配,命中的项在面板上直接呈现「已拦截」态(红点 + 禁用按钮 + 拦截原因),不等用户点击才报错——「留给用户在终端执行」这类指引要在第一眼就可见。
 3. **cwd 围栏**:执行 cwd 限定在该会话的 worktree 目录树内,清单里的相对 cwd 逃逸(`../`)拒绝。
 4. **远程访问考量**:面板按钮在手机端(Tailscale)同样可用且体验良好;ad-hoc 自由命令输入框(二期)默认仅桌面端开放。
 
@@ -257,6 +257,23 @@ interface RunbookRun {
       "expect": "返回 steps 数组含转化率字段,且 step 顺序与请求一致",
       "dependsOn": ["serve"] } ] }
 ```
+
+### xuanji(隔离预览 + 布尔参数 + 黑名单,dogfooding)
+
+```jsonc
+// 模板:preview.sh 隔离验收环境(端口自动顺延,永不碰 :7777 常驻后端)
+[
+  { "id": "preview", "type": "service", "title": "启动隔离预览环境", "command": "./preview.sh",
+    "readiness": { "kind": "http", "url": "http://127.0.0.1:37777/api/health" },
+    "params": [ { "key": "keepdb", "label": "复用上轮快照", "type": "boolean", "flag": "--keep-db" } ],
+    "links": [{ "title": "验收地址", "url": "http://localhost:35173" }] },
+  { "id": "stop", "type": "cleanup", "title": "停止预览环境并清理临时数据", "command": "./preview.sh --stop" }
+]
+```
+
+- 布尔参数渲染为勾选,勾选时才追加 flag(`./preview.sh` ↔ `./preview.sh --keep-db`);
+- 端口顺延意味着 37777/35173 只是默认值——实现时就绪判定与 links 需消费 preview.sh 实际输出的端口(脚本已打印「验收地址」行,可解析),这是「links 支持运行时插值」的第一个真实用例;
+- 若会话在 extraItems 里夹带「重启常驻后端使改动生效」(`./restart.sh`),按 §6.2 前置拦截,面板呈现「已拦截 + 防自斩原因 + 请在终端手动执行」——本项目是黑名单机制的第一个必然消费者。
 
 ### antifraud_skills(退化路径)
 

@@ -1658,6 +1658,14 @@ body.wall-glass .dd-menu {
 .rb-resp-meta { font-family: var(--mono); font-size: 0.6875rem; margin: 8px 0 0 18px; color: var(--muted); }
 .rb-resp-meta .code-ok { color: var(--jade); font-weight: 600; }
 
+/* 黑名单拦截提示:执行层机械拒绝(防自斩铁律),红=错误/禁止的既有词汇;
+   与「依赖未就绪」的置灰区分——置灰是「还不能」,拦截是「永远不能」 */
+.rb-blocked {
+  margin: 8px 0 0 18px; padding: 7px 12px;
+  font-size: 0.71875rem; color: var(--red); background: var(--tint-red);
+  border-radius: var(--r-s);
+}
+
 /* cleanup 收尾行:面板最底,quiet 姿态;auto 提示 faint */
 .rb-item.cleanup { display: flex; align-items: center; gap: 10px; background: var(--surface-2); }
 .rb-item.cleanup .rb-cmd { margin: 0; flex: 1; }
@@ -1681,7 +1689,7 @@ body.wall-glass .dd-menu {
   .rb-actions .btn { min-height: 40px; }
   .rb-row { flex-wrap: wrap; row-gap: 4px; }
   .rb-params { margin-left: 0; }
-  .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta { margin-left: 0; }
+  .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
 }
 
 /* ---- 原型页自身的演示外壳(非交付样式) ---- */
@@ -1706,6 +1714,7 @@ body.wall-glass .dd-menu {
     场景:
     <button class="btn btn-sm on" data-sc="baize">baize_web(模板+参数)</button>
     <button class="btn btn-sm" data-sc="deep">deep_baize(模板+预置请求)</button>
+    <button class="btn btn-sm" data-sc="xuanji">xuanji(隔离预览+黑名单)</button>
     <button class="btn btn-sm" data-sc="none">antifraud_skills(无清单,退化)</button>
   </div>
 </div>
@@ -1801,6 +1810,22 @@ const SCENARIOS = {
         resp:'{\n  "code": 0,\n  "steps": [ …默认 5 步全漏斗… ]\n}' },
     ],
   },
+  xuanji: {
+    task: '璇玑:会话看板卡片支持按项目筛选',
+    delivery: '开发完成:看板列头新增项目筛选下拉,vitest 40 passed、tsc/eslint/build 干净。已在 worktree 内过完质量门,请起隔离预览环境验收;改动要在常驻实例生效需你在终端跑 restart.sh(派发会话不得自斩)。',
+    tpl: '预览验收 v1',
+    notes: '预览环境端口自动顺延(永不碰 :7777 常驻后端),数据是宿主库快照,归档/挂起随便点、<b>不回流生产</b>。',
+    items: [
+      { id:'preview', type:'service', title:'启动隔离预览环境', cmd:'./preview.sh',
+        readiness:'http://127.0.0.1:37777/api/health',
+        params:[{k:'keepdb',label:'复用上轮快照(--keep-db)',type:'boolean',v:false,flag:'--keep-db'}],
+        links:[{t:'验收地址', u:'http://localhost:35173'}],
+        logs:['» 准备数据快照…','  已快照宿主库 → .preview/xuanji.db(验收中的写入不会回流生产)','» 启动后端(:37777)…','  ✓ 后端就绪','» 启动前端 dev server(:35173)…','━━━━━━━━━━━━━━━━━━━━━━━','  验收地址   http://localhost:35173','  分支       feature/board-project-filter'] },
+      { id:'restart', type:'command', origin:'session', title:'重启常驻后端使改动生效', cmd:'./restart.sh',
+        blocked:'命中执行层黑名单(防自斩铁律):restart.sh 会重启璇玑宿主后端,杀死本会话;请在终端手动执行' },
+      { id:'stop', type:'cleanup', title:'停止预览环境并清理临时数据', cmd:'./preview.sh --stop', auto:true },
+    ],
+  },
   none: {
     task: 'antifraud_skills:jueming 批量扫描输出补充关联实体计数',
     delivery: '开发完成:报告尾部新增关联实体计数表,skill 自测通过(3 个样例 UID 输出比对无 diff)。本项目无本地服务,直接看会话里的自测输出即可,通过请直接回复。',
@@ -1821,10 +1846,14 @@ function resolvedCmd(it){
   if (!it.params) return esc(it.cmd);
   const parts = it.params.map(p => {
     const input = document.getElementById('p-'+it.id+'-'+p.k);
+    if (p.type === 'boolean'){
+      const on = input ? input.checked : p.v;
+      return on ? `<span class="p">${esc(p.flag)}</span>` : '';
+    }
     const v = input ? input.value : p.v;
     return `${esc(p.flag)} <span class="p">${esc(v)}</span>`;
-  });
-  return esc(it.cmd) + ' ' + parts.join(' ');
+  }).filter(Boolean);
+  return esc(it.cmd) + (parts.length ? ' ' + parts.join(' ') : '');
 }
 
 function depReady(it){
@@ -1888,9 +1917,13 @@ function render(){
       bodyHtml += `<div class="rb-cmd" id="cmd-${it.id}">${resolvedCmd(it)}</div>`;
       if (it.params){
         bodyHtml += `<div class="rb-params">` + it.params.map(p =>
-          `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
+          p.type === 'boolean'
+          ? `<span class="rb-param"><input type="checkbox" id="p-${it.id}-${p.k}" ${p.v?'checked':''}>
+             <label for="p-${it.id}-${p.k}">${esc(p.label)}</label></span>`
+          : `<span class="rb-param"><label for="p-${it.id}-${p.k}">${esc(p.label)}${p.req?'<span class="req" title="必填"> *</span>':''}</label>
            <input class="input" type="${p.type}" id="p-${it.id}-${p.k}" value="${esc(p.v)}"></span>`).join('') + `</div>`;
       }
+      if (it.blocked) bodyHtml += `<div class="rb-blocked">⛔ ${esc(it.blocked)}</div>`;
       if (it.links) bodyHtml += `<div class="rb-links ${s.status==='ready'?'':'off'}" id="lk-${it.id}">` +
         it.links.map(l=>`<a href="${l.u}" target="_blank" rel="noreferrer">↗ ${esc(l.t)} <span style="color:var(--faint)">${esc(l.u)}</span></a>`).join('') + `</div>`;
       bodyHtml += `<div class="rb-out" id="out-${it.id}"><button class="rb-out-head"><span class="chev">▸</span>${it.type==='service'?'日志':'输出'}</button><pre id="log-${it.id}"></pre></div>`;
@@ -1908,7 +1941,7 @@ function bind(div, it){
   // 参数改动 → 重算插值命令
   if (it.params) it.params.forEach(p => {
     const input = div.querySelector('#p-'+it.id+'-'+p.k);
-    if (input) input.oninput = () => { document.getElementById('cmd-'+it.id).innerHTML = resolvedCmd(it); };
+    if (input) input.oninput = input.onchange = () => { document.getElementById('cmd-'+it.id).innerHTML = resolvedCmd(it); };
   });
   renderActions(it);
 }
@@ -1935,6 +1968,16 @@ function renderActions(it){
       box.appendChild(b);
     }
   } else if (it.type === 'command'){
+    if (it.blocked){
+      const b = mkBtn('已拦截', 'btn btn-sm');
+      b.disabled = true; b.title = it.blocked;
+      box.appendChild(b);
+      const dot = document.getElementById('dot-'+it.id);
+      if (dot) dot.className = 'rb-dot failed';
+      const lab = document.getElementById('st-'+it.id);
+      if (lab){ lab.className = 'rb-state failed'; lab.textContent = '黑名单拦截'; }
+      return;
+    }
     const b = mkBtn(s.status==='ok'?'再次执行':'执行', 'btn btn-sm');
     b.disabled = wait || s.status==='running';
     b.onclick = () => guard(it, () => runCommand(it));
