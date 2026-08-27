@@ -8,6 +8,8 @@ import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
 import { CompactionCard, Md, MsgTime, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
+import { RunbookPanel } from '@/components/RunbookPanel';
+import { useRunbook } from '@/lib/runbook';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /**
@@ -255,6 +257,8 @@ interface SessCtx {
 
 export function Dispatch({ active }: { active: boolean }) {
   const d = useDispatch();
+  // 验收面板:清单存在才渲染(没有清单 = 退化为现状体验,面板不出现)
+  const rb = useRunbook(d.sessionId);
   const isMobile = useIsMobile();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
@@ -901,6 +905,18 @@ export function Dispatch({ active }: { active: boolean }) {
             </Fragment>
           ))}
         </div>
+
+        {rb.runbook && (
+          <RunbookPanel
+            runbook={rb.runbook}
+            runs={rb.runs}
+            logs={rb.logs}
+            errors={rb.errors}
+            onRun={rb.run}
+            onStop={rb.stop}
+            onRequest={rb.sendRequest}
+          />
+        )}
 
         <div className="chat-status">
           {!isMobile && sessCtx && <SessCtxBadge ctx={sessCtx} />}

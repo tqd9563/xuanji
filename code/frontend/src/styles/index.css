@@ -1636,3 +1636,152 @@ body.wall-glass .dd-menu {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ============================================================
+   验收面板(Acceptance Runbook)
+   设计依据:wiki/tech/acceptance-runbook.md;原型 wiki/design/prototype-runbook.html
+   规则:
+   - 面板挂在「待验收」会话的消息区与状态条之间:它是验收阶段的常驻工具,
+     不是一条消息;可折叠,折叠后只剩一行头部
+   - 「待验收」语义色是紫罗兰(与 .pill-rev 同源),只用在面板头部与
+     「会话生成」来源标——面板内部回到中性,状态色只给状态灯
+   - 状态灯词汇:faint=未启动 / 琥珀脉动=启动中 / 玉=就绪·成功 /
+     muted=已退出 / 红=失败,与全局「状态色即语义」一致
+   - 每个可执行项在按钮旁常驻插值后的完整命令(mono 小字):
+     用户点的是命令,不是黑盒按钮
+   - origin=session 的项带「会话生成」标,首次执行弹完整命令确认
+     (复用 .confirm-mask 应用内确认框)
+   ============================================================ */
+.runbook {
+  margin-top: 10px; border: 1px solid color-mix(in oklab, var(--violet) 30%, transparent);
+  border-radius: var(--r-m); background: var(--surface); overflow: hidden;
+}
+.rb-head {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 16px; cursor: pointer; background: none; border: none;
+  transition: background 150ms var(--ease);
+}
+.rb-head:hover { background: var(--hover); }
+.rb-head .rb-label { font-size: 0.8125rem; font-weight: 600; color: var(--violet); flex: none; }
+.rb-head .rb-tpl {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 7px; white-space: nowrap;
+}
+/* 折叠态摘要:环境是否在跑,一眼可扫(数字不装饰,是「有没有东西还开着」的信号) */
+.rb-head .rb-sum { font-size: 0.6875rem; color: var(--faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-head .rb-sum .on { color: var(--jade); }
+.rb-head .chev { margin-left: auto; color: var(--faint); transition: transform 180ms var(--ease); flex: none; }
+.runbook.open .rb-head .chev { transform: rotate(180deg); }
+.rb-body { display: none; border-top: 1px solid var(--line-soft); }
+.runbook.open .rb-body { display: block; max-height: 46vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.rb-notes { padding: 9px 16px 8px; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
+.rb-notes b { color: var(--ink); font-weight: 600; }
+
+.rb-item { padding: 10px 16px; border-bottom: 1px solid var(--line-soft); }
+.rb-item:last-child { border-bottom: none; }
+.rb-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rb-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
+.rb-dot.starting, .rb-dot.running { background: var(--amber); animation: pulse 1.4s var(--ease) infinite; }
+.rb-dot.ready, .rb-dot.ok { background: var(--jade); animation: none; }
+.rb-dot.exited { background: var(--muted); }
+.rb-dot.failed { background: var(--red); }
+.rb-title { font-size: 0.8125rem; font-weight: 600; flex: none; }
+.rb-state { font-size: 0.6875rem; color: var(--faint); flex: none; white-space: nowrap; }
+.rb-state.ready { color: var(--jade); }
+.rb-state.failed { color: var(--red); }
+.rb-origin {
+  font-size: 0.625rem; font-weight: 600; color: var(--violet); background: var(--tint-violet);
+  border-radius: 4px; padding: 0 6px; flex: none; white-space: nowrap;
+}
+.rb-actions { margin-left: auto; display: flex; gap: 6px; flex: none; }
+/* 插值后的完整命令:与状态灯列对齐(缩进 18px),一行截断,title 见全文 */
+.rb-cmd {
+  font-family: var(--mono); font-size: 0.71875rem; color: var(--faint);
+  margin: 4px 0 0 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.rb-cmd .p { color: var(--blue); } /* 参数插值段:蓝=纯信息,标出「这段是你填的」 */
+
+/* 参数表单:命令行之下、与之同缩进;date 用原生控件(实现层 shadcn DatePicker) */
+.rb-params { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 8px 0 2px 18px; }
+.rb-param { display: flex; align-items: center; gap: 6px; }
+.rb-param label { font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.rb-param label .req { color: var(--amber); }
+.rb-param .input { padding: 3px 8px; font-size: 0.75rem; font-family: var(--mono); }
+.rb-param input[type="date"].input { color-scheme: dark; width: 138px; }
+/* 枚举下拉:补回 select.input 被 .rb-param .input 覆盖掉的右侧留白(否则箭头压住文字) */
+.rb-param select.input { padding: 3px 26px 3px 8px; }
+
+/* 就绪后点亮的入口链接:玉色 wikilink 同族词汇 */
+.rb-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0 18px; }
+.rb-links a {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 0.75rem; color: var(--jade); text-decoration: none;
+  background: var(--tint-jade); border-radius: 4px; padding: 1px 8px;
+  transition: background 150ms var(--ease);
+}
+.rb-links a:hover { background: color-mix(in oklab, var(--jade) 24%, transparent); }
+.rb-links.off a { color: var(--faint); background: var(--tint-muted); pointer-events: none; }
+
+/* 日志/输出:折叠块,mono tail;service 常驻可开合,command 执行后自动展开 */
+.rb-out { margin: 8px 0 0 18px; }
+.rb-out-head {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--faint);
+  background: none; border: none; cursor: pointer; padding: 0;
+}
+.rb-out-head:hover { color: var(--muted); }
+.rb-out-head .chev { font-size: 0.5625rem; transition: transform 150ms var(--ease); }
+.rb-out.open .rb-out-head .chev { transform: rotate(90deg); }
+.rb-out pre {
+  display: none; margin-top: 6px; padding: 8px 12px; max-height: 180px; overflow-y: auto;
+  font-family: var(--mono); font-size: 0.71875rem; line-height: 1.6; color: var(--muted);
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  white-space: pre-wrap;
+}
+.rb-out.open pre { display: block; }
+.rb-out .exit-ok { color: var(--jade); }
+.rb-out .exit-bad { color: var(--red); }
+
+/* request 项:方法 + URL 一行;body/响应折叠;expect 是给人看的验收要点 */
+.rb-method {
+  font-family: var(--mono); font-size: 0.625rem; font-weight: 700; color: var(--blue);
+  background: var(--tint-blue); border-radius: 4px; padding: 0 6px; flex: none;
+}
+.rb-url { font-family: var(--mono); font-size: 0.71875rem; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rb-expect { margin: 6px 0 0 18px; font-size: 0.71875rem; color: var(--muted); }
+.rb-expect b { color: var(--ink); font-weight: 600; font-size: 0.6875rem; }
+.rb-resp-meta { font-family: var(--mono); font-size: 0.6875rem; margin: 8px 0 0 18px; color: var(--muted); }
+.rb-resp-meta .code-ok { color: var(--jade); font-weight: 600; }
+
+/* 黑名单拦截提示:执行层机械拒绝(防自斩铁律),红=错误/禁止的既有词汇;
+   与「依赖未就绪」的置灰区分——置灰是「还不能」,拦截是「永远不能」 */
+.rb-blocked {
+  margin: 8px 0 0 18px; padding: 7px 12px;
+  font-size: 0.71875rem; color: var(--red); background: var(--tint-red);
+  border-radius: var(--r-s);
+}
+
+/* cleanup 收尾行:面板最底,quiet 姿态;auto 提示 faint */
+.rb-item.cleanup { display: flex; align-items: center; gap: 10px; background: var(--surface-2); }
+.rb-item.cleanup .rb-cmd { margin: 0; flex: 1; }
+.rb-item.cleanup .auto-note { font-size: 0.6875rem; color: var(--faint); flex: none; }
+
+/* 依赖未就绪的置灰项:整行降透明,按钮 disabled 由 .btn:disabled 承接 */
+.rb-item.dep-wait { opacity: 0.55; }
+.rb-item.dep-wait .rb-state { color: var(--faint); }
+
+.confirm-mask[hidden] { display: none; }
+/* 确认弹层里的完整命令块(复用 .confirm-box) */
+.confirm-box .cmd-block {
+  font-family: var(--mono); font-size: 0.75rem; color: var(--ink);
+  background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  padding: 10px 12px; margin-bottom: 14px; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.confirm-box .c-title { font-size: 0.875rem; font-weight: 600; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.confirm-box .c-sub { font-size: 0.75rem; color: var(--muted); margin-bottom: 10px; }
+
+@media (max-width: 430px) {
+  .rb-actions .btn { min-height: 40px; }
+  .rb-row { flex-wrap: wrap; row-gap: 4px; }
+  .rb-params { margin-left: 0; }
+  .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
+}
