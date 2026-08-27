@@ -257,8 +257,6 @@ interface SessCtx {
 
 export function Dispatch({ active }: { active: boolean }) {
   const d = useDispatch();
-  // 验收面板:清单存在才渲染(没有清单 = 退化为现状体验,面板不出现)
-  const rb = useRunbook(d.sessionId);
   const isMobile = useIsMobile();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
@@ -267,6 +265,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
+
   const [handoffBusy, setHandoffBusy] = useState(false);
   const [resumePalette, setResumePalette] = useState(false);
   const [wdPalette, setWdPalette] = useState(false);
@@ -314,6 +313,16 @@ export function Dispatch({ active }: { active: boolean }) {
   const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
   const [sessCtx, setSessCtx] = useState<SessCtx | null>(null);
+  /**
+   * 验收面板认的是「这一页在看哪个会话」,不是「哪个派发会话活着」。
+   * 三条入口的会话标识落点不同:全新派发只有 d.sessionId(发出第一条消息才有值)、
+   * 续接与接回则在 setSessCtx 时就有 id。只认 d.sessionId 会让「点进待验收会话只看不发」
+   * 这条最主要的验收路径拿不到面板——与 markSeen 漏标是同一族缺陷(见 applyResume 上方注释),
+   * 故在唯一一处派生,新增入口只要走 sessCtx 就自动覆盖。
+   */
+  const panelSessionId = d.sessionId ?? sessCtx?.id ?? null;
+  // 清单存在才渲染;没有清单 = 退化为现状体验,面板不出现
+  const rb = useRunbook(panelSessionId);
 
   const projects = projectsData?.projects ?? [];
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
