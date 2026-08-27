@@ -1772,7 +1772,7 @@ const SCENARIOS = {
     items: [
       { id:'dev-env', type:'service', title:'启动本地前后端', cmd:'./scripts/local_test.sh',
         readiness:'http://localhost:48163/health',
-        links:[{t:'本地前端', u:'http://localhost:48164'}],
+        links:[{t:'本地前端(dev 登录)', u:'http://localhost:48164/api/auth/dev-login?email=dev@lilithgames.com'}],
         logs:['[backend] uvicorn running on :48163','[frontend] vite dev server on :48164','[backend] health check ok'] },
       { id:'seed', type:'command', title:'灌入线上数据', cmd:'./scripts/local_seed.sh', dependsOn:'dev-env',
         params:[{k:'start',label:'开始日期',type:'date',v:'2026-08-20',flag:'--start',req:true},
