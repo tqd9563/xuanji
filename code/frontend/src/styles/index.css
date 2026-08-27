@@ -509,6 +509,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .wd-box .rp-item .rp-name { flex: none; max-width: 45%; }
 .wd-path { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; color: var(--faint); }
 .wd-cur { color: var(--jade); }
+/* 手输完整路径行:置底并以细线与「已有项目」区隔;短名位是玉色动词,提示这是新建而非选择 */
+.wd-manual { border-top: 1px solid var(--line-soft); margin-top: 6px; padding-top: 12px; }
+.wd-manual .rp-name { color: var(--jade); }
+.wd-manual:disabled { cursor: not-allowed; }
+.wd-manual:disabled .rp-name { color: var(--faint); }
+.wd-bad { color: var(--red); }
 /* 可变字段一律限行截断(全文在回放页),压住生产环境长文案导致的卡高参差 */
 .scard .title { font-weight: 600; font-size: 0.8125rem; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .scard .cwd { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; min-width: 0; }

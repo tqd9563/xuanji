@@ -1180,6 +1180,8 @@ export function Dispatch({ active }: { active: boolean }) {
             value={effectiveCwd}
             options={cwdOptions}
             initialQuery={wdQuery}
+            // 全新项目目录还没在 ~/.claude/projects 下建过目录、搜不到,允许手输完整路径切过去
+            allowManualPath
             labelOf={(p) => projects.find((x) => x.path === p)?.name ?? p.split('/').filter(Boolean).pop() ?? p}
             onPick={(p) => {
               setCwd(p);

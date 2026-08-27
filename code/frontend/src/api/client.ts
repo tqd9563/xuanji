@@ -5,6 +5,7 @@ import type {
   Memory,
   ProjectsResult,
   Replay,
+  ResolvedWorkdir,
   ScheduledJob,
   ScheduledRun,
   SessionsBoard,
@@ -37,6 +38,9 @@ export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
+  /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */
+  resolvePath: (p: string) =>
+    get<ResolvedWorkdir>(`/api/resolve-path?path=${encodeURIComponent(p)}`),
   replay: (sessionId: string) => get<Replay>(`/api/sessions/${sessionId}/replay`),
   skills: () => get<{ skills: Skill[] }>('/api/skills'),
   memories: () => get<{ memories: Memory[] }>('/api/memories'),

@@ -7,6 +7,7 @@ import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../ada
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
+import { resolveWorkdir } from '../services/paths.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
@@ -49,6 +50,13 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   api.get('/projects', async (c) => {
     const history = await readHistory(config.claudeDir, { sinceMs: Date.now() - 90 * DAY });
     return c.json(await listProjects(history));
+  });
+
+  /** /wd 手输路径的解析与校验:展开 `~`、归一为绝对路径,并回报是否真是一个目录 */
+  api.get('/resolve-path', (c) => {
+    const raw = c.req.query('path');
+    if (!raw?.trim()) return c.json({ error: 'path required' }, 400);
+    return c.json(resolveWorkdir(raw));
   });
 
   api.get('/sessions', async (c) => c.json(await sessionsBoard(storage)));

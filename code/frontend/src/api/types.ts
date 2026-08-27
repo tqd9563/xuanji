@@ -176,6 +176,13 @@ export interface ProjectsResult {
   filteredMissing: number;
 }
 
+/** GET /api/resolve-path 回包,口径见 backend/services/paths.ts */
+export interface ResolvedWorkdir {
+  input: string;
+  path: string;
+  isDir: boolean;
+}
+
 export interface Dashboard {
   needsAttention: AgentSession[];
   running: AgentSession[];
