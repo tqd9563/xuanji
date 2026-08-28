@@ -151,8 +151,15 @@ export interface UsageReport {
   projects: ProjectUsage[];
   totalCostUsd: number;
   totalTokens: TokenTotals;
-  /** 被 projectNoisePatterns 过滤的 multica workspaces 汇总:只给总量,用于「开发 vs multica」对比 */
-  noise: { costUsd: number; tokens: TokenTotals };
+  /**
+   * 噪音(multica 侧)汇总:只给类别总量,用于「开发 vs multica」对比。
+   * scan = multica workspaces + narrate 叙述会话;biz-events = 业务事件抽取
+   */
+  noise: {
+    costUsd: number;
+    tokens: TokenTotals;
+    categories: { key: string; label: string; costUsd: number; tokens: TokenTotals }[];
+  };
   caliber: string;
   computedAt: number;
 }

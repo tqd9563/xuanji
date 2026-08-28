@@ -85,10 +85,15 @@ export interface UsageReport {
   totalCostUsd: number;
   totalTokens: { inOut: number; cacheRead: number };
   /**
-   * 被 projectNoisePatterns 过滤掉的目录(multica workspaces)的汇总。
-   * 只给总量不给明细:它是「非开发」对照组,进项目条形图会碾压真实开发项目的分辨率。
+   * 被噪音规则过滤掉的目录汇总,按 config.noiseCategories 分类
+   * (scan = multica workspaces + narrate;biz-events = 业务事件抽取)。
+   * 只给类别总量不给项目明细:它是「非开发」对照组,进项目条形图会碾压真实开发项目的分辨率。
    */
-  noise: { costUsd: number; tokens: { inOut: number; cacheRead: number } };
+  noise: {
+    costUsd: number;
+    tokens: { inOut: number; cacheRead: number };
+    categories: { key: string; label: string; costUsd: number; tokens: { inOut: number; cacheRead: number } }[];
+  };
   caliber: string;
   computedAt: number;
 }
@@ -114,11 +119,17 @@ export async function usageReport(
   let totalCostUsd = 0;
   let inOut = 0;
   let cacheRead = 0;
-  const noise = { costUsd: 0, tokens: { inOut: 0, cacheRead: 0 } };
+  const noiseCats = config.noiseCategories.map((c) => ({
+    key: c.key,
+    label: c.label,
+    costUsd: 0,
+    tokens: { inOut: 0, cacheRead: 0 },
+  }));
 
   for (const d of dirs) {
-    // 噪音目录不进项目明细,但要单独汇总一份用于「开发 vs multica」对比
-    const isNoise = config.projectNoisePatterns.some((re) => re.test(d));
+    // 噪音目录不进项目明细,但按类别单独汇总,用于「开发 vs multica」对比
+    const noiseCat = noiseCats[config.noiseCategories.findIndex((c) => c.patterns.some((re) => re.test(d)))];
+    const isNoise = noiseCat !== undefined;
     const dir = path.join(root, d);
     const files = await fsp.readdir(dir).catch(() => [] as string[]);
     const sessions: SessionUsage[] = [];
@@ -130,12 +141,12 @@ export async function usageReport(
       const records = await extractUsage(full, since); // 再按记录时间戳过滤,只留窗口内
       if (!records.length) continue;
       const byModel = aggregateByModel(records);
-      if (isNoise) {
-        // 噪音目录只累加总量:跳过标题提取(多一次读盘)与会话明细
+      if (noiseCat) {
+        // 噪音目录只累加类别总量:跳过标题提取(多一次读盘)与会话明细
         for (const m of byModel) {
-          noise.costUsd += m.costUsd;
-          noise.tokens.inOut += m.inputTokens + m.outputTokens + m.cacheCreationTokens;
-          noise.tokens.cacheRead += m.cacheReadTokens;
+          noiseCat.costUsd += m.costUsd;
+          noiseCat.tokens.inOut += m.inputTokens + m.outputTokens + m.cacheCreationTokens;
+          noiseCat.tokens.cacheRead += m.cacheReadTokens;
         }
         continue;
       }
@@ -177,12 +188,19 @@ export async function usageReport(
     projects,
     totalCostUsd,
     totalTokens: { inOut, cacheRead },
-    noise,
+    noise: {
+      costUsd: noiseCats.reduce((s, c) => s + c.costUsd, 0),
+      tokens: {
+        inOut: noiseCats.reduce((s, c) => s + c.tokens.inOut, 0),
+        cacheRead: noiseCats.reduce((s, c) => s + c.tokens.cacheRead, 0),
+      },
+      categories: noiseCats,
+    },
     caliber:
       `${RANGE_LABEL[range]}(本地时区)有活动的 session jsonl,assistant usage 按 message.id 去重;` +
       'cost = in×P + cacheWrite×1.25P + cacheRead×0.1P + out×P(牌价常量,USD);' +
       'token 量 = in + out + cacheWrite(不含 cacheRead,与统计条同口径);' +
-      'multica workspaces 与 narrate(claude -p)不进项目明细,只计入对比总量(口径同 cost_report.py 的 Multica+Narrate)',
+      'multica 侧不进项目明细,按类计入对比总量:扫描归因 = workspaces + narrate(口径同 cost_report.py 的 Multica+Narrate 两行),业务事件 = baize-biz-events 抽取',
     computedAt: Date.now(),
   };
   cache.set(range, { at: Date.now(), report });

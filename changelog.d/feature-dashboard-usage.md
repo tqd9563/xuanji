@@ -9,3 +9,4 @@
 ### 修复
 - **同名项目在用量条形图里挤成一行**：项目展示名取编码目录末段，近一周窗口下 `skills`、`baize` 各有两个项目撞名，React key 冲突且用户分不清谁是谁。改为末段撞名时往前多带一段消歧（`antifraud-skills` / `yuiko-skills`），并用编码目录名作稳定 key。
 - **narrate 会话误计入开发成本**：baize multica 任务里 `claude -p` 的叙述会话固定跑在 `.narrate-cwd` 目录下，此前按开发项目统计且以 `cwd` 之名高居近一周 top1（约 $233）。已将其并入 multica noise 桶（口径对齐 `cost_report.py` 的 Multica+Narrate），真实开发占比由 90% 修正为 57%。
+- **业务事件抽取会话误计入开发成本**：`baize-biz-events` 目录（夜间业务事件抽取,曾以 `events` 之名进开发条形图）并入 multica 侧。同时对比条按任务类别分为三段：开发（玉色）/ 扫描归因 = workspaces+narrate（斜纹灰）/ 业务事件（纯灰），图例直接带各类数值,悬停给双口径明细。

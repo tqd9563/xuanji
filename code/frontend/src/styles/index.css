@@ -342,15 +342,20 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cmp-head .pct { color: var(--jade); font-family: var(--mono); }
 .cmp-track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--tint-muted); }
 .cmp-track .dev { background: var(--jade-dim); transition: width 200ms var(--ease); }
-.cmp-track .noise {
+.cmp-track .noise { transition: width 200ms var(--ease); }
+/* multica 两类任务共用中性灰系(不占状态色/模型色词汇),以纹理区分:
+   scan(扫描归因 = workspaces+narrate)= 斜纹;biz-events(业务事件)= 纯色浅一档 */
+.cmp-track .noise-scan {
   background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 5px, oklch(0.28 0.010 110) 5px 10px);
-  transition: width 200ms var(--ease);
 }
-.cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); }
+.cmp-track .noise-biz-events { background: oklch(0.42 0.014 110); }
+.cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); flex-wrap: wrap; }
 .cmp-legend span { display: flex; align-items: center; gap: 5px; }
+.cmp-legend b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
 .cmp-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .cmp-legend .i-dev { background: var(--jade-dim); }
-.cmp-legend .i-noise { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
+.cmp-legend .i-noise-scan { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
+.cmp-legend .i-noise-biz-events { background: oklch(0.42 0.014 110); }
 
 /* 近一周数据在路上:今日数据先垫着并压暗,不整块闪空 */
 .cmp.pending, .tok.pending { opacity: 0.5; }

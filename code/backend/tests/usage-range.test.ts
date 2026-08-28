@@ -120,16 +120,25 @@ describe('usageReport 窗口与 multica 对比桶', () => {
     expect(p.sessions[0]!.totalTokens.inOut).toBe(600);
   });
 
-  it('narrate-cwd 目录(baize claude -p 叙述会话)同样进 noise 桶,不进项目明细', async () => {
+  it('narrate-cwd 与 baize-biz-events 都进 noise 桶且按类别分列', async () => {
     usage.invalidateUsageCache();
-    // 真实形态:~/baize-runs/.narrate-cwd → 编码为 …-baize-runs--narrate-cwd
+    // 真实形态:~/baize-runs/.narrate-cwd → 编码为 …-baize-runs--narrate-cwd(归 scan 类)
     writeSession('-Users-me-baize-runs--narrate-cwd', 'ffffffff-0000-0000-0000-000000000006', [
       rec(Date.now(), 'msg-narrate', { out: 500_000 }),
     ]);
+    // 业务事件抽取:…-antifraud-skills-baize-biz-events(归 biz-events 类)
+    writeSession('-Users-me-antifraud-skills-baize-biz-events', '99999999-0000-0000-0000-000000000007', [
+      rec(Date.now(), 'msg-events', { out: 300_000 }),
+    ]);
     const r = await usage.usageReport('today');
-    expect(r.projects.some((p) => /narrate/.test(p.dir))).toBe(false);
-    // noise = multica 2M + narrate 0.5M
-    expect(r.noise.tokens.inOut).toBe(2_500_000);
+    expect(r.projects.some((p) => /narrate|biz-events/.test(p.dir))).toBe(false);
+    // scan = multica 2M + narrate 0.5M;biz-events = 0.3M;总量 = 两类之和
+    const scan = r.noise.categories.find((c) => c.key === 'scan')!;
+    const events = r.noise.categories.find((c) => c.key === 'biz-events')!;
+    expect(scan.tokens.inOut).toBe(2_500_000);
+    expect(events.tokens.inOut).toBe(300_000);
+    expect(r.noise.tokens.inOut).toBe(2_800_000);
+    expect(r.noise.costUsd).toBeCloseTo(scan.costUsd + events.costUsd);
   });
 
   it('目录末段撞名的项目往前多带一段消歧,dir 始终唯一', async () => {

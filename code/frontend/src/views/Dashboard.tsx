@@ -294,6 +294,11 @@ function UsagePanel({
 
   const dev = { totalCostUsd: usage.totalCostUsd, totalTokens: usage.totalTokens };
   const noise = { totalCostUsd: usage.noise.costUsd, totalTokens: usage.noise.tokens };
+  // multica 侧按类别分段:scan(workspaces+narrate)与 biz-events 是两种任务,条上分段 + 图例带数值
+  const cats = usage.noise.categories.map((c) => ({
+    ...c,
+    v: unit === 'cost' ? c.costUsd : c.tokens.inOut,
+  }));
   const devV = valueOf(dev, unit);
   const noiseV = valueOf(noise, unit);
   const totalV = devV + noiseV;
@@ -340,14 +345,28 @@ function UsagePanel({
         </div>
         <div
           className="cmp-track"
-          title={`${rangeLabel} · 开发 ${bothTip(dev.totalCostUsd, dev.totalTokens)} · multica ${bothTip(noise.totalCostUsd, noise.totalTokens)}`}
+          title={`${rangeLabel} · 开发 ${bothTip(dev.totalCostUsd, dev.totalTokens)} · ${cats
+            .map((c) => `${c.label} ${bothTip(c.costUsd, c.tokens)}`)
+            .join(' · ')}`}
         >
           <div className="dev" style={{ width: `${totalV > 0 ? (devV / totalV) * 100 : 0}%` }} />
-          <div className="noise" style={{ width: `${totalV > 0 ? (noiseV / totalV) * 100 : 0}%` }} />
+          {cats.map((c) => (
+            <div
+              key={c.key}
+              className={`noise noise-${c.key}`}
+              style={{ width: `${totalV > 0 ? (c.v / totalV) * 100 : 0}%` }}
+            />
+          ))}
         </div>
         <div className="cmp-legend">
           <span><i className="i-dev" />开发项目</span>
-          <span><i className="i-noise" />multica workspaces(含 narrate)</span>
+          {/* 图例直接带数值:两类 multica 的量级差一眼可比,不用去悬停里翻 */}
+          {cats.map((c) => (
+            <span key={c.key} title={c.key === 'scan' ? 'multica workspaces + narrate 叙述会话' : 'baize-biz-events 业务事件抽取'}>
+              <i className={`i-noise-${c.key}`} />
+              {c.label} <b>{fmtValue(c.v, unit)}</b>
+            </span>
+          ))}
         </div>
       </div>
 
