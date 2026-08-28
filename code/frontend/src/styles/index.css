@@ -1520,6 +1520,24 @@ body.wall-glass .dd-menu {
   -webkit-backdrop-filter: none;
 }
 
+/* 壁纸开启时状态栏静止态完全隐形:82% 近黑底在无壁纸时与页面底色融为一体,
+   压在壁纸上就是一条实心黑带,连 blur 本身也会把壁纸糊出一条可见的磨砂带。
+   故壁纸模式下底色/底边线/模糊全部卸掉,与 view-head 一样直接坐在壁纸上;
+   仅当内容真的滚到状态栏下方(.scrolled,JS 按 scrollY 挂)才浮出垫层保可读。 */
+body.wall-on .statusbar {
+  background: transparent;
+  border-bottom-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background 200ms var(--ease), border-color 200ms var(--ease);
+}
+body.wall-on .statusbar.scrolled {
+  background: color-mix(in oklab, var(--bg) 55%, transparent);
+  border-bottom-color: var(--line-soft);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
 .wall-btn {
   display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
   margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);

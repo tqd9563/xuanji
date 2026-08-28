@@ -84,8 +84,18 @@ export function StatusBar({
 
   const shown = widgets.filter((w): w is ReactNode => w !== null);
 
+  // 壁纸模式下状态栏静止时全透明;只有内容真的滚到它下方时才需要磨砂垫层保可读
+  // (无壁纸时底色与页面同色,这个开关视觉上无感,故不区分模式、恒挂监听)
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   return (
-    <div className="statusbar">
+    <div className={scrolled ? 'statusbar scrolled' : 'statusbar'}>
       {shown.map((w, i) => (
         // 分隔线只出现在两枚 widget 之间,首枚之前不加
         <Fragment key={i}>
