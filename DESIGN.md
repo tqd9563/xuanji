@@ -203,6 +203,26 @@ components:
     textColor: "{colors.jade}"
     rounded: "{rounded.sm}"
     padding: "7px 12px"
+  statusbar:
+    backgroundColor: "color-mix(in oklab, {colors.bg} 82%, transparent)"
+    height: "42px"
+    padding: "0 clamp(32px, 3.5vw, 80px)"
+  statusbar-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
+  statusbar-item-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  statusbar-item-alert:
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
+  statusbar-clock:
+    textColor: "{colors.ink}"
+    typography: "{typography.display}"
+    padding: "3px 9px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -340,6 +360,17 @@ components:
 - **窄屏(≤960px):** 侧栏转顶部横条,品牌标保留、计数徽章隐藏
 - **移动端(≤430px):** 导航沉底为 5-tab 拇指区栏(`.tabbar`:首页/会话/派发/定时/更多,surface-2 底 + 1px line-soft 上边线,高 58px + safe-area,active 玉字玉标);「会话」tab 挂琥珀徽章显示 blocked 数;项目/技能/经验/回顾收进「更多」二级页,顶栏出 ‹ 返回。顶栏与 tab 栏吸附时允许 backdrop blur 作滚动垫层——这是功能性模糊,不属玻璃拟态禁区
 - **快捷键:** 数字 1–7 直切视图,按钮悬停提示对应键位;移动端无物理键盘,快捷键语义由 tab 栏与卡片大点击区承接
+
+### 全局状态栏(Signature Component · `.statusbar`)
+- **性格:** macOS 菜单栏的观象台译本。它是**外壳家具而非视图内容**——挂在 `.main` 顶部、所有 `<section class="view">` 之外,切视图时它不参与转场、不重挂载、不闪。整条只承载「与当前视图无关、但任何时刻都想瞥一眼」的环境信息;凡是只对某一个视图成立的数字,都不属于这里,该回它自己的 view-head。
+- **形制:** 42px 高、`position: sticky; top: 0`、内容右对齐(靠近用户视线终点与窗口控件一侧)。左右内边距与 `.main` 同为 `clamp(32px, 3.5vw, 80px)`,再用等值负外边距出血到主区边缘,使模糊层贯通整幅宽度而不是浮在内容缩进里。底部 1px `{colors.line-soft}` 收边。
+- **材质:** 底色 `{colors.bg}` 82% + `backdrop-filter: blur(10px)`。这是**功能性模糊——内容从下方滚过时保证状态栏文字可读**,与 mobile-topbar / tabbar 的吸附垫层同源,不属玻璃拟态禁区;禁止给它加边框高光、内阴影或任何让「玻璃感」本身成为观赏对象的处理。
+- **widget 化:** 状态栏本身不认识任何具体信息,只提供插槽;每个 widget 是一枚 `.sb-item`(3px 9px、6px 圆角、`{colors.muted}` 11px 字、`tabular-nums`),相邻 widget 间以 14px 高的 1px 细竖线 `.sb-sep` 分隔。widget 分两类:纯展示用 `<span>`,可操作用 `<button>`(hover 提亮为 `{colors.hover}` 底 + `{colors.ink}` 字,唯一的悬停反馈,不位移不描边)。**新增信息一律是新增一枚 widget,不是把文字塞进已有 widget。**
+- **告警态(`.warn`):** 需要用户出手的 widget 整体转 `{colors.amber}`,前置圆点 2s 脉冲——复用状态胶囊 `pill-blk` 的琥珀语义,状态色只表状态。
+- **时钟 widget(`.sb-clock`):** 观象台时钟,自仪表盘迁入此处后成为全局常驻。日期(mono 12px `{colors.muted}`)与时间(mono 17px/500 `{colors.ink}`,即 `{typography.display}`)基线对齐、10px 间距,构成单一注视点;`tabular-nums` 保证秒位跳动不抖版。**尺寸与配色一字未改地沿用原仪表盘时钟**——它是全站唯一使用 display 级字号的常驻数据,这份重量是刻意的:时间是观象台的锚。
+- **零值即消失:** 计数类 widget(如待验收数)为 0 时整枚移除,不显示 `0`、不留灰底占位。状态栏的每一枚 widget 都必须在此刻有话要说。
+- **不重复原则:** 信息一旦升格为状态栏 widget,**它在视图内的旧位置必须删干净**。时钟迁入后仪表盘 view-head 的旧时钟即被移除——同屏两个钟是缺陷,不是冗余保险。与另一处**外壳**家具(侧栏 side-foot)同题不算违例,前提是粒度不同:状态栏的 daemon 圆点只回答「活着吗」,侧栏底部给的是 CLI 版本号全文。同粒度的两份拷贝仍然禁止。
+- **移动端(≤430px):** 不渲染。移动端已有 `.mobile-topbar` 承接标识与 daemon 状态,44px 宽度里再压一条状态栏只会挤掉标题。
 
 ### 思考卡(Signature Component · 派发流内的模型推理)
 - **性格:** 全站唯一一个「刻意不发光」的信息块。彩色是稀缺资源,已分配给工具卡函数名与用户消息底色;思考只用中性阶(faint 正文 / muted 悬停),永远落在助手正文之后的第二层级。
