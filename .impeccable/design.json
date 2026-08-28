@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-07-31T13:40:00+08:00",
+  "generatedAt": "2026-08-28T00:00:00+08:00",
   "title": "Design System: 璇玑 xuanji",
   "extensions": {
     "colorMeta": {
@@ -534,6 +534,14 @@
       "description": "「总结」模块的列表行:项目芯片 + 任务主题(单行省略)+ commit 数 + 状态胶囊;回顾页「本周总结」是同一词汇的紧凑变体。",
       "html": "<button class=\"ds-wl-item\"><span class=\"ds-wl-chip\">xuanji</span><span class=\"ds-wl-task\">会话卡片拖拽归档到「已完成」</span><span class=\"ds-wl-anchors\">1 commit</span><span class=\"ds-wl-pill\">已合并</span></button>",
       "css": ".ds-wl-item { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 10px 18px; border: none; border-bottom: 1px solid var(--line-soft); background: none; cursor: pointer; transition: background 120ms cubic-bezier(0.22,1,0.36,1); } .ds-wl-item:hover { background: var(--hover); } .ds-wl-chip { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.6875rem; font-weight: 500; border-radius: 4px; padding: 1.5px 8px; color: oklch(0.78 0.12 115); background: color-mix(in oklab, oklch(0.78 0.12 115) 16%, transparent); flex: none; } .ds-wl-task { font-size: 0.8125rem; color: var(--ink); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .ds-wl-anchors { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: 0.6875rem; color: var(--faint); flex: none; } .ds-wl-pill { font-size: 0.6875rem; font-weight: 600; border-radius: 99px; padding: 1px 9px; color: var(--green); background: color-mix(in oklab, var(--green) 14%, transparent); flex: none; }"
+    },
+    {
+      "name": "Global Status Bar",
+      "kind": "nav",
+      "refersTo": "statusbar",
+      "description": "主区顶部常驻的 macOS 菜单栏式信息条,widget 插槽化;切换视图时不重挂载。",
+      "html": "<div class=\"ds-statusbar\"><button class=\"ds-sb-item ds-sb-warn\" title=\"2 个会话等待验收\"><span class=\"ds-sb-dot\"></span>待验收 <span class=\"ds-sb-n\">2</span></button><span class=\"ds-sb-sep\"></span><span class=\"ds-sb-item\"><span class=\"ds-sb-dot\"></span>daemon</span><span class=\"ds-sb-sep\"></span><span class=\"ds-sb-item ds-sb-clock\" title=\"北京时间(UTC+8)\"><span class=\"ds-sb-date\">2026-08-28 周四</span><span class=\"ds-sb-hms\">21:47:03</span></span></div>",
+      "css": ".ds-statusbar { display: flex; align-items: center; justify-content: flex-end; gap: 4px; height: 42px; padding: 0 32px; background: color-mix(in oklab, var(--bg) 82%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line-soft); } .ds-sb-item { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px; border-radius: var(--r-s, 6px); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; border: none; background: none; transition: background 150ms cubic-bezier(0.22,1,0.36,1), color 150ms cubic-bezier(0.22,1,0.36,1); } button.ds-sb-item { cursor: pointer; } button.ds-sb-item:hover { background: var(--hover); color: var(--ink); } button.ds-sb-item:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; } .ds-sb-n { font-family: ui-monospace, SF Mono, Menlo, monospace; } .ds-sb-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--jade); flex: none; } .ds-sb-warn { color: var(--amber); } .ds-sb-warn .ds-sb-dot { background: var(--amber); animation: ds-sb-pulse 2s cubic-bezier(0.22,1,0.36,1) infinite; } @keyframes ds-sb-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } } @media (prefers-reduced-motion: reduce) { .ds-sb-warn .ds-sb-dot { animation: none; } } .ds-sb-clock { gap: 10px; align-items: baseline; } .ds-sb-date { font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; } .ds-sb-hms { font-family: ui-monospace, SF Mono, Menlo, monospace; font-size: 1.0625rem; font-weight: 500; color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em; } .ds-sb-sep { width: 1px; height: 14px; background: var(--line-soft); margin: 0 2px; flex: none; }"
     }
   ],
   "narrative": {

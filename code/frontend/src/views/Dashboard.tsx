@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { api } from '@/api/client';
 import type { ProjectUsage, SessionUsage } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
@@ -7,34 +7,8 @@ import { clock, fmtCost, fmtTokens, isUnread, modelColor, projColor, timeAgo } f
 import { Pill, ProjChip, Tag } from '@/components/shared';
 import { isStale, startTodo, useTodosChanged } from '@/views/Todos';
 
-const clockFmt = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Shanghai',
-  hour12: false,
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
-});
-const dateFmt = new Intl.DateTimeFormat('zh-CN', {
-  timeZone: 'Asia/Shanghai',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  weekday: 'short',
-});
-
-function Clock() {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  return (
-    <span className="clock" title="北京时间(UTC+8)">
-      <span className="date">{dateFmt.format(now).replace(/\//g, '-')}</span>
-      <span id="dash-clock">{clockFmt.format(now)}</span>
-    </span>
-  );
-}
+// 观象台时钟已升格为全局状态栏 widget(components/StatusBar.tsx):
+// 它在所有视图常驻,再在仪表盘留一份就成了同屏两个钟,故此处一并移除。
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 
@@ -122,7 +96,6 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
       <div className="view-head">
         <h1>仪表盘</h1>
         <span className="spacer" />
-        <Clock />
       </div>
 
       <div className="dash-now">
