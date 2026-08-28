@@ -20,6 +20,8 @@ export interface RunbookFileResult {
   runbook: AcceptanceRunbook | null;
   /** 解析失败/被忽略的原因;runbook 为 null 且有 warning 才是「本该有却没读成」 */
   warning?: string;
+  /** 清单文件的最后修改时刻(ms)。归属判定靠它区分「本次交付写的」与「上次交付留下的」 */
+  mtimeMs?: number;
 }
 
 /** 未知 type 的项不丢弃也不执行——渲染成只读文本,由前端呈现(schema 前向兼容) */
@@ -63,6 +65,8 @@ export function parseRunbook(raw: unknown): RunbookFileResult {
   }
   const rb: AcceptanceRunbook = { schemaVersion: 1 };
 
+  if (typeof o.sessionId === 'string' && o.sessionId) rb.sessionId = o.sessionId;
+
   const ref = o.templateRef as Record<string, unknown> | undefined;
   if (ref && typeof ref.id === 'string' && typeof ref.version === 'number') {
     rb.templateRef = { id: ref.id, version: ref.version };
@@ -94,8 +98,10 @@ export function parseRunbook(raw: unknown): RunbookFileResult {
 export function readRunbookFile(sessionCwd: string): RunbookFileResult {
   const file = path.join(sessionCwd, RUNBOOK_REL_PATH);
   let text: string;
+  let mtimeMs: number | undefined;
   try {
     text = fs.readFileSync(file, 'utf8');
+    mtimeMs = fs.statSync(file).mtimeMs;
   } catch {
     return { runbook: null };
   }
@@ -105,5 +111,22 @@ export function readRunbookFile(sessionCwd: string): RunbookFileResult {
   } catch (e) {
     return { runbook: null, warning: `清单 JSON 解析失败:${e instanceof Error ? e.message : String(e)}` };
   }
-  return parseRunbook(json);
+  return { ...parseRunbook(json), mtimeMs };
+}
+
+/**
+ * 把归属会话盖回清单文件(见 AcceptanceRunbook.sessionId)。
+ * 只补 sessionId 一个字段,其余内容原样保留——清单是会话写的,璇玑不改它的内容。
+ * 尽力而为:worktree 只读、文件被删等一切失败都只返回 false,不影响面板渲染。
+ */
+export function stampRunbookSession(sessionCwd: string, sessionId: string): boolean {
+  const file = path.join(sessionCwd, RUNBOOK_REL_PATH);
+  try {
+    const json = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    if (json.sessionId === sessionId) return true;
+    fs.writeFileSync(file, `${JSON.stringify({ ...json, sessionId }, null, 2)}\n`, 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
 }

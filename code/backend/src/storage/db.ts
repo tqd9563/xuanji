@@ -290,6 +290,18 @@ export class Storage {
       .run();
   }
 
+  /**
+   * 派发会话的起始时刻(ms);非 web 派发的会话返回 null。
+   * onConflictDoNothing 保证它是「这条会话第一次出现」的时刻,后端重启/接回都不会刷新,
+   * 因此可以拿来判定验收清单是不是本次交付写的。
+   */
+  dispatchStartedAt(sessionId: string): number | null {
+    const row = this.sqlite
+      .prepare('SELECT created_at as createdAt FROM dispatches WHERE session_id = ?')
+      .get(sessionId) as { createdAt: number } | undefined;
+    return row?.createdAt ?? null;
+  }
+
   /** 全部 web 派发记录:进程/CLI 都不再知道的历史 web 会话由此回到看板 */
   allDispatches(): {
     sessionId: string;

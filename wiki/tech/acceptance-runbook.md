@@ -167,6 +167,7 @@ interface RunbookTemplate {
 ```ts
 interface AcceptanceRunbook {
   schemaVersion: 1
+  sessionId?: string               // 归属会话(见 §4.1);会话可不写,后端认领时盖章
   templateRef?: { id: string; version: number }   // 可缺省:纯增量清单(项目无模板)
   paramValues?: Record<string, Record<string, string>>  // itemId → paramKey → 值,会话预填的本次默认
   omitItems?: string[]             // 本次用不上的模板项 id(面板隐藏,非删除)
@@ -182,6 +183,17 @@ interface AcceptanceRunbook {
 - 文件不存在 → 面板不出现,交付体验完全等于现状(antifraud_skills 类项目的退化路径,零负担)。
 - `.xuanji/` 加入项目 `.gitignore` 建议清单(清单是交付物元数据,不进代码库)。
 - 派发会话侧的产出约定(写进派发 system prompt / 项目 CLAUDE.md):有模板则引用模板 + 填 `paramValues`,不要重抄命令;request 类 extraItems 写清本次验收要打的具体请求与 expect。
+
+### 4.1 归属:面板出现的时机
+
+清单是**一次交付的产物**,不是项目常驻配置。只按「目录下有没有这个文件」渲染面板,同一目录后续会话会一路继承上一次交付的清单——实测:项目里躺着一份旧清单,新会话刚问完版本号就弹出验收面板。故清单绑会话,`resolveRunbook` 两级判定:
+
+1. 清单写了 `sessionId` → **只对这条会话渲染**,别的会话一律不渲染;
+2. 没写 → 只有**写于本会话开始之后**(文件 mtime ≥ `dispatches.created_at`)才算本次交付,认领并把 `sessionId` 盖回文件;早于会话开始的视为上次交付的残留,不渲染。
+
+盖章后归属硬绑定,不再依赖时间比较:后端重启、接回、只看不发都照常出面板(`created_at` 由 `onConflictDoNothing` 保证是会话首次出现的时刻,不会被刷新)。非 web 派发的会话拿不到起始时刻,只接受已盖章的清单——宁可不出面板,不错出面板。
+
+返工重写清单会丢掉 `sessionId`,由下一次读取重新认领,不影响返工交付流程。判定收在 `resolveRunbook` 一处,执行路径(`rb-run`)也现读清单,故不属于本会话的清单既不渲染也执行不了。
 
 ## 5. 运行态(RunbookRun,璇玑自有)
 
