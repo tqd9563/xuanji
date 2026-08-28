@@ -37,6 +37,18 @@ export const sessionNamesTable = sqliteTable('session_names', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+/**
+ * 会话名快照(自有可重建索引):`claude agents --json` 的会话名只在会话存活期间可查,
+ * 进程退出后 ~/.claude 里就再也找不到它。用量报表统计的恰恰是已结束的历史会话,
+ * 名字源头已消失,只能退化成转录首句。看板每轮轮询顺手把看到的名字存下来,
+ * 会话退出后名字仍在。~/.claude 不动,快照丢了也只是退回首句显示。
+ */
+export const sessionTitleSnapshotsTable = sqliteTable('session_title_snapshots', {
+  sessionId: text('session_id').primaryKey(),
+  name: text('name').notNull(),
+  seenAt: integer('seen_at').notNull(),
+});
+
 /** 看板「关闭」的隐藏列表(自有数据,可逆):~/.claude 不动,只是不再展示 */
 export const hiddenSessionsTable = sqliteTable('hidden_sessions', {
   sessionId: text('session_id').primaryKey(),
@@ -222,6 +234,9 @@ export class Storage {
       CREATE TABLE IF NOT EXISTS session_names (
         session_id TEXT PRIMARY KEY, name TEXT NOT NULL, updated_at INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS session_title_snapshots (
+        session_id TEXT PRIMARY KEY, name TEXT NOT NULL, seen_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS hidden_sessions (
         session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
       );
@@ -386,6 +401,35 @@ export class Storage {
   /** sessionId → display-name 覆盖表 */
   sessionNames(): Map<string, string> {
     const rows = this.orm.select().from(sessionNamesTable).all();
+    return new Map(rows.map((r) => [r.sessionId, r.name]));
+  }
+
+  /**
+   * 记录看板上看到的会话名。同名不重复写(看板每几秒轮询一次,不值得每轮都落盘)。
+   * 调用方负责过滤占位名(8 位 id 之类),这里只认它给的就是可读名字。
+   */
+  snapshotSessionTitles(entries: Iterable<[string, string]>) {
+    const known = this.sessionTitleSnapshots();
+    const now = Date.now();
+    const write = this.sqlite.transaction((rows: [string, string][]) => {
+      for (const [sessionId, name] of rows) {
+        this.orm
+          .insert(sessionTitleSnapshotsTable)
+          .values({ sessionId, name, seenAt: now })
+          .onConflictDoUpdate({
+            target: sessionTitleSnapshotsTable.sessionId,
+            set: { name, seenAt: now },
+          })
+          .run();
+      }
+    });
+    const changed = [...entries].filter(([id, name]) => known.get(id) !== name);
+    if (changed.length) write(changed);
+  }
+
+  /** sessionId → 看板历史上出现过的会话名 */
+  sessionTitleSnapshots(): Map<string, string> {
+    const rows = this.orm.select().from(sessionTitleSnapshotsTable).all();
     return new Map(rows.map((r) => [r.sessionId, r.name]));
   }
 
