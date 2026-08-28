@@ -1027,6 +1027,14 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   .table-skills :is(th, td):nth-child(6) { display: none; }
 }
 
+/* ---- 显式排序控件 ----
+   「排序」标签用 faint 层级只作锚点:窗口组(7/30/90 天)与筛选组(全部/已启用)语义自明,
+   排序组不带标签会和它们混成一排无从分辨。tabs 本身复用 filter-tabs,控件语言保持一套。 */
+.sort-group { display: inline-flex; align-items: center; gap: 8px; }
+.sort-label { font-size: 0.75rem; color: var(--faint); }
+.s-arrow { font-size: 0.625rem; color: var(--faint); }
+.sort-group .filter-tabs button.active .s-arrow { color: var(--jade); }
+
 /* ---- 触发次数 ---- */
 /* 排序表头:按钮撑满 th(点击热区仍是整格),当前排序列点亮箭头 */
 .usage-th { padding: 0; }

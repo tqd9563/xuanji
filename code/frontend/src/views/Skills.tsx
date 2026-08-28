@@ -88,6 +88,19 @@ export function Skills() {
         <h1>技能</h1>
         <span className="sub">{skills.filter((s) => s.enabled).length} 个已启用 / 共 {skills.length} 个</span>
         <span className="spacer" />
+        {/* 排序与「触发」列头共用 byUsage 一个状态,双向同步:
+            列头是就近入口,这组 tabs 是可发现的显式入口,不能各存一份状态 */}
+        <div className="sort-group" role="group" aria-label="排序">
+          <span className="sort-label">排序</span>
+          <div className="filter-tabs">
+            <button className={byUsage ? '' : 'active'} onClick={() => setByUsage(false)}>
+              默认
+            </button>
+            <button className={byUsage ? 'active' : ''} onClick={() => setByUsage(true)}>
+              触发 <span className="s-arrow">▼</span>
+            </button>
+          </div>
+        </div>
         <div className="filter-tabs" role="group" aria-label="统计窗口">
           {WINDOWS.map((w) => (
             <button key={w} className={win === w ? 'active' : ''} onClick={() => setWin(w)}>
