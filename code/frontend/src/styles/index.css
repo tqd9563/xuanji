@@ -318,7 +318,12 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 头部要塞下标题 + 两组切换:标题不折行,切换组整组换行但不拆散 */
 .usage-head { flex-wrap: wrap; row-gap: 6px; }
 .usage-head h2 { white-space: nowrap; }
-.usage-head .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* 小字用 flex-basis:0 吸收剩余空间(顺带接替 spacer 的角色)。
+   关键在 basis 而非 shrink:flex 容器开了 wrap 就是「先换行再压缩」,
+   按内容宽度参与分行时,口径文案一变长就会把第二组切换顶到下一行
+   (成本↔Token 切换时头部忽高忽低)。basis 归零后它永不顶出换行,
+   空间不足时省略号收尾,完整口径仍在 title 悬停里。 */
+.usage-head .sub { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* 分段切换:沿用 .nav button.active 的选中词汇(玉色 tint),不另造一套 */
 .seg {

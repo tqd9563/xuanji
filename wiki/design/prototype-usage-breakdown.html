@@ -96,7 +96,11 @@
 
   .usage-head { flex-wrap: wrap; row-gap: 6px; }
   .usage-head h2 { white-space: nowrap; }
-  .usage-head .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  /* 小字用 flex-basis:0 吸收剩余空间(顺带接替 spacer 的角色)。
+     关键在 basis 而非 shrink:flex 容器开了 wrap 就是「先换行再压缩」,
+     按内容宽度参与分行时,口径文案一变长就会把第二组切换顶到下一行。
+     basis 归零后它永不顶出换行,空间不足时省略号收尾,完整口径在 title 里 */
+  .usage-head .sub { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
   .seg {
     display: inline-flex; align-items: center; gap: 2px;
     background: var(--surface-2); border: 1px solid var(--line-soft);
@@ -195,7 +199,6 @@
     <div class="panel-head usage-head">
       <h2>Token 用量</h2>
       <span class="sub" id="usage-sub"></span>
-      <span class="spacer"></span>
       <span class="seg" id="seg-range" role="group" aria-label="时间范围">
         <button data-v="today">今天</button>
         <button data-v="week">近一周</button>
@@ -302,7 +305,7 @@ function render() {
   // 口径写进头部小字:条长到底量的是什么,一句话讲完(token 态点明三分量,cacheRead 不在其中)
   const sub = document.getElementById('usage-sub');
   sub.textContent =
-    `${rangeLabel} · 按项目聚合 · 条长 = ${unit === 'cost' ? '实际成本' : 'in + out + cacheWrite token 量'}`;
+    `${rangeLabel} · 按项目聚合 · ${unit === 'cost' ? '条长 = 实际成本' : '条长未包含 cacheRead'}`;
   sub.title = unit === 'cost'
     ? '条长 = 按牌价加权的实际成本(含 cacheRead × 0.1)'
     : '条长 = in + out + cacheWrite;cacheRead 不计入,在下方构成里单列并折算';

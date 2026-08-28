@@ -368,12 +368,12 @@ function UsagePanel({
             <span className="usage-loading">近一周 · 统计中…</span>
           ) : (
             <>
-              {rangeLabel} · 按项目聚合 · 条长 ={' '}
-              {unit === 'cost' ? '实际成本' : 'in + out + cacheWrite token 量'}
+              {rangeLabel} · 按项目聚合 ·{' '}
+              {unit === 'cost' ? '条长 = 实际成本' : '条长未包含 cacheRead'}
             </>
           )}
         </span>
-        <span className="spacer" />
+        {/* 小字自己吸收剩余空间,不再另设 spacer:见 .usage-head .sub 的 flex-basis 说明 */}
         <span className="seg" role="group" aria-label="时间范围">
           <Seg on={range === 'today'} onClick={() => setRange('today')}>今天</Seg>
           <Seg on={range === '7d'} onClick={() => setRange('7d')}>近一周</Seg>
