@@ -999,6 +999,74 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .check { color: var(--jade); }
 .uncheck { color: var(--faint); }
 
+/* ---- 技能表列宽 ----
+   auto 布局下列宽由内容决定:切窗口让 210 变成 3、排序把长名字换到首屏,
+   整张表就会重新分配宽度、行与行之间横向错位。改 fixed + colgroup 定死骨架:
+   只有「描述」是弹性列(窄屏只压它),其余按内容上界给定值,任何窗口/排序下都不动。 */
+/* 宽度写在表头单元格而不是 colgroup:fixed 布局下列宽取自首行,
+   这样窄屏 display:none 掉某列时,剩下的列自然按各自宽度重排
+   (colgroup 是按位置映射的,隐藏第 4 列会让第 5 列错拿第 4 个 col 的宽度) */
+.table-skills { table-layout: fixed; }
+.table-skills th:nth-child(1) { width: 200px; }  /* mono 技能名,超长省略号 + title 兜全名 */
+.table-skills th:nth-child(2) { width: auto; }   /* 描述:唯一弹性列,吃掉剩余空间 */
+.table-skills th:nth-child(3) { width: 132px; }  /* 3 位数字(3ch)+ 72px 满条 + 间距,四位数也不换行 */
+.table-skills th:nth-child(4) { width: 76px; }
+.table-skills th:nth-child(5) { width: 72px; }
+.table-skills th:nth-child(6) { width: 78px; }
+.table-skills th:nth-child(7) { width: 64px; }
+/* 描述列没给 col 宽度 = 吃掉剩余空间;fixed 布局下 max-width 失效,靠单元格自身截断 */
+.table-skills .skill-desc { max-width: none; }
+.table-skills .cell-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 窄屏结构性收列:固定列合计 622px,窗口再窄就只剩描述被压(1024 宽时只剩 ~100px,等于不可读)。
+   版本/可调用/来源是查阅项而非扫视项,抽屉里都有,先收它们把宽度还给描述;
+   名称/触发/启用是这张表的三个主任务(找技能、看用量、开关),任何宽度都保留。 */
+@media (max-width: 1279px) {
+  .table-skills :is(th, td):nth-child(4),
+  .table-skills :is(th, td):nth-child(5),
+  .table-skills :is(th, td):nth-child(6) { display: none; }
+}
+
+/* ---- 显式排序控件 ----
+   「排序」标签用 faint 层级只作锚点:窗口组(7/30/90 天)与筛选组(全部/已启用)语义自明,
+   排序组不带标签会和它们混成一排无从分辨。tabs 本身复用 filter-tabs,控件语言保持一套。 */
+.sort-group { display: inline-flex; align-items: center; gap: 8px; }
+.sort-label { font-size: 0.75rem; color: var(--faint); }
+.s-arrow { font-size: 0.625rem; color: var(--faint); }
+.sort-group .filter-tabs button.active .s-arrow { color: var(--jade); }
+
+/* ---- 触发次数 ---- */
+/* 排序表头:按钮撑满 th(点击热区仍是整格),当前排序列点亮箭头 */
+.usage-th { padding: 0; }
+.usage-th button {
+  display: block; width: 100%; text-align: left; cursor: pointer; user-select: none;
+  padding: 10px 18px; font: inherit; font-size: 0.75rem; font-weight: 600; color: var(--muted);
+  transition: color 150ms var(--ease);
+}
+.usage-th button:hover { color: var(--ink); }
+.usage-th .arrow { font-size: 0.625rem; margin-left: 3px; color: var(--faint); }
+.usage-th.sorted button { color: var(--ink); }
+.usage-th.sorted .arrow { color: var(--jade); }
+/* 数字用 tabular-nums 右对齐:逐位对齐,列内数字上下成一条线。
+   横条走图表色(--chart-1)而非状态色——它表量级,不表状态 */
+.usage-cell { display: flex; align-items: center; gap: 8px; }
+.usage-n { font-family: var(--mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+.usage-n.zero { color: var(--faint); }
+.usage-bar { height: 5px; border-radius: 99px; background: color-mix(in oklab, var(--chart-1) 55%, transparent); min-width: 2px; flex: none; transition: width 200ms var(--ease); }
+
+/* 抽屉「使用情况」:kv + 近 30 天逐日迷你柱 */
+.drawer-sec { border-top: 1px solid var(--line-soft); padding-top: 16px; margin-top: 4px; }
+.drawer-sec + .drawer-sec { margin-top: 20px; }
+.drawer-sec h3 { font-size: 0.8125rem; color: var(--ink); margin-bottom: 10px; }
+.usage-kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
+.usage-kv dt { color: var(--muted); }
+.usage-kv dd { font-family: var(--mono); font-size: 0.78125rem; font-variant-numeric: tabular-nums; }
+.usage-spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; margin: 4px 0 2px; }
+.usage-spark i { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: color-mix(in oklab, var(--chart-1) 55%, transparent); }
+.usage-spark i.zero { height: 2px !important; background: var(--line-soft); }
+.usage-spark-cap { font-size: 0.6875rem; color: var(--faint); display: flex; justify-content: space-between; }
+.usage-spark-empty { font-size: 0.75rem; color: var(--faint); height: 36px; display: flex; align-items: center; }
+
 .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
 .kv dt { color: var(--muted); }
 /* 长 URL / 路径(MR 链接、锚点文件路径)无空格,不强制断行会顶破抽屉右边界 */

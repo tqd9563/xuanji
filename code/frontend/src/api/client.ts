@@ -42,7 +42,11 @@ export const api = {
   resolvePath: (p: string) =>
     get<ResolvedWorkdir>(`/api/resolve-path?path=${encodeURIComponent(p)}`),
   replay: (sessionId: string) => get<Replay>(`/api/sessions/${sessionId}/replay`),
-  skills: () => get<{ skills: Skill[] }>('/api/skills'),
+  skills: () =>
+    get<{ skills: Skill[]; usageCaliber: string; usageComputedAt: number }>('/api/skills'),
+  /** 单技能近 30 天逐日触发次数(抽屉展开时才拉) */
+  skillUsageDaily: (name: string) =>
+    get<{ days: number[]; span: number }>(`/api/skills/${encodeURIComponent(name)}/usage-daily`),
   memories: () => get<{ memories: Memory[] }>('/api/memories'),
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),

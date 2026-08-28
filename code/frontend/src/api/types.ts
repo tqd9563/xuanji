@@ -59,6 +59,15 @@ export interface Replay {
   title?: string;
 }
 
+/** 技能触发次数(各窗口计数 + 最近触发) */
+export interface SkillUsage {
+  d7: number;
+  d30: number;
+  d90: number;
+  /** 最近一次触发时刻(ms);从未触发时缺省 */
+  lastUsedAt?: number;
+}
+
 export interface Skill {
   name: string;
   description: string;
@@ -68,6 +77,8 @@ export interface Skill {
   source: 'user' | 'plugin';
   enabled: boolean;
   body?: string;
+  /** 索引尚未建好时缺省 */
+  usage?: SkillUsage;
 }
 
 export interface Memory {
