@@ -11,6 +11,7 @@ import type {
   SessionsBoard,
   Skill,
   Todo,
+  UsageRange,
   UsageReport,
   WeeklyDraft,
   WeeklyReview,
@@ -57,7 +58,7 @@ export const api = {
     const qs = p.toString();
     return get<{ cards: WorklogCard[] }>(`/api/worklog${qs ? `?${qs}` : ''}`);
   },
-  usage: () => get<UsageReport>('/api/usage/today'),
+  usage: (range: UsageRange = 'today') => get<UsageReport>(`/api/usage?range=${range}`),
   // ---------- 待办 ----------
   todos: () => get<{ todos: Todo[] }>('/api/todos'),
   /** cwd 传绝对路径(界面已选好)或短名(外部脚本手打),后端统一宽松匹配 */

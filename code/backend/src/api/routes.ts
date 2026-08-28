@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
@@ -14,7 +14,7 @@ import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { listMemories, searchMemories } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
-import { todayUsage } from '../services/usage.js';
+import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
 import { liveEnvironments, resolveRunbook, resolveSessionCleanup, runRequest } from '../services/runbook.js';
@@ -166,12 +166,17 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     return c.json({ ok: true });
   });
 
-  api.get('/usage/today', async (c) => {
+  /** ?range=today|7d(非法值退回 today)。/usage/today 是既有路径,固定 today 口径 */
+  const usageHandler = (fixed?: UsageRange) => async (c: Context) => {
+    const q = c.req.query('range');
+    const range: UsageRange = fixed ?? (isUsageRange(q) ? q : 'today');
     const board = await sessionsBoard(storage);
     const names = new Map<string, string>();
     for (const col of Object.values(board.columns)) for (const s of col) names.set(s.sessionId, s.name);
-    return c.json(await todayUsage((id) => names.get(id)));
-  });
+    return c.json(await usageReport(range, (id) => names.get(id)));
+  };
+  api.get('/usage', usageHandler());
+  api.get('/usage/today', usageHandler('today'));
 
   // ---------- M2 写操作与派发辅助 ----------
 

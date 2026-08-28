@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
-import type { ProjectUsage, SessionUsage } from '@/api/types';
+import type { ModelUsage, ProjectUsage, SessionUsage, TokenTotals, UsageRange, UsageReport } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, fmtCost, fmtTokens, isUnread, modelColor, projColor, timeAgo } from '@/lib/utils';
@@ -55,6 +55,13 @@ function heatDayLabels(): { short: string; full: string }[] {
 
 /** 仪表盘待办卡:只露前 N 条未完成的,整理与回顾去「待办」模块 */
 const DASH_TODO_N = 5;
+
+/**
+ * 最近活动条数:后端一次给 40 条,这里全量渲染。
+ * 左栏高度由 grid 拉伸跟随右侧用量模块(近一周下有十几个项目条,比固定 25 条高得多),
+ * 写死条数会在项目多时留下大片空白;给满 40 条 + 内部滚动才是两种口径下都填得满的做法。
+ */
+const TIMELINE_N = 40;
 
 function DashTodos() {
   const { data, refresh } = usePoll(api.todos, 30_000);
@@ -220,11 +227,13 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
         </span>
       </div>
 
+      {/* 左「最近活动」拉通整栏,右「Token 用量」把成本条形图与 7 日热力图合成一个模块——
+          两者是同一个问题的两个视角(谁在烧 / 什么时候烧),分开放要来回扫视 */}
       <div className="dash-grid">
         <div className="panel">
           <div className="panel-head"><h2>最近活动</h2><span className="sub">来自 history.jsonl</span></div>
-          <ul className="tl">
-            {data.timeline.slice(0, 12).map((t, i) => (
+          <ul className="tl tl-tall">
+            {data.timeline.slice(0, TIMELINE_N).map((t, i) => (
               <li key={i}>
                 <span className="t">{clock(t.time)}</span>
                 <span className="proj" style={{ color: projColor(t.project) }}>{t.project}</span>
@@ -233,38 +242,63 @@ export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) =>
             ))}
           </ul>
         </div>
-        <div className="panel">
-          <div className="panel-head"><h2>7 日活动</h2><span className="sub">按项目 · 每日 prompt 数</span></div>
-          <div className="heat">
-            {data.heat.map((row) => (
-              <div className="heat-row" key={row.project}>
-                <span className="lbl">{row.project}</span>
-                {row.days.map((v, i) => (
-                  <div
-                    key={i}
-                    className="heat-cell"
-                    title={`${dayLabels[i]!.full} · ${v} 条 prompt`}
-                    style={v ? { background: `color-mix(in oklab, var(--jade) ${18 + Math.round((v / maxHeat) * 72)}%, var(--surface-2))` } : undefined}
-                  />
-                ))}
-              </div>
-            ))}
-            <div className="heat-days">
-              <span />
-              {dayLabels.map((d, i) => <span key={i} title={d.full}>{d.short}</span>)}
-            </div>
-          </div>
-        </div>
+        <UsagePanel today={data.usage} heat={data.heat} maxHeat={maxHeat} dayLabels={dayLabels} />
       </div>
-
-      <CostPanel usage={data.usage} />
     </>
   );
 }
 
-function CostPanel({ usage }: { usage: import('@/api/types').UsageReport }) {
+/** 计量口径:成本(美元)或 token 量。条长、数值、对比条统一跟随 */
+type Unit = 'cost' | 'tok';
+
+/** 取所选口径下的量。token 量用 inOut(不含 cacheRead,与统计条同口径) */
+const valueOf = (x: { totalCostUsd: number; totalTokens: TokenTotals }, unit: Unit) =>
+  unit === 'cost' ? x.totalCostUsd : x.totalTokens.inOut;
+const fmtValue = (v: number, unit: Unit) => (unit === 'cost' ? fmtCost(v) : fmtTokens(v));
+/** 悬停一律两个口径都给:切到 token 量时也能看到它值多少钱 */
+const bothTip = (cost: number, tokens: TokenTotals) =>
+  `${fmtCost(cost)} · ${fmtTokens(tokens.inOut)} tok(另有 ${fmtTokens(tokens.cacheRead)} cache read)`;
+
+function UsagePanel({
+  today,
+  heat,
+  maxHeat,
+  dayLabels,
+}: {
+  today: UsageReport;
+  heat: { project: string; days: number[] }[];
+  maxHeat: number;
+  dayLabels: { short: string; full: string }[];
+}) {
+  const [range, setRange] = useState<UsageRange>('today');
+  const [unit, setUnit] = useState<Unit>('cost');
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const max = Math.max(1e-9, ...usage.projects.map((p) => p.totalCostUsd));
+  // 近一周按需拉取:首屏只算今日,避免每次仪表盘轮询都全量扫 7 天的 jsonl
+  const [week, setWeek] = useState<UsageReport | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (range !== '7d' || week || loading) return;
+    setLoading(true);
+    api
+      .usage('7d')
+      .then(setWeek)
+      .catch(() => undefined)
+      .finally(() => setLoading(false));
+  }, [range, week, loading]);
+
+  // 近一周还在路上时先拿今日垫着(条长比例仍成立),避免模块整块闪空
+  const usage = range === '7d' ? (week ?? today) : today;
+  const pending = range === '7d' && !week;
+  const max = Math.max(1e-9, ...usage.projects.map((p) => valueOf(p, unit)));
+
+  const dev = { totalCostUsd: usage.totalCostUsd, totalTokens: usage.totalTokens };
+  const noise = { totalCostUsd: usage.noise.costUsd, totalTokens: usage.noise.tokens };
+  const devV = valueOf(dev, unit);
+  const noiseV = valueOf(noise, unit);
+  const totalV = devV + noiseV;
+  const devPct = totalV > 0 ? Math.round((devV / totalV) * 100) : 0;
+
   const toggle = (name: string) =>
     setOpen((prev) => {
       const next = new Set(prev);
@@ -273,28 +307,61 @@ function CostPanel({ usage }: { usage: import('@/api/types').UsageReport }) {
       return next;
     });
 
+  const rangeLabel = range === 'today' ? '今天' : '近一周';
+
   return (
-    <div className="panel" style={{ marginTop: 16 }}>
-      <div className="panel-head">
-        <h2>Token 成本</h2>
+    <div className="panel">
+      <div className="panel-head usage-head">
+        <h2>Token 用量</h2>
+        {/* 近一周首次要全量扫 7 天 jsonl(实测 ~5s),必须给出文字反馈——只压暗会被当成卡死 */}
         <span className="sub" title={usage.caliber}>
-          今日 · 按项目聚合,条长 = 实际成本 · 点击展开会话明细
+          {pending ? (
+            <span className="usage-loading">近一周 · 统计中…</span>
+          ) : (
+            <>{rangeLabel} · 按项目聚合 · 条长 = {unit === 'cost' ? '实际成本' : 'token 量'}</>
+          )}
         </span>
         <span className="spacer" />
-        <span className="tok-legend">
-          {['fable', 'opus', 'sonnet'].map((m) => (
-            <span key={m}><i style={{ background: modelColor(m) }} />{m}</span>
-          ))}
+        <span className="seg" role="group" aria-label="时间范围">
+          <Seg on={range === 'today'} onClick={() => setRange('today')}>今天</Seg>
+          <Seg on={range === '7d'} onClick={() => setRange('7d')}>近一周</Seg>
+        </span>
+        <span className="seg" role="group" aria-label="计量单位">
+          <Seg on={unit === 'cost'} onClick={() => setUnit('cost')}>成本 $</Seg>
+          <Seg on={unit === 'tok'} onClick={() => setUnit('tok')}>Token</Seg>
         </span>
       </div>
-      <div className="tok">
-        {usage.projects.length === 0 && <Empty0 />}
+
+      {/* 开发 vs multica 对比:multica 只在这条总览里出现,进项目条形图会碾压真实开发项目的分辨率 */}
+      <div className={`cmp ${pending ? 'pending' : ''}`}>
+        <div className="cmp-head">
+          开发 <b>{fmtValue(devV, unit)}</b> vs multica <b>{fmtValue(noiseV, unit)}</b>
+          <span className="pct">开发占 {devPct}%</span>
+        </div>
+        <div
+          className="cmp-track"
+          title={`${rangeLabel} · 开发 ${bothTip(dev.totalCostUsd, dev.totalTokens)} · multica ${bothTip(noise.totalCostUsd, noise.totalTokens)}`}
+        >
+          <div className="dev" style={{ width: `${totalV > 0 ? (devV / totalV) * 100 : 0}%` }} />
+          <div className="noise" style={{ width: `${totalV > 0 ? (noiseV / totalV) * 100 : 0}%` }} />
+        </div>
+        <div className="cmp-legend">
+          <span><i className="i-dev" />开发项目</span>
+          <span><i className="i-noise" />multica workspaces</span>
+        </div>
+      </div>
+
+      <div className={`tok ${pending ? 'pending' : ''}`}>
+        {usage.projects.length === 0 && (
+          <div className="empty" style={{ padding: 16 }}><p>{rangeLabel}暂无用量。</p></div>
+        )}
+        {/* key 与展开态都用 dir:展示名末段可能撞名(近一周窗口里 skills/baize 各有两个项目) */}
         {usage.projects.map((p) => (
-          <div className={`tok-proj ${open.has(p.project) ? 'open' : ''}`} key={p.project}>
-            <button className="tok-row" onClick={() => toggle(p.project)} aria-expanded={open.has(p.project)}>
+          <div className={`tok-proj ${open.has(p.dir) ? 'open' : ''}`} key={p.dir}>
+            <button className="tok-row" onClick={() => toggle(p.dir)} aria-expanded={open.has(p.dir)}>
               <span className="lbl"><span className="chev">▸</span>{p.project}</span>
-              <CostBar usage={p} max={max} />
-              <span className="val">{fmtCost(p.totalCostUsd)}</span>
+              <UsageBar usage={p} max={max} unit={unit} />
+              <span className="val">{fmtValue(valueOf(p, unit), unit)}</span>
             </button>
             <div className="tok-subs">
               {p.sessions.map((s) => (
@@ -309,32 +376,71 @@ function CostPanel({ usage }: { usage: import('@/api/types').UsageReport }) {
                       </span>
                     )}
                   </span>
-                  <CostBar usage={s} max={max} />
-                  <span className="val">{fmtCost(s.totalCostUsd)}</span>
+                  <UsageBar usage={s} max={max} unit={unit} />
+                  <span className="val">{fmtValue(valueOf(s, unit), unit)}</span>
                 </div>
               ))}
             </div>
           </div>
         ))}
       </div>
+
+      {/* 7 日活动:与上方条形图同属「用量」视角,故并入同一模块;它天然是 7 日口径,不随时间切换变化 */}
+      <div className="usage-divide">
+        <div className="cap"><h3>7 日活动</h3><span>按项目 · 每日 prompt 数</span></div>
+        <div className="heat">
+          {heat.map((row) => (
+            <div className="heat-row" key={row.project}>
+              <span className="lbl">{row.project}</span>
+              {row.days.map((v, i) => (
+                <div
+                  key={i}
+                  className="heat-cell"
+                  title={`${dayLabels[i]!.full} · ${v} 条 prompt`}
+                  style={v ? { background: `color-mix(in oklab, var(--jade) ${18 + Math.round((v / maxHeat) * 72)}%, var(--surface-2))` } : undefined}
+                />
+              ))}
+            </div>
+          ))}
+          <div className="heat-days">
+            <span />
+            {dayLabels.map((d, i) => <span key={i} title={d.full}>{d.short}</span>)}
+          </div>
+        </div>
+      </div>
+
+      <div className="usage-divide usage-foot">
+        <span className="tok-legend">
+          {['fable', 'opus', 'sonnet'].map((m) => (
+            <span key={m}><i style={{ background: modelColor(m) }} />{m}</span>
+          ))}
+        </span>
+      </div>
     </div>
   );
 }
 
-function Empty0() {
-  return <div className="empty" style={{ padding: 16 }}><p>今日暂无用量。</p></div>;
+function Seg({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button className={on ? 'active' : ''} onClick={onClick} aria-pressed={on}>
+      {children}
+    </button>
+  );
 }
 
-function CostBar({ usage, max }: { usage: ProjectUsage | SessionUsage; max: number }) {
-  const total = usage.totalCostUsd;
-  const tip = usage.byModel.map((m) => `${m.model} ${fmtCost(m.costUsd)}`).join(' · ');
+function UsageBar({ usage, max, unit }: { usage: ProjectUsage | SessionUsage; max: number; unit: Unit }) {
+  const total = valueOf(usage, unit);
+  // 分段按所选口径切:成本口径下 output 段最粗,token 口径下 cacheWrite 段最粗,两者本就不同
+  const seg = (m: ModelUsage) =>
+    unit === 'cost' ? m.costUsd : m.inputTokens + m.outputTokens + m.cacheCreationTokens;
+  const tip = usage.byModel.map((m) => `${m.model} ${fmtValue(seg(m), unit)}`).join(' · ');
   return (
-    <div className="track" title={tip}>
+    <div className="track" title={`${bothTip(usage.totalCostUsd, usage.totalTokens)}${tip ? ` · ${tip}` : ''}`}>
       <div className="bar" style={{ width: `${((total / max) * 100).toFixed(2)}%` }}>
         {usage.byModel.map((m) => (
           <i
             key={m.model}
-            style={{ width: `${((m.costUsd / total) * 100).toFixed(2)}%`, background: modelColor(m.model) }}
+            style={{ width: `${total > 0 ? ((seg(m) / total) * 100).toFixed(2) : 0}%`, background: modelColor(m.model) }}
           />
         ))}
       </div>

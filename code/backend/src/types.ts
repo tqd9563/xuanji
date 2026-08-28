@@ -291,17 +291,28 @@ export interface ModelUsage {
   costUsd: number;
 }
 
+/** token 量:inOut = in + out + cacheWrite(与统计条同口径),cacheRead 单列 */
+export interface TokenTotals {
+  inOut: number;
+  cacheRead: number;
+}
+
 export interface SessionUsage {
   sessionId: string;
   title: string;
   byModel: ModelUsage[];
   totalCostUsd: number;
+  totalTokens: TokenTotals;
 }
 
 export interface ProjectUsage {
+  /** 编码目录名(~/.claude/projects 下),天然唯一,作稳定 key 用 */
+  dir: string;
+  /** 展示名:目录末段,重名时往前多带一段消歧 */
   project: string;
   byModel: ModelUsage[];
   totalCostUsd: number;
+  totalTokens: TokenTotals;
   sessions: SessionUsage[];
 }
 

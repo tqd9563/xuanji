@@ -142,6 +142,7 @@ export function daySeparator(prev: number | string | null | undefined, cur: numb
 export const fmtCost = (usd: number) => '$' + usd.toFixed(2);
 
 export function fmtTokens(n: number): string {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'; // 近一周量级会上到十亿档,B 位保两位小数才分得出高低
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
   return String(n);
