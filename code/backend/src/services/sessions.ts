@@ -109,7 +109,41 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   promoteReview(columns, storage);
   syncTodosWithBoard(columns, agents.ok, storage);
   for (const col of Object.values(columns)) col.sort((a, b) => b.startedAt - a.startedAt);
+  snapshotBoardNames(columns, storage);
   return { ok: agents.ok, error: agents.error, columns, refreshedAt: Date.now() };
+}
+
+/** 8 位 id 占位名(转录里也找不到标题时的兜底),不是可读名字,别存进快照污染用量报表 */
+const isPlaceholderName = (s: AgentSession) => s.name === s.sessionId.slice(0, 8);
+
+/**
+ * 把看板上的会话名落进快照表:会话名只在进程存活期间可查,而用量报表统计的是
+ * 已结束的会话,不趁活着记下来,事后就只剩转录首句可显示。
+ */
+export function snapshotBoardNames(columns: Record<SessionState, AgentSession[]>, storage?: Storage) {
+  if (!storage) return;
+  const seen = new Map<string, string>();
+  for (const col of Object.values(columns)) {
+    for (const s of col) if (s.name?.trim() && !isPlaceholderName(s)) seen.set(s.sessionId, s.name);
+  }
+  storage.snapshotSessionTitles(seen);
+}
+
+/**
+ * 用量报表的会话名解析:看板实时名 → 派发注册表 → 名字快照 → 用户重命名覆盖(优先级最高)。
+ * 解析不到的由 usage 层从转录提首句兜底。dashboard 与 /api/usage 共用同一份口径,
+ * 免得两个入口各拼一份 nameMap、漏掉其中几个来源(近一周视图曾因此只用看板)。
+ */
+export function usageNameResolver(board: SessionsBoard, storage?: Storage): (id: string) => string | undefined {
+  const map = new Map<string, string>();
+  for (const [id, n] of storage?.sessionTitleSnapshots() ?? []) map.set(id, n);
+  for (const d of storage?.allDispatches() ?? []) if (d.name) map.set(d.sessionId, d.name);
+  // 看板名优先于快照,但占位名除外——它比快照里的旧真名更没用
+  for (const col of Object.values(board.columns)) {
+    for (const s of col) if (s.name?.trim() && !isPlaceholderName(s)) map.set(s.sessionId, s.name);
+  }
+  for (const [id, n] of storage?.sessionNames() ?? []) map.set(id, n);
+  return (id) => map.get(id);
 }
 
 /**
