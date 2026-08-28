@@ -182,7 +182,7 @@ export async function usageReport(
       `${RANGE_LABEL[range]}(本地时区)有活动的 session jsonl,assistant usage 按 message.id 去重;` +
       'cost = in×P + cacheWrite×1.25P + cacheRead×0.1P + out×P(牌价常量,USD);' +
       'token 量 = in + out + cacheWrite(不含 cacheRead,与统计条同口径);' +
-      'multica workspaces 不进项目明细,只计入对比总量',
+      'multica workspaces 与 narrate(claude -p)不进项目明细,只计入对比总量(口径同 cost_report.py 的 Multica+Narrate)',
     computedAt: Date.now(),
   };
   cache.set(range, { at: Date.now(), report });

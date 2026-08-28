@@ -120,6 +120,18 @@ describe('usageReport 窗口与 multica 对比桶', () => {
     expect(p.sessions[0]!.totalTokens.inOut).toBe(600);
   });
 
+  it('narrate-cwd 目录(baize claude -p 叙述会话)同样进 noise 桶,不进项目明细', async () => {
+    usage.invalidateUsageCache();
+    // 真实形态:~/baize-runs/.narrate-cwd → 编码为 …-baize-runs--narrate-cwd
+    writeSession('-Users-me-baize-runs--narrate-cwd', 'ffffffff-0000-0000-0000-000000000006', [
+      rec(Date.now(), 'msg-narrate', { out: 500_000 }),
+    ]);
+    const r = await usage.usageReport('today');
+    expect(r.projects.some((p) => /narrate/.test(p.dir))).toBe(false);
+    // noise = multica 2M + narrate 0.5M
+    expect(r.noise.tokens.inOut).toBe(2_500_000);
+  });
+
   it('目录末段撞名的项目往前多带一段消歧,dir 始终唯一', async () => {
     usage.invalidateUsageCache();
     const now = Date.now();

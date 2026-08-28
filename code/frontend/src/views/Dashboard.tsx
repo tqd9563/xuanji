@@ -347,7 +347,7 @@ function UsagePanel({
         </div>
         <div className="cmp-legend">
           <span><i className="i-dev" />开发项目</span>
-          <span><i className="i-noise" />multica workspaces</span>
+          <span><i className="i-noise" />multica workspaces(含 narrate)</span>
         </div>
       </div>
 
