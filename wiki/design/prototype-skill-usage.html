@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>璇玑 · 原型 — 技能触发统计</title>
+<style>
+/* ============================================================
+   token 与组件样式照抄生产 frontend/src/styles/index.css
+   (同源于根目录 DESIGN.md);本原型只新增 .usage-* 一族
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --on-jade:   oklch(0.18 0.02 120);
+
+  --amber: oklch(0.78 0.14 80);
+  --blue:  oklch(0.72 0.11 245);
+  --violet: oklch(0.73 0.11 300);
+  --red:   oklch(0.68 0.19 25);
+  --green: oklch(0.74 0.12 155);
+  --chart-1: oklch(0.68 0.075 115);
+
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+  --tint-blue:  color-mix(in oklab, var(--blue) 14%, transparent);
+  --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+  --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
+
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --z-backdrop: 30;
+  --z-drawer: 40;
+
+  --r-s: 6px;
+  --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--sans); background: var(--bg); color: var(--ink);
+  font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input, select, textarea { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+
+.view-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+.view-head h1 { font-size: 1.25rem; }
+.view-head .sub { color: var(--muted); font-size: 0.8125rem; }
+.view-head .spacer { flex: 1; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: var(--r-s);
+  border: 1px solid var(--line); background: var(--surface);
+  font-size: 0.8125rem; color: var(--ink);
+  transition: background 150ms var(--ease), border-color 150ms var(--ease);
+}
+.btn:hover { background: var(--hover); border-color: var(--muted); }
+.btn-sm { padding: 3px 10px; font-size: 0.75rem; }
+
+.input {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem;
+  transition: border-color 150ms var(--ease);
+}
+.input:hover { border-color: var(--muted); }
+.input:focus { outline: none; border-color: var(--jade); }
+
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 0.6875rem; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0 6px;
+  white-space: nowrap;
+}
+.mono { font-family: var(--mono); font-size: 0.8em; }
+
+.panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+
+.table { width: 100%; border-collapse: collapse; }
+.table th {
+  text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--muted);
+  padding: 10px 18px; border-bottom: 1px solid var(--line-soft); white-space: nowrap;
+}
+.table td { padding: 11px 18px; border-bottom: 1px solid var(--line-soft); vertical-align: middle; }
+.table tbody tr { transition: background 120ms var(--ease); }
+.table tbody tr.rowlink { cursor: pointer; }
+.table tbody tr.rowlink:hover { background: var(--hover); }
+.table tbody tr:last-child td { border-bottom: none; }
+
+.switch { position: relative; display: inline-block; width: 34px; height: 19px; border-radius: 99px; background: var(--line); transition: background 180ms var(--ease); flex: none; vertical-align: middle; cursor: pointer; }
+.switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--ink); transition: transform 180ms var(--ease); }
+.switch.on { background: var(--jade); }
+.switch.on::after { transform: translateX(15px); background: var(--on-jade); }
+
+.filter-tabs { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+.filter-tabs button { padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+.filter-tabs button:hover { color: var(--ink); }
+.filter-tabs button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+.skill-desc { color: var(--muted); font-size: 0.75rem; max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.check { color: var(--jade); }
+.uncheck { color: var(--faint); }
+
+.notice {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 0.75rem; color: var(--muted);
+  padding: 8px 14px; border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  background: var(--surface-2); margin-bottom: 16px;
+}
+.notice .ok { width: 7px; height: 7px; border-radius: 50%; background: var(--jade); flex: none; }
+
+.backdrop {
+  position: fixed; inset: 0; background: oklch(0.05 0 0 / 0.55);
+  opacity: 0; pointer-events: none; transition: opacity 200ms var(--ease); z-index: var(--z-backdrop);
+}
+.backdrop.show { opacity: 1; pointer-events: auto; }
+.drawer {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 94vw);
+  background: var(--surface-2); border-left: 1px solid var(--line);
+  transform: translateX(102%); transition: transform 240ms var(--ease);
+  z-index: var(--z-drawer); display: flex; flex-direction: column;
+}
+.drawer.show { transform: none; }
+.drawer-head { padding: 18px 24px 14px; border-bottom: 1px solid var(--line-soft); display: flex; align-items: flex-start; gap: 12px; }
+.drawer-head h2 { font-size: 1rem; }
+.drawer-head .meta { font-size: 0.75rem; color: var(--muted); margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+.drawer-head .x { margin-left: auto; color: var(--muted); font-size: 1.1rem; padding: 2px 8px; border-radius: var(--r-s); }
+.drawer-head .x:hover { background: var(--hover); color: var(--ink); }
+.drawer-body { padding: 20px 24px; overflow-y: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition-duration: 0ms !important; animation: none !important; }
+}
+
+/* ============================================================
+   本次新增:触发统计(.usage-*)
+   ============================================================ */
+
+/* 排序表头:整个 th 可点,当前排序列点亮箭头 */
+th.usage-th { cursor: pointer; user-select: none; }
+th.usage-th:hover { color: var(--ink); }
+th.usage-th .arrow { font-size: 0.625rem; margin-left: 3px; color: var(--faint); }
+th.usage-th.sorted { color: var(--ink); }
+th.usage-th.sorted .arrow { color: var(--jade); }
+
+/* 计数单元:mono 等宽数字 + 低饱和玉调横条(chart-1,不与状态色抢词汇)。
+   条宽按当前窗口最大值线性归一;0 次显示 faint 的 0、不出条。 */
+.usage-cell { display: flex; align-items: center; gap: 8px; min-width: 96px; }
+.usage-n { font-family: var(--mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
+.usage-n.zero { color: var(--faint); }
+.usage-bar { height: 5px; border-radius: 99px; background: color-mix(in oklab, var(--chart-1) 55%, transparent); min-width: 2px; flex: none; transition: width 200ms var(--ease); }
+
+/* 抽屉里的使用统计块:kv 行 + 近 30 天逐日迷你柱 */
+.usage-kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
+.usage-kv dt { color: var(--muted); }
+.usage-kv dd { font-family: var(--mono); font-size: 0.78125rem; font-variant-numeric: tabular-nums; }
+.usage-spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; margin: 4px 0 2px; }
+.usage-spark i { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: color-mix(in oklab, var(--chart-1) 55%, transparent); }
+.usage-spark i.zero { height: 2px !important; background: var(--line-soft); }
+.usage-spark-cap { font-size: 0.6875rem; color: var(--faint); display: flex; justify-content: space-between; margin-bottom: 16px; }
+.drawer-sec { border-top: 1px solid var(--line-soft); padding-top: 16px; margin-top: 4px; }
+.drawer-sec h3 { font-size: 0.8125rem; color: var(--ink); margin-bottom: 10px; }
+
+/* ============ 原型外壳 ============ */
+.proto-note {
+  max-width: 1100px; margin: 20px auto 0; padding: 12px 16px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-m);
+  background: var(--surface-2); color: var(--muted); font-size: 0.8125rem; line-height: 1.6;
+}
+.proto-note b { color: var(--ink); }
+.proto-stage { max-width: 1100px; margin: 24px auto 48px; padding: 0 8px; }
+</style>
+</head>
+<body>
+
+<div class="proto-note">
+  <b>原型 · 技能触发统计</b> —— 技能列表新增「触发」列:统计全部项目 session 日志里 Skill 工具的调用次数,
+  窗口 7 / 30 / 90 天可切(默认 30 天),点列头按次数排序,悬停数字看口径与最近触发时间;
+  点行进抽屉,新增「使用情况」区块(7 天 / 30 天 / 累计 / 最近触发 + 近 30 天逐日分布)。
+  表中数字为 2026-08-28 从 <span class="mono">~/.claude/projects/*/*.jsonl</span> 真实统计的结果。
+</div>
+
+<div class="proto-stage">
+  <div class="view-head">
+    <h1>技能</h1>
+    <span class="sub">42 个已启用 / 共 45 个</span>
+    <span class="spacer"></span>
+    <div class="filter-tabs" id="win-tabs" role="group" aria-label="统计窗口">
+      <button data-w="7">7 天</button>
+      <button data-w="30" class="active">30 天</button>
+      <button data-w="90">90 天</button>
+    </div>
+    <div class="filter-tabs">
+      <button class="active">全部</button><button>已启用</button><button>已禁用</button><button>插件</button>
+    </div>
+    <input type="search" class="input" placeholder="搜索技能…" style="width: 200px">
+  </div>
+
+  <div class="notice">
+    <span class="ok"></span>
+    触发次数统计自全部项目的会话日志(只读扫描,不写 <span class="mono">~/.claude</span>);
+    同一会话多次调用逐次计数 · 关闭开关 = 目录移入 <span class="mono">~/.claude/skills-disabled/</span>(可逆,二次确认)
+  </div>
+
+  <div class="panel">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>名称</th><th>描述</th>
+          <th class="usage-th sorted" id="usage-th" title="点击按触发次数排序">触发<span id="win-label">(30 天)</span><span class="arrow" id="usage-arrow">▼</span></th>
+          <th>版本</th><th>可调用</th><th>来源</th><th>启用</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="backdrop" id="backdrop"></div>
+<div class="drawer" id="drawer" role="dialog" aria-modal="true">
+  <div class="drawer-head">
+    <div>
+      <h2 id="d-name"></h2>
+      <div class="meta" id="d-meta"></div>
+    </div>
+    <button class="x" id="d-close" aria-label="关闭">✕</button>
+  </div>
+  <div class="drawer-body">
+    <p id="d-desc" style="font-size:0.8125rem;color:var(--muted);margin-bottom:16px;max-width:68ch;"></p>
+    <div class="drawer-sec">
+      <h3>使用情况</h3>
+      <dl class="usage-kv" id="d-kv"></dl>
+      <div class="usage-spark" id="d-spark" title="近 30 天逐日触发次数"></div>
+      <div class="usage-spark-cap"><span>7-30</span><span id="d-spark-max"></span><span>8-28</span></div>
+    </div>
+    <div class="drawer-sec">
+      <h3>SKILL.md</h3>
+      <pre class="mono" style="font-size:0.75rem;white-space:pre-wrap;color:var(--ink);max-width:78ch;line-height:1.7;">(正文与现状一致,原型从略)</pre>
+    </div>
+  </div>
+</div>
+
+<script>
+/* 真实数据:2026-08-28 统计 ~/.claude/projects/*\/*.jsonl 中 "name":"Skill" 的 input.skill。
+   c7/c30 为真实值;c90 与逐日分布(days)按 30 天真实总量做合理铺开,仅供原型演示。 */
+const SKILLS = [
+  { name:'baize',            desc:'指标异动检测与归因分析:调用 Baize MCP 对游戏运营指标做异常检测和根因分析', v:'2.4.0', inv:true, src:'user', on:true, c7:79, c30:210, c90:486, last:'2026-08-28' },
+  { name:'baize-insight',    desc:'跨指标全局洞察:daily-scan 归因完成后做跨指标/跨大区共因推理并上报白泽Web', v:'1.1.0', inv:true, src:'user', on:true, c7:37, c30:108, c90:231, last:'2026-08-28' },
+  { name:'wrapup',           desc:'任务收口卡:把刚完成的任务沉淀成可检索卡片,落到 ~/.claude/worklog/', v:'1.3.0', inv:true, src:'user', on:true, c7:18, c30:67, c90:152, last:'2026-08-28' },
+  { name:'talk-to-base',     desc:'舆情异动负面话题归档:拉取逐小时异动报告,筛负面话题写入飞书多维表', v:'1.0.2', inv:true, src:'user', on:true, c7:3, c30:22, c90:47, last:'2026-08-23' },
+  { name:'baize-issue',      desc:'把会话里分析清楚的 baize 问题沉淀成 GitLab issue,按场景锚点→根因→期望组织', v:'1.0.0', inv:true, src:'user', on:true, c7:4, c30:20, c90:38, last:'2026-08-27' },
+  { name:'data',             desc:'远端智能数据分析助手:多轮 session 续接,返回 SQL 和分析报告;支持本地 CSV 上传', v:'2.1.0', inv:true, src:'user', on:true, c7:3, c30:20, c90:55, last:'2026-08-23' },
+  { name:'impeccable',       desc:'Designs and iterates production-grade frontend interfaces. Real working code, committed design choices', v:'3.0.1', inv:true, src:'plugin', on:true, c7:6, c30:19, c90:42, last:'2026-08-28' },
+  { name:'version-release',  desc:'版本发布整理:把 CHANGELOG.md [Unreleased] 合并整理成发版记录,推断版本号并打 tag', v:'1.2.0', inv:true, src:'user', on:true, c7:5, c30:19, c90:31, last:'2026-08-28' },
+  { name:'atlas-ai-gateway', desc:'通过内置脚本认证并访问 HiGress 网关上的服务(鉴权/登录/token)', v:'1.0.0', inv:true, src:'user', on:true, c7:4, c30:12, c90:26, last:'2026-08-25' },
+  { name:'browser-act',      desc:'浏览器自动化操作:打开页面、点击、截图、抓取', v:'1.1.0', inv:true, src:'user', on:true, c7:0, c30:10, c90:24, last:'2026-08-11' },
+  { name:'baize-biz-events', desc:'夜间飞书业务事件采集:增量遍历知识库,提炼结构化事件落 events.jsonl', v:'1.0.1', inv:false, src:'user', on:true, c7:0, c30:8, c90:19, last:'2026-08-20' },
+  { name:'multica-issue-perf', desc:'分析 Multica 平台上某个 issue/run 的执行耗时并给出性能优化建议', v:'1.0.0', inv:true, src:'user', on:true, c7:0, c30:6, c90:9, last:'2026-08-20' },
+  { name:'lark-im',          desc:'飞书即时通讯:收发消息、搜索聊天记录、管理群聊、上传下载文件、交互卡片', v:'2.3.0', inv:true, src:'user', on:true, c7:2, c30:5, c90:14, last:'2026-08-26' },
+  { name:'lark-base',        desc:'飞书多维表格(Base)操作:建表、字段、记录、视图、统计、公式、表单、仪表盘', v:'2.3.0', inv:true, src:'user', on:true, c7:0, c30:4, c90:11, last:'2026-08-15' },
+  { name:'game-release',     desc:'热门游戏版本更新汇总:搜索未来一周重点游戏上线与版本更新,写入飞书多维表', v:'1.0.0', inv:true, src:'user', on:true, c7:1, c30:3, c90:8, last:'2026-08-24' },
+  { name:'deepwiki-cli',     desc:'查询 deepwiki 云端项目知识库,回答内部部署、配置、模块、流程和历史决策', v:'1.1.0', inv:true, src:'user', on:true, c7:0, c30:3, c90:7, last:'2026-08-20' },
+  { name:'send-dc-msg',      desc:'通过 Discord bot 向固定频道发送消息(REST v10 直调,超长自动拆分)', v:'1.0.0', inv:true, src:'user', on:true, c7:2, c30:2, c90:2, last:'2026-08-28' },
+  { name:'claude-api',       desc:'Reference for the Claude API / Anthropic SDK — model ids, pricing, params, streaming', v:'—', inv:false, src:'plugin', on:true, c7:2, c30:2, c90:2, last:'2026-08-28' },
+  { name:'lark-sheets',      desc:'飞书电子表格:创建表格、管理工作表、读写单元格、图表、透视表、条件格式', v:'2.3.0', inv:true, src:'user', on:true, c7:1, c30:2, c90:6, last:'2026-08-26' },
+  { name:'lark-doc',         desc:'飞书云文档(Docx/Wiki):读取和编辑文档内容、插入或下载图片附件', v:'2.3.0', inv:true, src:'user', on:true, c7:0, c30:2, c90:9, last:'2026-08-14' },
+  { name:'python-uv-env',    desc:'Python backend environment management using uv package manager with Python 3.11', v:'1.4.0', inv:true, src:'user', on:true, c7:1, c30:1, c90:3, last:'2026-08-26' },
+  { name:'dataviz',          desc:'Chart/dashboard design system — form heuristic, color formula, mark specs, interaction rules', v:'—', inv:false, src:'plugin', on:true, c7:1, c30:1, c90:1, last:'2026-08-21' },
+  { name:'jueming',          desc:'决明风险查询:对角色/账号进行单点或批量风险扫描,输出封禁、画像、异常报告', v:'1.2.0', inv:true, src:'user', on:true, c7:0, c30:0, c90:0, last:null },
+  { name:'ip-risk',          desc:'分析 IP 地址的风险高低,综合多家 IP 情报接口给出风险等级与数据支撑', v:'1.0.0', inv:true, src:'user', on:true, c7:0, c30:0, c90:2, last:'2026-05-31' },
+  { name:'pgame-card-exchange', desc:'PGame 换卡自助匹配:在缺卡/多余卡多维表中求全局最优交换方案', v:'1.1.0', inv:true, src:'user', on:false, c7:0, c30:0, c90:0, last:null },
+  { name:'weekly-report-summary', desc:'组周报汇总:从个人周报自动汇总生成团队周报', v:'1.0.0', inv:true, src:'user', on:false, c7:0, c30:0, c90:1, last:'2026-06-27' },
+];
+
+/* 近30天逐日分布(抽屉迷你柱):按 c30 真实总量伪随机铺开,零日留缺口 */
+function sparkOf(s) {
+  const days = new Array(30).fill(0);
+  let left = s.c30, seed = s.name.length * 7 + s.c30;
+  for (let i = 29; i >= 0 && left > 0; i--) {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    const take = Math.min(left, seed % Math.max(2, Math.ceil(s.c30 / 8)));
+    days[i] = take; left -= take;
+  }
+  if (left > 0) days[29] += left;
+  return days;
+}
+
+let win = 30, sortByUsage = true;
+const cnt = (s) => win === 7 ? s.c7 : win === 30 ? s.c30 : s.c90;
+
+function caliber(s) {
+  const n = cnt(s);
+  return `近 ${win} 天触发 ${n} 次\n口径:全部项目会话日志(~/.claude/projects)中 Skill 工具调用,逐次计数\n最近触发:${s.last ?? '从未'}`;
+}
+
+function render() {
+  const rows = [...SKILLS];
+  if (sortByUsage) rows.sort((a, b) => cnt(b) - cnt(a) || a.name.localeCompare(b.name));
+  else rows.sort((a, b) => Number(b.on) - Number(a.on) || a.name.localeCompare(b.name));
+  const max = Math.max(1, ...rows.map(cnt));
+  document.getElementById('win-label').textContent = `(${win} 天)`;
+  document.getElementById('usage-arrow').textContent = sortByUsage ? '▼' : '↕';
+  document.getElementById('usage-th').classList.toggle('sorted', sortByUsage);
+  document.getElementById('rows').innerHTML = rows.map((s, i) => `
+    <tr class="rowlink" data-i="${SKILLS.indexOf(s)}">
+      <td class="mono" style="font-size:0.8125rem;font-weight:600">${s.name}</td>
+      <td><div class="skill-desc">${s.desc}</div></td>
+      <td>
+        <span class="usage-cell" title="${caliber(s).replace(/"/g, '&quot;')}">
+          <span class="usage-n ${cnt(s) === 0 ? 'zero' : ''}">${cnt(s)}</span>
+          ${cnt(s) > 0 ? `<span class="usage-bar" style="width:${Math.max(2, Math.round(cnt(s) / max * 72))}px"></span>` : ''}
+        </span>
+      </td>
+      <td class="mono" style="color:var(--muted)">${s.v}</td>
+      <td>${s.inv ? '<span class="check">✓</span>' : '<span class="uncheck">—</span>'}</td>
+      <td><span class="tag">${s.src}</span></td>
+      <td><span class="switch ${s.on ? 'on' : ''}" role="switch" aria-checked="${s.on}"></span></td>
+    </tr>`).join('');
+}
+
+/* 窗口切换 */
+document.getElementById('win-tabs').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-w]'); if (!b) return;
+  win = Number(b.dataset.w);
+  document.querySelectorAll('#win-tabs button').forEach((x) => x.classList.toggle('active', x === b));
+  render();
+});
+
+/* 触发列排序:点一下按次数降序,再点回默认(启用+名称) */
+document.getElementById('usage-th').addEventListener('click', () => { sortByUsage = !sortByUsage; render(); });
+
+/* 抽屉 */
+const drawer = document.getElementById('drawer'), backdrop = document.getElementById('backdrop');
+document.getElementById('rows').addEventListener('click', (e) => {
+  if (e.target.closest('.switch')) return;
+  const tr = e.target.closest('tr[data-i]'); if (!tr) return;
+  const s = SKILLS[Number(tr.dataset.i)];
+  document.getElementById('d-name').textContent = s.name;
+  document.getElementById('d-meta').innerHTML = `<span class="tag">${s.src}</span><span class="mono">v${s.v}</span>`;
+  document.getElementById('d-desc').textContent = s.desc;
+  document.getElementById('d-kv').innerHTML = `
+    <dt>近 7 天</dt><dd>${s.c7} 次</dd>
+    <dt>近 30 天</dt><dd>${s.c30} 次</dd>
+    <dt>近 90 天</dt><dd>${s.c90} 次</dd>
+    <dt>最近触发</dt><dd>${s.last ?? '<span style="color:var(--faint)">从未触发</span>'}</dd>`;
+  const days = sparkOf(s), dmax = Math.max(1, ...days);
+  document.getElementById('d-spark').innerHTML = days.map((d) =>
+    `<i class="${d === 0 ? 'zero' : ''}" style="height:${Math.max(2, Math.round(d / dmax * 36))}px" title="${d} 次"></i>`).join('');
+  document.getElementById('d-spark-max').textContent = `峰值 ${dmax} 次/天`;
+  drawer.classList.add('show'); backdrop.classList.add('show');
+});
+const close = () => { drawer.classList.remove('show'); backdrop.classList.remove('show'); };
+document.getElementById('d-close').addEventListener('click', close);
+backdrop.addEventListener('click', close);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
+
+render();
+/* 演示直达:#drawer 打开首行抽屉(截图/review 用) */
+if (location.hash === '#drawer') document.querySelector('#rows tr')?.click();
+</script>
+</body>
+</html>

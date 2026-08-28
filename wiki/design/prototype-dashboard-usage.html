@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>璇玑 · 仪表盘用量模块改版原型</title>
+<style>
+  /* ============================================================
+     以下 token 与组件样式逐字拷贝自 code/frontend/src/styles/index.css
+     (与 DESIGN.md 同源);新增样式集中在文件末尾「新增样式」段。
+     ============================================================ */
+  :root {
+    --bg:        oklch(0.145 0.006 120);
+    --surface:   oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover:     oklch(0.215 0.009 120);
+    --line:      oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+
+    --ink:   oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+
+    --jade:      oklch(0.80 0.13 115);
+    --jade-dim:  oklch(0.68 0.10 115);
+    --on-jade:   oklch(0.18 0.02 120);
+
+    --amber: oklch(0.78 0.14 80);
+    --blue:  oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --red:   oklch(0.68 0.19 25);
+    --green: oklch(0.74 0.12 155);
+    --chart-1: oklch(0.68 0.075 115);
+    --chart-2: oklch(0.65 0.065 300);
+    --chart-3: oklch(0.65 0.065 245);
+
+    --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+    --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+    --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+    --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
+
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --r-s: 6px;
+    --r-m: 10px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+  button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+
+  .view-head { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+  .view-head h1 { font-size: 1.25rem; }
+  .view-head .sub { color: var(--muted); font-size: 0.8125rem; }
+  .view-head .spacer { flex: 1; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+  .panel-head h2 { font-size: 0.875rem; }
+  .panel-head .sub { font-size: 0.75rem; color: var(--muted); }
+  .panel-head .spacer { flex: 1; }
+  .mono { font-family: var(--mono); font-size: 0.8em; }
+
+  .clock { display: flex; align-items: baseline; gap: 10px; }
+  .clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .clock #dash-clock {
+    font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
+    color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+  }
+
+  .dash-strip { display: flex; gap: 24px; flex-wrap: wrap; padding: 12px 18px; font-size: 0.8125rem; color: var(--muted); margin-bottom: 16px; }
+  .dash-strip b { color: var(--ink); font-weight: 600; }
+
+  .dash-grid { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 16px; }
+
+  .tl { list-style: none; }
+  .tl li { display: flex; gap: 12px; padding: 9px 18px; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; }
+  .tl li:last-child { border-bottom: none; }
+  .tl .t { font-family: var(--mono); font-size: 0.75rem; color: var(--faint); flex: none; width: 58px; white-space: nowrap; }
+  .tl .proj { font-size: 0.75rem; flex: none; }
+  .tl .msg { color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .heat { padding: 14px 18px; }
+  .heat-row { display: grid; grid-template-columns: 96px repeat(7, 1fr); gap: 4px; align-items: center; margin-bottom: 6px; }
+  .heat-row .lbl { font-size: 0.75rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .heat-cell { height: 18px; border-radius: 3px; background: var(--tint-muted); position: relative; }
+  .heat-days { display: grid; grid-template-columns: 96px repeat(7, 1fr); gap: 4px; margin-top: 6px; }
+  .heat-days span { font-size: 0.6875rem; color: var(--faint); text-align: center; }
+  .heat-days span:first-child { text-align: left; }
+
+  .tok { padding: 10px 18px 14px; }
+  .tok-row {
+    display: grid; grid-template-columns: 176px 1fr 76px; gap: 12px; align-items: center;
+    width: 100%; padding: 6px 0; font-size: 0.8125rem; text-align: left;
+    background: none; border: none; color: inherit; font-family: inherit;
+  }
+  button.tok-row { cursor: pointer; border-radius: var(--r-s); transition: background 150ms var(--ease); }
+  button.tok-row:hover { background: var(--hover); }
+  button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
+  .tok-row .lbl { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .tok-row .chev { color: var(--faint); font-size: 0.6875rem; transition: transform 150ms var(--ease); flex: none; }
+  .tok-proj.open > .tok-row .chev { transform: rotate(90deg); }
+  .tok-row .track { height: 9px; }
+  .tok-row .bar { height: 100%; display: flex; border-radius: 4px; overflow: hidden; min-width: 3px; transition: width 200ms var(--ease); }
+  .tok-row .bar i { height: 100%; }
+  .tok-row .val { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-align: right; white-space: nowrap; }
+  .tok-subs { display: none; padding: 2px 0 6px; }
+  .tok-proj.open .tok-subs { display: block; }
+  .tok-row.sub { padding: 4px 0; }
+  .tok-row.sub .lbl { font-weight: 400; color: var(--muted); padding-left: 22px; font-size: 0.75rem; }
+  .tok-row.sub .track { height: 6px; }
+  .tok-legend { display: flex; gap: 14px; font-size: 0.6875rem; color: var(--muted); }
+  .tok-legend span { display: flex; align-items: center; gap: 5px; }
+  .tok-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  /* ============================================================
+     新增样式(改版专用):分段切换、multica 对比条、合并模块内的分隔
+     ============================================================ */
+
+  /* 分段切换:紧凑 pill 组,选中态 = 玉色 tint(沿用 .nav button.active 词汇) */
+  /* 合并模块头部:标题不折行,切换组允许整组换行但不拆散 */
+  .usage-head { flex-wrap: wrap; row-gap: 6px; }
+  .usage-head h2 { white-space: nowrap; }
+  .usage-head .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .seg {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: var(--surface-2); border: 1px solid var(--line-soft);
+    border-radius: var(--r-s); padding: 2px;
+  }
+  .seg button {
+    padding: 1px 10px; border-radius: 4px;
+    font-size: 0.75rem; color: var(--muted);
+    transition: background 150ms var(--ease), color 150ms var(--ease);
+    white-space: nowrap;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+
+  /* multica 对比条:开发 vs multica 的水平堆叠总览。
+     开发段用玉色(主角),multica 段用低饱和中性(背景噪声,不与模型系列色抢词汇) */
+  .cmp { padding: 14px 18px 4px; }
+  .cmp-head {
+    display: flex; align-items: baseline; gap: 8px;
+    font-size: 0.75rem; color: var(--muted); margin-bottom: 7px;
+  }
+  .cmp-head b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.75rem; }
+  .cmp-head .pct { color: var(--jade); font-family: var(--mono); }
+  .cmp-track {
+    display: flex; height: 10px; border-radius: 5px; overflow: hidden;
+    background: var(--tint-muted);
+  }
+  .cmp-track .dev { background: var(--jade-dim); transition: width 200ms var(--ease); }
+  .cmp-track .noise {
+    background: repeating-linear-gradient(
+      -45deg,
+      oklch(0.34 0.012 110) 0 5px,
+      oklch(0.28 0.010 110) 5px 10px
+    );
+    transition: width 200ms var(--ease);
+  }
+  .cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); }
+  .cmp-legend span { display: flex; align-items: center; gap: 5px; }
+  .cmp-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .cmp-legend .i-dev { background: var(--jade-dim); }
+  .cmp-legend .i-noise {
+    background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px);
+  }
+
+  /* 合并模块内两段之间的分隔:热力图接在成本条下方,用整宽细线分段 */
+  .usage-divide { border-top: 1px solid var(--line-soft); }
+  .usage-divide .cap {
+    display: flex; align-items: baseline; gap: 8px;
+    padding: 10px 18px 0; font-size: 0.75rem; color: var(--muted);
+  }
+  .usage-divide .cap h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+
+  /* 最近活动拉长后内部滚动兜底(左栏跟随右栏自然高度) */
+  .tl-tall { max-height: 720px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+
+  /* ---------- 原型页面自身的注解外壳(非产品样式) ---------- */
+  .proto-wrap { max-width: 1180px; margin: 0 auto; padding: 40px 32px 80px; }
+  .proto-lede { color: var(--muted); max-width: 72ch; margin: 0 0 8px; text-wrap: pretty; font-size: 0.8125rem; }
+  .proto-note {
+    color: var(--faint); font-size: 0.75rem; max-width: 78ch; margin: 0 0 28px;
+  }
+  .proto-note b { color: var(--muted); font-weight: 600; }
+  .proto-h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin: 0 0 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 900px) {
+    .dash-grid { grid-template-columns: minmax(0, 1fr); }
+    /* 移动端顺序:最近活动更高频,DOM 里左栏在前,天然先显示 */
+  }
+  @media (max-width: 640px) {
+    /* 窄屏:副标题让位给两组切换(口径悬停仍在),条形图三列收紧防止数值溢出 */
+    .usage-head .sub { display: none; }
+    .tok-row { grid-template-columns: minmax(90px, 110px) 1fr 64px; gap: 8px; }
+    .tok-row.sub .lbl { padding-left: 12px; }
+    .proto-wrap { padding: 24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="proto-wrap">
+  <h1 class="proto-h1">仪表盘 · 用量模块改版原型</h1>
+  <p class="proto-lede">改动范围是仪表盘下半部(统计条以下)。左栏「最近活动」拉通整栏、显示约 25 条;右栏是合并后的「Token 用量」模块:multica 对比总览条 + 按项目条形图 + 7 日热力图,顶部两组分段切换(今天/近一周 × 成本/Token 量)全部可点,切换时条长、数值、对比条与热力图 tooltip 同步换算。</p>
+  <p class="proto-note"><b>口径注解:</b>项目条形图仍然只列开发项目(multica 被 projectNoisePatterns 过滤,维持现状);multica 只出现在顶部对比条里,避免它碾压条形图的分辨率。统计条里的「今日成本」口径不变(纯开发)。热力图行序跟随条形图 top 项目。</p>
+
+  <div class="view-head">
+    <h1>仪表盘</h1>
+    <span class="spacer"></span>
+    <span class="clock" title="北京时间(UTC+8)"><span class="date">2026-08-28 周五</span><span id="dash-clock">21:47:03</span></span>
+  </div>
+
+  <div class="panel dash-strip" title="usage 数据来自 ~/.claude/projects 下 session jsonl 的 assistant usage 字段,按 message.id 去重;成本按模型单价表现算">
+    <span>今日 prompt <b>47</b> 条</span>
+    <span>今日 token <b>386.2M</b> · 成本 <b>$5.85</b></span>
+    <span>活跃项目 <b>5</b> 个</span>
+    <span>定时任务 <b>6</b> 个正常</span>
+    <span>系统定时 <b>3</b> 条(只读)</span>
+    <span class="spacer"></span>
+    <span>claude 2.1.34</span>
+  </div>
+
+  <div class="dash-grid">
+    <!-- 左栏:最近活动,拉通整栏高度 -->
+    <div class="panel">
+      <div class="panel-head"><h2>最近活动</h2><span class="sub">来自 history.jsonl</span></div>
+      <ul class="tl tl-tall" id="tl"></ul>
+    </div>
+
+    <!-- 右栏:Token 用量合并模块 -->
+    <div class="panel">
+      <div class="panel-head usage-head">
+        <h2>Token 用量</h2>
+        <span class="sub" id="usage-sub" title="按项目聚合,条长 = 所选口径的量;点击展开会话明细">按项目聚合 · 点击展开明细</span>
+        <span class="spacer"></span>
+        <span class="seg" id="seg-range" role="group" aria-label="时间范围">
+          <button class="active" data-v="today">今天</button>
+          <button data-v="week">近一周</button>
+        </span>
+        <span class="seg" id="seg-unit" role="group" aria-label="计量单位">
+          <button class="active" data-v="cost">成本 $</button>
+          <button data-v="tok">Token</button>
+        </span>
+      </div>
+
+      <!-- multica 对比总览条 -->
+      <div class="cmp">
+        <div class="cmp-head" id="cmp-head"></div>
+        <div class="cmp-track" title="">
+          <div class="dev" id="cmp-dev"></div>
+          <div class="noise" id="cmp-noise"></div>
+        </div>
+        <div class="cmp-legend">
+          <span><i class="i-dev"></i>开发项目</span>
+          <span><i class="i-noise"></i>multica workspaces</span>
+        </div>
+      </div>
+
+      <!-- 项目条形图 -->
+      <div class="tok" id="tok"></div>
+
+      <!-- 7 日热力图:行序跟随条形图 top 项目 -->
+      <div class="usage-divide">
+        <div class="cap"><h3>7 日活动</h3><span>按项目 · 每日 prompt 数</span></div>
+        <div class="heat" id="heat"></div>
+      </div>
+
+      <!-- 模块底部图例 -->
+      <div class="usage-divide" style="padding: 10px 18px;">
+        <span class="tok-legend">
+          <span><i style="background: var(--chart-1)"></i>fable</span>
+          <span><i style="background: var(--chart-2)"></i>opus</span>
+          <span><i style="background: var(--chart-3)"></i>sonnet</span>
+        </span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- mock 数据(量级贴近真实:cache read 占大头,成本远小于名义 token 量) ---------------- */
+// models: [fable, opus, sonnet] 占比
+const DATA = {
+  today: {
+    noise: { cost: 18.62, tok: 1.64e9 },
+    projects: [
+      { name: 'xuanji', cost: 3.12, tok: 214.6e6, models: [0.71, 0.0, 0.29], sessions: [
+        { title: '仪表盘用量模块改版', id: '9f3a17c2', cost: 1.84, tok: 128.3e6, models: [1, 0, 0] },
+        { title: '验收面板会话绑定', id: 'c41b88e0', cost: 0.92, tok: 61.5e6, models: [0.45, 0, 0.55] },
+        { title: '/wd 手输路径回归', id: '77d2e5aa', cost: 0.36, tok: 24.8e6, models: [0, 0, 1] },
+      ]},
+      { name: 'antifraud_skills', cost: 1.41, tok: 96.4e6, models: [0.35, 0.0, 0.65], sessions: [
+        { title: 'P0 标签梳理', id: '2b9c4d11', cost: 1.41, tok: 96.4e6, models: [0.35, 0, 0.65] },
+      ]},
+      { name: 'baize_web', cost: 0.78, tok: 48.9e6, models: [0.6, 0.0, 0.4], sessions: [
+        { title: '日报卡片调试', id: 'e80f3c55', cost: 0.78, tok: 48.9e6, models: [0.6, 0, 0.4] },
+      ]},
+      { name: 'yuiko-skills', cost: 0.34, tok: 18.7e6, models: [0, 0, 1], sessions: [
+        { title: 'skill lint 修复', id: '5a6e9b02', cost: 0.34, tok: 18.7e6, models: [0, 0, 1] },
+      ]},
+      { name: 'worklog', cost: 0.20, tok: 7.6e6, models: [0, 0, 1], sessions: [
+        { title: '收口卡整理', id: 'b3d0f471', cost: 0.20, tok: 7.6e6, models: [0, 0, 1] },
+      ]},
+    ],
+  },
+  week: {
+    noise: { cost: 121.40, tok: 11.2e9 },
+    projects: [
+      { name: 'xuanji', cost: 19.86, tok: 1.42e9, models: [0.66, 0.05, 0.29], sessions: [
+        { title: '仪表盘用量模块改版', id: '9f3a17c2', cost: 1.84, tok: 128.3e6, models: [1, 0, 0] },
+        { title: '验收面板会话绑定', id: 'c41b88e0', cost: 7.41, tok: 512.7e6, models: [0.7, 0, 0.3] },
+        { title: 'runbook 落地 baize', id: '10c2ffd8', cost: 6.02, tok: 447.2e6, models: [0.62, 0.11, 0.27] },
+        { title: '/wd 手输路径', id: '77d2e5aa', cost: 4.59, tok: 331.8e6, models: [0.55, 0, 0.45] },
+      ]},
+      { name: 'antifraud_skills', cost: 8.13, tok: 588.5e6, models: [0.4, 0, 0.6], sessions: [
+        { title: 'P0 标签梳理', id: '2b9c4d11', cost: 5.32, tok: 371.0e6, models: [0.45, 0, 0.55] },
+        { title: '决明批量扫描', id: '8c1da933', cost: 2.81, tok: 217.5e6, models: [0.3, 0, 0.7] },
+      ]},
+      { name: 'baize_web', cost: 6.44, tok: 402.1e6, models: [0.5, 0.1, 0.4], sessions: [
+        { title: '日报卡片调试', id: 'e80f3c55', cost: 3.9, tok: 244.6e6, models: [0.55, 0.1, 0.35] },
+        { title: 'insight 上报', id: 'f2ab7710', cost: 2.54, tok: 157.5e6, models: [0.4, 0.1, 0.5] },
+      ]},
+      { name: 'deep_baize', cost: 3.05, tok: 226.0e6, models: [0.2, 0, 0.8], sessions: [
+        { title: 'funnel v2 验收', id: '61e4c8d9', cost: 3.05, tok: 226.0e6, models: [0.2, 0, 0.8] },
+      ]},
+      { name: 'yuiko-skills', cost: 1.92, tok: 104.3e6, models: [0, 0, 1], sessions: [
+        { title: 'skill lint 修复', id: '5a6e9b02', cost: 1.92, tok: 104.3e6, models: [0, 0, 1] },
+      ]},
+    ],
+  },
+};
+
+// 热力图:近 7 天 prompt 数,行序 = 条形图(近一周)top 项目
+const HEAT = [
+  { name: 'xuanji',           days: [12, 18, 9, 22, 15, 26, 21] },
+  { name: 'antifraud_skills', days: [4, 0, 7, 11, 3, 8, 9] },
+  { name: 'baize_web',        days: [0, 6, 10, 2, 12, 4, 7] },
+  { name: 'deep_baize',       days: [0, 0, 5, 8, 2, 0, 3] },
+  { name: 'yuiko-skills',     days: [2, 0, 0, 3, 0, 5, 1] },
+];
+
+// 最近活动 mock(约 25 条)
+const TL = [
+  ['21:44','xuanji','仪表盘用量模块改版:出原型 prototype-dashboard-usage.html'],
+  ['21:31','xuanji','multica 成本口径调查:确认 projectNoisePatterns 过滤'],
+  ['21:02','antifraud_skills','P0 标签梳理:更新飞书多维表 47 条'],
+  ['20:48','baize_web','日报卡片:envelope digest 汇总模式调试'],
+  ['20:33','xuanji','验收面板会话绑定 PR#31 合并后清理 worktree'],
+  ['20:15','worklog','2026-08-28 收口卡:runbook session binding'],
+  ['19:52','baize_web','insight-1.1 契约上报重试逻辑'],
+  ['19:40','deep_baize','funnel v2 路径改名回归验证'],
+  ['19:21','xuanji','restart.sh 部署验收面板改动'],
+  ['18:58','antifraud_skills','决明批量扫描 340 个 role_id'],
+  ['18:44','yuiko-skills','skill lint:description 触发词补齐'],
+  ['18:12','xuanji','/wd 手输路径 PR#30 验收通过'],
+  ['17:55','baize_web','异动日报卡片:大盘对比下钻'],
+  ['17:31','xuanji','preview.sh 快照库验收环境拉起'],
+  ['17:04','worklog','INDEX.md 周报数据源整理'],
+  ['16:47','antifraud_skills','tag_organize 离线标签引用关系刷新'],
+  ['16:20','deep_baize','analyze_sql 慢查询定位'],
+  ['15:58','xuanji','runbook 模板 tpl_baize_web_std v1 入库'],
+  ['15:33','baize_web','daily-scan 归因结果交叉验证'],
+  ['15:10','yuiko-skills','新 skill 骨架:card-sender 拆分'],
+  ['14:42','xuanji','验收清单 mtime 认领逻辑单测 175 passed'],
+  ['14:18','antifraud_skills','P1 标签重要性复核'],
+  ['13:55','xuanji','代码块一键复制 PR#28 浏览器回归'],
+  ['13:27','baize_web','版本区块 changelog 碎片整理'],
+  ['13:02','deep_baize','group_analyze 分组维度扩展'],
+];
+
+const PROJ_HUES = [115, 300, 245, 80, 25, 155, 200, 340];
+function projHue(name) {
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return PROJ_HUES[(h >>> 0) % PROJ_HUES.length];
+}
+const projColor = (n) => `oklch(0.78 0.12 ${projHue(n)})`;
+const MODEL_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)'];
+const MODEL_NAMES = ['fable', 'opus', 'sonnet'];
+
+const fmtCost = (v) => '$' + v.toFixed(2);
+function fmtTok(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+  return String(n);
+}
+
+// 原型自测便利:?range=week&unit=tok 可直接打开某个切换态(截图/review 用,不进产品代码)
+const q = new URLSearchParams(location.search);
+let range = q.get('range') === 'week' ? 'week' : 'today';
+let unit = q.get('unit') === 'tok' ? 'tok' : 'cost';
+const open = new Set();
+
+function val(x) { return unit === 'cost' ? x.cost : x.tok; }
+function fmt(v) { return unit === 'cost' ? fmtCost(v) : fmtTok(v); }
+function tip(x) { return `${fmtCost(x.cost)} · ${fmtTok(x.tok)} tok`; }
+
+function barHtml(x, max) {
+  const w = (val(x) / max * 100).toFixed(2);
+  const segs = x.models.map((f, i) => f > 0
+    ? `<i style="width:${(f * 100).toFixed(1)}%;background:${MODEL_COLORS[i]}" title="${MODEL_NAMES[i]}"></i>` : '').join('');
+  return `<div class="track" title="${tip(x)} · ${x.models.map((f, i) => f > 0 ? MODEL_NAMES[i] + ' ' + Math.round(f * 100) + '%' : '').filter(Boolean).join(' · ')}"><div class="bar" style="width:${w}%">${segs}</div></div>`;
+}
+
+function render() {
+  const d = DATA[range];
+  const rangeLabel = range === 'today' ? '今天' : '近一周';
+
+  // 副标题
+  document.getElementById('usage-sub').textContent =
+    `${rangeLabel} · 按项目聚合 · 条长 = ${unit === 'cost' ? '实际成本' : 'token 量'}`;
+
+  // 对比条
+  const dev = d.projects.reduce((s, p) => s + val(p), 0);
+  const devFull = { cost: d.projects.reduce((s, p) => s + p.cost, 0), tok: d.projects.reduce((s, p) => s + p.tok, 0) };
+  const noise = val(d.noise);
+  const total = dev + noise;
+  const pct = Math.round(dev / total * 100);
+  document.getElementById('cmp-head').innerHTML =
+    `开发 <b>${fmt(dev)}</b> vs multica <b>${fmt(noise)}</b><span class="pct">开发占 ${pct}%</span>`;
+  document.getElementById('cmp-dev').style.width = (dev / total * 100).toFixed(1) + '%';
+  document.getElementById('cmp-noise').style.width = (noise / total * 100).toFixed(1) + '%';
+  document.querySelector('.cmp-track').title =
+    `${rangeLabel} · 开发 ${tip(devFull)} · multica ${tip(d.noise)}`;
+
+  // 项目条形图
+  const max = Math.max(1e-9, ...d.projects.map(val));
+  document.getElementById('tok').innerHTML = d.projects.map((p) => `
+    <div class="tok-proj ${open.has(p.name) ? 'open' : ''}" data-p="${p.name}">
+      <button class="tok-row" aria-expanded="${open.has(p.name)}">
+        <span class="lbl"><span class="chev">▸</span>${p.name}</span>
+        ${barHtml(p, max)}
+        <span class="val">${fmt(val(p))}</span>
+      </button>
+      <div class="tok-subs">
+        ${p.sessions.map((s) => `
+          <div class="tok-row sub" title="session ${s.id} · ${tip(s)}">
+            <span class="lbl">${s.title} <span class="mono" style="color:var(--faint)">(${s.id})</span></span>
+            ${barHtml(s, max)}
+            <span class="val">${fmt(val(s))}</span>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('.tok-proj > .tok-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const n = btn.parentElement.dataset.p;
+      open.has(n) ? open.delete(n) : open.add(n);
+      render();
+    });
+  });
+}
+
+// 热力图(静态,不随切换变:它天然就是 7 日口径)
+function renderHeat() {
+  const maxHeat = Math.max(1, ...HEAT.flatMap((h) => h.days));
+  const dayFull = ['8/22 周六', '8/23 周日', '8/24 周一', '8/25 周二', '8/26 周三', '8/27 周四', '8/28 周五'];
+  const dayShort = ['六', '日', '一', '二', '三', '四', '今'];
+  document.getElementById('heat').innerHTML = HEAT.map((row) => `
+    <div class="heat-row">
+      <span class="lbl" style="color:${projColor(row.name)}">${row.name}</span>
+      ${row.days.map((v, i) => `<div class="heat-cell" title="${dayFull[i]} · ${v} 条 prompt"${
+        v ? ` style="background:color-mix(in oklab, var(--jade) ${18 + Math.round(v / maxHeat * 72)}%, var(--surface-2))"` : ''}></div>`).join('')}
+    </div>`).join('') +
+    `<div class="heat-days"><span></span>${dayShort.map((s, i) => `<span title="${dayFull[i]}">${s}</span>`).join('')}</div>`;
+}
+
+function renderTl() {
+  document.getElementById('tl').innerHTML = TL.map(([t, p, m]) =>
+    `<li><span class="t">${t}</span><span class="proj" style="color:${projColor(p)}">${p}</span><span class="msg">${m}</span></li>`).join('');
+}
+
+function bindSeg(id, set) {
+  const el = document.getElementById(id);
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    el.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    set(b.dataset.v);
+    render();
+  }));
+}
+bindSeg('seg-range', (v) => { range = v; });
+bindSeg('seg-unit', (v) => { unit = v; });
+document.querySelectorAll('#seg-range button').forEach((b) => b.classList.toggle('active', b.dataset.v === range));
+document.querySelectorAll('#seg-unit button').forEach((b) => b.classList.toggle('active', (b.dataset.v === 'tok') === (unit === 'tok')));
+
+renderTl();
+renderHeat();
+render();
+</script>
+</body>
+</html>

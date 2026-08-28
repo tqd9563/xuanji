@@ -203,6 +203,26 @@ components:
     textColor: "{colors.jade}"
     rounded: "{rounded.sm}"
     padding: "7px 12px"
+  statusbar:
+    backgroundColor: "color-mix(in oklab, {colors.bg} 82%, transparent)"
+    height: "42px"
+    padding: "0 clamp(32px, 3.5vw, 80px)"
+  statusbar-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
+  statusbar-item-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  statusbar-item-alert:
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
+  statusbar-clock:
+    textColor: "{colors.ink}"
+    typography: "{typography.display}"
+    padding: "3px 9px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -341,6 +361,17 @@ components:
 - **移动端(≤430px):** 导航沉底为 5-tab 拇指区栏(`.tabbar`:首页/会话/派发/定时/更多,surface-2 底 + 1px line-soft 上边线,高 58px + safe-area,active 玉字玉标);「会话」tab 挂琥珀徽章显示 blocked 数;项目/技能/经验/回顾收进「更多」二级页,顶栏出 ‹ 返回。顶栏与 tab 栏吸附时允许 backdrop blur 作滚动垫层——这是功能性模糊,不属玻璃拟态禁区
 - **快捷键:** 数字 1–7 直切视图,按钮悬停提示对应键位;移动端无物理键盘,快捷键语义由 tab 栏与卡片大点击区承接
 
+### 全局状态栏(Signature Component · `.statusbar`)
+- **性格:** macOS 菜单栏的观象台译本。它是**外壳家具而非视图内容**——挂在 `.main` 顶部、所有 `<section class="view">` 之外,切视图时它不参与转场、不重挂载、不闪。整条只承载「与当前视图无关、但任何时刻都想瞥一眼」的环境信息;凡是只对某一个视图成立的数字,都不属于这里,该回它自己的 view-head。
+- **形制:** 42px 高、`position: sticky; top: 0`、内容右对齐(靠近用户视线终点与窗口控件一侧)。左右内边距与 `.main` 同为 `clamp(32px, 3.5vw, 80px)`,再用等值负外边距出血到主区边缘,使模糊层贯通整幅宽度而不是浮在内容缩进里。底部 1px `{colors.line-soft}` 收边。
+- **材质:** 底色 `{colors.bg}` 82% + `backdrop-filter: blur(10px)`。这是**功能性模糊——内容从下方滚过时保证状态栏文字可读**,与 mobile-topbar / tabbar 的吸附垫层同源,不属玻璃拟态禁区;禁止给它加边框高光、内阴影或任何让「玻璃感」本身成为观赏对象的处理。
+- **widget 化:** 状态栏本身不认识任何具体信息,只提供插槽;每个 widget 是一枚 `.sb-item`(3px 9px、6px 圆角、`{colors.muted}` 11px 字、`tabular-nums`),相邻 widget 间以 14px 高的 1px 细竖线 `.sb-sep` 分隔。widget 分两类:纯展示用 `<span>`,可操作用 `<button>`(hover 提亮为 `{colors.hover}` 底 + `{colors.ink}` 字,唯一的悬停反馈,不位移不描边)。**新增信息一律是新增一枚 widget,不是把文字塞进已有 widget。**
+- **告警态(`.warn`):** 需要用户出手的 widget 整体转 `{colors.amber}`,前置圆点 2s 脉冲——复用状态胶囊 `pill-blk` 的琥珀语义,状态色只表状态。
+- **时钟 widget(`.sb-clock`):** 观象台时钟,自仪表盘迁入此处后成为全局常驻。日期(mono 12px `{colors.muted}`)与时间(mono 17px/500 `{colors.ink}`,即 `{typography.display}`)基线对齐、10px 间距,构成单一注视点;`tabular-nums` 保证秒位跳动不抖版。**尺寸与配色一字未改地沿用原仪表盘时钟**——它是全站唯一使用 display 级字号的常驻数据,这份重量是刻意的:时间是观象台的锚。
+- **零值即消失:** 计数类 widget(如待验收数)为 0 时整枚移除,不显示 `0`、不留灰底占位。状态栏的每一枚 widget 都必须在此刻有话要说。
+- **不重复原则:** 信息一旦升格为状态栏 widget,**它在视图内的旧位置必须删干净**。时钟迁入后仪表盘 view-head 的旧时钟即被移除——同屏两个钟是缺陷,不是冗余保险。与另一处**外壳**家具(侧栏 side-foot)同题不算违例,前提是粒度不同:状态栏的 daemon 圆点只回答「活着吗」,侧栏底部给的是 CLI 版本号全文。同粒度的两份拷贝仍然禁止。
+- **移动端(≤430px):** 不渲染。移动端已有 `.mobile-topbar` 承接标识与 daemon 状态,44px 宽度里再压一条状态栏只会挤掉标题。
+
 ### 思考卡(Signature Component · 派发流内的模型推理)
 - **性格:** 全站唯一一个「刻意不发光」的信息块。彩色是稀缺资源,已分配给工具卡函数名与用户消息底色;思考只用中性阶(faint 正文 / muted 悬停),永远落在助手正文之后的第二层级。
 - **结构:** 无边框无底色,仅左侧 1px `{colors.line}` 竖线 + 16px 缩进构成轨道;头部一行 = 虚线圆环图标 + 「思考」标签(sans 11px/600)+ 耗时(mono 12px/400)+ `▾`。宽度与工具卡同为 68ch。
@@ -404,6 +435,13 @@ components:
 
 ### 待办来源横幅(`.from-todo`)
 派发页 composer 上方的玉色 tint 条,说明本次会话由哪条待办发起,右端 ✕ 解除关联。它承担一条产品约束的可见化:待办「开工」只把内容**预填**进输入框、**不自动发送**(半句话想法直接发出去质量不高),所以界面必须解释「这段文字是哪来的、发出去会发生什么」。同理,会话结束不自动勾完成——那是人的判断。
+
+### 验收面板(Signature Component · `.runbook`)
+派发页消息区与状态条之间的常驻工具条——它是验收**阶段**的工作台,不是一条消息,所以不进消息流,而是夹在对话与输入框之间:抬眼看产出、低头点命令、就地回「验收通过」,一屏闭合。头部用紫罗兰(`.rb-label` + 30% 紫描边)接住「待验收」的既有语义色(与 `.pill-rev` 同源),**面板内部随即回到中性**——状态色是稀缺资源,只留给状态灯。折叠头常驻一行摘要(`● N 个环境运行中` / `环境未启动`),因为「有没有东西还开着」是收起面板后唯一还需要知道的事。
+
+状态灯(`.rb-dot`)沿用全局状态词汇、不新造:faint=未启动、琥珀脉动=执行中、玉=就绪/完成、muted=已退出、红=失败或拦截。每个可执行项在按钮下方**常驻插值后的完整命令**(mono faint,参数段染蓝标出「这段是你填的」)——用户点的是一条命令而不是一个黑盒按钮,这与「数据可信优先:数字必须带口径」是同一条原则的两种形态。参数按类型渲染成日期选择器/下拉/勾选框,改动实时重算上方命令行。
+
+两类「不可点」必须一眼可分,故走两个正交通道:依赖未就绪是**整行降透明 + 按钮禁用**(`.dep-wait`,语义是「还不能」,上游就绪后自动解除);命中防自斩黑名单是**红点 + 红底原因条**(`.rb-blocked`,语义是「永远不能」,并写清请改在终端手动执行)。拦截在渲染时就判定完毕,不等用户点了才报错。会话生成(未经模板入库)的项挂紫色 `.rb-origin` 标,首次执行弹完整命令确认层(复用 `.confirm-mask`),同会话内二次执行免确认。
 
 ## 6. Do's and Don'ts
 

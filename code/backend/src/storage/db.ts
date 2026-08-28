@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { desc, eq } from 'drizzle-orm';
-import type { Memory, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
+import type { Memory, RunbookRun, RunbookTemplate, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -35,6 +35,18 @@ export const sessionNamesTable = sqliteTable('session_names', {
   sessionId: text('session_id').primaryKey(),
   name: text('name').notNull(),
   updatedAt: integer('updated_at').notNull(),
+});
+
+/**
+ * 会话名快照(自有可重建索引):`claude agents --json` 的会话名只在会话存活期间可查,
+ * 进程退出后 ~/.claude 里就再也找不到它。用量报表统计的恰恰是已结束的历史会话,
+ * 名字源头已消失,只能退化成转录首句。看板每轮轮询顺手把看到的名字存下来,
+ * 会话退出后名字仍在。~/.claude 不动,快照丢了也只是退回首句显示。
+ */
+export const sessionTitleSnapshotsTable = sqliteTable('session_title_snapshots', {
+  sessionId: text('session_id').primaryKey(),
+  name: text('name').notNull(),
+  seenAt: integer('seen_at').notNull(),
 });
 
 /** 看板「关闭」的隐藏列表(自有数据,可逆):~/.claude 不动,只是不再展示 */
@@ -148,6 +160,59 @@ export const todosTable = sqliteTable('todos', {
   source: text('source').notNull(), // web | external
 });
 
+/**
+ * 项目级验收模板(自有数据):验收骨架一次沉淀长期复用。
+ * items 存 JSON 串——清单项是嵌套结构且只整体读写,拆表徒增 join 无收益。
+ * 版本号只增不改:实例按 (id, version) 锁定引用,模板后续编辑不回溯已交付的清单。
+ */
+export const runbookTemplatesTable = sqliteTable('runbook_templates', {
+  id: text('id').primaryKey(),
+  project: text('project').notNull(),
+  name: text('name').notNull(),
+  version: integer('version').notNull(),
+  status: text('status').notNull(), // draft | active | archived
+  source: text('source').notNull(), // user | agent
+  items: text('items').notNull(), // JSON: RunbookItem[]
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
+/** 验收面板每次执行的运行态(自有数据):谁、跑了哪条插值后的命令、结果如何 */
+export const runbookRunsTable = sqliteTable('runbook_runs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id').notNull(),
+  itemId: text('item_id').notNull(),
+  /** 插值后的完整命令:审计与「用户点的到底是什么」的唯一事实 */
+  resolvedCommand: text('resolved_command').notNull(),
+  status: text('status').notNull(), // running | ready | ok | exited | failed | stopped
+  pid: integer('pid'),
+  exitCode: integer('exit_code'),
+  startedAt: integer('started_at').notNull(),
+  endedAt: integer('ended_at'),
+  logPath: text('log_path'),
+});
+
+/**
+ * 技能触发次数索引(可重建索引,非自有数据):source of truth 永远是 ~/.claude 的 session jsonl。
+ * 按「文件 × 技能 × 本地日」聚合到日粒度——最细只到天,窗口统计与逐日分布都够用,
+ * 且行数比逐条事件小两个数量级。带 path 是为了增量:文件变了先删它的旧行再重插。
+ */
+export const skillInvocationsTable = sqliteTable('skill_invocations', {
+  path: text('path').notNull(),
+  skill: text('skill').notNull(),
+  day: text('day').notNull(), // YYYY-MM-DD(本地时区)
+  count: integer('count').notNull(),
+  /** 该文件该技能该日的最后一次触发时刻,供「最近触发」取 max */
+  lastAt: integer('last_at').notNull(),
+});
+
+/** 已扫描文件的指纹:(mtime,size) 都没变的文件跳过重解析,冷扫 4.7s → 热扫毫秒级 */
+export const skillScanFilesTable = sqliteTable('skill_scan_files', {
+  path: text('path').primaryKey(),
+  mtime: integer('mtime').notNull(),
+  size: integer('size').notNull(),
+});
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -168,6 +233,9 @@ export class Storage {
       );
       CREATE TABLE IF NOT EXISTS session_names (
         session_id TEXT PRIMARY KEY, name TEXT NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS session_title_snapshots (
+        session_id TEXT PRIMARY KEY, name TEXT NOT NULL, seen_at INTEGER NOT NULL
       );
       CREATE TABLE IF NOT EXISTS hidden_sessions (
         session_id TEXT PRIMARY KEY, hidden_at INTEGER NOT NULL
@@ -216,6 +284,30 @@ export class Storage {
         source TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, id DESC);
+      CREATE TABLE IF NOT EXISTS runbook_templates (
+        id TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL,
+        version INTEGER NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL,
+        items TEXT NOT NULL,
+        created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_runbook_templates_project ON runbook_templates(project);
+      CREATE TABLE IF NOT EXISTS runbook_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL, item_id TEXT NOT NULL,
+        resolved_command TEXT NOT NULL, status TEXT NOT NULL,
+        pid INTEGER, exit_code INTEGER,
+        started_at INTEGER NOT NULL, ended_at INTEGER, log_path TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_runbook_runs_session ON runbook_runs(session_id, id DESC);
+      CREATE TABLE IF NOT EXISTS skill_invocations (
+        path TEXT NOT NULL, skill TEXT NOT NULL, day TEXT NOT NULL,
+        count INTEGER NOT NULL, last_at INTEGER NOT NULL,
+        PRIMARY KEY (path, skill, day)
+      );
+      CREATE INDEX IF NOT EXISTS idx_skill_invocations_day ON skill_invocations(day, skill);
+      CREATE TABLE IF NOT EXISTS skill_scan_files (
+        path TEXT PRIMARY KEY, mtime INTEGER NOT NULL, size INTEGER NOT NULL
+      );
       CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
         name, description, body, project, type UNINDEXED, file UNINDEXED,
         tokenize = 'trigram'
@@ -241,6 +333,18 @@ export class Storage {
       .values({ sessionId, cwd, createdAt: Date.now(), name: name ?? null })
       .onConflictDoNothing()
       .run();
+  }
+
+  /**
+   * 派发会话的起始时刻(ms);非 web 派发的会话返回 null。
+   * onConflictDoNothing 保证它是「这条会话第一次出现」的时刻,后端重启/接回都不会刷新,
+   * 因此可以拿来判定验收清单是不是本次交付写的。
+   */
+  dispatchStartedAt(sessionId: string): number | null {
+    const row = this.sqlite
+      .prepare('SELECT created_at as createdAt FROM dispatches WHERE session_id = ?')
+      .get(sessionId) as { createdAt: number } | undefined;
+    return row?.createdAt ?? null;
   }
 
   /** 全部 web 派发记录:进程/CLI 都不再知道的历史 web 会话由此回到看板 */
@@ -297,6 +401,35 @@ export class Storage {
   /** sessionId → display-name 覆盖表 */
   sessionNames(): Map<string, string> {
     const rows = this.orm.select().from(sessionNamesTable).all();
+    return new Map(rows.map((r) => [r.sessionId, r.name]));
+  }
+
+  /**
+   * 记录看板上看到的会话名。同名不重复写(看板每几秒轮询一次,不值得每轮都落盘)。
+   * 调用方负责过滤占位名(8 位 id 之类),这里只认它给的就是可读名字。
+   */
+  snapshotSessionTitles(entries: Iterable<[string, string]>) {
+    const known = this.sessionTitleSnapshots();
+    const now = Date.now();
+    const write = this.sqlite.transaction((rows: [string, string][]) => {
+      for (const [sessionId, name] of rows) {
+        this.orm
+          .insert(sessionTitleSnapshotsTable)
+          .values({ sessionId, name, seenAt: now })
+          .onConflictDoUpdate({
+            target: sessionTitleSnapshotsTable.sessionId,
+            set: { name, seenAt: now },
+          })
+          .run();
+      }
+    });
+    const changed = [...entries].filter(([id, name]) => known.get(id) !== name);
+    if (changed.length) write(changed);
+  }
+
+  /** sessionId → 看板历史上出现过的会话名 */
+  sessionTitleSnapshots(): Map<string, string> {
+    const rows = this.orm.select().from(sessionTitleSnapshotsTable).all();
     return new Map(rows.map((r) => [r.sessionId, r.name]));
   }
 
@@ -571,9 +704,195 @@ export class Storage {
     return row.n;
   }
 
+  // ---------- 验收面板:模板 ----------
+
+  /** 某项目下的模板。draft 不参与实例引用,但要在管理界面看得到,故一并返回 */
+  listRunbookTemplates(project?: string): RunbookTemplate[] {
+    const rows = project
+      ? this.sqlite.prepare('SELECT * FROM runbook_templates WHERE project = ? ORDER BY updated_at DESC').all(project)
+      : this.sqlite.prepare('SELECT * FROM runbook_templates ORDER BY updated_at DESC').all();
+    return (rows as Record<string, unknown>[]).map(rowToTemplate);
+  }
+
+  getRunbookTemplate(id: string): RunbookTemplate | null {
+    const row = this.sqlite.prepare('SELECT * FROM runbook_templates WHERE id = ?').get(id);
+    return row ? rowToTemplate(row as Record<string, unknown>) : null;
+  }
+
+  upsertRunbookTemplate(t: RunbookTemplate) {
+    this.sqlite
+      .prepare(
+        `INSERT INTO runbook_templates (id, project, name, version, status, source, items, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT(id) DO UPDATE SET
+           project=excluded.project, name=excluded.name, version=excluded.version,
+           status=excluded.status, source=excluded.source, items=excluded.items,
+           updated_at=excluded.updated_at`,
+      )
+      .run(t.id, t.project, t.name, t.version, t.status, t.source, JSON.stringify(t.items), t.createdAt, t.updatedAt);
+  }
+
+  deleteRunbookTemplate(id: string) {
+    this.sqlite.prepare('DELETE FROM runbook_templates WHERE id = ?').run(id);
+  }
+
+  // ---------- 验收面板:运行态 ----------
+
+  createRunbookRun(run: Omit<RunbookRun, 'id'>): number {
+    const r = this.orm.insert(runbookRunsTable).values(run).run();
+    return Number(r.lastInsertRowid);
+  }
+
+  updateRunbookRun(id: number, patch: Partial<Omit<RunbookRun, 'id' | 'sessionId' | 'itemId'>>) {
+    this.orm.update(runbookRunsTable).set(patch).where(eq(runbookRunsTable.id, id)).run();
+  }
+
+  /** 某会话每个 item 的最近一次运行(面板状态灯的数据源) */
+  latestRunbookRuns(sessionId: string): RunbookRun[] {
+    return this.sqlite
+      .prepare(
+        `SELECT id, session_id as sessionId, item_id as itemId, resolved_command as resolvedCommand,
+                status, pid, exit_code as exitCode, started_at as startedAt, ended_at as endedAt, log_path as logPath
+         FROM runbook_runs
+         WHERE id IN (SELECT MAX(id) FROM runbook_runs WHERE session_id = ? GROUP BY item_id)
+         ORDER BY id DESC`,
+      )
+      .all(sessionId) as RunbookRun[];
+  }
+
+  /** 全局仍在跑的 service 进程:仪表盘「运行中的验收环境」与重启后收养的数据源 */
+  liveRunbookRuns(): RunbookRun[] {
+    return this.sqlite
+      .prepare(
+        `SELECT id, session_id as sessionId, item_id as itemId, resolved_command as resolvedCommand,
+                status, pid, exit_code as exitCode, started_at as startedAt, ended_at as endedAt, log_path as logPath
+         FROM runbook_runs WHERE status IN ('running','ready') ORDER BY id DESC`,
+      )
+      .all() as RunbookRun[];
+  }
+
+  // ---------- 技能触发次数索引 ----------
+
+  /** 已扫描文件指纹表:path → (mtime,size),用于增量判断 */
+  skillScanFingerprints(): Map<string, { mtime: number; size: number }> {
+    const rows = this.sqlite.prepare('SELECT path, mtime, size FROM skill_scan_files').all() as {
+      path: string;
+      mtime: number;
+      size: number;
+    }[];
+    return new Map(rows.map((r) => [r.path, { mtime: r.mtime, size: r.size }]));
+  }
+
+  /**
+   * 写入一个文件的解析结果:先删该文件旧行再重插,保证同一文件重复扫描不会累加。
+   * 整体包在事务里——半写状态会让计数虚高,比扫描慢更糟。
+   */
+  replaceSkillInvocations(
+    file: { path: string; mtime: number; size: number },
+    rows: { skill: string; day: string; count: number; lastAt: number }[],
+  ) {
+    const del = this.sqlite.prepare('DELETE FROM skill_invocations WHERE path = ?');
+    const ins = this.sqlite.prepare(
+      'INSERT INTO skill_invocations (path, skill, day, count, last_at) VALUES (?, ?, ?, ?, ?)',
+    );
+    const fp = this.sqlite.prepare(
+      'INSERT INTO skill_scan_files (path, mtime, size) VALUES (?, ?, ?) ' +
+        'ON CONFLICT(path) DO UPDATE SET mtime = excluded.mtime, size = excluded.size',
+    );
+    this.sqlite.transaction(() => {
+      del.run(file.path);
+      for (const r of rows) ins.run(file.path, r.skill, r.day, r.count, r.lastAt);
+      fp.run(file.path, file.mtime, file.size);
+    })();
+  }
+
+  /** 清理已消失的 jsonl(会话被删/项目目录移走):留着会让计数含已不存在的历史 */
+  pruneSkillScanFiles(livePaths: Set<string>) {
+    const known = this.sqlite.prepare('SELECT path FROM skill_scan_files').all() as { path: string }[];
+    const gone = known.filter((r) => !livePaths.has(r.path)).map((r) => r.path);
+    if (!gone.length) return 0;
+    const delInv = this.sqlite.prepare('DELETE FROM skill_invocations WHERE path = ?');
+    const delFp = this.sqlite.prepare('DELETE FROM skill_scan_files WHERE path = ?');
+    this.sqlite.transaction(() => {
+      for (const p of gone) {
+        delInv.run(p);
+        delFp.run(p);
+      }
+    })();
+    return gone.length;
+  }
+
+  /** 某日之后(含当日)每个技能的触发次数与最近触发时刻 */
+  skillCountsSince(sinceDay: string): Map<string, { count: number; lastAt: number }> {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT skill, SUM(count) as count, MAX(last_at) as lastAt
+         FROM skill_invocations WHERE day >= ? GROUP BY skill`,
+      )
+      .all(sinceDay) as { skill: string; count: number; lastAt: number }[];
+    return new Map(rows.map((r) => [r.skill, { count: r.count, lastAt: r.lastAt }]));
+  }
+
+  /** 每个技能的历史最近触发时刻(不设窗口):窗口内 0 次时仍要显示「上次是什么时候」 */
+  skillLastUsed(): Map<string, number> {
+    const rows = this.sqlite
+      .prepare('SELECT skill, MAX(last_at) as lastAt FROM skill_invocations GROUP BY skill')
+      .all() as { skill: string; lastAt: number }[];
+    return new Map(rows.map((r) => [r.skill, r.lastAt]));
+  }
+
+  /**
+   * 把 SKILL.md 里的裸名解析成索引里真实记录的键。
+   * 插件技能调用时写的是 `plugin:skill`,裸名直查会全 0——先精确后带前缀匹配。
+   */
+  skillResolveKey(name: string): string | null {
+    const row = this.sqlite
+      .prepare(
+        `SELECT skill FROM skill_invocations WHERE skill = ?
+         UNION ALL
+         SELECT skill FROM skill_invocations WHERE skill LIKE '%:' || ?
+         LIMIT 1`,
+      )
+      .get(name, name) as { skill: string } | undefined;
+    return row?.skill ?? null;
+  }
+
+  /** 单个技能的逐日次数(抽屉里的迷你柱) */
+  skillDailyCounts(skill: string, sinceDay: string): Map<string, number> {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT day, SUM(count) as count FROM skill_invocations
+         WHERE skill = ? AND day >= ? GROUP BY day`,
+      )
+      .all(skill, sinceDay) as { day: string; count: number }[];
+    return new Map(rows.map((r) => [r.day, r.count]));
+  }
+
   close() {
     this.sqlite.close();
   }
+}
+
+/** DB 行 → 模板领域对象;items 是 JSON 串,解析失败降级为空清单而不是抛 */
+function rowToTemplate(row: Record<string, unknown>): RunbookTemplate {
+  let items: RunbookTemplate['items'] = [];
+  try {
+    const parsed: unknown = JSON.parse(String(row.items ?? '[]'));
+    if (Array.isArray(parsed)) items = parsed as RunbookTemplate['items'];
+  } catch {
+    /* 坏数据不该让整个面板挂掉 */
+  }
+  return {
+    id: String(row.id),
+    project: String(row.project),
+    name: String(row.name),
+    version: Number(row.version),
+    status: row.status as RunbookTemplate['status'],
+    source: row.source as RunbookTemplate['source'],
+    items,
+    createdAt: Number(row.created_at),
+    updatedAt: Number(row.updated_at),
+  };
 }
 
 /** 把用户输入包成 FTS5 字符串字面量,避免被解析成查询语法 */

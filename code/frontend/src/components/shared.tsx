@@ -102,9 +102,67 @@ export function installExternalLinkHandler() {
   window.addEventListener('click', onClick, true);
 }
 
+const ICON_COPY = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10.5 5.5v-2a1.5 1.5 0 0 0-1.5-1.5H4A1.5 1.5 0 0 0 2.5 3.5V9A1.5 1.5 0 0 0 4 10.5h1.5" />
+  </svg>
+);
+const ICON_CHECK = (
+  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+    <path d="M3 8.5 6.5 12 13 4.5" />
+  </svg>
+);
+
+/** 代码块 + 右上角复制按钮。
+ *  外面必须包一层定位壳:pre 自身横向滚动,按钮直接挂 pre 上会随内容一起滚出可视区。
+ *  取文本走 ref 读 DOM 的 textContent,而不是从 children 里拼 —— children 是
+ *  react-markdown 的节点树,拼出来的字符串未必等于用户实际看到的代码。 */
+function CodeBlock({ children }: { children?: ReactNode }) {
+  const preRef = useRef<HTMLPreElement>(null);
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const copy = async () => {
+    const text = preRef.current?.textContent ?? '';
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      return; // 非安全上下文 / 用户拒权:失败就不亮「已复制」,不谎报成功
+    }
+    setCopied(true);
+    if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="codeblock">
+      <pre ref={preRef}>{children}</pre>
+      <button
+        className={cn('copy-btn', copied && 'copied')}
+        onClick={() => void copy()}
+        aria-label={copied ? '已复制代码' : '复制代码'}
+        title="复制代码"
+      >
+        {copied ? ICON_CHECK : ICON_COPY}
+        <span>{copied ? '已复制' : '复制'}</span>
+      </button>
+    </div>
+  );
+}
+
 // 链接一律标记新窗口:浏览器里避免同窗导航把 SPA 整页带走。
 const MD_COMPONENTS: Components = {
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noopener noreferrer" />,
+  pre: ({ node: _node, children }) => <CodeBlock>{children}</CodeBlock>,
 };
 
 /** 裸 URL 自动成链的尾部修剪:GFM 的 autolink 只认 ASCII 标点作终止符,中文正文里

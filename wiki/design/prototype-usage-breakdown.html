@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>璇玑 · 用量模块 token 构成明细原型</title>
+<style>
+  /* ============================================================
+     token 与组件样式逐字拷贝自 code/frontend/src/styles/index.css
+     (feature/dashboard-usage worktree 当前实现,含三段对比条);
+     新增样式集中在「新增样式」段。
+     ============================================================ */
+  :root {
+    --bg:        oklch(0.145 0.006 120);
+    --surface:   oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover:     oklch(0.215 0.009 120);
+    --line:      oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+
+    --ink:   oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+
+    --jade:      oklch(0.80 0.13 115);
+    --jade-dim:  oklch(0.68 0.10 115);
+    --on-jade:   oklch(0.18 0.02 120);
+
+    --amber: oklch(0.78 0.14 80);
+    --blue:  oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --red:   oklch(0.68 0.19 25);
+    --green: oklch(0.74 0.12 155);
+    --chart-1: oklch(0.68 0.075 115);
+    --chart-2: oklch(0.65 0.065 300);
+    --chart-3: oklch(0.65 0.065 245);
+
+    --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+    --tint-amber: color-mix(in oklab, var(--amber) 14%, transparent);
+    --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
+    --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
+
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+    --r-s: 6px;
+    --r-m: 10px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { font-size: 16px; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--ink);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
+  }
+  h1, h2, h3 { text-wrap: balance; font-weight: 600; }
+  button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line-soft); border-radius: var(--r-m); }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
+  .panel-head h2 { font-size: 0.875rem; }
+  .panel-head .sub { font-size: 0.75rem; color: var(--muted); }
+  .panel-head .spacer { flex: 1; }
+  .mono { font-family: var(--mono); font-size: 0.8em; }
+
+  .tok { padding: 10px 18px 14px; }
+  .tok-row {
+    display: grid; grid-template-columns: 176px 1fr 76px; gap: 12px; align-items: center;
+    width: 100%; padding: 6px 0; font-size: 0.8125rem; text-align: left;
+    background: none; border: none; color: inherit; font-family: inherit;
+  }
+  button.tok-row { cursor: pointer; border-radius: var(--r-s); transition: background 150ms var(--ease); }
+  button.tok-row:hover { background: var(--hover); }
+  button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -2px; }
+  .tok-row .lbl { color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
+  .tok-row .chev { color: var(--faint); font-size: 0.6875rem; transition: transform 150ms var(--ease); flex: none; }
+  .tok-proj.open > .tok-row .chev { transform: rotate(90deg); }
+  .tok-row .track { height: 9px; }
+  .tok-row .bar { height: 100%; display: flex; border-radius: 4px; overflow: hidden; min-width: 3px; transition: width 200ms var(--ease); }
+  .tok-row .bar i { height: 100%; }
+  .tok-row .val { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); text-align: right; white-space: nowrap; }
+  .tok-subs { display: none; padding: 2px 0 6px; }
+  .tok-proj.open .tok-subs { display: block; }
+  .tok-row.sub { padding: 4px 0; }
+  .tok-row.sub .lbl { font-weight: 400; color: var(--muted); padding-left: 22px; font-size: 0.75rem; }
+  .tok-row.sub .track { height: 6px; }
+  .tok-legend { display: flex; gap: 14px; font-size: 0.6875rem; color: var(--muted); }
+  .tok-legend span { display: flex; align-items: center; gap: 5px; }
+  .tok-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+
+  .usage-head { flex-wrap: wrap; row-gap: 6px; }
+  .usage-head h2 { white-space: nowrap; }
+  /* 小字用 flex-basis:0 吸收剩余空间(顺带接替 spacer 的角色)。
+     关键在 basis 而非 shrink:flex 容器开了 wrap 就是「先换行再压缩」,
+     按内容宽度参与分行时,口径文案一变长就会把第二组切换顶到下一行。
+     basis 归零后它永不顶出换行,空间不足时省略号收尾,完整口径在 title 里 */
+  .usage-head .sub { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .seg {
+    display: inline-flex; align-items: center; gap: 2px;
+    background: var(--surface-2); border: 1px solid var(--line-soft);
+    border-radius: var(--r-s); padding: 2px;
+  }
+  .seg button {
+    padding: 1px 10px; border-radius: 4px;
+    font-size: 0.75rem; color: var(--muted);
+    transition: background 150ms var(--ease), color 150ms var(--ease);
+    white-space: nowrap;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+
+  .cmp { padding: 14px 18px 4px; transition: opacity 150ms var(--ease); }
+  .cmp-head { display: flex; align-items: baseline; gap: 8px; font-size: 0.75rem; color: var(--muted); margin-bottom: 7px; flex-wrap: wrap; }
+  .cmp-head b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.75rem; }
+  .cmp-head .pct { color: var(--jade); font-family: var(--mono); }
+  .cmp-track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--tint-muted); }
+  .cmp-track .dev { background: var(--jade-dim); transition: width 200ms var(--ease); }
+  .cmp-track .noise { transition: width 200ms var(--ease); }
+  .cmp-track .noise-scan {
+    background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 5px, oklch(0.28 0.010 110) 5px 10px);
+  }
+  .cmp-track .noise-biz-events { background: oklch(0.42 0.014 110); }
+  .cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); flex-wrap: wrap; }
+  .cmp-legend span { display: flex; align-items: center; gap: 5px; }
+  .cmp-legend b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+  .cmp-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .cmp-legend .i-dev { background: var(--jade-dim); }
+  .cmp-legend .i-noise-scan { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
+  .cmp-legend .i-noise-biz-events { background: oklch(0.42 0.014 110); }
+
+  .usage-divide { border-top: 1px solid var(--line-soft); }
+
+  /* ============================================================
+     新增样式:token 构成明细(comp)—— 纯文字,不画条
+     只在 unit = Token 时出现;成本口径本身已是加权汇总,无需构成。
+     四个分量同排一行(键名用缩写才挤得进右栏实宽 488px),cacheRead 附
+     ×0.1 计费折算:量级 20× 的差距靠数字本身表达,比任何刻度都诚实。
+     ============================================================ */
+  .comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); }
+  .comp-head {
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+    font-size: 0.75rem; color: var(--muted); margin-bottom: 5px;
+  }
+  .comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+  .comp-nums {
+    display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .comp-nums span { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+  .comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
+  .comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
+  /* cacheRead 与前三项同排:键名用缩写才挤得进右栏一行(实宽约 488px)。
+     不右推也不强制独占一行——两者都会让它看着像另一个模块,而它只是第四个分量。
+     值弱化一档、折算注解更弱,以此区分「另一个计费维度」 */
+  .comp-nums .cr b { color: var(--muted); }
+  .comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+  /* 展开的项目明细里,会话列表上方的单行构成(纯文字,不再画条) */
+  .comp-line {
+    padding: 2px 0 4px 22px; font-size: 0.6875rem; color: var(--faint);
+    font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .comp-line b { color: var(--muted); font-weight: 500; }
+
+  /* ---------- 原型注解外壳(非产品样式) ---------- */
+  .proto-wrap { max-width: 640px; margin: 0 auto; padding: 40px 32px 80px; }
+  .proto-lede { color: var(--muted); max-width: 72ch; margin: 0 0 8px; text-wrap: pretty; font-size: 0.8125rem; }
+  .proto-note { color: var(--faint); font-size: 0.75rem; max-width: 78ch; margin: 0 0 28px; }
+  .proto-note b { color: var(--muted); font-weight: 600; }
+  .proto-h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin: 0 0 6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+  @media (max-width: 640px) {
+    .usage-head .sub { display: none; }
+    .tok-row { grid-template-columns: minmax(90px, 110px) 1fr 64px; gap: 8px; }
+    .tok-row.sub .lbl { padding-left: 12px; }
+    .comp-line { padding-left: 12px; }
+    .comp-nums { gap: 6px 14px; }
+    .proto-wrap { padding: 24px 16px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="proto-wrap">
+  <h1 class="proto-h1">用量模块 · token 构成明细原型</h1>
+  <p class="proto-lede">在已上线的「Token 用量」模块内新增构成明细:单位切到 <b>Token</b> 时,对比条下方出现「构成(开发侧)」段——四个分量全部以数字呈现,不画任何条形。三个常规计费分量(input / output / cacheWrite)一组,cacheRead 同排接在后面并附 <b>×0.1 计费折算</b>(直接回答「cacheRead 到底占多重」)。展开某个项目时,会话列表上方补一行同口径的构成文字。切回「成本 $」时构成段整体隐藏。口径不在构成段里重复解释,而是并进头部小字:「条长 = in + out + cacheWrite token 量」,读条形图时就已知道 cacheRead 不在其中。</p>
+  <p class="proto-note"><b>数据为真:</b>全部数字取自验收环境 /api/usage 实时返回(2026-08-28)。近一周开发侧 in 821.9K · out 1.8M · cacheW 19.7M,cacheRead 439.5M ≈ 计费当量 43.9M——比 inOut 总量 22.4M 还大,这正是要单列展示的原因。可用 ?unit=cost / ?range=today 直接打开对应切换态。</p>
+
+  <!-- 右栏「Token 用量」模块(仪表盘其余部分不变,原型只画本模块) -->
+  <div class="panel">
+    <div class="panel-head usage-head">
+      <h2>Token 用量</h2>
+      <span class="sub" id="usage-sub"></span>
+      <span class="seg" id="seg-range" role="group" aria-label="时间范围">
+        <button data-v="today">今天</button>
+        <button data-v="week">近一周</button>
+      </span>
+      <span class="seg" id="seg-unit" role="group" aria-label="计量单位">
+        <button data-v="cost">成本 $</button>
+        <button data-v="tok">Token</button>
+      </span>
+    </div>
+
+    <!-- multica 对比条(现状,三段) -->
+    <div class="cmp">
+      <div class="cmp-head" id="cmp-head"></div>
+      <div class="cmp-track" id="cmp-track">
+        <div class="dev" id="cmp-dev"></div>
+        <div class="noise noise-scan" id="cmp-scan"></div>
+        <div class="noise noise-biz-events" id="cmp-biz"></div>
+      </div>
+      <div class="cmp-legend" id="cmp-legend"></div>
+    </div>
+
+    <!-- ★ 新增:token 构成明细(仅 Token 口径显示) -->
+    <div class="comp" id="comp" hidden>
+      <div class="comp-head"><h3>构成(开发侧)</h3></div>
+      <div class="comp-nums" id="comp-nums"></div>
+    </div>
+
+    <!-- 项目条形图(现状 + 展开时的构成行) -->
+    <div class="tok" id="tok"></div>
+  </div>
+
+  <p class="proto-note" style="margin-top:20px"><b>不改的部分:</b>7 日热力图、模型图例、最近活动栏与本次无关,维持已实现状态,原型不重复画。噪音对比条的图例仍只给 inOut 总量(multica 侧构成价值低,不扩四分量,避免图例三行爆炸)。</p>
+</div>
+
+<script>
+/* ---------------- 真实数据:验收环境 /api/usage 2026-08-28 快照 ---------------- */
+// comp: [in, out, cacheWrite, cacheRead](tok 已 = in+out+cw)
+const DATA = {
+  week: {
+    dev: { cost: 388.28, tok: 22.4e6 }, // 真实总量(项目列表只截取 top6,故不由列表求和)
+    noise: { scan: { cost: 300.6, tok: 53.3e6 }, biz: { cost: 29.9, tok: 5.9e6 } },
+    comp: [821.9e3, 1.8e6, 19.7e6, 439.5e6],
+    projects: [
+      { name: 'xuanji', cost: 111.54, tok: 4.85e6, models: [0.4, 0.5, 0.1], comp: [202.4e3, 443.8e3, 4.2e6, 145.9e6], sessions: [
+        { title: '现在的璇玑似乎缺少了一个终端界面…', id: 'a1f09b3c', cost: 52.1, tok: 2.07e6, models: [0.3, 0.7, 0], comp: [65.2e3, 207.8e3, 1.8e6, 91.6e6] },
+        { title: '仪表盘重构', id: '9f3a17c2', cost: 41.2, tok: 1.78e6, models: [0.6, 0.4, 0], comp: [59.0e3, 120.9e3, 1.6e6, 33.5e6] },
+        { title: '璇玑输出的结果如果有代码块…', id: 'c41b88e0', cost: 9.8, tok: 0.45e6, models: [0.5, 0.5, 0], comp: [18.4e3, 35.1e3, 393.0e3, 6.6e6] },
+      ]},
+      { name: 'skills-baize', cost: 96.28, tok: 5.62e6, models: [0.2, 0.3, 0.5], comp: [168.3e3, 451.0e3, 5.0e6, 106.1e6], sessions: [] },
+      { name: 'etl', cost: 55.72, tok: 4.07e6, models: [0, 0.6, 0.4], comp: [56.4e3, 209.6e3, 3.8e6, 53.0e6], sessions: [] },
+      { name: 'antifraud-skills', cost: 40.87, tok: 2.53e6, models: [0.3, 0.3, 0.4], comp: [104.7e3, 220.6e3, 2.2e6, 48.8e6], sessions: [] },
+      { name: 'deep-baize', cost: 26.11, tok: 1.79e6, models: [0, 0.4, 0.6], comp: [46.9e3, 145.6e3, 1.6e6, 25.0e6], sessions: [] },
+      { name: 'exchange', cost: 23.66, tok: 0.60e6, models: [0, 1, 0], comp: [24.3e3, 153.8e3, 423.9e3, 34.1e6], sessions: [] },
+    ],
+  },
+  today: {
+    dev: { cost: 41.15, tok: 2.5e6 },
+    noise: { scan: { cost: 29.1, tok: 3.5e6 }, biz: { cost: 10.5, tok: 2.0e6 } },
+    comp: [115.9e3, 192.3e3, 2.2e6, 44.2e6],
+    projects: [
+      { name: 'xuanji', cost: 36.03, tok: 2.04e6, models: [0.55, 0.45, 0], comp: [78.7e3, 160.3e3, 1.8e6, 40.7e6], sessions: [
+        { title: '仪表盘重构', id: '9f3a17c2', cost: 30.5, tok: 1.78e6, models: [0.6, 0.4, 0], comp: [59.0e3, 120.9e3, 1.6e6, 33.5e6] },
+        { title: '感觉现在验收面板出现的时机有问题…', id: '8b02de41', cost: 4.1, tok: 0.23e6, models: [0.5, 0.5, 0], comp: [1.3e3, 33.7e3, 194.0e3, 6.3e6] },
+      ]},
+      { name: 'baize', cost: 3.95, tok: 0.32e6, models: [0, 0.5, 0.5], comp: [18.3e3, 27.0e3, 272.7e3, 3.0e6], sessions: [] },
+      { name: 'skills', cost: 1.17, tok: 0.13e6, models: [0, 0, 1], comp: [18.9e3, 5.0e3, 102.3e3, 623.3e3], sessions: [] },
+    ],
+  },
+};
+
+const MODEL_COLORS = ['var(--chart-1)', 'var(--chart-2)', 'var(--chart-3)'];
+const MODEL_NAMES = ['fable', 'opus', 'sonnet'];
+const fmtCost = (v) => '$' + v.toFixed(2);
+function fmtTok(n) {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K';
+  return String(n);
+}
+
+const q = new URLSearchParams(location.search);
+let range = q.get('range') === 'today' ? 'today' : 'week';
+let unit = q.get('unit') === 'cost' ? 'cost' : 'tok';
+const open = new Set(['xuanji']);
+
+function val(x) { return unit === 'cost' ? x.cost : x.tok; }
+function fmt(v) { return unit === 'cost' ? fmtCost(v) : fmtTok(v); }
+function tip(x) { return `${fmtCost(x.cost)} · ${fmtTok(x.tok)} tok`; }
+
+function compLine(c) {
+  return `in <b>${fmtTok(c[0])}</b> · out <b>${fmtTok(c[1])}</b> · cacheW <b>${fmtTok(c[2])}</b> · cacheR <b>${fmtTok(c[3])}</b>`;
+}
+
+function barHtml(x, max) {
+  const w = (val(x) / max * 100).toFixed(2);
+  const segs = x.models.map((f, i) => f > 0
+    ? `<i style="width:${(f * 100).toFixed(1)}%;background:${MODEL_COLORS[i]}" title="${MODEL_NAMES[i]}"></i>` : '').join('');
+  return `<div class="track" title="${tip(x)}"><div class="bar" style="width:${w}%">${segs}</div></div>`;
+}
+
+function render() {
+  const d = DATA[range];
+  const rangeLabel = range === 'today' ? '今天' : '近一周';
+  // 口径写进头部小字:条长到底量的是什么,一句话讲完(token 态点明三分量,cacheRead 不在其中)
+  const sub = document.getElementById('usage-sub');
+  sub.textContent =
+    `${rangeLabel} · 按项目聚合 · ${unit === 'cost' ? '条长 = 实际成本' : '条长未包含 cacheRead'}`;
+  sub.title = unit === 'cost'
+    ? '条长 = 按牌价加权的实际成本(含 cacheRead × 0.1)'
+    : '条长 = in + out + cacheWrite;cacheRead 不计入,在下方构成里单列并折算';
+
+  // 对比条(现状逻辑)
+  const dev = val(d.dev);
+  const scan = unit === 'cost' ? d.noise.scan.cost : d.noise.scan.tok;
+  const biz = unit === 'cost' ? d.noise.biz.cost : d.noise.biz.tok;
+  const total = dev + scan + biz;
+  const pct = Math.round(dev / total * 100);
+  document.getElementById('cmp-head').innerHTML =
+    `开发 <b>${fmt(dev)}</b> vs multica <b>${fmt(scan + biz)}</b><span class="pct">开发占 ${pct}%</span>`;
+  document.getElementById('cmp-dev').style.width = (dev / total * 100).toFixed(1) + '%';
+  document.getElementById('cmp-scan').style.width = (scan / total * 100).toFixed(1) + '%';
+  document.getElementById('cmp-biz').style.width = (biz / total * 100).toFixed(1) + '%';
+  document.getElementById('cmp-legend').innerHTML =
+    `<span><i class="i-dev"></i>开发项目 <b>${fmt(dev)}</b></span>` +
+    `<span><i class="i-noise-scan"></i>扫描归因 <b>${fmt(scan)}</b></span>` +
+    `<span><i class="i-noise-biz-events"></i>业务事件 <b>${fmt(biz)}</b></span>`;
+
+  // ★ 构成明细:仅 token 口径显示
+  const compEl = document.getElementById('comp');
+  compEl.hidden = unit !== 'tok';
+  if (unit === 'tok') {
+    const [ci, co, cw, cr] = d.comp;
+    document.getElementById('comp-nums').innerHTML =
+      `<span title="非缓存的输入 token"><span class="k">in</span><b>${fmtTok(ci)}</b></span>` +
+      `<span title="模型输出 token,单价 5× input"><span class="k">out</span><b>${fmtTok(co)}</b></span>` +
+      `<span title="写入 prompt 缓存,单价 1.25× input"><span class="k">cacheW</span><b>${fmtTok(cw)}</b></span>` +
+      `<span class="cr" title="命中 prompt 缓存,单价 0.1× input,故折算成 input 当量便于与左侧三项比较">` +
+        `<span class="k">cacheR</span><b>${fmtTok(cr)}</b><span class="eq">×0.1≈${fmtTok(cr * 0.1)}</span></span>`;
+  }
+
+  // 项目条形图 + 展开时的构成行
+  const max = Math.max(1e-9, ...d.projects.map(val));
+  document.getElementById('tok').innerHTML = d.projects.map((p) => `
+    <div class="tok-proj ${open.has(p.name) ? 'open' : ''}" data-p="${p.name}">
+      <button class="tok-row" aria-expanded="${open.has(p.name)}">
+        <span class="lbl"><span class="chev">▸</span>${p.name}</span>
+        ${barHtml(p, max)}
+        <span class="val">${fmt(val(p))}</span>
+      </button>
+      <div class="tok-subs">
+        ${unit === 'tok' ? `<div class="comp-line" title="该项目的四分量构成">${compLine(p.comp)}</div>` : ''}
+        ${p.sessions.map((s) => `
+          <div class="tok-row sub" title="session ${s.id} · ${tip(s)}${unit === 'tok' ? ' · cacheR ' + fmtTok(s.comp[3]) : ''}">
+            <span class="lbl">${s.title} <span class="mono" style="color:var(--faint)">(${s.id})</span></span>
+            ${barHtml(s, max)}
+            <span class="val">${fmt(val(s))}</span>
+          </div>`).join('')}
+        ${!p.sessions.length ? '<div class="comp-line" style="color:var(--faint)">(会话明细略,同现状)</div>' : ''}
+      </div>
+    </div>`).join('');
+  document.querySelectorAll('.tok-proj > .tok-row').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const n = btn.parentElement.dataset.p;
+      open.has(n) ? open.delete(n) : open.add(n);
+      render();
+    });
+  });
+}
+
+function bindSeg(id, set) {
+  const el = document.getElementById(id);
+  el.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    el.querySelectorAll('button').forEach((x) => x.classList.toggle('active', x === b));
+    set(b.dataset.v);
+    render();
+  }));
+}
+bindSeg('seg-range', (v) => { range = v; });
+bindSeg('seg-unit', (v) => { unit = v; });
+document.querySelectorAll('#seg-range button').forEach((b) => b.classList.toggle('active', b.dataset.v === (range === 'today' ? 'today' : 'week')));
+document.querySelectorAll('#seg-unit button').forEach((b) => b.classList.toggle('active', b.dataset.v === unit));
+
+render();
+</script>
+</body>
+</html>

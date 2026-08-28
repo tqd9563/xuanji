@@ -6,6 +6,7 @@ import { ConfirmHost, ToastHost, toast } from '@/components/shared';
 import { WallpaperSettings } from '@/components/WallpaperSettings';
 import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
 import { TabBar, mobileTabOf, type MobileTab } from '@/components/TabBar';
+import { StatusBar } from '@/components/StatusBar';
 import { MoreMenu } from '@/components/MoreMenu';
 import { Dashboard } from '@/views/Dashboard';
 import { Projects } from '@/views/Projects';
@@ -58,6 +59,7 @@ export default function App() {
   // 会话 tab 徽章:与 Sessions.tsx 共享同一 fetcher 引用,命中 pollCache,不重复拉取
   const { data: sessData } = usePoll(api.sessions, 5_000);
   const blockedCount = sessData?.columns.blocked.length ?? 0;
+  const reviewCount = sessData?.columns.review.length ?? 0;
 
   // 项目分类色调色板(后端 SQLite 首次出现顺序):加载后重渲染;旧后端无此端点时静默用哈希兜底
   useEffect(() => {
@@ -230,6 +232,9 @@ export default function App() {
       </header>
 
       <main className="main">
+        {/* 外壳家具:挂在所有 <section class="view"> 之外,切视图时不重挂载(见 DESIGN.md §5) */}
+        <StatusBar health={health} reviewCount={reviewCount} onGoReview={() => nav('dashboard')} />
+
         <section className={cn('view', isShown('dashboard') && 'active')}>
           {isShown('dashboard') && <Dashboard onGoSession={goSession} />}
         </section>

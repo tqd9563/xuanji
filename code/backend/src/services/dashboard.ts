@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { readHistory } from '../adapters/claude-dir.js';
 import { cliVersion, readCrontab } from '../adapters/agents-cli.js';
-import { sessionsBoard } from './sessions.js';
+import { sessionsBoard, usageNameResolver } from './sessions.js';
 import { heatBuckets } from './projects.js';
 import { todayUsage } from './usage.js';
 import type { AgentSession, HistoryEntry } from '../types.js';
@@ -40,12 +40,7 @@ export async function dashboard(storage?: Storage): Promise<Dashboard> {
     cliVersion(),
   ]);
 
-  // Token 成本会话名解析:看板(含 agents/bg 名)+ web 派发名 + 重命名覆盖;缺失由 usage 层从转录提默认名
-  const nameMap = new Map<string, string>();
-  for (const d of storage?.allDispatches() ?? []) if (d.name) nameMap.set(d.sessionId, d.name);
-  for (const col of Object.values(board.columns)) for (const s of col) nameMap.set(s.sessionId, s.name);
-  for (const [id, n] of storage?.sessionNames() ?? []) nameMap.set(id, n);
-  const usage = await todayUsage((id) => nameMap.get(id));
+  const usage = await todayUsage(usageNameResolver(board, storage));
 
   // SDK 派发会话不写 history.jsonl:并入自有 prompt 流水,时间线/统计条/热力图才不会在纯璇玑使用时冻结
   const webPrompts: HistoryEntry[] = (storage?.recentPrompts(since) ?? []).map((p) => ({

@@ -64,24 +64,54 @@ export function aggregateByModel(records: RawUsageRecord[]): ModelUsage[] {
   return [...map.values()].sort((a, b) => b.costUsd - a.costUsd);
 }
 
+/** 用量窗口。today = 本地时区当日零点起;7d = 含今日在内的近 7 个自然日(与热力图同窗口) */
+export type UsageRange = 'today' | '7d';
+
+export const USAGE_RANGES: UsageRange[] = ['today', '7d'];
+export const isUsageRange = (v: unknown): v is UsageRange => USAGE_RANGES.includes(v as UsageRange);
+
+/** 窗口起点(本地时区日界)。7d 往前推 6 天,加上今天正好 7 个自然日 */
+export function rangeStart(range: UsageRange, now = new Date()): number {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  if (range === '7d') d.setDate(d.getDate() - 6);
+  return d.getTime();
+}
+
 export interface UsageReport {
+  range: UsageRange;
+  since: number;
   projects: ProjectUsage[];
   totalCostUsd: number;
   totalTokens: { inOut: number; cacheRead: number };
+  /**
+   * 被噪音规则过滤掉的目录汇总,按 config.noiseCategories 分类
+   * (scan = multica workspaces + narrate;biz-events = 业务事件抽取)。
+   * 只给类别总量不给项目明细:它是「非开发」对照组,进项目条形图会碾压真实开发项目的分辨率。
+   */
+  noise: {
+    costUsd: number;
+    tokens: { inOut: number; cacheRead: number };
+    categories: { key: string; label: string; costUsd: number; tokens: { inOut: number; cacheRead: number } }[];
+  };
   caliber: string;
   computedAt: number;
 }
 
-let cache: { at: number; report: UsageReport } | null = null;
+const cache = new Map<UsageRange, { at: number; report: UsageReport }>();
 const CACHE_MS = 60_000;
 
-/** 今日用量:扫描 mtime 在今日零点之后的 session jsonl */
-export async function todayUsage(titleOf?: (sessionId: string) => string | undefined): Promise<UsageReport> {
-  if (cache && Date.now() - cache.at < CACHE_MS) return cache.report;
+const RANGE_LABEL: Record<UsageRange, string> = { today: '今日', '7d': '近 7 日' };
 
-  const startOfToday = new Date();
-  startOfToday.setHours(0, 0, 0, 0);
-  const since = startOfToday.getTime();
+/** 用量报表:扫描 mtime 落在窗口内的 session jsonl,再按记录时间戳二次过滤 */
+export async function usageReport(
+  range: UsageRange = 'today',
+  titleOf?: (sessionId: string) => string | undefined,
+): Promise<UsageReport> {
+  const hit = cache.get(range);
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.report;
+
+  const since = rangeStart(range);
 
   const root = path.join(config.claudeDir, 'projects');
   const dirs = await fsp.readdir(root).catch(() => [] as string[]);
@@ -89,9 +119,17 @@ export async function todayUsage(titleOf?: (sessionId: string) => string | undef
   let totalCostUsd = 0;
   let inOut = 0;
   let cacheRead = 0;
+  const noiseCats = config.noiseCategories.map((c) => ({
+    key: c.key,
+    label: c.label,
+    costUsd: 0,
+    tokens: { inOut: 0, cacheRead: 0 },
+  }));
 
   for (const d of dirs) {
-    if (config.projectNoisePatterns.some((re) => re.test(d))) continue;
+    // 噪音目录不进项目明细,但按类别单独汇总,用于「开发 vs multica」对比
+    const noiseCat = noiseCats[config.noiseCategories.findIndex((c) => c.patterns.some((re) => re.test(d)))];
+    const isNoise = noiseCat !== undefined;
     const dir = path.join(root, d);
     const files = await fsp.readdir(dir).catch(() => [] as string[]);
     const sessions: SessionUsage[] = [];
@@ -99,45 +137,113 @@ export async function todayUsage(titleOf?: (sessionId: string) => string | undef
       if (!f.endsWith('.jsonl')) continue;
       const full = path.join(dir, f);
       const st = await fsp.stat(full).catch(() => null);
-      if (!st || st.mtimeMs < since) continue; // 文件今天没动过 → 整体跳过(快速筛)
-      const records = await extractUsage(full, since); // 再按记录时间戳过滤,只留今日
+      if (!st || st.mtimeMs < since) continue; // 文件窗口内没动过 → 整体跳过(快速筛)
+      const records = await extractUsage(full, since); // 再按记录时间戳过滤,只留窗口内
       if (!records.length) continue;
       const byModel = aggregateByModel(records);
-      const total = byModel.reduce((s, m) => s + m.costUsd, 0);
+      if (noiseCat) {
+        // 噪音目录只累加类别总量:跳过标题提取(多一次读盘)与会话明细
+        for (const m of byModel) {
+          noiseCat.costUsd += m.costUsd;
+          noiseCat.tokens.inOut += m.inputTokens + m.outputTokens + m.cacheCreationTokens;
+          noiseCat.tokens.cacheRead += m.cacheReadTokens;
+        }
+        continue;
+      }
       const sessionId = path.basename(f, '.jsonl');
       // 名字优先注册表(重命名/派发/jobs/看板),缺失则从转录提取默认标题,再兜底短 id
       const title = titleOf?.(sessionId) || (await extractSessionTitle(full)) || sessionId.slice(0, 8);
-      sessions.push({ sessionId, title, byModel, totalCostUsd: total });
+      sessions.push({
+        sessionId,
+        title,
+        byModel,
+        totalCostUsd: byModel.reduce((s, m) => s + m.costUsd, 0),
+        totalTokens: sumTokens(byModel),
+      });
     }
-    if (!sessions.length) continue;
+    if (isNoise || !sessions.length) continue;
     sessions.sort((a, b) => b.totalCostUsd - a.totalCostUsd);
     const all = sessions.flatMap((s) => s.byModel);
     const byModel = mergeModelUsage(all);
     const total = byModel.reduce((s, m) => s + m.costUsd, 0);
+    const tokens = sumTokens(byModel);
     totalCostUsd += total;
-    for (const m of byModel) {
-      inOut += m.inputTokens + m.outputTokens + m.cacheCreationTokens;
-      cacheRead += m.cacheReadTokens;
-    }
+    inOut += tokens.inOut;
+    cacheRead += tokens.cacheRead;
     projects.push({
+      dir: d,
       project: d.split('-').filter(Boolean).pop() ?? d,
       byModel,
       totalCostUsd: total,
+      totalTokens: tokens,
       sessions,
     });
   }
+  disambiguate(projects);
   projects.sort((a, b) => b.totalCostUsd - a.totalCostUsd);
 
   const report: UsageReport = {
+    range,
+    since,
     projects,
     totalCostUsd,
     totalTokens: { inOut, cacheRead },
+    noise: {
+      costUsd: noiseCats.reduce((s, c) => s + c.costUsd, 0),
+      tokens: {
+        inOut: noiseCats.reduce((s, c) => s + c.tokens.inOut, 0),
+        cacheRead: noiseCats.reduce((s, c) => s + c.tokens.cacheRead, 0),
+      },
+      categories: noiseCats,
+    },
     caliber:
-      '今日(本地时区)有活动的 session jsonl,assistant usage 按 message.id 去重;cost = in×P + cacheWrite×1.25P + cacheRead×0.1P + out×P(牌价常量,USD)',
+      `${RANGE_LABEL[range]}(本地时区)有活动的 session jsonl,assistant usage 按 message.id 去重;` +
+      'cost = in×P + cacheWrite×1.25P + cacheRead×0.1P + out×P(牌价常量,USD);' +
+      'token 量 = in + out + cacheWrite(不含 cacheRead,与统计条同口径);' +
+      'multica 侧不进项目明细,按类计入对比总量:扫描归因 = workspaces + narrate(口径同 cost_report.py 的 Multica+Narrate 两行),业务事件 = baize-biz-events 抽取',
     computedAt: Date.now(),
   };
-  cache = { at: Date.now(), report };
+  cache.set(range, { at: Date.now(), report });
   return report;
+}
+
+/** 今日用量(仪表盘首屏口径) */
+export const todayUsage = (titleOf?: (sessionId: string) => string | undefined) => usageReport('today', titleOf);
+
+/**
+ * 显示名去重:目录末段重名的项目往前多带一段(`skills` → `yuiko-skills` / `antifraud-skills`)。
+ * 近一周窗口项目数是今日的两倍多,末段撞名是常态——不消歧则条形图出现两行同名、用户分不清谁是谁。
+ * 注意编码目录名里 '-' 既是分隔符也可能是路径本身的连字符,无法反解,故只做「多带一段」的最小消歧。
+ */
+function disambiguate(projects: ProjectUsage[]) {
+  const byName = new Map<string, ProjectUsage[]>();
+  for (const p of projects) {
+    const list = byName.get(p.project);
+    if (list) list.push(p);
+    else byName.set(p.project, [p]);
+  }
+  for (const [, group] of byName) {
+    if (group.length < 2) continue;
+    for (let take = 2; take <= 4; take++) {
+      for (const p of group) p.project = p.dir.split('-').filter(Boolean).slice(-take).join('-');
+      if (new Set(group.map((p) => p.project)).size === group.length) break;
+    }
+    // 仍然撞名(极罕见):退回完整编码目录名,保证唯一
+    if (new Set(group.map((p) => p.project)).size !== group.length) {
+      for (const p of group) p.project = p.dir;
+    }
+  }
+}
+
+/** token 量口径:inOut 不含 cacheRead——cacheRead 量级压倒性大且只值 0.1×单价,混进来会让条形图只反映缓存命中 */
+function sumTokens(list: ModelUsage[]): { inOut: number; cacheRead: number } {
+  let inOut = 0;
+  let cacheRead = 0;
+  for (const m of list) {
+    inOut += m.inputTokens + m.outputTokens + m.cacheCreationTokens;
+    cacheRead += m.cacheReadTokens;
+  }
+  return { inOut, cacheRead };
 }
 
 function mergeModelUsage(list: ModelUsage[]): ModelUsage[] {
@@ -157,5 +263,5 @@ function mergeModelUsage(list: ModelUsage[]): ModelUsage[] {
 }
 
 export function invalidateUsageCache() {
-  cache = null;
+  cache.clear();
 }

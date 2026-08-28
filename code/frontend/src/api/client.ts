@@ -5,11 +5,13 @@ import type {
   Memory,
   ProjectsResult,
   Replay,
+  ResolvedWorkdir,
   ScheduledJob,
   ScheduledRun,
   SessionsBoard,
   Skill,
   Todo,
+  UsageRange,
   UsageReport,
   WeeklyDraft,
   WeeklyReview,
@@ -37,8 +39,15 @@ export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
+  /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */
+  resolvePath: (p: string) =>
+    get<ResolvedWorkdir>(`/api/resolve-path?path=${encodeURIComponent(p)}`),
   replay: (sessionId: string) => get<Replay>(`/api/sessions/${sessionId}/replay`),
-  skills: () => get<{ skills: Skill[] }>('/api/skills'),
+  skills: () =>
+    get<{ skills: Skill[]; usageCaliber: string; usageComputedAt: number }>('/api/skills'),
+  /** 单技能近 30 天逐日触发次数(抽屉展开时才拉) */
+  skillUsageDaily: (name: string) =>
+    get<{ days: number[]; span: number }>(`/api/skills/${encodeURIComponent(name)}/usage-daily`),
   memories: () => get<{ memories: Memory[] }>('/api/memories'),
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
@@ -53,7 +62,7 @@ export const api = {
     const qs = p.toString();
     return get<{ cards: WorklogCard[] }>(`/api/worklog${qs ? `?${qs}` : ''}`);
   },
-  usage: () => get<UsageReport>('/api/usage/today'),
+  usage: (range: UsageRange = 'today') => get<UsageReport>(`/api/usage?range=${range}`),
   // ---------- 待办 ----------
   todos: () => get<{ todos: Todo[] }>('/api/todos'),
   /** cwd 传绝对路径(界面已选好)或短名(外部脚本手打),后端统一宽松匹配 */

@@ -402,6 +402,53 @@ export async function extractSessionTitle(jsonlPath: string): Promise<string | u
   return firstUser;
 }
 
+// ---------- 技能触发记录 ----------
+
+/** 一次技能触发:技能名 + 本地日期(YYYY-MM-DD) + 触发时刻(ms) */
+export interface SkillInvocation {
+  skill: string;
+  day: string;
+  at: number;
+}
+
+/** 本地时区日期键。计数按本地日切分,与用户看到的「今天」一致(与用量口径同源) */
+export function localDay(ms: number): string {
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * 抽取一个 session jsonl 里的全部技能触发(assistant 事件中 name=Skill 的 tool_use)。
+ * 整文件读入后先做子串预筛:含标记的文件只占少数(实测 1965 个文件里仅 382 个),
+ * 不含标记的直接跳过逐行解析,是全量扫描能压到秒级的关键。
+ */
+export async function extractSkillInvocations(jsonlPath: string): Promise<SkillInvocation[]> {
+  const raw = await fsp.readFile(jsonlPath, 'utf8').catch(() => '');
+  if (!raw.includes('"name":"Skill"')) return [];
+  const out: SkillInvocation[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.includes('"name":"Skill"')) continue;
+    try {
+      const j = JSON.parse(line);
+      if (j.type !== 'assistant') continue;
+      const ts = typeof j.timestamp === 'string' ? Date.parse(j.timestamp) : NaN;
+      if (!Number.isFinite(ts)) continue; // 无时间戳无法归入窗口,不计入
+      const blocks = j.message?.content;
+      if (!Array.isArray(blocks)) continue;
+      for (const b of blocks) {
+        if (b?.type !== 'tool_use' || b.name !== 'Skill') continue;
+        const skill = b.input?.skill;
+        if (typeof skill !== 'string' || !skill) continue;
+        out.push({ skill, day: localDay(ts), at: ts });
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
+
 // ---------- 技能 ----------
 
 export async function scanSkills(claudeDir: string): Promise<Skill[]> {

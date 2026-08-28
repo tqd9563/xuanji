@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>原型 · /wd 手动输入完整路径</title>
+<style>
+/* ============================================================
+   token 与组件样式内联自 code/frontend/src/styles/index.css(生产同源),
+   本原型仅新增 .wd-manual(手动路径行的分隔与标记)与演示外壳样式。
+   ============================================================ */
+:root {
+  --bg:        oklch(0.145 0.006 120);
+  --surface:   oklch(0.185 0.008 120);
+  --surface-2: oklch(0.165 0.007 120);
+  --hover:     oklch(0.215 0.009 120);
+  --line:      oklch(0.27 0.010 120);
+  --line-soft: oklch(0.225 0.009 120);
+  --ink:   oklch(0.93 0.008 110);
+  --muted: oklch(0.71 0.015 110);
+  --faint: oklch(0.60 0.012 110);
+  --jade:      oklch(0.80 0.13 115);
+  --jade-dim:  oklch(0.68 0.10 115);
+  --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --r-s: 6px;
+  --r-m: 10px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { font-size: 16px; }
+body {
+  font-family: var(--sans); background: var(--bg); color: var(--ink);
+  font-size: 0.875rem; line-height: 1.6; -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+button { font: inherit; color: inherit; background: none; border: none; cursor: pointer; }
+input { font: inherit; color: var(--ink); }
+:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; border-radius: 2px; }
+::placeholder { color: var(--muted); opacity: 1; }
+.mono { font-family: var(--mono); }
+
+.input {
+  background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: 6px 12px; font-size: 0.8125rem;
+  transition: border-color 150ms var(--ease);
+}
+.input:hover { border-color: var(--muted); }
+.input:focus { outline: none; border-color: var(--jade); }
+
+.confirm-mask {
+  position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center;
+  background: color-mix(in oklab, var(--bg) 62%, transparent); backdrop-filter: blur(2px);
+}
+.rp-box {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  width: min(520px, calc(100vw - 48px)); box-shadow: 0 18px 48px rgb(0 0 0 / 0.5); overflow: hidden;
+}
+.rp-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 14px 18px 12px; font-size: 0.8125rem; font-weight: 600;
+  border-bottom: 1px solid var(--line-soft);
+}
+.rp-hint { font-size: 0.6875rem; font-weight: 400; color: var(--faint); }
+.rp-empty { padding: 22px 18px; font-size: 0.8125rem; color: var(--muted); line-height: 1.7; }
+.rp-list { max-height: 320px; overflow-y: auto; padding: 6px; }
+.rp-item {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 9px 12px; border: 0; border-radius: var(--r-s); background: none;
+  color: var(--ink); font-size: 0.8125rem; cursor: pointer;
+}
+.rp-item.sel { background: transparent; outline: 2px solid var(--jade); outline-offset: -2px; }
+.rp-item .rp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.rp-item .rp-meta { flex-shrink: 0; font-size: 0.6875rem; color: var(--faint); }
+
+/* WdPalette 生产已有类,原样复用 */
+.wd-search { padding: 10px 12px; border-bottom: 1px solid var(--line-soft); }
+.wd-search .input { width: 100%; }
+.wd-box .rp-item .rp-name { flex: none; max-width: 45%; }
+.wd-path { flex: 1; min-width: 0; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.6875rem; color: var(--faint); }
+.wd-cur { color: var(--jade); }
+
+/* 本次新增:手动路径行 —— 置底、上方细分隔线区隔于「已有项目」,
+   短名位用玉色动词提示这是一次「新建」而非「选择」 */
+.wd-manual { border-top: 1px solid var(--line-soft); margin-top: 6px; padding-top: 12px; border-radius: 0 0 var(--r-s) var(--r-s); }
+.wd-manual .rp-name { color: var(--jade); }
+.wd-manual.sel { outline-offset: -2px; }
+
+/* ============ 以下仅原型演示外壳 ============ */
+.demo-note {
+  position: fixed; left: 24px; bottom: 24px; z-index: 95;
+  max-width: 360px; background: var(--surface-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-m); padding: 14px 16px; font-size: 0.75rem; color: var(--muted); line-height: 1.8;
+}
+.demo-note b { color: var(--ink); font-weight: 600; }
+.demo-note .k {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+  background: var(--tint-jade); border-radius: 4px; padding: 0 5px;
+}
+@media (max-width: 720px) { .demo-note { display: none; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="confirm-mask">
+  <div class="rp-box wd-box" role="dialog" aria-modal="true" aria-label="切换工作目录">
+    <div class="rp-head">
+      切换工作目录
+      <span class="rp-hint">↑↓/Tab 选择 · Enter 切换 · Esc 关闭</span>
+    </div>
+    <div class="wd-search">
+      <input id="q" class="input" type="text" placeholder="模糊搜索目录…或输入完整路径(/ 或 ~ 开头)" autocomplete="off" aria-label="搜索或输入工作目录">
+    </div>
+    <div class="rp-list" id="list"></div>
+    <div class="rp-empty" id="empty" hidden></div>
+  </div>
+</div>
+
+<div class="demo-note">
+  <b>原型说明</b><br>
+  搜索框输入以 <span class="k">/</span> 或 <span class="k">~</span> 开头的内容时,列表底部固定出现一条
+  <span style="color:var(--jade)">使用此路径</span> 行——即便零匹配也在,按 Enter 直接切到该目录。<br>
+  已有项目照常模糊搜索,手动行<b>置底</b>,保证输入既有项目路径时 Enter 仍选中既有项目。<br>
+  试试:<span class="k">xuanji</span>(常规搜索)、
+  <span class="k">/Users/lilithgames/new-proj</span>(全新目录)、
+  <span class="k">~/demo</span>(波浪号展开)。
+</div>
+
+<script>
+// mock 数据:口径与 GET /api/projects 一致(path 为真实路径,取自 ~/.claude/projects 现有条目)
+const HOME = '/Users/lilithgames';
+const PROJECTS = [
+  '/Users/lilithgames/xuanji',
+  '/Users/lilithgames/antifraud_skills',
+  '/Users/lilithgames/antifraud_skills/baize',
+  '/Users/lilithgames/PycharmProjects/lilith-offline-etl',
+  '/Users/lilithgames/yuiko-skills',
+  '/Users/lilithgames/.agents/skills',
+  '/Users/lilithgames/xuanji-remote-access',
+];
+const CURRENT = '/Users/lilithgames/xuanji';
+const shortName = (p) => p.split('/').filter(Boolean).pop() || p;
+
+const q = document.getElementById('q'), list = document.getElementById('list'), empty = document.getElementById('empty');
+let rows = [], sel = 0;
+
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// 子序列模糊匹配,口径同 lib/fuzzy 的 fuzzyRank(短名与完整路径分别打分取高)
+const sub = (text, kw) => {
+  let i = 0;
+  for (const ch of kw.toLowerCase()) { i = text.toLowerCase().indexOf(ch, i); if (i < 0) return false; i++; }
+  return true;
+};
+// 手动路径判定:/ 或 ~ 开头即视为用户在输完整路径;~ 展开为 home
+const asManualPath = (kw) => {
+  if (kw.startsWith('~')) return HOME + kw.slice(1);
+  if (kw.startsWith('/')) return kw;
+  return null;
+};
+
+function render() {
+  const kw = q.value.trim();
+  const matched = kw ? PROJECTS.filter((p) => sub(shortName(p), kw) || sub(p, kw)) : PROJECTS;
+  rows = matched.map((p) => ({ path: p, manual: false }));
+  const manual = asManualPath(kw);
+  // 已在列表中的路径不重复出条(否则同一目录出现两行)
+  if (manual && manual.length > 1 && !matched.includes(manual)) rows.push({ path: manual, manual: true });
+  sel = Math.min(sel, Math.max(0, rows.length - 1));
+  empty.hidden = rows.length > 0;
+  if (!rows.length) empty.textContent = '没有匹配「' + kw + '」的工作目录 —— 输入以 / 或 ~ 开头的完整路径可直接切换';
+  list.innerHTML = rows.map((r, i) =>
+    '<button class="rp-item' + (r.manual ? ' wd-manual' : '') + (i === sel ? ' sel' : '') + '" tabindex="-1" data-i="' + i + '" title="' + esc(r.path) + '">' +
+      '<span class="rp-name">' + (r.manual ? '使用此路径' : esc(shortName(r.path))) + '</span>' +
+      (r.path === CURRENT ? '<span class="rp-meta wd-cur">当前</span>' : '') +
+      '<span class="wd-path mono">' + esc(r.path) + '</span>' +
+    '</button>').join('');
+}
+const pick = (i) => { const r = rows[i]; if (r) alert((r.manual ? '切换到手动输入路径:' : '切换到:') + r.path); };
+
+q.addEventListener('input', () => { sel = 0; render(); });
+list.addEventListener('mouseover', (e) => {
+  const btn = e.target.closest('.rp-item');
+  if (btn && +btn.dataset.i !== sel) { sel = +btn.dataset.i; render(); }
+});
+list.addEventListener('click', (e) => {
+  const btn = e.target.closest('.rp-item');
+  if (btn) pick(+btn.dataset.i);
+});
+document.addEventListener('keydown', (e) => {
+  if (!rows.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
+    e.preventDefault();
+    sel = e.key === 'Tab'
+      ? (e.shiftKey ? (sel - 1 + rows.length) % rows.length : (sel + 1) % rows.length)
+      : (e.key === 'ArrowDown' ? Math.min(sel + 1, rows.length - 1) : Math.max(sel - 1, 0));
+    render();
+    list.children[sel]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    pick(sel);
+  }
+});
+if (location.hash) q.value = decodeURIComponent(location.hash.slice(1));
+q.focus();
+render();
+</script>
+</body>
+</html>

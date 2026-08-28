@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import type { ModelUsage } from '@/api/types';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -142,6 +143,7 @@ export function daySeparator(prev: number | string | null | undefined, cur: numb
 export const fmtCost = (usd: number) => '$' + usd.toFixed(2);
 
 export function fmtTokens(n: number): string {
+  if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'; // 近一周量级会上到十亿档,B 位保两位小数才分得出高低
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
   if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
   return String(n);
@@ -156,4 +158,26 @@ export function fmtTokens(n: number): string {
  */
 export function canWrapup(started: boolean, hasResumeTarget: boolean): boolean {
   return started || hasResumeTarget;
+}
+
+/** token 四分量:inOut 口径把三类计费分量揉成一个数,这里拆开看结构 */
+export interface TokenComp {
+  input: number;
+  output: number;
+  cacheWrite: number;
+  cacheRead: number;
+}
+
+/** cacheRead 计费单价是 input 的 0.1 倍(与 backend/services/usage.ts 的 costUsd 同源) */
+export const CACHE_READ_WEIGHT = 0.1;
+
+export function sumComp(list: ModelUsage[]): TokenComp {
+  const c: TokenComp = { input: 0, output: 0, cacheWrite: 0, cacheRead: 0 };
+  for (const m of list) {
+    c.input += m.inputTokens;
+    c.output += m.outputTokens;
+    c.cacheWrite += m.cacheCreationTokens;
+    c.cacheRead += m.cacheReadTokens;
+  }
+  return c;
 }
