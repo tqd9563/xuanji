@@ -2,8 +2,7 @@
 - **Token 用量时间范围与计量单位切换**：仪表盘用量模块支持在「今天 / 近一周」与「成本 $ / Token 量」之间切换，条长、数值与对比条同步换算；token 量按 k/M/B 分档（近一周量级会上到十亿档）。近一周按需拉取，首次统计期间显示「统计中…」并沿用今日数据垫底。
 - **开发成本 vs multica 对比条**：用量模块顶部新增一条堆叠总览，给出开发项目与 multica workspaces 各自的成本/token 量与开发占比。此前 multica 被 `projectNoisePatterns` 静默过滤，界面上无从得知被排除掉多少。
 - **`GET /api/usage?range=today|7d`**：用量报表接口支持窗口参数，非法值退回 today；`/api/usage/today` 保留为固定 today 口径的别名。响应新增 `range`、`since`、`noise`（被过滤目录的汇总）与每层的 `totalTokens`。
-
-- **token 四分量构成明细**：单位切到 Token 时，用量模块新增「构成（开发侧）」一段，给出 input / output / cacheWrite 三项数值，cacheRead 因不计入 token 总量而独占一行并附 ×0.1 计费折算当量（近一周 459.2M ≈ 45.9M，比 inOut 总量 23.0M 还大）。展开某个项目时，会话列表上方补一行同口径的构成。切回「成本 $」整段隐藏。四项全部以数字呈现不画条：cacheRead 量级常是其余三项之和的 20 倍，同一根线性条会把另外三段压成碎片。
+- **token 四分量构成明细**：单位切到 Token 时，用量模块新增「构成（开发侧）」一段，同排给出 in / out / cacheW / cacheR 四项数值，cacheRead 因不计入 token 总量而附 ×0.1 计费折算当量（近一周 459.2M ≈ 45.9M，比 inOut 总量 23.0M 还大）。展开某个项目时，会话列表上方补一行同口径的构成。切回「成本 $」整段隐藏。四项全部以数字呈现不画条：cacheRead 量级常是其余三项之和的 20 倍，同一根线性条会把另外三段压成碎片。
 
 ### 变更
 - **用量模块头部写明条长口径**：Token 单位下的小字由「条长 = token 量」改为「条长 = in + out + cacheWrite token 量」，读条形图时即可知道 cacheRead 不在其中；悬停给出完整口径说明。

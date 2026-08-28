@@ -278,22 +278,24 @@ const bothTip = (cost: number, tokens: TokenTotals) =>
 function CompNums({ comp, className = 'comp-nums' }: { comp: TokenComp; className?: string }) {
   return (
     <div className={className}>
-      <span title="非缓存的输入 token">
-        <span className="k">input</span>
+      {/* 键名用缩写:四项要挤进右栏一行(实宽约 488px),全称 input/output/cacheWrite/cacheRead
+          会溢出到第二行,把「同一组分量」拆成看似两块。全称在悬停里给 */}
+      <span title="input:非缓存的输入 token">
+        <span className="k">in</span>
         <b>{fmtTokens(comp.input)}</b>
       </span>
-      <span title="模型输出 token,计费单价 5× input">
-        <span className="k">output</span>
+      <span title="output:模型输出 token,计费单价 5× input">
+        <span className="k">out</span>
         <b>{fmtTokens(comp.output)}</b>
       </span>
-      <span title="写入 prompt 缓存,计费单价 1.25× input">
-        <span className="k">cacheWrite</span>
+      <span title="cacheWrite:写入 prompt 缓存,计费单价 1.25× input">
+        <span className="k">cacheW</span>
         <b>{fmtTokens(comp.cacheWrite)}</b>
       </span>
-      <span className="cr" title="命中 prompt 缓存,计费单价 0.1× input;不计入上方 token 总量,故折算成 input 当量便于比较">
-        <span className="k">cacheRead</span>
+      <span className="cr" title="cacheRead:命中 prompt 缓存,计费单价 0.1× input;不计入上方 token 总量,故折算成 input 当量便于比较">
+        <span className="k">cacheR</span>
         <b>{fmtTokens(comp.cacheRead)}</b>
-        <span className="eq">×0.1 ≈ {fmtTokens(comp.cacheRead * CACHE_READ_WEIGHT)}</span>
+        <span className="eq">×0.1≈{fmtTokens(comp.cacheRead * CACHE_READ_WEIGHT)}</span>
       </span>
     </div>
   );

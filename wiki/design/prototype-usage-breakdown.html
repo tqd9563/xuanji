@@ -135,8 +135,8 @@
   /* ============================================================
      新增样式:token 构成明细(comp)—— 纯文字,不画条
      只在 unit = Token 时出现;成本口径本身已是加权汇总,无需构成。
-     三个计费常规分量(in/out/cacheW)一组,cacheRead 用竖线分隔单列并
-     附 ×0.1 计费折算:量级 20× 的差距靠数字本身表达,比任何刻度都诚实。
+     四个分量同排一行(键名用缩写才挤得进右栏实宽 488px),cacheRead 附
+     ×0.1 计费折算:量级 20× 的差距靠数字本身表达,比任何刻度都诚实。
      ============================================================ */
   .comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); }
   .comp-head {
@@ -145,16 +145,15 @@
   }
   .comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
   .comp-nums {
-    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap;
     font-size: 0.75rem; color: var(--muted);
   }
-  .comp-nums span { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+  .comp-nums span { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
   .comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
   .comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
-  /* cacheRead 固定另起一行(实测右栏实宽约 470px,四项挤不进一行;靠 flex-wrap
-     会让它被 margin-left:auto 甩到右边缘像漂浮物)。整行独占后左对齐,
-     与上方三项的分区改用留白表达。值弱化一档,折算注解更弱 */
-  .comp-nums .cr { flex-basis: 100%; margin-top: 3px; }
+  /* cacheRead 与前三项同排:键名用缩写才挤得进右栏一行(实宽约 488px)。
+     不右推也不强制独占一行——两者都会让它看着像另一个模块,而它只是第四个分量。
+     值弱化一档、折算注解更弱,以此区分「另一个计费维度」 */
   .comp-nums .cr b { color: var(--muted); }
   .comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 
@@ -188,7 +187,7 @@
 <body>
 <div class="proto-wrap">
   <h1 class="proto-h1">用量模块 · token 构成明细原型</h1>
-  <p class="proto-lede">在已上线的「Token 用量」模块内新增构成明细:单位切到 <b>Token</b> 时,对比条下方出现「构成(开发侧)」段——四个分量全部以数字呈现,不画任何条形。三个常规计费分量(input / output / cacheWrite)一组,cacheRead 独占下一行并附 <b>×0.1 计费折算</b>(直接回答「cacheRead 到底占多重」)。展开某个项目时,会话列表上方补一行同口径的构成文字。切回「成本 $」时构成段整体隐藏。口径不在构成段里重复解释,而是并进头部小字:「条长 = in + out + cacheWrite token 量」,读条形图时就已知道 cacheRead 不在其中。</p>
+  <p class="proto-lede">在已上线的「Token 用量」模块内新增构成明细:单位切到 <b>Token</b> 时,对比条下方出现「构成(开发侧)」段——四个分量全部以数字呈现,不画任何条形。三个常规计费分量(input / output / cacheWrite)一组,cacheRead 同排接在后面并附 <b>×0.1 计费折算</b>(直接回答「cacheRead 到底占多重」)。展开某个项目时,会话列表上方补一行同口径的构成文字。切回「成本 $」时构成段整体隐藏。口径不在构成段里重复解释,而是并进头部小字:「条长 = in + out + cacheWrite token 量」,读条形图时就已知道 cacheRead 不在其中。</p>
   <p class="proto-note"><b>数据为真:</b>全部数字取自验收环境 /api/usage 实时返回(2026-08-28)。近一周开发侧 in 821.9K · out 1.8M · cacheW 19.7M,cacheRead 439.5M ≈ 计费当量 43.9M——比 inOut 总量 22.4M 还大,这正是要单列展示的原因。可用 ?unit=cost / ?range=today 直接打开对应切换态。</p>
 
   <!-- 右栏「Token 用量」模块(仪表盘其余部分不变,原型只画本模块) -->
@@ -330,11 +329,11 @@ function render() {
   if (unit === 'tok') {
     const [ci, co, cw, cr] = d.comp;
     document.getElementById('comp-nums').innerHTML =
-      `<span title="非缓存的输入 token"><span class="k">input</span><b>${fmtTok(ci)}</b></span>` +
-      `<span title="模型输出 token,单价 5× input"><span class="k">output</span><b>${fmtTok(co)}</b></span>` +
-      `<span title="写入 prompt 缓存,单价 1.25× input"><span class="k">cacheWrite</span><b>${fmtTok(cw)}</b></span>` +
+      `<span title="非缓存的输入 token"><span class="k">in</span><b>${fmtTok(ci)}</b></span>` +
+      `<span title="模型输出 token,单价 5× input"><span class="k">out</span><b>${fmtTok(co)}</b></span>` +
+      `<span title="写入 prompt 缓存,单价 1.25× input"><span class="k">cacheW</span><b>${fmtTok(cw)}</b></span>` +
       `<span class="cr" title="命中 prompt 缓存,单价 0.1× input,故折算成 input 当量便于与左侧三项比较">` +
-        `<span class="k">cacheRead</span><b>${fmtTok(cr)}</b><span class="eq">×0.1 ≈ ${fmtTok(cr * 0.1)}</span></span>`;
+        `<span class="k">cacheR</span><b>${fmtTok(cr)}</b><span class="eq">×0.1≈${fmtTok(cr * 0.1)}</span></span>`;
   }
 
   // 项目条形图 + 展开时的构成行

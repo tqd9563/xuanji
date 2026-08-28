@@ -364,17 +364,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); transition: opacity 150ms var(--ease); }
 .comp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
 .comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
-.comp-nums { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
-.comp-nums span { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.comp-nums { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
+.comp-nums span { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
 .comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
 .comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
-/* cacheRead 固定另起一行:右栏实宽约 470px,四项挤不进一行,靠 flex-wrap 会让它
-   被 margin-left:auto 甩到右边缘像漂浮物。整行独占后左对齐,分区改用上方留白表达 */
-.comp-nums .cr { flex-basis: 100%; margin-top: 3px; }
+/* cacheRead 与前三项同排,放不下时自然折行接着排(不右推、不强制独占一行:
+   两者都会让它看着像另一个模块,而它只是第四个分量)。值弱化一档区分计费维度 */
 .comp-nums .cr b { color: var(--muted); }
 .comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 /* 展开项目内的同款构成行:整体降一档,与会话行拉开层级 */
-.comp-line { padding: 2px 0 5px 22px; gap: 12px; }
+.comp-line { padding: 2px 0 5px 22px; gap: 4px 10px; }
 .comp-line b { font-size: 0.75rem; color: var(--muted); }
 
 /* 近一周数据在路上:今日数据先垫着并压暗,不整块闪空 */
