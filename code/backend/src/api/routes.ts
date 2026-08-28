@@ -11,6 +11,7 @@ import { resolveWorkdir } from '../services/paths.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
+import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
 import { listMemories, searchMemories } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
@@ -82,7 +83,18 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     return c.json(replay);
   });
 
-  api.get('/skills', async (c) => c.json({ skills: await listSkills() }));
+  api.get('/skills', async (c) =>
+    c.json({
+      skills: await listSkills(storage),
+      usageCaliber: USAGE_CALIBER,
+      usageComputedAt: lastScanTime(),
+    }),
+  );
+
+  /** 单技能近 30 天逐日触发次数(抽屉迷你柱);只读索引,不触发扫描 */
+  api.get('/skills/:name/usage-daily', (c) =>
+    c.json({ days: skillDailySeries(storage, c.req.param('name')), span: DAILY_SPAN }),
+  );
 
   api.get('/memories', async (c) => c.json({ memories: await listMemories(storage) }));
 

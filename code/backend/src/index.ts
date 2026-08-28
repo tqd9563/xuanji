@@ -9,10 +9,15 @@ import { createApi } from './api/routes.js';
 import { attachWs } from './ws.js';
 import { Storage } from './storage/db.js';
 import { SchedulerService } from './services/scheduler.js';
+import { refreshSkillUsage } from './services/skill-usage.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
 scheduler.init(); // 重启不丢任务:重新加载全部 pending/blocked 任务并注册 croner 触发器
+
+// 技能触发索引预热:冷库首扫要读近百万行 jsonl(实测 ~5s),放后台跑,
+// 让第一次打开技能页就有数;失败不影响启动,下次请求会再触发增量扫描。
+void refreshSkillUsage(storage).catch((e) => console.error('[xuanji] skill usage scan failed:', e));
 
 const app = new Hono();
 

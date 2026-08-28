@@ -121,6 +121,15 @@ export interface Replay {
   title?: string;
 }
 
+/** 技能触发次数(各窗口计数 + 最近触发);由 session jsonl 重建,非自有数据 */
+export interface SkillUsage {
+  d7: number;
+  d30: number;
+  d90: number;
+  /** 最近一次触发时刻(ms);从未触发时缺省 */
+  lastUsedAt?: number;
+}
+
 export interface Skill {
   name: string;
   description: string;
@@ -131,6 +140,8 @@ export interface Skill {
   enabled: boolean;
   /** SKILL.md 正文(frontmatter 之后) */
   body?: string;
+  /** 触发统计;索引尚未建好时缺省 */
+  usage?: SkillUsage;
 }
 
 export interface Memory {
