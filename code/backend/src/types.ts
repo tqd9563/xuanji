@@ -451,6 +451,13 @@ export interface RunbookTemplate {
 /** 一次交付的验收清单(worktree 内 .xuanji/runbook.json 的内容) */
 export interface AcceptanceRunbook {
   schemaVersion: 1;
+  /**
+   * 清单归属的会话。面板只对这条会话渲染——清单是「某次交付」的产物而非项目常驻配置,
+   * 不绑会话的话同一目录下的后续会话会一路继承上一次交付的清单(实测:项目里躺着一份
+   * 旧清单,新会话刚问完版本号就弹出验收面板)。
+   * 缺失时由后端按「写于本会话开始之后」认领并回写盖章(见 services/runbook.ts)。
+   */
+  sessionId?: string;
   templateRef?: { id: string; version: number };
   /** itemId → paramKey → 值,会话预填的本次默认 */
   paramValues?: Record<string, Record<string, string>>;

@@ -16,7 +16,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { readRunbookFile } from '../adapters/runbook-file.js';
+import { readRunbookFile, stampRunbookSession } from '../adapters/runbook-file.js';
 import { guardItem } from './runbook-guard.js';
 import type { Storage } from '../storage/db.js';
 import type {
@@ -105,16 +105,54 @@ export function instantiate(
 }
 
 /**
- * 读出某会话的完整面板数据。返回 null = 没有清单,面板不渲染(退化为现状体验)。
+ * 清单归属判定:这份清单是不是「本次会话的交付物」。
+ *
+ * 面板出现的时机由此决定。清单是一次交付的产物,不是项目常驻配置——同一目录下的
+ * 后续会话不该继承上一次交付的清单(实测:项目里躺着一份旧清单,新会话刚问完版本号
+ * 就弹出验收面板)。两级判定:
+ *  1) 清单显式写了 sessionId → 只认它,别的会话一律不渲染(硬绑定,盖章后永久生效);
+ *  2) 没写 → 只有「写于本会话开始之后」才算本次交付,认领并盖章;早于会话开始的
+ *     一律视为上一次交付的残留。
+ * 非 web 派发的会话拿不到起始时刻,只接受已盖章的清单(宁可不出面板,不错出面板)。
+ */
+function runbookOwner(
+  storage: Storage,
+  sessionId: string,
+  runbook: AcceptanceRunbook,
+  mtimeMs: number | undefined,
+): { ok: true; claim: boolean } | { ok: false; reason: string } {
+  if (runbook.sessionId) {
+    return runbook.sessionId === sessionId
+      ? { ok: true, claim: false }
+      : { ok: false, reason: `清单归属会话 ${runbook.sessionId},不属于本会话` };
+  }
+  const startedAt = storage.dispatchStartedAt(sessionId);
+  if (startedAt === null) return { ok: false, reason: '清单未标注归属会话,而本会话不是 web 派发会话' };
+  if (mtimeMs === undefined) return { ok: false, reason: '读不到清单修改时间,无法判定归属' };
+  if (mtimeMs < startedAt) {
+    return { ok: false, reason: '清单写于本会话开始之前,视为上一次交付的残留' };
+  }
+  return { ok: true, claim: true };
+}
+
+/**
+ * 读出某会话的完整面板数据。返回 null = 没有清单(或清单不属于本会话),面板不渲染。
  * 每项在这里就跑一遍 guard:黑名单命中的项带着 blockedReason 下发,
  * 前端渲染成「已拦截」而不是等用户点了才报错(§6.2)。
  */
 export function resolveRunbook(storage: Storage, sessionId: string, cwd: string): ResolvedRunbook | null {
-  const { runbook, warning } = readRunbookFile(cwd);
+  const { runbook, warning, mtimeMs } = readRunbookFile(cwd);
   if (!runbook) {
     if (warning) console.warn(`[runbook] ${sessionId}: ${warning}`);
     return null;
   }
+  const owner = runbookOwner(storage, sessionId, runbook, mtimeMs);
+  if (!owner.ok) {
+    console.warn(`[runbook] ${sessionId}: ${owner.reason}`);
+    return null;
+  }
+  // 认领即盖章:此后这份清单硬绑在本会话上,不再依赖时间比较
+  if (owner.claim) stampRunbookSession(cwd, sessionId);
   const template = runbook.templateRef ? storage.getRunbookTemplate(runbook.templateRef.id) : null;
   const items = instantiate(runbook, template).map((item) => {
     const provided = runbook.paramValues?.[item.id];

@@ -30,6 +30,8 @@ const SID = '11111111-2222-3333-4444-555555555555';
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'xj-rb-'));
   storage = new Storage(path.join(dir, 'data'));
+  // 面板只对「本次交付」渲染,清单归属判定要用会话起始时刻:用例里的清单都写在这之后
+  storage.recordDispatch(SID, dir);
   fs.mkdirSync(path.join(dir, '.xuanji'), { recursive: true });
   _resetRunbookState();
 });
@@ -166,6 +168,45 @@ describe('面板数据组装', () => {
 
   it('没有清单文件时返回 null(面板不渲染)', () => {
     expect(resolveRunbook(storage, SID, path.join(dir, 'empty'))).toBeNull();
+  });
+});
+
+describe('清单归属(面板出现的时机)', () => {
+  const OTHER = '99999999-8888-7777-6666-555555555555';
+  const file = () => path.join(dir, '.xuanji', 'runbook.json');
+  const readBack = () => JSON.parse(fs.readFileSync(file(), 'utf8')) as { sessionId?: string };
+  /** 把清单文件的修改时间挪到会话开始之前,模拟上一次交付留下的残留 */
+  const ageFile = (beforeMs: number) => {
+    const t = new Date(Date.now() - beforeMs);
+    fs.utimesSync(file(), t, t);
+  };
+  const anyRunbook = () => ({ schemaVersion: 1, extraItems: [{ id: 'x', type: 'link', title: '看一眼' }] });
+
+  it('写于会话开始之前的清单视为上次交付的残留,面板不渲染', () => {
+    writeRunbook(anyRunbook());
+    ageFile(60_000);
+    expect(resolveRunbook(storage, SID, dir)).toBeNull();
+  });
+
+  it('本次交付写的清单渲染,并把归属会话盖回文件', () => {
+    writeRunbook(anyRunbook());
+    expect(resolveRunbook(storage, SID, dir)).not.toBeNull();
+    expect(readBack().sessionId).toBe(SID);
+  });
+
+  it('盖章后只认这条会话:同目录下开始更晚的会话拿不到面板', () => {
+    writeRunbook({ ...anyRunbook(), sessionId: SID });
+    storage.recordDispatch(OTHER, dir);
+    expect(resolveRunbook(storage, OTHER, dir)).toBeNull();
+    // 归属会话自己不受清单新旧影响(接回/后端重启后照样能验收)
+    ageFile(60_000);
+    expect(resolveRunbook(storage, SID, dir)).not.toBeNull();
+  });
+
+  it('非 web 派发的会话只接受已盖章的清单,不靠时间认领', () => {
+    writeRunbook(anyRunbook());
+    expect(resolveRunbook(storage, OTHER, dir)).toBeNull();
+    expect(readBack().sessionId).toBeUndefined();
   });
 });
 
