@@ -1,3 +1,14 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 会话页项目维度原型(泳道 / chip 过滤)</title>
+<style>
+/* ============================================================
+   以下为真实前端样式表 code/frontend/src/styles/index.css 全量内联,
+   保证原型与线上视觉 1:1;新功能样式见文件底部「PROTO」区块。
+   ============================================================ */
 @import "tailwindcss";
 
 /* ============================================================
@@ -248,49 +259,15 @@ select.input { appearance: none; padding-right: 28px;
 .empty .glyph { font-size: 1.5rem; margin-bottom: 8px; color: var(--faint); }
 .empty p { font-size: 0.8125rem; max-width: 34em; margin: 0 auto 4px; }
 
-/* ============ 全局状态栏 ============ */
-/* 外壳家具,不属于任何视图:挂在 .main 顶部吸顶,切视图时不重挂载。详见 DESIGN.md §5 */
-.statusbar {
-  position: sticky; top: 0; z-index: var(--z-sticky);
-  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
-  height: 42px;
-  /* 左右内边距与 .main 同值,再用等值负外边距出血到主区边缘:模糊层贯通整幅宽度 */
-  padding: 0 clamp(32px, 3.5vw, 80px);
-  margin: 0 calc(-1 * clamp(32px, 3.5vw, 80px)) 8px;
-  /* 功能性模糊:内容从下方滚过时保证状态栏文字可读,与 mobile-topbar/tabbar 吸附垫层同源 */
-  background: color-mix(in oklab, var(--bg) 82%, transparent);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--line-soft);
-}
-/* widget 插槽:新增信息 = 新增一枚 .sb-item,不往已有 widget 里塞文字 */
-.sb-item {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 9px; border-radius: var(--r-s);
-  font-size: 0.75rem; color: var(--muted);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-  transition: background 150ms var(--ease), color 150ms var(--ease);
-}
-button.sb-item { cursor: pointer; }
-button.sb-item:hover { background: var(--hover); color: var(--ink); }
-.sb-item .n { font-family: var(--mono); }
-.sb-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--jade); flex: none; }
-/* 告警态:复用 pill-blk 的琥珀语义,状态色只表状态 */
-.sb-item.warn { color: var(--amber); }
-.sb-item.warn .dot { background: var(--amber); animation: pulse 2s var(--ease) infinite; }
-/* 故障态:红。文案本身也随之改写,状态永不 color-alone */
-.sb-item.bad { color: var(--red); }
-.sb-item.bad .dot { background: var(--red); }
-/* 观象台时钟 widget:自仪表盘迁入,尺寸与配色一字未改;等宽 + 表格数字,秒位跳动不抖版 */
-.sb-clock { gap: 10px; align-items: baseline; }
-.sb-clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.sb-clock .hms {
+/* ============ 仪表盘 ============ */
+/* 观象台时钟:日期+时间+时区一个仪表组(同类信息单注视点),等宽 + 表格数字,秒位跳动不抖版 */
+.clock { display: flex; align-items: baseline; gap: 10px; }
+.clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.clock #dash-clock {
   font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
   color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
-.sb-sep { width: 1px; height: 14px; background: var(--line-soft); margin: 0 2px; flex: none; }
-@media (prefers-reduced-motion: reduce) { .sb-item.warn .dot { animation: none; } }
 
-/* ============ 仪表盘 ============ */
 .dash-now { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 4fr); gap: 16px; margin-bottom: 16px; }
 .need-item { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line-soft); }
 .need-item:last-child { border-bottom: none; }
@@ -348,93 +325,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .tok-legend span { display: flex; align-items: center; gap: 5px; }
 .tok-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-/* ---- Token 用量合并模块(成本条形图 + 7 日热力图同属「用量」视角,合为一块) ---- */
-/* 头部要塞下标题 + 两组切换:标题不折行,切换组整组换行但不拆散 */
-.usage-head { flex-wrap: wrap; row-gap: 6px; }
-.usage-head h2 { white-space: nowrap; }
-/* 小字用 flex-basis:0 吸收剩余空间(顺带接替 spacer 的角色)。
-   关键在 basis 而非 shrink:flex 容器开了 wrap 就是「先换行再压缩」,
-   按内容宽度参与分行时,口径文案一变长就会把第二组切换顶到下一行
-   (成本↔Token 切换时头部忽高忽低)。basis 归零后它永不顶出换行,
-   空间不足时省略号收尾,完整口径仍在 title 悬停里。 */
-.usage-head .sub { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-
-/* 分段切换:沿用 .nav button.active 的选中词汇(玉色 tint),不另造一套 */
-.seg {
-  display: inline-flex; align-items: center; gap: 2px;
-  background: var(--surface-2); border: 1px solid var(--line-soft);
-  border-radius: var(--r-s); padding: 2px;
-}
-.seg button {
-  padding: 1px 10px; border-radius: 4px;
-  font-size: 0.75rem; color: var(--muted); white-space: nowrap;
-  transition: background 150ms var(--ease), color 150ms var(--ease);
-}
-.seg button:hover { color: var(--ink); }
-.seg button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
-
-/* 开发 vs multica 对比条:开发段用玉色(主角),multica 段用中性斜纹——
-   它是「非开发」对照组,不该占用任何状态色或模型系列色的词汇 */
-.cmp { padding: 14px 18px 4px; transition: opacity 150ms var(--ease); }
-.cmp-head { display: flex; align-items: baseline; gap: 8px; font-size: 0.75rem; color: var(--muted); margin-bottom: 7px; flex-wrap: wrap; }
-.cmp-head b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.75rem; }
-.cmp-head .pct { color: var(--jade); font-family: var(--mono); }
-.cmp-track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--tint-muted); }
-.cmp-track .dev { background: var(--jade-dim); transition: width 200ms var(--ease); }
-.cmp-track .noise { transition: width 200ms var(--ease); }
-/* multica 两类任务共用中性灰系(不占状态色/模型色词汇),以纹理区分:
-   scan(扫描归因 = workspaces+narrate)= 斜纹;biz-events(业务事件)= 纯色浅一档 */
-.cmp-track .noise-scan {
-  background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 5px, oklch(0.28 0.010 110) 5px 10px);
-}
-.cmp-track .noise-biz-events { background: oklch(0.42 0.014 110); }
-.cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); flex-wrap: wrap; }
-.cmp-legend span { display: flex; align-items: center; gap: 5px; }
-.cmp-legend b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
-.cmp-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-.cmp-legend .i-dev { background: var(--jade-dim); }
-.cmp-legend .i-noise-scan { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
-.cmp-legend .i-noise-biz-events { background: oklch(0.42 0.014 110); }
-
-/* token 四分量构成:纯文字不画条——cacheRead 量级常是其余三项之和的 20 倍,
-   同一根线性条会把另外三段压成碎片,20× 的差距交给数字本身表达。
-   三个常规计费分量一组,cacheRead 用竖线断开推到行尾并弱化一档:
-   它不是「同类的第四项」,而是被排除在 token 总量之外的另一个计费维度。 */
-.comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); transition: opacity 150ms var(--ease); }
-.comp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
-.comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
-.comp-nums { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
-.comp-nums span { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
-.comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
-.comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
-/* cacheRead 与前三项同排,放不下时自然折行接着排(不右推、不强制独占一行:
-   两者都会让它看着像另一个模块,而它只是第四个分量)。值弱化一档区分计费维度 */
-.comp-nums .cr b { color: var(--muted); }
-.comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
-/* 展开项目内的同款构成行:整体降一档,与会话行拉开层级 */
-.comp-line { padding: 2px 0 5px 22px; gap: 4px 10px; }
-.comp-line b { font-size: 0.75rem; color: var(--muted); }
-
-/* 近一周数据在路上:今日数据先垫着并压暗,不整块闪空 */
-.cmp.pending, .tok.pending, .comp.pending { opacity: 0.5; }
-/* 统计中的文字反馈:玉色呼吸,与运行态 pill 同一套「正在进行」词汇 */
-.usage-loading { color: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
-@media (prefers-reduced-motion: reduce) { .usage-loading { animation: none; } }
-
-/* 模块内分段:热力图与图例接在条形图之下,用整宽细线分隔 */
-.usage-divide { border-top: 1px solid var(--line-soft); }
-.usage-divide .cap { display: flex; align-items: baseline; gap: 8px; padding: 10px 18px 0; font-size: 0.75rem; color: var(--muted); }
-.usage-divide .cap h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
-.usage-foot { padding: 10px 18px; }
-
-/* 最近活动拉通整栏:面板由 grid 拉伸到与右侧用量模块等高,列表吃掉剩余空间,超出内部滚动。
-   可视区封顶 60vh——40 条全展开会把仪表盘拉到近三屏,而这是一块「扫一眼」的驾驶舱屏,
-   要看更早的活动滚动即可,不该让下面的内容被推出视野。 */
-.dash-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
-.tl-tall { flex: 1; min-height: 0; max-height: 60vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.tl-tall::-webkit-scrollbar { width: 6px; }
-.tl-tall::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
-
 /* ============ 项目 ============ */
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 84px; }
 .spark i { flex: 1; background: var(--jade-dim); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
@@ -443,11 +333,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* ============ 会话看板 ============ */
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
 .board { display: grid; grid-template-columns: repeat(4, minmax(252px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
-/* 过滤条在场时,看板高度改由 flex 分配而非再减一个魔数:项目多到 chip 换行(8+ 个项目
-   实测就会)时,减固定值会让看板底部溢出视口。外壳锁一个视口高,过滤条占自然高度,
-   看板吃掉剩下的。 */
-.board-wrap { display: flex; flex-direction: column; height: calc(100vh - 196px); min-height: 340px; }
-.board-wrap .board { flex: 1; height: auto; min-height: 0; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 /* flex:1 —— 列体撑满整列高度。不撑满时它只有内容那么高,空闲列一两张卡就意味着拖拽落点
    只是顶部一条窄带,拖到列中段接不住(2026-08-05 实测:已完成列卡多能接,空闲列接不到)。 */
@@ -491,43 +376,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard .unarchive:hover { color: var(--jade); }
 /* 拖拽处置:原位卡留半透明占位,跟手的那张由 DragOverlay 画;落点列悬停时显出接纳边框 */
 .scard.dragging { opacity: 0.4; cursor: grabbing; border-style: dashed; border-color: var(--jade); }
-
-/* ---- 项目过滤:非命中卡淡出而非移除 ----
-   移除会让列长随过滤缩水,而列长在本产品里是「积压量」的信号(验收中列刻意不折叠即为此)。
-   留位淡出后,收窄的是注意力、不是事实。暗卡同时退出指针与键盘两个输入通道。 */
-.scard.pf-dim { opacity: 0.22; pointer-events: none; }
-.scard.pf-dim, .scard.pf-dim * { transition: none; }
-
-/* ============ 项目过滤条(会话看板) ============ */
-/* 过滤是「聚焦」不是「导航」:单行、紧贴看板上沿,不做侧栏也不做下拉 */
-.proj-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-/* 这行标签是全页少数直接坐在 body(壁纸)上的小字,用 --muted 而非更暗的 --faint:
-   开壁纸时 faint 实测只有 2.87:1,muted 才回到可读区间 */
-.proj-filter .pf-label { font-size: 0.75rem; color: var(--muted); flex: none; }
-/* --pf-base 固定取不透明的 surface-2 原色,不走 var(--surface-2):chip 是控件不是外壳表面
-   (同 .dd-menu 的理由)。开壁纸时 body 转透明,任何「往 transparent 里混」的底色都会把壁纸
-   漏进这行 0.75rem 小字背后——选中态实测掉到 1.44:1。混进不透明基色则三种模式一律 7:1 以上。 */
-.pf-chip {
-  --pf-base: oklch(0.165 0.007 120);
-  display: inline-flex; align-items: center; gap: 7px;
-  font-family: var(--mono); font-size: 0.75rem; font-weight: 500;
-  padding: 4px 12px; border-radius: 999px; cursor: pointer;
-  color: var(--muted); background: var(--pf-base); border: 1px solid var(--line-soft);
-  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
-}
-.pf-chip:hover { border-color: var(--muted); color: var(--ink); }
-.pf-chip:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
-/* 选中态:项目分类色经 --pc 注入,tint 底 + 同色描边——与卡上 .proj-chip 同一套词汇 */
-.pf-chip.on { color: var(--pc); background: color-mix(in oklab, var(--pc) 14%, var(--pf-base)); border-color: color-mix(in oklab, var(--pc) 45%, transparent); }
-.pf-chip .pf-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pc); flex: none; }
-.pf-chip .pf-n { font-size: 0.6875rem; color: var(--faint); }
-.pf-chip.on .pf-n { color: color-mix(in oklab, var(--pc) 70%, var(--ink)); }
-/* 待验收角标:琥珀专表「等你处理」,与 chip 的分类色分守两套词汇 */
-.pf-chip .pf-warn { font-size: 0.6875rem; font-weight: 650; color: oklch(0.24 0.05 85); background: var(--amber); border-radius: 999px; padding: 0 6px; flex: none; }
-.pf-chip.pf-all.on { color: var(--ink); background: oklch(0.215 0.009 120); border-color: var(--muted); }
-@media (prefers-reduced-motion: reduce) {
-  .pf-chip { transition: none; }
-}
 /* 跟手卡:抬起来的质感(阴影 + 玉色描边),不再被相邻列或列体滚动容器盖住 */
 .drag-ghost .scard { cursor: grabbing; border-color: var(--jade); box-shadow: 0 12px 28px rgb(0 0 0 / 0.45); margin-bottom: 0; }
 .col-body.drop-over {
@@ -1162,74 +1010,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .check { color: var(--jade); }
 .uncheck { color: var(--faint); }
 
-/* ---- 技能表列宽 ----
-   auto 布局下列宽由内容决定:切窗口让 210 变成 3、排序把长名字换到首屏,
-   整张表就会重新分配宽度、行与行之间横向错位。改 fixed + colgroup 定死骨架:
-   只有「描述」是弹性列(窄屏只压它),其余按内容上界给定值,任何窗口/排序下都不动。 */
-/* 宽度写在表头单元格而不是 colgroup:fixed 布局下列宽取自首行,
-   这样窄屏 display:none 掉某列时,剩下的列自然按各自宽度重排
-   (colgroup 是按位置映射的,隐藏第 4 列会让第 5 列错拿第 4 个 col 的宽度) */
-.table-skills { table-layout: fixed; }
-.table-skills th:nth-child(1) { width: 200px; }  /* mono 技能名,超长省略号 + title 兜全名 */
-.table-skills th:nth-child(2) { width: auto; }   /* 描述:唯一弹性列,吃掉剩余空间 */
-.table-skills th:nth-child(3) { width: 132px; }  /* 3 位数字(3ch)+ 72px 满条 + 间距,四位数也不换行 */
-.table-skills th:nth-child(4) { width: 76px; }
-.table-skills th:nth-child(5) { width: 72px; }
-.table-skills th:nth-child(6) { width: 78px; }
-.table-skills th:nth-child(7) { width: 64px; }
-/* 描述列没给 col 宽度 = 吃掉剩余空间;fixed 布局下 max-width 失效,靠单元格自身截断 */
-.table-skills .skill-desc { max-width: none; }
-.table-skills .cell-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* 窄屏结构性收列:固定列合计 622px,窗口再窄就只剩描述被压(1024 宽时只剩 ~100px,等于不可读)。
-   版本/可调用/来源是查阅项而非扫视项,抽屉里都有,先收它们把宽度还给描述;
-   名称/触发/启用是这张表的三个主任务(找技能、看用量、开关),任何宽度都保留。 */
-@media (max-width: 1279px) {
-  .table-skills :is(th, td):nth-child(4),
-  .table-skills :is(th, td):nth-child(5),
-  .table-skills :is(th, td):nth-child(6) { display: none; }
-}
-
-/* ---- 显式排序控件 ----
-   「排序」标签用 faint 层级只作锚点:窗口组(7/30/90 天)与筛选组(全部/已启用)语义自明,
-   排序组不带标签会和它们混成一排无从分辨。tabs 本身复用 filter-tabs,控件语言保持一套。 */
-.sort-group { display: inline-flex; align-items: center; gap: 8px; }
-.sort-label { font-size: 0.75rem; color: var(--faint); }
-.s-arrow { font-size: 0.625rem; color: var(--faint); }
-.sort-group .filter-tabs button.active .s-arrow { color: var(--jade); }
-
-/* ---- 触发次数 ---- */
-/* 排序表头:按钮撑满 th(点击热区仍是整格),当前排序列点亮箭头 */
-.usage-th { padding: 0; }
-.usage-th button {
-  display: block; width: 100%; text-align: left; cursor: pointer; user-select: none;
-  padding: 10px 18px; font: inherit; font-size: 0.75rem; font-weight: 600; color: var(--muted);
-  transition: color 150ms var(--ease);
-}
-.usage-th button:hover { color: var(--ink); }
-.usage-th .arrow { font-size: 0.625rem; margin-left: 3px; color: var(--faint); }
-.usage-th.sorted button { color: var(--ink); }
-.usage-th.sorted .arrow { color: var(--jade); }
-/* 数字用 tabular-nums 右对齐:逐位对齐,列内数字上下成一条线。
-   横条走图表色(--chart-1)而非状态色——它表量级,不表状态 */
-.usage-cell { display: flex; align-items: center; gap: 8px; }
-.usage-n { font-family: var(--mono); font-size: 0.8125rem; font-variant-numeric: tabular-nums; min-width: 3ch; text-align: right; }
-.usage-n.zero { color: var(--faint); }
-.usage-bar { height: 5px; border-radius: 99px; background: color-mix(in oklab, var(--chart-1) 55%, transparent); min-width: 2px; flex: none; transition: width 200ms var(--ease); }
-
-/* 抽屉「使用情况」:kv + 近 30 天逐日迷你柱 */
-.drawer-sec { border-top: 1px solid var(--line-soft); padding-top: 16px; margin-top: 4px; }
-.drawer-sec + .drawer-sec { margin-top: 20px; }
-.drawer-sec h3 { font-size: 0.8125rem; color: var(--ink); margin-bottom: 10px; }
-.usage-kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
-.usage-kv dt { color: var(--muted); }
-.usage-kv dd { font-family: var(--mono); font-size: 0.78125rem; font-variant-numeric: tabular-nums; }
-.usage-spark { display: flex; align-items: flex-end; gap: 2px; height: 36px; margin: 4px 0 2px; }
-.usage-spark i { flex: 1; min-width: 3px; border-radius: 2px 2px 0 0; background: color-mix(in oklab, var(--chart-1) 55%, transparent); }
-.usage-spark i.zero { height: 2px !important; background: var(--line-soft); }
-.usage-spark-cap { font-size: 0.6875rem; color: var(--faint); display: flex; justify-content: space-between; }
-.usage-spark-empty { font-size: 0.75rem; color: var(--faint); height: 36px; display: flex; align-items: center; }
-
 .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px 14px; font-size: 0.8125rem; margin-bottom: 18px; }
 .kv dt { color: var(--muted); }
 /* 长 URL / 路径(MR 链接、锚点文件路径)无空格,不强制断行会顶破抽屉右边界 */
@@ -1562,24 +1342,6 @@ body.wall-glass .dd-menu {
   -webkit-backdrop-filter: none;
 }
 
-/* 壁纸开启时状态栏静止态完全隐形:82% 近黑底在无壁纸时与页面底色融为一体,
-   压在壁纸上就是一条实心黑带,连 blur 本身也会把壁纸糊出一条可见的磨砂带。
-   故壁纸模式下底色/底边线/模糊全部卸掉,与 view-head 一样直接坐在壁纸上;
-   仅当内容真的滚到状态栏下方(.scrolled,JS 按 scrollY 挂)才浮出垫层保可读。 */
-body.wall-on .statusbar {
-  background: transparent;
-  border-bottom-color: transparent;
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  transition: background 200ms var(--ease), border-color 200ms var(--ease);
-}
-body.wall-on .statusbar.scrolled {
-  background: color-mix(in oklab, var(--bg) 55%, transparent);
-  border-bottom-color: var(--line-soft);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
 .wall-btn {
   display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
   margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
@@ -1633,22 +1395,14 @@ body.wall-on .statusbar.scrolled {
   .nav .count { display: none; }
   .side-foot { display: none; }
   .main { padding: 18px 16px 40px; }
-  /* 侧栏在此断点转为吸顶横条(同为 z-sticky),状态栏再吸顶就会与它抢同一条位置并互相压盖,
-     故此处退回普通流:仍在主区顶部,只是随页面滚走 */
-  .statusbar { position: static; padding: 0 16px; margin: 0 -16px 8px; }
   .dash-now, .dash-grid, .rv-grid { grid-template-columns: minmax(0, 1fr); }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
-  /* 窄屏改为整页滚动:外壳不再锁视口高,看板恢复内容高度 */
-  .board-wrap { display: block; height: auto; min-height: 0; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
   .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
   .sess-ctx { max-width: 100%; }
   .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
-  /* 单列后不必再与右栏对齐:列表自然展开,不做内部滚动(移动端嵌套滚动手感差)。
-     max-height 必须一并解除——只放开 overflow 会让 60vh 之外的行被裁掉且滚不到 */
-  .tl-tall { flex: none; max-height: none; overflow-y: visible; }
 }
 
 /* ============================================================
@@ -1668,9 +1422,6 @@ body.wall-on .statusbar.scrolled {
   /* ---- 应用外壳:侧栏隐藏,换底部 tab + 顶部标识条 ---- */
   .app { display: block; }
   .sidebar { display: none; }
-  /* 状态栏不上移动端:标识与 daemon 状态已由 .mobile-topbar 承接,
-     这点宽度里再压一条只会挤掉标题(见 DESIGN.md §5 全局状态栏) */
-  .statusbar { display: none; }
   .mobile-topbar {
     display: flex; align-items: center; gap: 10px;
     position: fixed; top: 0; left: 0; right: 0; z-index: var(--z-sticky);
@@ -1873,14 +1624,6 @@ body.wall-on .statusbar.scrolled {
   .heat-row { grid-template-columns: 72px repeat(7, 1fr); }
   .heat-days { grid-template-columns: 72px repeat(7, 1fr); }
   .week-nav .wk-btn { min-width: 44px; min-height: 44px; }
-  /* 用量模块:副标题让位给两组切换(口径仍可长按 title 看),条形图三列收紧,否则数值被挤出右缘 */
-  .usage-head .sub { display: none; }
-  .seg button { min-height: 32px; padding: 1px 12px; }
-  .tok-row { grid-template-columns: minmax(90px, 110px) 1fr 64px; gap: 8px; }
-  .tok-row.sub .lbl { padding-left: 12px; }
-  /* 构成:窄屏三项也可能各自换行,收紧行距 */
-  .comp-nums { gap: 6px 14px; }
-  .comp-line { padding-left: 12px; }
 
   /* ---- 回顾:顶部统计改原型 stat-grid 2×2 卡片(见 prototype-mobile.html #v-review/#v-home),
      渲染分支见 Review.tsx isMobile ---- */
@@ -2059,3 +1802,366 @@ body.wall-on .statusbar.scrolled {
   .rb-params { margin-left: 0; }
   .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
 }
+/* ============================================================
+   PROTO:全局状态栏(StatusBar)——本次新增的全部样式
+   设计意图:macOS 菜单栏式的常驻信息条,挂在主区顶部、不属于任何视图,
+   切换视图时它不动。widget 化:时钟只是第一个 widget,后续可注册更多。
+   ============================================================ */
+.statusbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+  height: 42px; padding: 0 clamp(32px, 3.5vw, 80px);
+  margin: 0 calc(-1 * clamp(32px, 3.5vw, 80px)) 8px;
+  /* 半透明磨砂:内容从底下滚过时仍可读,又不压住墙纸氛围 */
+  background: color-mix(in oklab, var(--bg) 82%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--line-soft);
+}
+/* 单个 widget:内容 + 悬停浮起,可点击的 widget hover 有底色 */
+.sb-item {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 9px; border-radius: var(--r-s);
+  font-size: 0.75rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+button.sb-item { cursor: pointer; }
+button.sb-item:hover { background: var(--hover); color: var(--ink); }
+.sb-item .n { font-family: var(--mono); }
+.sb-item .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--jade); flex: none; }
+.sb-item.warn { color: var(--amber); }
+.sb-item.warn .dot { background: var(--amber); animation: pulse 2s var(--ease) infinite; }
+/* 时钟 widget:原仪表盘 .clock 原样迁入,字号层级一字不改(日期灰小字 + 大号等宽时间) */
+.sb-clock { gap: 10px; align-items: baseline; }
+.sb-clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.sb-clock .hms {
+  font-family: var(--mono); font-size: 1.0625rem; font-weight: 500;
+  color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+/* widget 之间的分隔:细竖线,macOS 菜单栏同款层级 */
+.sb-sep { width: 1px; height: 14px; background: var(--line-soft); margin: 0 2px; flex: none; }
+
+/* PROTO 演示辅助:提示条,非交付内容 */
+.proto-note {
+  position: fixed; left: 16px; bottom: 16px; z-index: 99;
+  max-width: 340px; font-size: 0.75rem; color: var(--muted);
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 10px 14px; line-height: 1.6;
+}
+.proto-note b { color: var(--jade); }
+
+/* ═══════════ 本原型新增:项目 chip 过滤条 ═══════════ */
+/* —— 方案三:项目 chip 过滤条 —— */
+/* 过滤是「聚焦」不是「导航」:一行,紧贴 notice 之下、看板之上 */
+.proj-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.proj-filter .pf-label { font-size: 0.75rem; color: var(--faint); flex: none; }
+.pf-chip {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 500;
+  padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft);
+  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
+}
+.pf-chip:hover { border-color: var(--muted); color: var(--ink); }
+/* 选中态:项目色注入 CSS 变量 --pc,tint 底 + 同色描边——与 proj-chip 同一分类色词汇 */
+.pf-chip.on { color: var(--pc); background: color-mix(in oklab, var(--pc) 14%, transparent); border-color: color-mix(in oklab, var(--pc) 45%, transparent); }
+.pf-chip .pf-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pc); flex: none; }
+.pf-chip .pf-n { font-size: 0.6875rem; color: var(--faint); }
+.pf-chip.on .pf-n { color: color-mix(in oklab, var(--pc) 70%, var(--ink)); }
+/* 待验收角标:琥珀是注意力专用色,只标真的等你的数 */
+.pf-chip .pf-warn { font-size: 0.6875rem; font-weight: 650; color: oklch(0.24 0.05 85); background: var(--amber); border-radius: 999px; padding: 0 6px; }
+.pf-chip.pf-all.on { color: var(--ink); background: var(--hover); border-color: var(--muted); }
+/* 过滤生效时非命中的卡淡出而非移除:列长仍如实反映全局积压量 */
+.board.filtering .scard:not(.pf-hit) { opacity: 0.22; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-chip { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="-66.9 -53.29 1438.85 1438.85" aria-hidden="true">
+        <g transform="translate(129.962149,1193.807683) scale(0.100000,-0.100000)" fill="currentColor" stroke="none">
+          <path d="M4950 8329 c-153 -11 -376 -50 -531 -93 -344 -95 -676 -262 -946 -476 -730 -579 -1116 -1564 -957 -2443 14 -74 19 -87 33 -82 9 4 49 15 90 26 207 53 421 -8 576 -165 81 -82 123 -149 159 -256 80 -240 9 -478 -169 -565 -180 -89 -415 16 -415 185 0 124 117 201 236 155 25 -9 48 -14 52 -10 4 3 6 33 6 65 -2 111 -86 228 -191 264 -61 21 -186 21 -249 -1 -157 -53 -283 -199 -328 -384 -21 -84 -21 -261 -1 -368 94 -492 577 -1127 1150 -1511 347 -232 711 -373 1132 -437 156 -24 537 -24 698 0 399 59 803 210 1130 424 138 91 356 265 345 276 -3 3 -30 17 -60 32 -160 80 -306 216 -366 341 -89 185 -82 424 18 604 100 179 244 290 424 327 222 45 425 -89 441 -291 6 -66 -16 -136 -55 -180 -41 -46 -138 -69 -199 -45 -57 21 -113 93 -113 144 0 14 -6 25 -13 25 -22 0 -100 -55 -136 -95 -58 -67 -76 -118 -76 -220 0 -80 3 -97 31 -155 53 -113 168 -204 309 -246 79 -24 236 -23 324 0 83 22 201 83 273 140 277 221 504 788 568 1420 27 259 2 625 -60 906 -209 942 -807 1756 -1567 2134 -72 37 -138 66 -146 66 -12 0 -13 -7 -6 -37 24 -103 2 -240 -54 -348 -38 -73 -143 -180 -217 -222 -81 -46 -188 -73 -291 -73 -389 0 -662 327 -476 571 41 54 124 99 182 99 56 0 123 -36 146 -80 32 -58 19 -153 -24 -189 -25 -20 -21 -29 21 -47 24 -11 65 -17 117 -18 70 0 86 3 134 29 89 49 131 118 147 241 7 61 -15 155 -53 226 -15 28 -60 80 -99 117 -142 133 -320 197 -609 221 -141 11 -167 11 -335 -1z m371 -2228 c270 -69 498 -296 570 -567 28 -105 30 -289 5 -389 -76 -292 -306 -522 -593 -592 -96 -23 -267 -23 -363 1 -294 73 -525 302 -597 593 -24 99 -22 285 5 384 79 295 329 527 629 584 98 18 241 13 344 -14z" />
+        </g>
+      </svg>
+      <div class="brand-text">
+        <span class="zh">璇玑</span>
+        <span class="brand-meta"><span class="version">v1.7.0</span></span>
+      </div>
+    </div>
+    <nav class="nav" id="proto-nav">
+      <button data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/></svg>仪表盘</button>
+      <button data-view="projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7l3-4h5l2 3h8v13H3z"/></svg>项目</button>
+      <button data-view="sessions" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/></svg>会话</button>
+      <button data-view="dispatch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
+      <button data-view="skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z"/></svg>技能</button>
+      <button data-view="memory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4"/></svg>经验</button>
+      <button data-view="cron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2"/></svg>定时</button>
+      <button data-view="review"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12"/></svg>回顾</button>
+      <button data-view="worklog"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg>总结</button>
+      <button data-view="todo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2"/></svg>待办</button>
+    </nav>
+    <div class="side-foot">
+      <div class="row"><span class="ok"></span>2.0.13 (Claude Code) · 就绪</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <!-- ═══════════ 新增:全局状态栏,挂在 main 顶部、所有视图之上 ═══════════ -->
+    <div class="statusbar">
+      <button class="sb-item warn" title="2 个会话等待验收,点击去仪表盘处置">
+        <span class="dot"></span>待验收 <span class="n">2</span>
+      </button>
+      <span class="sb-sep"></span>
+      <span class="sb-item" title="后端 daemon 与 Claude CLI 均就绪">
+        <span class="dot"></span>daemon
+      </span>
+      <span class="sb-sep"></span>
+      <span class="sb-item sb-clock" title="北京时间(UTC+8)">
+        <span class="date" id="sb-date">2026-08-28 周四</span>
+        <span class="hms" id="sb-hms">21:47:03</span>
+      </span>
+    </div>
+
+    <!-- ═══ 视图 1:仪表盘(view-head 里的旧时钟已移除,时间统一由状态栏承接) ═══ -->
+    <section class="view" data-view="dashboard">
+      <div class="view-head"><h1>仪表盘</h1><span class="spacer"></span></div>
+      <div class="dash-now">
+        <div class="panel">
+          <div class="panel-head"><h2>需要你处理</h2><span class="pill pill-blk"><span class="dot"></span>2</span></div>
+          <div>
+            <div class="need-item">
+              <div class="what"><div class="t">验收面板绑定会话</div><div class="n">等待验收处置</div></div>
+              <span class="pill pill-rev"><span class="dot"></span>验收中</span>
+            </div>
+            <div class="need-item">
+              <div class="what"><div class="t">重构 adapter 层解析</div><div class="n">等待权限确认</div></div>
+              <span class="pill pill-blk"><span class="dot"></span>等待输入</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2>正在运行</h2><span class="pill pill-run"><span class="dot"></span>1</span></div>
+          <div>
+            <div class="run-item"><span class="pill pill-run"><span class="dot"></span>运行中</span><span class="d">xuanji · 全局状态栏组件开发</span><span class="mono">12m</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel dash-strip"><span>今日会话 <b>14</b></span><span>tokens <b>2.1M</b></span><span>成本 <b>$8.42</b></span></div>
+    </section>
+
+    <!-- ═══ 视图 2:会话——四列看板 + 项目 chip 过滤 ═══ -->
+    <section class="view active" data-view="sessions">
+      <div class="view-head"><h1>会话</h1><span class="spacer"></span></div>
+      <div class="notice"><span class="ok"></span>经 <span class="mono">claude agents --json --all</span> 刷新于 3 秒前 · 终端存活的交互会话仅只读展示 · <span class="mono">← ↑ ↓ →</span> 选卡,<span class="mono">Space</span> 进入,<span class="mono">Ctrl+X</span> 关闭会话,<span class="mono">Esc</span> 关抽屉</div>
+      <!-- 项目过滤:可多选;非命中卡淡出而非移除,列长仍如实反映全局积压量 -->
+      <div class="proj-filter" id="proj-filter"><span class="pf-label">项目</span></div>
+      <div class="board" id="board-flat"></div>
+    </section>
+
+    <!-- ═══ 其余视图:占位,演示状态栏在任何视图都在 ═══ -->
+    <section class="view" data-view="projects"><div class="view-head"><h1>项目</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="dispatch"><div class="view-head"><h1>派发</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="skills"><div class="view-head"><h1>技能</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="memory"><div class="view-head"><h1>经验</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="cron"><div class="view-head"><h1>定时</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="review"><div class="view-head"><h1>回顾</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="worklog"><div class="view-head"><h1>总结</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+    <section class="view" data-view="todo"><div class="view-head"><h1>待办</h1></div><div class="panel"><div class="empty"><div class="glyph">〇</div><p>占位视图——注意右上角状态栏仍在。</p></div></div></section>
+  </main>
+</div>
+
+<div class="proto-note">
+  <b>原型说明</b>:会话页四列看板不变,新增顶部<b>项目 chip 过滤条</b>——项目色圆点 + 名称 + 会话数 +
+  琥珀待验收角标,可多选;点「全部」或再次点击已选 chip 恢复。过滤时非命中的卡<b>淡出而非移除</b>,
+  列长仍如实反映全局积压量。<b>方向键导航保留</b>:<span class="mono">← ↑ ↓ →</span> 只在亮着的卡之间移动,
+  暗卡与整列无命中的列一并跳过;切换过滤后选中位自动校准。试试先点几个 chip 再按方向键。
+</div>
+
+<script>
+// 时钟走时:照抄 Dashboard.tsx 的 Intl 格式化口径(Asia/Shanghai, 24h)
+const clockFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const dateFmt = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' });
+function tick() {
+  const now = new Date();
+  document.getElementById('sb-date').textContent = dateFmt.format(now).replace(/\//g, '-');
+  document.getElementById('sb-hms').textContent = clockFmt.format(now);
+}
+tick(); setInterval(tick, 1000);
+
+// 视图切换
+document.getElementById('proto-nav').addEventListener('click', (e) => {
+  const btn = e.target.closest('button'); if (!btn) return;
+  document.querySelectorAll('#proto-nav button').forEach((b) => b.classList.toggle('active', b === btn));
+  document.querySelectorAll('.main .view').forEach((v) => v.classList.toggle('active', v.dataset.view === btn.dataset.view));
+});
+</script>
+<script>
+// ═══ 会话看板 mock:真实项目名 + 近期真实任务;卡片 DOM 1:1 抄 Sessions.tsx ═══
+// 项目分类色:照抄 lib/utils.ts 的等明度色环(oklch 0.78/0.12 只转色相)
+const PROJ_HUES = [115, 265, 190, 340, 55, 215, 140, 290, 165, 315, 240];
+const PALETTE = { 'xuanji': 0, 'baize-web': 1, 'antifraud-skills': 2, 'deep-baize': 3, 'feishu-claude': 4, 'jianghu-idle': 5, 'lilith-offline-etl': 6 };
+function projHue(name) {
+  if (name in PALETTE) return PROJ_HUES[PALETTE[name] % PROJ_HUES.length];
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return PROJ_HUES[(h >>> 0) % PROJ_HUES.length];
+}
+const projColor = (n) => `oklch(0.78 0.12 ${projHue(n)})`;
+const projBg = (n) => `oklch(0.78 0.12 ${projHue(n)} / 0.16)`;
+
+// state: running / blocked / review / idle / done;unread=待验收,susp=已挂起
+const MOCK = [
+  { name: '会话页项目泳道改版', proj: 'xuanji', cwd: '~/xuanji-proj-lens', state: 'running', src: 'web', id: 'a3f19c2e', detail: '正在按获批原型实现泳道视图,列头 sticky 与折叠逻辑已完成,补充键盘导航中。', t: '14:02' },
+  { name: 'daily-scan 归因跑批', proj: 'baize-web', cwd: '~/baize-web', state: 'running', src: 'bg', id: 'e7d02b91', detail: '19 个游戏大区扫描中,已完成 12 个;LLM RCA 阶段预计还需 8 分钟。', t: '13:40' },
+  { name: '状态栏壁纸模式回归验证', proj: 'xuanji', cwd: '~/xuanji-statusbar-fix', state: 'blocked', src: 'web', id: 'c94e17ab', detail: '滚动阈值是否要防橡皮筋回弹?两个方案已列出,等你选一个。', needs: '等待输入:选择方案 A(hysteresis)或 B(clamp scrollY)', t: '13:55', unread: true },
+  { name: '用量条形图会话名修复', proj: 'xuanji', cwd: '~/xuanji-usage-name', state: 'review', src: 'web', id: 'f81b44d0', detail: '203 测试通过,PR#36 已建;usageNameResolver 抽出共用,待验收。', t: '11:20', unread: true },
+  { name: 'P0 标签梳理写入飞书表', proj: 'antifraud-skills', cwd: '~/antifraud_skills', state: 'review', src: 'web', id: 'b2c85e13', detail: '扫描 go-antifraud 实时服务完成,47 个 P0/P1 标签已 upsert,报告待过目。', t: '10:47', unread: true },
+  { name: '漏斗分析 v2 接口联调', proj: 'deep-baize', cwd: '~/deep-baize', state: 'review', src: 'web', id: 'd60a92f7', detail: '/analyze/funnel/v2 三个用例跑通,窗口参数语义有一处待确认。', t: '09:31' },
+  { name: '技能触发统计口径复核', proj: 'baize-web', cwd: '~/baize-web', state: 'idle', src: 'term', id: '7e3fa804', susp: true, t: '昨天 21:14' },
+  { name: '飞书消息桥接调研', proj: 'feishu-claude', cwd: '~/feishu-claude', state: 'idle', src: 'term', id: '19c6d5b2', t: '昨天 18:02' },
+  { name: '放置玩法数值草稿', proj: 'jianghu-idle', cwd: '~/jianghu-idle', state: 'idle', src: 'term', id: '5aa80f6c', t: '3 天前' },
+  { name: '全局状态栏开发', proj: 'xuanji', cwd: '~/xuanji', state: 'done', src: 'web', id: '90b7e2d4', t: '昨天' },
+  { name: '仪表盘用量模块改版', proj: 'xuanji', cwd: '~/xuanji', state: 'done', src: 'web', id: '31d4c8fa', t: '昨天' },
+  { name: 'ban_config 建表脚本', proj: 'lilith-offline-etl', cwd: '~/PycharmProjects/lilith-offline-etl', state: 'done', src: 'term', id: '48e0b19d', t: '2 天前' },
+  { name: '业务事件夜间采集巡检', proj: 'baize-web', cwd: '~/baize-web', state: 'done', src: 'bg', id: 'ac52f7e1', t: '2 天前' },
+];
+
+const COLS = [
+  { key: 'running', pill: 'pill-run', label: '进行中', states: ['running', 'blocked'] },
+  { key: 'review', pill: 'pill-rev', label: '验收中', states: ['review'] },
+  { key: 'idle', pill: 'pill-idle', label: '空闲', states: ['idle'] },
+  { key: 'done', pill: 'pill-done', label: '已完成', states: ['done'] },
+];
+
+const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const chip = (s) => `<span class="proj-chip" title="${esc(s.cwd)}" style="color:${projColor(s.proj)};background:${projBg(s.proj)}">${esc(s.proj)}</span>`;
+const srcTag = (s) => `<span class="tag">${s.src === 'web' ? 'web' : s.src === 'bg' ? '后台' : '终端'}</span>`;
+
+// 三种卡型与 Sessions.tsx 同构:进行态=全尺寸,验收中=中密度,空闲/已完成=紧凑
+function card(s) {
+  const unread = s.unread ? '<span class="u-dot"></span>' : '';
+  const unreadTag = s.unread ? '<span class="tag t-unread">待验收</span>' : '';
+  const dp = ` data-proj="${esc(s.proj)}"`;
+  if (s.state === 'running' || s.state === 'blocked') {
+    return `<div class="scard${s.state === 'blocked' ? ' blk' : ''}"${dp} role="button" tabindex="0" title="${esc(s.name)}">
+      <div class="top">${unread}<span class="title">${esc(s.name)}</span>${unreadTag}${s.state === 'blocked' ? '<span class="tag t-unread">等输入</span>' : ''}${srcTag(s)}<button class="x-close" title="关闭会话(Ctrl+X)">×</button></div>
+      <div class="cwd">${chip(s)}<span class="sid">${s.id}</span></div>
+      <div class="detail">${esc(s.detail)}</div>
+      ${s.needs ? `<div class="needs">⏸ ${esc(s.needs)}</div>` : ''}
+      <div class="foot">${s.state === 'blocked' ? '<button class="btn btn-sm btn-primary">去回复</button>' : ''}<span class="time">${s.t} 开始</span></div>
+    </div>`;
+  }
+  if (s.state === 'review') {
+    return `<div class="scard mid"${dp} role="button" tabindex="0" title="${esc(s.name)}">
+      <div class="top">${unread}<span class="title">${esc(s.name)}</span>${unreadTag}<button class="x-close" title="关闭会话(Ctrl+X)">×</button></div>
+      <div class="cwd">${chip(s)}<span class="sid">${s.id}</span></div>
+      <div class="detail one">${esc(s.detail)}</div>
+      <div class="foot"><button class="btn btn-sm btn-primary">继续</button><button class="btn btn-sm">挂起</button><button class="btn btn-sm">归档</button><span class="time">${s.t}</span></div>
+    </div>`;
+  }
+  return `<div class="scard compact"${dp} role="button" tabindex="0" title="${esc(s.name)}">
+    <div class="top">${unread}<span class="title">${esc(s.name)}</span>${unreadTag}${s.susp ? '<span class="tag t-susp">已挂起</span>' : ''}<button class="x-close" title="关闭会话(Ctrl+X)">×</button></div>
+    <div class="cwd">${chip(s)}<span class="ctime">${s.t}</span></div>
+  </div>`;
+}
+
+const inCol = (col) => MOCK.filter((s) => col.states.includes(s.state));
+const colHead = (col, items) => {
+  const waiting = col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
+  return `<div class="col-head"><span class="pill ${col.pill}"><span class="dot"></span>${col.label}</span><span class="n">${items.length}</span>${waiting ? `<span class="n" style="color:var(--amber)">· ${waiting} 等你</span>` : ''}</div>`;
+};
+
+// ═══ 方案三:平铺四列 + 项目 chip 过滤 ═══
+const flat = document.getElementById('board-flat');
+flat.innerHTML = COLS.map((col) => {
+  const items = inCol(col);
+  return `<div>${colHead(col, items)}<div class="col-body">${items.map(card).join('')}</div></div>`;
+}).join('');
+
+const projects = [...new Set(MOCK.map((s) => s.proj))];
+const active = new Set(); // 空 = 全部
+const pf = document.getElementById('proj-filter');
+pf.insertAdjacentHTML('beforeend',
+  `<button class="pf-chip pf-all on" data-p="*">全部 <span class="pf-n">${MOCK.length}</span></button>` +
+  projects.map((p) => {
+    const mine = MOCK.filter((s) => s.proj === p);
+    const warn = mine.filter((s) => s.unread).length;
+    return `<button class="pf-chip" data-p="${esc(p)}" style="--pc:${projColor(p)}"><span class="pf-dot"></span>${esc(p)} <span class="pf-n">${mine.length}</span>${warn ? `<span class="pf-warn">${warn}</span>` : ''}</button>`;
+  }).join(''));
+function applyFilter() {
+  const filtering = active.size > 0;
+  flat.classList.toggle('filtering', filtering);
+  pf.querySelectorAll('.pf-chip').forEach((c) => {
+    c.classList.toggle('on', c.dataset.p === '*' ? !filtering : active.has(c.dataset.p));
+  });
+  flat.querySelectorAll('.scard').forEach((el) => el.classList.toggle('pf-hit', !filtering || active.has(el.dataset.proj)));
+  if (typeof recalibrate === 'function') recalibrate();
+}
+pf.addEventListener('click', (e) => {
+  const c = e.target.closest('.pf-chip'); if (!c) return;
+  if (c.dataset.p === '*') active.clear();
+  else if (!active.delete(c.dataset.p)) active.add(c.dataset.p);
+  applyFilter();
+});
+applyFilter();
+
+// ═══ 方向键导航:与渲染共用同一份「命中卡」列表,过滤中的暗卡直接跳过 ═══
+// (线上 Sessions.tsx 的 itemsOf() 是渲染与键盘的唯一真源,这里原样复刻该约束)
+let kb = null; // { c, r }
+const colEls = () => [...flat.children];
+const cardsIn = (c) => [...colEls()[c].querySelectorAll('.scard')].filter((el) => el.classList.contains('pf-hit'));
+function paint() {
+  flat.querySelectorAll('.scard.kb-sel').forEach((el) => el.classList.remove('kb-sel'));
+  if (!kb) return;
+  const el = cardsIn(kb.c)[kb.r];
+  if (el) { el.classList.add('kb-sel'); el.scrollIntoView({ block: 'nearest' }); }
+}
+// 过滤变化后重新校准选中位:当前卡被滤掉则落到该列首张命中卡,不凭空消失
+function recalibrate() {
+  if (!kb) return;
+  let c = kb.c;
+  if (cardsIn(c).length === 0) { c = colEls().findIndex((_, i) => cardsIn(i).length > 0); if (c === -1) { kb = null; paint(); return; } }
+  kb = { c, r: Math.min(kb.r, cardsIn(c).length - 1) };
+  paint();
+}
+document.addEventListener('keydown', (e) => {
+  const K = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter'];
+  if (!K.includes(e.key) || e.target.closest('input, textarea')) return;
+  e.preventDefault();
+  if (!kb) {
+    const c = colEls().findIndex((_, i) => cardsIn(i).length > 0);
+    if (c === -1) return;
+    kb = { c, r: 0 }; paint(); return;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const dir = e.key === 'ArrowLeft' ? -1 : 1;
+    let c = kb.c;
+    do { c += dir; } while (c >= 0 && c < colEls().length && cardsIn(c).length === 0);
+    if (c < 0 || c >= colEls().length || cardsIn(c).length === 0) return;
+    kb = { c, r: Math.min(kb.r, cardsIn(c).length - 1) };
+  } else if (e.key === 'ArrowUp') {
+    kb = { ...kb, r: Math.max(0, kb.r - 1) };
+  } else if (e.key === 'ArrowDown') {
+    kb = { ...kb, r: Math.min(cardsIn(kb.c).length - 1, kb.r + 1) };
+  } else {
+    const el = cardsIn(kb.c)[kb.r];
+    if (el) alert('进入会话:' + el.querySelector('.title').textContent + '\n(原型不做跳转)');
+    return;
+  }
+  paint();
+});
+// 点卡片同步键盘选中位:此后方向键从鼠标停留处继续
+flat.addEventListener('click', (e) => {
+  const el = e.target.closest('.scard'); if (!el || e.target.closest('button')) return;
+  const c = colEls().findIndex((col) => col.contains(el));
+  const r = cardsIn(c).indexOf(el);
+  if (r >= 0) { kb = { c, r }; paint(); }
+});
+</script>
+</body>
+</html>

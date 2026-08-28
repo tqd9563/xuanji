@@ -25,6 +25,9 @@ export function projHue(name: string): number {
   }
   return PROJ_HUES[(h >>> 0) % PROJ_HUES.length]!;
 }
+/** 项目在调色板里的序号(首次出现顺序,后端 SQLite 固定);未收录的返回 +∞,排序时垫底。
+ *  给需要稳定项目顺序的界面用(会话页项目过滤 chip),与分类色同源保证位置与色序一致。 */
+export const projOrder = (name: string) => paletteIdx[name] ?? Number.POSITIVE_INFINITY;
 export const projColor = (name: string) => `oklch(0.78 0.12 ${projHue(name)})`;
 export const projBg = (name: string) => `oklch(0.78 0.12 ${projHue(name)} / 0.16)`;
 
