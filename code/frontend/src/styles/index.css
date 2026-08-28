@@ -277,6 +277,9 @@ button.sb-item:hover { background: var(--hover); color: var(--ink); }
 /* 告警态:复用 pill-blk 的琥珀语义,状态色只表状态 */
 .sb-item.warn { color: var(--amber); }
 .sb-item.warn .dot { background: var(--amber); animation: pulse 2s var(--ease) infinite; }
+/* 故障态:红。文案本身也随之改写,状态永不 color-alone */
+.sb-item.bad { color: var(--red); }
+.sb-item.bad .dot { background: var(--red); }
 /* 观象台时钟 widget:自仪表盘迁入,尺寸与配色一字未改;等宽 + 表格数字,秒位跳动不抖版 */
 .sb-clock { gap: 10px; align-items: baseline; }
 .sb-clock .date { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-variant-numeric: tabular-nums; }

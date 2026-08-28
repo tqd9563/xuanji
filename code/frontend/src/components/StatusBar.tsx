@@ -64,9 +64,10 @@ export function StatusBar({
         待验收 <span className="n">{reviewCount}</span>
       </button>
     ) : null,
+    // 异常态改的是文案本身而不只是圆点颜色:状态永不 color-alone(DESIGN.md §Accessibility)
     <span
       key="daemon"
-      className="sb-item"
+      className={daemonOk ? 'sb-item' : 'sb-item bad'}
       title={
         health === null
           ? '正在连接后端…'
@@ -75,8 +76,8 @@ export function StatusBar({
             : '后端可用,但 Claude CLI 不可达'
       }
     >
-      <span className="dot" style={daemonOk ? undefined : { background: 'var(--red)' }} />
-      daemon
+      <span className="dot" />
+      {health === null ? 'daemon 连接中' : daemonOk ? 'daemon' : 'daemon 不可达'}
     </span>,
     <ClockWidget key="clock" />,
   ];
