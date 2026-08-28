@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import type { ModelUsage, ProjectUsage, SessionUsage, TokenTotals, UsageRange, UsageReport } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
