@@ -129,24 +129,48 @@ export interface ModelUsage {
   costUsd: number;
 }
 
+/** token 量:inOut = in + out + cacheWrite(与统计条同口径),cacheRead 单列 */
+export interface TokenTotals {
+  inOut: number;
+  cacheRead: number;
+}
+
 export interface SessionUsage {
   sessionId: string;
   title: string;
   byModel: ModelUsage[];
   totalCostUsd: number;
+  totalTokens: TokenTotals;
 }
 
 export interface ProjectUsage {
+  /** 编码目录名,天然唯一,作稳定 key 用(展示名可能因末段撞名而不唯一) */
+  dir: string;
   project: string;
   byModel: ModelUsage[];
   totalCostUsd: number;
+  totalTokens: TokenTotals;
   sessions: SessionUsage[];
 }
 
+/** 用量窗口:today = 当日零点起;7d = 含今日的近 7 个自然日(与热力图同窗口) */
+export type UsageRange = 'today' | '7d';
+
 export interface UsageReport {
+  range: UsageRange;
+  since: number;
   projects: ProjectUsage[];
   totalCostUsd: number;
-  totalTokens: { inOut: number; cacheRead: number };
+  totalTokens: TokenTotals;
+  /**
+   * 噪音(multica 侧)汇总:只给类别总量,用于「开发 vs multica」对比。
+   * scan = multica workspaces + narrate 叙述会话;biz-events = 业务事件抽取
+   */
+  noise: {
+    costUsd: number;
+    tokens: TokenTotals;
+    categories: { key: string; label: string; costUsd: number; tokens: TokenTotals }[];
+  };
   caliber: string;
   computedAt: number;
 }

@@ -348,6 +348,93 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .tok-legend span { display: flex; align-items: center; gap: 5px; }
 .tok-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
+/* ---- Token 用量合并模块(成本条形图 + 7 日热力图同属「用量」视角,合为一块) ---- */
+/* 头部要塞下标题 + 两组切换:标题不折行,切换组整组换行但不拆散 */
+.usage-head { flex-wrap: wrap; row-gap: 6px; }
+.usage-head h2 { white-space: nowrap; }
+/* 小字用 flex-basis:0 吸收剩余空间(顺带接替 spacer 的角色)。
+   关键在 basis 而非 shrink:flex 容器开了 wrap 就是「先换行再压缩」,
+   按内容宽度参与分行时,口径文案一变长就会把第二组切换顶到下一行
+   (成本↔Token 切换时头部忽高忽低)。basis 归零后它永不顶出换行,
+   空间不足时省略号收尾,完整口径仍在 title 悬停里。 */
+.usage-head .sub { flex: 1 1 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* 分段切换:沿用 .nav button.active 的选中词汇(玉色 tint),不另造一套 */
+.seg {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--line-soft);
+  border-radius: var(--r-s); padding: 2px;
+}
+.seg button {
+  padding: 1px 10px; border-radius: 4px;
+  font-size: 0.75rem; color: var(--muted); white-space: nowrap;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.seg button:hover { color: var(--ink); }
+.seg button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+
+/* 开发 vs multica 对比条:开发段用玉色(主角),multica 段用中性斜纹——
+   它是「非开发」对照组,不该占用任何状态色或模型系列色的词汇 */
+.cmp { padding: 14px 18px 4px; transition: opacity 150ms var(--ease); }
+.cmp-head { display: flex; align-items: baseline; gap: 8px; font-size: 0.75rem; color: var(--muted); margin-bottom: 7px; flex-wrap: wrap; }
+.cmp-head b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.75rem; }
+.cmp-head .pct { color: var(--jade); font-family: var(--mono); }
+.cmp-track { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--tint-muted); }
+.cmp-track .dev { background: var(--jade-dim); transition: width 200ms var(--ease); }
+.cmp-track .noise { transition: width 200ms var(--ease); }
+/* multica 两类任务共用中性灰系(不占状态色/模型色词汇),以纹理区分:
+   scan(扫描归因 = workspaces+narrate)= 斜纹;biz-events(业务事件)= 纯色浅一档 */
+.cmp-track .noise-scan {
+  background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 5px, oklch(0.28 0.010 110) 5px 10px);
+}
+.cmp-track .noise-biz-events { background: oklch(0.42 0.014 110); }
+.cmp-legend { display: flex; gap: 16px; margin-top: 6px; font-size: 0.6875rem; color: var(--muted); flex-wrap: wrap; }
+.cmp-legend span { display: flex; align-items: center; gap: 5px; }
+.cmp-legend b { color: var(--ink); font-family: var(--mono); font-weight: 500; }
+.cmp-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.cmp-legend .i-dev { background: var(--jade-dim); }
+.cmp-legend .i-noise-scan { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
+.cmp-legend .i-noise-biz-events { background: oklch(0.42 0.014 110); }
+
+/* token 四分量构成:纯文字不画条——cacheRead 量级常是其余三项之和的 20 倍,
+   同一根线性条会把另外三段压成碎片,20× 的差距交给数字本身表达。
+   三个常规计费分量一组,cacheRead 用竖线断开推到行尾并弱化一档:
+   它不是「同类的第四项」,而是被排除在 token 总量之外的另一个计费维度。 */
+.comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); transition: opacity 150ms var(--ease); }
+.comp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
+.comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+.comp-nums { display: flex; align-items: baseline; gap: 4px 12px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
+.comp-nums span { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+.comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
+.comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
+/* cacheRead 与前三项同排,放不下时自然折行接着排(不右推、不强制独占一行:
+   两者都会让它看着像另一个模块,而它只是第四个分量)。值弱化一档区分计费维度 */
+.comp-nums .cr b { color: var(--muted); }
+.comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+/* 展开项目内的同款构成行:整体降一档,与会话行拉开层级 */
+.comp-line { padding: 2px 0 5px 22px; gap: 4px 10px; }
+.comp-line b { font-size: 0.75rem; color: var(--muted); }
+
+/* 近一周数据在路上:今日数据先垫着并压暗,不整块闪空 */
+.cmp.pending, .tok.pending, .comp.pending { opacity: 0.5; }
+/* 统计中的文字反馈:玉色呼吸,与运行态 pill 同一套「正在进行」词汇 */
+.usage-loading { color: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
+@media (prefers-reduced-motion: reduce) { .usage-loading { animation: none; } }
+
+/* 模块内分段:热力图与图例接在条形图之下,用整宽细线分隔 */
+.usage-divide { border-top: 1px solid var(--line-soft); }
+.usage-divide .cap { display: flex; align-items: baseline; gap: 8px; padding: 10px 18px 0; font-size: 0.75rem; color: var(--muted); }
+.usage-divide .cap h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+.usage-foot { padding: 10px 18px; }
+
+/* 最近活动拉通整栏:面板由 grid 拉伸到与右侧用量模块等高,列表吃掉剩余空间,超出内部滚动。
+   可视区封顶 60vh——40 条全展开会把仪表盘拉到近三屏,而这是一块「扫一眼」的驾驶舱屏,
+   要看更早的活动滚动即可,不该让下面的内容被推出视野。 */
+.dash-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
+.tl-tall { flex: 1; min-height: 0; max-height: 60vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.tl-tall::-webkit-scrollbar { width: 6px; }
+.tl-tall::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+
 /* ============ 项目 ============ */
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 84px; }
 .spark i { flex: 1; background: var(--jade-dim); border-radius: 2px 2px 0 0; min-height: 2px; opacity: 0.85; }
@@ -1497,6 +1584,9 @@ body.wall-glass .dd-menu {
   .chat-status { flex-wrap: wrap; row-gap: 6px; } /* 标识+用量条+agent 状态三段窄屏放不下一行,允许折行 */
   .sess-ctx { max-width: 100%; }
   .cs-state { margin-left: 0; } /* 折行后 auto 外边距失去意义,退回自然流 */
+  /* 单列后不必再与右栏对齐:列表自然展开,不做内部滚动(移动端嵌套滚动手感差)。
+     max-height 必须一并解除——只放开 overflow 会让 60vh 之外的行被裁掉且滚不到 */
+  .tl-tall { flex: none; max-height: none; overflow-y: visible; }
 }
 
 /* ============================================================
@@ -1721,6 +1811,14 @@ body.wall-glass .dd-menu {
   .heat-row { grid-template-columns: 72px repeat(7, 1fr); }
   .heat-days { grid-template-columns: 72px repeat(7, 1fr); }
   .week-nav .wk-btn { min-width: 44px; min-height: 44px; }
+  /* 用量模块:副标题让位给两组切换(口径仍可长按 title 看),条形图三列收紧,否则数值被挤出右缘 */
+  .usage-head .sub { display: none; }
+  .seg button { min-height: 32px; padding: 1px 12px; }
+  .tok-row { grid-template-columns: minmax(90px, 110px) 1fr 64px; gap: 8px; }
+  .tok-row.sub .lbl { padding-left: 12px; }
+  /* 构成:窄屏三项也可能各自换行,收紧行距 */
+  .comp-nums { gap: 6px 14px; }
+  .comp-line { padding-left: 12px; }
 
   /* ---- 回顾:顶部统计改原型 stat-grid 2×2 卡片(见 prototype-mobile.html #v-review/#v-home),
      渲染分支见 Review.tsx isMobile ---- */
