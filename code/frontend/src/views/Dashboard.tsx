@@ -3,7 +3,18 @@ import { api } from '@/api/client';
 import type { ModelUsage, ProjectUsage, SessionUsage, TokenTotals, UsageRange, UsageReport } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock, fmtCost, fmtTokens, isUnread, modelColor, projColor, timeAgo } from '@/lib/utils';
+import {
+  CACHE_READ_WEIGHT,
+  clock,
+  fmtCost,
+  fmtTokens,
+  isUnread,
+  modelColor,
+  projColor,
+  sumComp,
+  timeAgo,
+  type TokenComp,
+} from '@/lib/utils';
 import { Pill, ProjChip, Tag } from '@/components/shared';
 import { isStale, startTodo, useTodosChanged } from '@/views/Todos';
 
@@ -259,6 +270,35 @@ const fmtValue = (v: number, unit: Unit) => (unit === 'cost' ? fmtCost(v) : fmtT
 const bothTip = (cost: number, tokens: TokenTotals) =>
   `${fmtCost(cost)} · ${fmtTokens(tokens.inOut)} tok(另有 ${fmtTokens(tokens.cacheRead)} cache read)`;
 
+/**
+ * 四分量构成:全部以数字呈现,不画条。
+ * cacheRead 量级常是其余三项之和的 20 倍,画进线性条会把另外三段压成碎片;
+ * 且它被排除在 token 总量口径之外,故单列并给出 ×0.1 计费折算,把「它到底占多重」讲清楚。
+ */
+function CompNums({ comp, className = 'comp-nums' }: { comp: TokenComp; className?: string }) {
+  return (
+    <div className={className}>
+      <span title="非缓存的输入 token">
+        <span className="k">input</span>
+        <b>{fmtTokens(comp.input)}</b>
+      </span>
+      <span title="模型输出 token,计费单价 5× input">
+        <span className="k">output</span>
+        <b>{fmtTokens(comp.output)}</b>
+      </span>
+      <span title="写入 prompt 缓存,计费单价 1.25× input">
+        <span className="k">cacheWrite</span>
+        <b>{fmtTokens(comp.cacheWrite)}</b>
+      </span>
+      <span className="cr" title="命中 prompt 缓存,计费单价 0.1× input;不计入上方 token 总量,故折算成 input 当量便于比较">
+        <span className="k">cacheRead</span>
+        <b>{fmtTokens(comp.cacheRead)}</b>
+        <span className="eq">×0.1 ≈ {fmtTokens(comp.cacheRead * CACHE_READ_WEIGHT)}</span>
+      </span>
+    </div>
+  );
+}
+
 function UsagePanel({
   today,
   heat,
@@ -299,6 +339,8 @@ function UsagePanel({
     ...c,
     v: unit === 'cost' ? c.costUsd : c.tokens.inOut,
   }));
+  // 开发侧四分量:报表顶层只给 {inOut, cacheRead},拆分量要回到 byModel 汇总
+  const devComp = sumComp(usage.projects.flatMap((p) => p.byModel));
   const devV = valueOf(dev, unit);
   const noiseV = valueOf(noise, unit);
   const totalV = devV + noiseV;
@@ -323,7 +365,10 @@ function UsagePanel({
           {pending ? (
             <span className="usage-loading">近一周 · 统计中…</span>
           ) : (
-            <>{rangeLabel} · 按项目聚合 · 条长 = {unit === 'cost' ? '实际成本' : 'token 量'}</>
+            <>
+              {rangeLabel} · 按项目聚合 · 条长 ={' '}
+              {unit === 'cost' ? '实际成本' : 'in + out + cacheWrite token 量'}
+            </>
           )}
         </span>
         <span className="spacer" />
@@ -370,6 +415,14 @@ function UsagePanel({
         </div>
       </div>
 
+      {/* 构成明细:成本口径本身已是加权汇总,拆构成属重复信息,故只在 token 口径出现 */}
+      {unit === 'tok' && usage.projects.length > 0 && (
+        <div className={`comp ${pending ? 'pending' : ''}`}>
+          <div className="comp-head"><h3>构成(开发侧)</h3></div>
+          <CompNums comp={devComp} />
+        </div>
+      )}
+
       <div className={`tok ${pending ? 'pending' : ''}`}>
         {usage.projects.length === 0 && (
           <div className="empty" style={{ padding: 16 }}><p>{rangeLabel}暂无用量。</p></div>
@@ -383,6 +436,8 @@ function UsagePanel({
               <span className="val">{fmtValue(valueOf(p, unit), unit)}</span>
             </button>
             <div className="tok-subs">
+              {/* 展开时先给该项目的四分量,再列会话:会话行只有一列数值,放不下构成 */}
+              {unit === 'tok' && <CompNums comp={sumComp(p.byModel)} className="comp-nums comp-line" />}
               {p.sessions.map((s) => (
                 <div className="tok-row sub" key={s.sessionId} title={`session ${s.sessionId}`}>
                   <span className="lbl">

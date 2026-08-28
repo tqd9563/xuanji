@@ -357,8 +357,28 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .cmp-legend .i-noise-scan { background: repeating-linear-gradient(-45deg, oklch(0.34 0.012 110) 0 3px, oklch(0.28 0.010 110) 3px 6px); }
 .cmp-legend .i-noise-biz-events { background: oklch(0.42 0.014 110); }
 
+/* token 四分量构成:纯文字不画条——cacheRead 量级常是其余三项之和的 20 倍,
+   同一根线性条会把另外三段压成碎片,20× 的差距交给数字本身表达。
+   三个常规计费分量一组,cacheRead 用竖线断开推到行尾并弱化一档:
+   它不是「同类的第四项」,而是被排除在 token 总量之外的另一个计费维度。 */
+.comp { padding: 9px 18px 11px; border-top: 1px solid var(--line-soft); transition: opacity 150ms var(--ease); }
+.comp-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); margin-bottom: 5px; }
+.comp-head h3 { font-size: 0.75rem; font-weight: 600; color: var(--ink); }
+.comp-nums { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; font-size: 0.75rem; color: var(--muted); }
+.comp-nums span { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.comp-nums .k { color: var(--faint); font-size: 0.6875rem; }
+.comp-nums b { color: var(--ink); font-family: var(--mono); font-weight: 500; font-size: 0.8125rem; }
+/* cacheRead 固定另起一行:右栏实宽约 470px,四项挤不进一行,靠 flex-wrap 会让它
+   被 margin-left:auto 甩到右边缘像漂浮物。整行独占后左对齐,分区改用上方留白表达 */
+.comp-nums .cr { flex-basis: 100%; margin-top: 3px; }
+.comp-nums .cr b { color: var(--muted); }
+.comp-nums .cr .eq { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+/* 展开项目内的同款构成行:整体降一档,与会话行拉开层级 */
+.comp-line { padding: 2px 0 5px 22px; gap: 12px; }
+.comp-line b { font-size: 0.75rem; color: var(--muted); }
+
 /* 近一周数据在路上:今日数据先垫着并压暗,不整块闪空 */
-.cmp.pending, .tok.pending { opacity: 0.5; }
+.cmp.pending, .tok.pending, .comp.pending { opacity: 0.5; }
 /* 统计中的文字反馈:玉色呼吸,与运行态 pill 同一套「正在进行」词汇 */
 .usage-loading { color: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
 @media (prefers-reduced-motion: reduce) { .usage-loading { animation: none; } }
@@ -1684,6 +1704,9 @@ body.wall-glass .dd-menu {
   .seg button { min-height: 32px; padding: 1px 12px; }
   .tok-row { grid-template-columns: minmax(90px, 110px) 1fr 64px; gap: 8px; }
   .tok-row.sub .lbl { padding-left: 12px; }
+  /* 构成:窄屏三项也可能各自换行,收紧行距 */
+  .comp-nums { gap: 6px 14px; }
+  .comp-line { padding-left: 12px; }
 
   /* ---- 回顾:顶部统计改原型 stat-grid 2×2 卡片(见 prototype-mobile.html #v-review/#v-home),
      渲染分支见 Review.tsx isMobile ---- */
