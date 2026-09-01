@@ -1649,6 +1649,21 @@ body.wall-glass .dd-menu {
 .prcard:focus-visible .pr-go { opacity: 1; }
 @media (hover: none) { .prcard .pr-go { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .prcard, .prcard .pr-ico, .prcard .pr-go { transition: none; } }
+
+/* ---- 试验:平台品牌色 + 真实 logo(body.brand 时生效,用于与中性版对比) ---- */
+.prcard .ico-brand { display: none; }
+body.brand .prcard .ico-merge { display: none; }
+body.brand .prcard .ico-brand { display: block; }
+body.brand .prcard[data-platform="gitlab"] .pr-ico,
+body.brand .prcard[data-platform="gitlab"] .pr-num { color: oklch(0.75 0.165 45); }
+body.brand .prcard[data-platform="github"] .pr-ico,
+body.brand .prcard[data-platform="github"] .pr-num { color: oklch(0.74 0.145 296); }
+body.brand .prcard[data-platform="gitlab"]:hover { border-color: color-mix(in oklab, oklch(0.75 0.165 45) 45%, var(--line)); background: color-mix(in oklab, oklch(0.75 0.165 45) 12%, transparent); }
+body.brand .prcard[data-platform="github"]:hover { border-color: color-mix(in oklab, oklch(0.74 0.145 296) 45%, var(--line)); background: var(--tint-violet); }
+body.brand .prcard:hover .pr-ico, body.brand .prcard:hover .pr-num { color: inherit; }
+body.brand .prcard[data-platform="gitlab"]:hover .pr-go { color: oklch(0.75 0.165 45); }
+body.brand .prcard[data-platform="github"]:hover .pr-go { color: oklch(0.74 0.145 296); }
+
 </style>
 </head>
 <body>
@@ -1658,6 +1673,7 @@ body.wall-glass .dd-menu {
   <b>同一个 PR 的重复事件合并成一条</b>(每次 push 都会重写一条),只显示最近一次时间与更新次数,避免刷屏。
   <div class="demo-btns">
     <button class="btn btn-sm" id="toggle">切到「修复前」看对比</button>
+    <button class="btn btn-sm" id="tone">配色:中性(点击试品牌色)</button>
     <span class="proto-hud" id="hud">当前:修复后</span>
   </div>
 </div>
@@ -1681,7 +1697,7 @@ body.wall-glass .dd-menu {
     </div>
 
     <!-- 新增:MR 创建 -->
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://gitlab.lilithgame.com/hdp/pub/lilith_offline_etl/-/merge_requests/8087" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!8087</span><span class="pr-repo">hdp/pub/lilith_offline_etl</span><span class="pr-meta">已创建 · 11:38</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" data-platform="gitlab" href="https://gitlab.lilithgame.com/hdp/pub/lilith_offline_etl/-/merge_requests/8087" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!8087</span><span class="pr-repo">hdp/pub/lilith_offline_etl</span><span class="pr-meta">已创建 · 11:38</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
 
     <div class="chat-msg user">
       <div class="who">你</div>
@@ -1695,7 +1711,7 @@ body.wall-glass .dd-menu {
     </div>
 
     <!-- 新增:同一 MR 的重复事件合并 -->
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://gitlab.lilithgame.com/hdp/pub/lilith_offline_etl/-/merge_requests/8087" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!8087</span><span class="pr-repo">hdp/pub/lilith_offline_etl</span><span class="pr-meta">更新 3 次 · 最近 12:56</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div><div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div><div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" data-platform="gitlab" href="https://gitlab.lilithgame.com/hdp/pub/lilith_offline_etl/-/merge_requests/8087" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!8087</span><span class="pr-repo">hdp/pub/lilith_offline_etl</span><span class="pr-meta">更新 3 次 · 最近 12:56</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div><div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div><div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
 
     <div class="compactcard">
       <button class="cc-head"><span class="ico">🗜</span><span class="label">上下文自动压缩</span><span class="stats">压缩前 168,420 tokens · 耗时 7.4s</span></button>
@@ -1713,9 +1729,9 @@ body.wall-glass .dd-menu {
     </div>
 
     <!-- 新增:GitHub 平台 + 长仓库名截断 -->
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://github.com/tqd9563/xuanji/pull/38" target="_blank" rel="noreferrer"><span class="pr-ico">GITHUB_ICON</span><span class="pr-num">#38</span><span class="pr-repo">tqd9563/xuanji</span><span class="pr-meta">已创建 · 13:02</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" data-platform="github" href="https://github.com/tqd9563/xuanji/pull/38" target="_blank" rel="noreferrer"><span class="pr-ico">GITHUB_ICON</span><span class="pr-num">#38</span><span class="pr-repo">tqd9563/xuanji</span><span class="pr-meta">已创建 · 13:02</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
 
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://gitlab.lilithgame.com/datascience/production/antifraud_skills/-/merge_requests/501" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!501</span><span class="pr-repo">datascience/production/antifraud_skills</span><span class="pr-meta">已创建 · 13:40</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" data-platform="gitlab" href="https://gitlab.lilithgame.com/datascience/production/antifraud_skills/-/merge_requests/501" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!501</span><span class="pr-repo">datascience/production/antifraud_skills</span><span class="pr-meta">已创建 · 13:40</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
   </div>
 
   <div class="chat-status">
@@ -1740,8 +1756,8 @@ body.wall-glass .dd-menu {
 </div>
 
 <script>
-const GITLAB_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg>';
-const GITHUB_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg>';
+const GITLAB_ICON = '<span class="ico-merge"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg></span><span class="ico-brand"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 14.6 5.55 7.05h4.9L8 14.6Zm-6.05-7.55h3.6L8 14.6 1.95 7.05Zm12.1 0L8 14.6l2.45-7.55h3.6ZM4.6 7.05 3.3 2.6a.32.32 0 0 1 .61-.07l1.38 4.52H4.6Zm6.8 0h-.69l1.38-4.52a.32.32 0 0 1 .61.07l-1.3 4.45Z"/></svg></span>';
+const GITHUB_ICON = '<span class="ico-merge"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg></span><span class="ico-brand"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .8a7.2 7.2 0 0 0-2.28 14.03c.36.07.49-.16.49-.35v-1.2c-2 .44-2.43-.97-2.43-.97-.33-.83-.8-1.06-.8-1.06-.66-.45.05-.44.05-.44.72.05 1.1.75 1.1.75.64 1.1 1.69.78 2.1.6.07-.47.25-.79.46-.97-1.6-.18-3.28-.8-3.28-3.56 0-.79.28-1.43.74-1.93-.07-.19-.32-.92.07-1.91 0 0 .6-.2 1.98.73a6.8 6.8 0 0 1 3.6 0c1.37-.93 1.97-.73 1.97-.73.4.99.15 1.72.07 1.9.46.51.74 1.15.74 1.94 0 2.77-1.69 3.38-3.3 3.56.26.22.49.66.49 1.34v1.98c0 .19.13.42.5.35A7.2 7.2 0 0 0 8 .8Z"/></svg></span>';
 
 const slots = [...document.querySelectorAll('.pr-slot')];
 function render(mode) {
@@ -1757,6 +1773,11 @@ document.getElementById('toggle').addEventListener('click', (e) => {
   render(mode);
   e.currentTarget.textContent = mode === 'fixed' ? '切到「修复前」看对比' : '切回「修复后」';
   document.getElementById('hud').textContent = mode === 'fixed' ? '当前:修复后' : '当前:修复前(线上现状)';
+});
+
+document.getElementById('tone').addEventListener('click', (e) => {
+  const on = document.body.classList.toggle('brand');
+  e.currentTarget.textContent = on ? '配色:品牌色(点击回中性)' : '配色:中性(点击试品牌色)';
 });
 
 document.querySelectorAll('.toolcard .tc-head').forEach((h) => {
