@@ -1634,7 +1634,7 @@ body.wall-glass .dd-menu {
 }
 .prcard .pr-ico { flex: none; width: 14px; height: 14px; color: var(--faint); transition: color 150ms var(--ease); }
 .prcard .pr-ico svg { width: 100%; height: 100%; display: block; }
-.prcard .pr-num { flex: none; font-family: var(--mono); color: var(--blue); }
+.prcard .pr-num { flex: none; transition: color 150ms var(--ease); font-family: var(--mono); color: var(--ink); }
 .prcard .pr-repo {
   flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: var(--mono); font-size: 0.71875rem; color: var(--muted);
@@ -1643,7 +1643,7 @@ body.wall-glass .dd-menu {
 .prcard .pr-go { flex: none; color: var(--faint); opacity: 0; transition: opacity 150ms var(--ease), color 150ms var(--ease); }
 
 .prcard:hover { border-color: color-mix(in oklab, var(--blue) 42%, var(--line)); background: var(--tint-blue); color: var(--ink); }
-.prcard:hover .pr-ico, .prcard:hover .pr-go { color: var(--blue); }
+.prcard:hover .pr-ico, .prcard:hover .pr-go, .prcard:hover .pr-num { color: var(--blue); }
 .prcard:hover .pr-go { opacity: 1; }
 .prcard:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
 .prcard:focus-visible .pr-go { opacity: 1; }
@@ -1713,9 +1713,9 @@ body.wall-glass .dd-menu {
     </div>
 
     <!-- 新增:GitHub 平台 + 长仓库名截断 -->
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://github.com/tqd9563/xuanji/pull/41" target="_blank" rel="noreferrer"><span class="pr-ico">GITHUB_ICON</span><span class="pr-num">#41</span><span class="pr-repo">tqd9563/xuanji</span><span class="pr-meta">已创建 · 13:02</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" href="https://github.com/tqd9563/xuanji/pull/38" target="_blank" rel="noreferrer"><span class="pr-ico">GITHUB_ICON</span><span class="pr-num">#38</span><span class="pr-repo">tqd9563/xuanji</span><span class="pr-meta">已创建 · 13:02</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
 
-    <div class="pr-slot" data-fixed='<a class="prcard" href="https://gitlab.lilithgame.com/datascience/production/baize_web/-/merge_requests/1203" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!1203</span><span class="pr-repo">datascience/production/baize_web/services/ingestion-pipeline</span><span class="pr-meta">已创建 · 13:40</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
+    <div class="pr-slot" data-fixed='<a class="prcard" href="https://gitlab.lilithgame.com/datascience/production/antifraud_skills/-/merge_requests/501" target="_blank" rel="noreferrer"><span class="pr-ico">GITLAB_ICON</span><span class="pr-num">!501</span><span class="pr-repo">datascience/production/antifraud_skills</span><span class="pr-meta">已创建 · 13:40</span><span class="pr-go" aria-hidden="true">↗</span></a>' data-raw='<div class="raw-event"><div class="note">⚠ 未知事件「pr-link」(原始记录见回放页)</div></div>'></div>
   </div>
 
   <div class="chat-status">
