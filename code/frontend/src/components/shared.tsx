@@ -2,7 +2,7 @@ import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'rea
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
-import { cn, msgClock, projBg, projColor } from '@/lib/utils';
+import { cn, fullTime, msgClock, prCardText, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 
 // ---------- Markdown 渲染(统一出口) ----------
@@ -261,7 +261,7 @@ export function ProjChip({ name, path }: { name: string; path?: string }) {
 export function MsgTime({ ts }: { ts: number | string | null | undefined }) {
   const hhmm = msgClock(ts);
   if (!hhmm) return null;
-  const full = new Date(typeof ts === 'number' ? ts : Date.parse(String(ts))).toLocaleString('zh-CN');
+  const full = fullTime(ts) ?? '';
   return <span className="msg-ts" title={full}>{hhmm}</span>;
 }
 
@@ -513,6 +513,68 @@ export function CompactionCard({
         </div>
       )}
     </div>
+  );
+}
+
+const PR_ICON = {
+  gitlab: (
+    <path d="M23.955 13.587l-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.386 9.45.044 13.587a.924.924 0 0 0 .331 1.03L12 23.054l11.625-8.436a.92.92 0 0 0 .33-1.031" />
+  ),
+  github: (
+    <path d="M12 1.2a10.8 10.8 0 0 0-3.42 21.05c.54.1.74-.24.74-.53v-1.8c-3 .66-3.64-1.45-3.64-1.45-.5-1.25-1.2-1.59-1.2-1.59-.99-.67.08-.66.08-.66 1.08.08 1.65 1.12 1.65 1.12.96 1.65 2.53 1.17 3.15.9.1-.71.38-1.19.69-1.46-2.4-.27-4.92-1.2-4.92-5.34 0-1.18.42-2.15 1.11-2.9-.11-.28-.48-1.38.1-2.87 0 0 .9-.29 2.97 1.1a10.2 10.2 0 0 1 5.4 0c2.06-1.39 2.96-1.1 2.96-1.1.59 1.49.22 2.59.11 2.86.69.75 1.11 1.72 1.11 2.9 0 4.16-2.53 5.07-4.94 5.34.39.33.73.99.73 2v2.97c0 .29.2.64.75.53A10.8 10.8 0 0 0 12 1.2Z" />
+  ),
+  other: (
+    <path
+      d="M6 5.4h3.3A3.9 3.9 0 0 1 13.2 9.3v.3M6 7.8v8.4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.1"
+      strokeLinecap="round"
+    />
+  ),
+} as const;
+
+/**
+ * 回放时间线里的「PR/MR 链接」卡片:pr-link 元事件的落点。
+ *
+ * 同一个 PR 的重复事件已在 adapter 合并,这里一个 PR 只出一张卡。
+ * 事件本身没有状态字段(创建/push/合并写的是同一种记录),故只报次数不报状态。
+ */
+export function PrLinkCard({
+  url,
+  platform,
+  number,
+  repo,
+  updates,
+  ts,
+  lastTs,
+}: {
+  url: string;
+  platform: 'gitlab' | 'github' | 'other';
+  number?: number;
+  repo?: string;
+  updates: number;
+  ts?: number | string;
+  lastTs?: number | string;
+}) {
+  const { label, meta } = prCardText({ platform, number, updates, ts });
+  // 悬停给完整日期:一个 PR 的更新常跨天(实测有跨 5 天的),行内只有时分会读成时间倒流
+  const latest = updates > 0 ? fullTime(lastTs) : null;
+  const title = latest ? `${url}\n最近更新 ${latest}` : url;
+  return (
+    <a className="prcard" data-platform={platform} href={url} target="_blank" rel="noreferrer" title={title}>
+      <span className="pr-ico" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          {PR_ICON[platform]}
+        </svg>
+      </span>
+      <span className="pr-num">{label}</span>
+      {repo && <span className="pr-repo">{repo}</span>}
+      {meta && <span className="pr-meta">{meta}</span>}
+      <span className="pr-go" aria-hidden="true">
+        ↗
+      </span>
+    </a>
   );
 }
 

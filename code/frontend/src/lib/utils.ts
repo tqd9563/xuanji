@@ -184,3 +184,27 @@ export function sumComp(list: ModelUsage[]): TokenComp {
   }
   return c;
 }
+
+/** 完整日期时间(悬停提示用);无法解析返回 null,由调用方决定省略 */
+export function fullTime(ts: number | string | null | undefined): string | null {
+  if (ts == null) return null;
+  const ms = typeof ts === 'number' ? ts : Date.parse(ts);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleString('zh-CN');
+}
+
+/**
+ * PR/MR 卡片的文案:编号前缀随平台走(GitLab 用 !,GitHub 用 #),
+ * 元信息按「已创建 时刻 · 更新 N 次」组织,缺时间就只留有的那半截。
+ */
+export function prCardText(pr: {
+  platform: 'gitlab' | 'github' | 'other';
+  number?: number;
+  updates: number;
+  ts?: number | string;
+}): { label: string; meta: string } {
+  const created = msgClock(pr.ts);
+  const label = pr.number != null ? `${pr.platform === 'gitlab' ? '!' : '#'}${pr.number}` : '链接';
+  const meta = [created && `已创建 ${created}`, pr.updates > 0 && `更新 ${pr.updates} 次`].filter(Boolean).join(' · ');
+  return { label, meta };
+}

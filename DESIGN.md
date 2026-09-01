@@ -25,6 +25,8 @@ colors:
   tool-skill: "oklch(0.78 0.12 345)"
   tool-exec: "oklch(0.78 0.13 180)"
   tool-write: "oklch(0.78 0.12 55)"
+  pr-gitlab: "oklch(0.75 0.165 45)"
+  pr-github: "oklch(0.74 0.145 296)"
 typography:
   display:
     fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace"
@@ -146,6 +148,14 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.md}"
     padding: "18px 20px 20px"
+  pr-link-card:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "6px 12px 6px 10px"
+  pr-link-card-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
   brand-mark:
     textColor: "{colors.jade}"
     width: "48px"
@@ -277,6 +287,12 @@ components:
 - **其余(含 `mcp__*` 长尾与未知工具)**:muted 中性,不参与争色。
 - `isError` 时一律红色内联覆盖,优先级高于类别色,与状态色语义一致。
 
+### 平台品牌色(唯一的非语义色)
+PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一一处颜色不表状态的用法,故单列并严格圈定作用域:
+- **pr-gitlab** (oklch(0.75 0.165 45)):GitLab 官方橙 #FC6D26 的色相,按深色底提亮至可读明度(实测 8.08:1)。只出现在 `.prcard[data-platform="gitlab"]` 的图标与编号上。
+- **pr-github** (oklch(0.74 0.145 296)):GitHub 紫 #8250DF 同源。**与 --violet(300°)仅差 4°**,故严禁扩散到卡片以外——紫在本产品的既有语义是「待验收 / 编排类工具」,两者一旦同屏出现在同类元素上即不可分辨。
+- 认不出的自建实例(platform=other)不上色,走中性 ink + 通用合并图形,不为「凑齐平台」而编造第三种品牌色。
+
 ### Named Rules
 **状态色即语义规则。** 玉=运行、琥珀=等待、绿=完成、蓝=纯信息、红=错误/熔断。「已完成」与「信息」是两件事:前者是终结状态,必须绿色;后者是事实标注(路径、计数、目录),永远蓝色,两者不得混用同一色相。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。
 
@@ -381,6 +397,14 @@ components:
   - *展开*:body 显出;超过 1200 字符时限高 320px + 底部 56px 渐隐,附「展开全文」。
 - **对比度纪律:** 正文与耗时均为 `{colors.faint}` 实色,实测 4.89:1 过 AA。耗时曾用 75% 透明度写法,实测仅 3.22:1——**层次由字体族/字重承担(mono 400 vs sans 600),不靠降透明度**。
 - **不渲染的情形:** 模型未思考、或思考明文被服务端剥空时,不留任何占位(空卡片比没有卡片更糟)。历史会话回放一律不含思考卡。
+
+### PR / MR 链接卡(Signature Component · 回放时间线里的元事件条)
+- **性格:** 与「上下文已压缩」卡同属元事件层级(0.75rem、muted、非消息高度),但它可点,故用**实线** 1px `{colors.line-soft}` 边框与虚线的压缩卡分家;宽度 fit-content 上限 68ch,不占满行宽。
+- **结构:** 单行 = 平台图标(14px,GitLab tanuki / GitHub mark / 通用合并图形)+ 编号(mono,GitLab 用 `!8087`、GitHub 用 `#38`)+ 仓库路径(mono 11.5px,`flex: 1 1 0` 截断)+ 元信息(「已创建 14:27 · 更新 26 次」)+ 悬停浮现的 `↗`。
+- **状态:** 静止只有平台色在图标与编号上;悬停整条转 hover 底 + 平台色边框、`↗` 显形;`:focus-visible` 走全局玉色 outline,键盘可达。触屏(`hover: none`)下 `↗` 常显。
+- **合并纪律:** 同一个 PR 的多条 `pr-link` 事件(每次 push / 合并都会重写一条,实测单会话可达 26 条)在 adapter 层合并为一张卡,只累加次数与最近时间。**逐条出卡即刷屏**,这是本组件存在的首要理由。
+- **不表状态:** 事件本身无状态字段,创建/推送/合并写的是同一种记录,故卡片只报次数不报「已合并」——宁可少说,不可臆断。
+- **跨天提示:** 行内时间只有时分,更新常跨天(实测跨 5 天),故完整日期放 `title` 悬停,避免「创建 14:27 · 最近更新 14:11」读成时间倒流。
 
 ### 自绘下拉(Signature Component)
 原生 select 弹层由 OS 绘制无法主题化,故一律自绘(实现层用 shadcn/ui Select):无边触发钮(mono 字,按语义着色——目录蓝/模型紫)+ 悬浮菜单(surface 底、1px line 边、10px 圆角、悬浮影),选中项玉色对勾,Esc/外点关闭,贴近屏底的向上弹出。**模态内变体**(`.dd.down`):表单字段贴顶部而非屏底时,菜单改为向下弹出、触发钮补满字段宽度并现出 surface 底 + line 边框(而非无边贴文本),其余选中态/对勾/关闭逻辑与默认下拉完全一致——仅弹出方向与触发钮外观随上下文调整,组件词汇不分叉。

@@ -44,6 +44,11 @@
   --tool-skill: oklch(0.78 0.12 345);  /* Skill / SlashCommand */
   --tool-exec:  oklch(0.78 0.13 180);  /* Bash / BashOutput / KillShell */
   --tool-write: oklch(0.78 0.12 55);   /* Edit / Write / NotebookEdit */
+
+  /* 平台品牌色:只用于 PR/MR 卡片标识代码托管平台,不参与状态语义。
+     取官方色相、按深色底提亮到可读明度(GitLab #FC6D26 / GitHub #8250DF) */
+  --pr-gitlab: oklch(0.75 0.165 45);
+  --pr-github: oklch(0.74 0.145 296);
   /* 读取/检索复用 --blue,编排/规划复用 --violet(与派发状态行的模型紫同族) */
 
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
@@ -818,6 +823,38 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   border-top: 1px dashed var(--line); padding: 10px 12px;
   font-size: 0.8125rem; color: var(--muted); max-height: 480px; overflow-y: auto;
 }
+
+/* PR/MR 链接卡片:与 .compactcard 同为元事件条(小字、muted、非消息层级),
+   但它可点,故用实线边框区分于虚线的压缩卡。平台色只给 GitLab/GitHub 两家品牌用,
+   不进状态色词汇表 —— 认不出的自建实例走 other,保持中性 */
+.prcard {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: min(68ch, 100%); margin: 10px 0; padding: 6px 12px 6px 10px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  background: var(--surface-2);
+  font-size: 0.75rem; color: var(--muted); text-decoration: none;
+  transition: border-color 150ms var(--ease), background 150ms var(--ease), color 150ms var(--ease);
+}
+.prcard .pr-ico { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.prcard .pr-ico svg { width: 100%; height: 100%; display: block; }
+.prcard .pr-num { flex: none; font-family: var(--mono); color: var(--ink); }
+.prcard .pr-repo {
+  flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 0.71875rem; color: var(--muted);
+}
+.prcard .pr-meta { flex: none; color: var(--faint); }
+.prcard .pr-go { flex: none; color: var(--faint); opacity: 0; transition: opacity 150ms var(--ease); }
+
+.prcard[data-platform='gitlab'] .pr-ico, .prcard[data-platform='gitlab'] .pr-num { color: var(--pr-gitlab); }
+.prcard[data-platform='github'] .pr-ico, .prcard[data-platform='github'] .pr-num { color: var(--pr-github); }
+
+.prcard:hover { border-color: color-mix(in oklab, var(--ink) 22%, var(--line)); background: var(--hover); color: var(--ink); }
+.prcard:hover .pr-go { opacity: 1; color: var(--muted); }
+.prcard[data-platform='gitlab']:hover { border-color: color-mix(in oklab, var(--pr-gitlab) 42%, var(--line)); }
+.prcard[data-platform='github']:hover { border-color: color-mix(in oklab, var(--pr-github) 42%, var(--line)); }
+.prcard:focus-visible .pr-go { opacity: 1; }
+@media (hover: none) { .prcard .pr-go { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .prcard, .prcard .pr-go { transition: none; } }
 
 .raw-event {
   border: 1px dashed var(--line); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0;

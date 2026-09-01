@@ -50,6 +50,17 @@ export type ReplayEvent =
   | { kind: 'assistant'; text: string; model?: string; ts?: string }
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
   | { kind: 'raw'; type: string; json: string }
+  | {
+      /** PR/MR 链接:同一 URL 的多条 pr-link 事件已在 adapter 合并成一条 */
+      kind: 'pr';
+      url: string;
+      platform: 'gitlab' | 'github' | 'other';
+      number?: number;
+      repo?: string;
+      updates: number;
+      lastTs?: string;
+      ts?: string;
+    }
   | { kind: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string; ts?: string };
 
 export interface Replay {
