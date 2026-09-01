@@ -1650,30 +1650,30 @@ body.wall-glass .dd-menu {
 @media (hover: none) { .prcard .pr-go { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .prcard, .prcard .pr-ico, .prcard .pr-go { transition: none; } }
 
-/* ---- 试验:平台品牌色 + 真实 logo(body.brand 时生效,用于与中性版对比) ---- */
+/* ---- 试验:平台品牌色 + 真实 logo(body[data-tone="brand"] 时生效,用于与中性版对比) ---- */
 .prcard .ico-brand { display: none; }
-body.brand .prcard .ico-merge { display: none; }
-body.brand .prcard .ico-brand { display: block; }
-body.brand .prcard[data-platform="gitlab"] .pr-ico,
-body.brand .prcard[data-platform="gitlab"] .pr-num { color: oklch(0.75 0.165 45); }
-body.brand .prcard[data-platform="github"] .pr-ico,
-body.brand .prcard[data-platform="github"] .pr-num { color: oklch(0.74 0.145 296); }
-body.brand .prcard[data-platform="gitlab"]:hover { border-color: color-mix(in oklab, oklch(0.75 0.165 45) 45%, var(--line)); background: color-mix(in oklab, oklch(0.75 0.165 45) 12%, transparent); }
-body.brand .prcard[data-platform="github"]:hover { border-color: color-mix(in oklab, oklch(0.74 0.145 296) 45%, var(--line)); background: var(--tint-violet); }
-body.brand .prcard:hover .pr-ico, body.brand .prcard:hover .pr-num { color: inherit; }
-body.brand .prcard[data-platform="gitlab"]:hover .pr-go { color: oklch(0.75 0.165 45); }
-body.brand .prcard[data-platform="github"]:hover .pr-go { color: oklch(0.74 0.145 296); }
+body[data-tone="brand"] .prcard .ico-merge { display: none; }
+body[data-tone="brand"] .prcard .ico-brand { display: block; }
+body[data-tone="brand"] .prcard[data-platform="gitlab"] .pr-ico,
+body[data-tone="brand"] .prcard[data-platform="gitlab"] .pr-num { color: oklch(0.75 0.165 45); }
+body[data-tone="brand"] .prcard[data-platform="github"] .pr-ico,
+body[data-tone="brand"] .prcard[data-platform="github"] .pr-num { color: oklch(0.74 0.145 296); }
+body[data-tone="brand"] .prcard[data-platform="gitlab"]:hover { border-color: color-mix(in oklab, oklch(0.75 0.165 45) 45%, var(--line)); background: color-mix(in oklab, oklch(0.75 0.165 45) 12%, transparent); }
+body[data-tone="brand"] .prcard[data-platform="github"]:hover { border-color: color-mix(in oklab, oklch(0.74 0.145 296) 45%, var(--line)); background: var(--tint-violet); }
+body[data-tone="brand"] .prcard:hover .pr-ico, body[data-tone="brand"] .prcard:hover .pr-num { color: inherit; }
+body[data-tone="brand"] .prcard[data-platform="gitlab"]:hover .pr-go { color: oklch(0.75 0.165 45); }
+body[data-tone="brand"] .prcard[data-platform="github"]:hover .pr-go { color: oklch(0.74 0.145 296); }
 
 </style>
 </head>
-<body>
+<body data-tone="brand">
 <div class="proto-note">
   <b>原型 · PR / MR 链接卡片</b> —— Claude Code 在会话里创建或更新 PR/MR 时会往 session jsonl 写一条 <code style="font-family:var(--mono);font-size:0.75rem;">pr-link</code> 元事件。
   目前 adapter 不认识它,回放到派发页会降级成一行琥珀色「⚠ 未知事件」。改为渲染成<b>一条可点击的链接条</b>:平台图标 + 编号 + 仓库路径 + 创建/更新时间,点击新标签打开。
   <b>同一个 PR 的重复事件合并成一条</b>(每次 push 都会重写一条),只显示最近一次时间与更新次数,避免刷屏。
   <div class="demo-btns">
     <button class="btn btn-sm" id="toggle">切到「修复前」看对比</button>
-    <button class="btn btn-sm" id="tone">配色:中性(点击试品牌色)</button>
+    <button class="btn btn-sm" id="tone">配色:品牌色(点击看中性版)</button>
     <span class="proto-hud" id="hud">当前:修复后</span>
   </div>
 </div>
@@ -1756,7 +1756,7 @@ body.brand .prcard[data-platform="github"]:hover .pr-go { color: oklch(0.74 0.14
 </div>
 
 <script>
-const GITLAB_ICON = '<span class="ico-merge"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg></span><span class="ico-brand"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 14.6 5.55 7.05h4.9L8 14.6Zm-6.05-7.55h3.6L8 14.6 1.95 7.05Zm12.1 0L8 14.6l2.45-7.55h3.6ZM4.6 7.05 3.3 2.6a.32.32 0 0 1 .61-.07l1.38 4.52H4.6Zm6.8 0h-.69l1.38-4.52a.32.32 0 0 1 .61.07l-1.3 4.45Z"/></svg></span>';
+const GITLAB_ICON = '<span class="ico-merge"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg></span><span class="ico-brand"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M23.955 13.587l-1.342-4.135-2.664-8.189a.455.455 0 0 0-.867 0L16.418 9.45H7.582L4.919 1.263a.455.455 0 0 0-.867 0L1.386 9.45.044 13.587a.924.924 0 0 0 .331 1.03L12 23.054l11.625-8.436a.92.92 0 0 0 .33-1.031"/></svg></span>';
 const GITHUB_ICON = '<span class="ico-merge"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><circle cx="4" cy="3.6" r="1.6"/><circle cx="4" cy="12.4" r="1.6"/><circle cx="12" cy="8" r="1.6"/><path d="M4 5.2v5.6"/><path d="M5.6 3.6h2.2A2.6 2.6 0 0 1 10.4 6.2v.2"/></svg></span><span class="ico-brand"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 .8a7.2 7.2 0 0 0-2.28 14.03c.36.07.49-.16.49-.35v-1.2c-2 .44-2.43-.97-2.43-.97-.33-.83-.8-1.06-.8-1.06-.66-.45.05-.44.05-.44.72.05 1.1.75 1.1.75.64 1.1 1.69.78 2.1.6.07-.47.25-.79.46-.97-1.6-.18-3.28-.8-3.28-3.56 0-.79.28-1.43.74-1.93-.07-.19-.32-.92.07-1.91 0 0 .6-.2 1.98.73a6.8 6.8 0 0 1 3.6 0c1.37-.93 1.97-.73 1.97-.73.4.99.15 1.72.07 1.9.46.51.74 1.15.74 1.94 0 2.77-1.69 3.38-3.3 3.56.26.22.49.66.49 1.34v1.98c0 .19.13.42.5.35A7.2 7.2 0 0 0 8 .8Z"/></svg></span>';
 
 const slots = [...document.querySelectorAll('.pr-slot')];
@@ -1776,8 +1776,9 @@ document.getElementById('toggle').addEventListener('click', (e) => {
 });
 
 document.getElementById('tone').addEventListener('click', (e) => {
-  const on = document.body.classList.toggle('brand');
-  e.currentTarget.textContent = on ? '配色:品牌色(点击回中性)' : '配色:中性(点击试品牌色)';
+  const on = document.body.dataset.tone !== 'brand';
+  document.body.dataset.tone = on ? 'brand' : 'neutral';
+  e.currentTarget.textContent = on ? '配色:品牌色(点击看中性版)' : '配色:中性(点击回品牌色)';
 });
 
 document.querySelectorAll('.toolcard .tc-head').forEach((h) => {
