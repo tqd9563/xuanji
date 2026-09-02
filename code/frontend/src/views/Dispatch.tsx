@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
@@ -8,6 +8,8 @@ import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
 import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
+import { TurnHead, TurnOutline } from '@/components/TurnNav';
+import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
 import { RunbookPanel } from '@/components/RunbookPanel';
 import { useRunbook } from '@/lib/runbook';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
@@ -129,8 +131,15 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   return <StreamMd text={shown} />;
 }
 
-/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。 */
+/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。
+ *  超出上限的更早事件不丢弃:留在 earlierRef 里供轮次目录列出与按需回填(见 splitHistory)。 */
 const CHAT_SEED_LIMIT = 200;
+/** 吸顶轮次头的带高(与 .turnhead 实际高度同值);判「提问是否已被带子盖住」用它 */
+const TURN_HEAD_H = 36;
+/** 跳转落点在头带下方再留的呼吸位 */
+const TURN_JUMP_GAP = 8;
+/** 判「算不算当前轮」的阈值:须 ≥ 落点余量,否则刚跳到的那一轮不算数,⌥↑ 会一按跳两轮 */
+const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 /** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
 const TA_MIN_H = 56;
 
@@ -167,6 +176,20 @@ function blobToPasted(blob: Blob): Promise<PastedImage> {
   });
 }
 
+/** 历史事件切成「先不装载的更早部分」与「立即渲染的尾部」两段。
+ *  更早部分不丢弃:轮次目录照样列出它们(编号才连续、才搜得到),被选中时再回填。 */
+function splitHistory(events: ReplayEvent[]): { earlier: ReplayEvent[]; seed: ReplayEvent[] } {
+  const cut = Math.max(0, events.length - CHAT_SEED_LIMIT);
+  return { earlier: events.slice(0, cut), seed: events.slice(cut) };
+}
+
+/** 回放事件里的用户输入 → 轮次索引所需的最小字段 */
+function userTurnsOf(events: ReplayEvent[]): { text: string; ts?: number }[] {
+  return events
+    .filter((ev): ev is Extract<ReplayEvent, { kind: 'user' }> => ev.kind === 'user')
+    .map((ev) => ({ text: ev.text, ts: parseTs(ev.ts) }));
+}
+
 function fmtBytes(n: number): string {
   return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 }
@@ -178,9 +201,9 @@ function parseTs(iso: string | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
-/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
+/** 只读回放事件 → 派发页消息 */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
-  return events.slice(-CHAT_SEED_LIMIT).map((ev, i): ChatItem => {
+  return events.map((ev, i): ChatItem => {
     if (ev.kind === 'user') return { t: 'user', text: ev.text, ts: parseTs(ev.ts) };
     if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false, ts: parseTs(ev.ts) };
     if (ev.kind === 'tool')
@@ -308,8 +331,27 @@ export function Dispatch({ active }: { active: boolean }) {
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
-  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 replayToChat)
+  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
+  // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
+  // pendingEarlier 是它们当中的用户输入(目录要列出来,故须进 state 参与渲染)。
+  const earlierRef = useRef<ReplayEvent[]>([]);
+  const [pendingEarlier, setPendingEarlier] = useState<{ text: string; ts?: number }[]>([]);
+  const [outline, setOutline] = useState(false);
+  const [curTurn, setCurTurn] = useState<{ ord: number; gone: boolean } | null>(null);
+  const [flashOrd, setFlashOrd] = useState<number | null>(null);
+  const [pendingJump, setPendingJump] = useState<number | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /** 换会话:轮次索引连同待回填的更早事件一起清空,不跨会话残留 */
+  const resetTurnNav = () => {
+    earlierRef.current = [];
+    setPendingEarlier([]);
+    setOutline(false);
+    setCurTurn(null);
+    setFlashOrd(null);
+    setPendingJump(null);
+  };
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
   const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
@@ -354,10 +396,17 @@ export function Dispatch({ active }: { active: boolean }) {
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
     setCwd(info.cwd);
     d.pushNote(`↻ 将续接会话 ${info.sessionId.slice(0, 8)}(${info.name}),发送第一条消息后恢复上下文。`);
-    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
+    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)。
+    // 只渲染尾部 CHAT_SEED_LIMIT 条,更早的留给轮次目录按需回填。
+    resetTurnNav();
     void api
       .replay(info.sessionId)
-      .then((r) => d.seedHistory(replayToChat(r.events)))
+      .then((r) => {
+        const { earlier, seed } = splitHistory(r.events);
+        earlierRef.current = earlier;
+        setPendingEarlier(userTurnsOf(earlier));
+        d.seedHistory(replayToChat(seed));
+      })
       .catch(() => {});
   };
 
@@ -467,6 +516,120 @@ export function Dispatch({ active }: { active: boolean }) {
     if (entered || intent) setTimeout(() => taRef.current?.focus(), 0);
   }, [active, d]);
 
+  // ---- 轮次导航 ----------------------------------------------------------
+  // 一轮 = 一条用户输入及其之后的产出。吸顶轮次头与 ⌘⇧O 目录共用这份索引,
+  // 编号/排序/摘要口径全收在 lib/turns,两处显示的「第 7 轮」必须是同一轮。
+  const loadedTurns = useMemo(
+    () =>
+      d.items
+        .filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user')
+        .map((i) => ({ text: i.text, ts: i.ts })),
+    [d.items],
+  );
+  const turns = useMemo(() => buildTurns(pendingEarlier, loadedTurns), [pendingEarlier, loadedTurns]);
+  // 每条用户消息挂的全局轮次序号(含未装载的更早轮次),供 data-turn 定位与高亮
+  const turnOrds = useMemo(() => {
+    // 起点是「未装载的真轮次」数量,与 buildTurns 的过滤口径必须同源,否则序号对不上
+    let n = pendingEarlier.filter((x) => isRealTurn(x.text)).length;
+    return d.items.map((i) => (i.t === 'user' && isRealTurn(i.text) ? n++ : null));
+  }, [d.items, pendingEarlier]);
+
+  /** 按滚动位置刷新「当前轮」。offsetTop 以 .chat 为参照系(它是 position:relative 的滚动容器)。 */
+  const measureTurn = useCallback(() => {
+    const el = chatRef.current;
+    if (!el) return setCurTurn(null);
+    const boxes = [...el.querySelectorAll<HTMLElement>('[data-turn]')].map((n) => ({
+      ord: Number(n.dataset.turn),
+      top: n.offsetTop,
+      bottom: n.offsetTop + n.offsetHeight,
+    }));
+    const next = currentTurn(boxes, el.scrollTop, TURN_ACTIVE_OFFSET, TURN_HEAD_H);
+    // 同值不 setState:滚动每帧都会调到这里,不比一下会把整条消息列表重渲染成滚动卡顿
+    setCurTurn((prev) =>
+      prev?.ord === next?.ord && prev?.gone === next?.gone ? prev : next,
+    );
+  }, []);
+
+  /** 回填尚未渲染的更早历史(轮次目录选中未加载轮次时触发);一次补齐,事件本就已在客户端 */
+  const backfillEarlier = () => {
+    const ev = earlierRef.current;
+    if (!ev.length) return;
+    earlierRef.current = [];
+    setPendingEarlier([]);
+    d.seedHistory(replayToChat(ev));
+  };
+
+  const scrollToTurn = useCallback((ord: number) => {
+    const box = chatRef.current;
+    const el = box?.querySelector<HTMLElement>(`[data-turn="${ord}"]`);
+    if (!box || !el) return;
+    // 跳走 = 用户主动离开底部;不解钉的话流式输出会立刻把视口拽回去
+    pinnedRef.current = false;
+    box.scrollTo({
+      top: Math.max(0, el.offsetTop - TURN_HEAD_H - TURN_JUMP_GAP),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+    // 落点必须被看见:目标气泡描一圈玉环再淡出,否则滚完还要在满屏文字里找自己要的那条
+    setFlashOrd(ord);
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashOrd(null), 1400);
+  }, []);
+
+  const jumpToTurn = (ord: number) => {
+    setOutline(false);
+    const t = turns.find((x) => x.ord === ord);
+    if (!t) return;
+    if (t.loaded) return scrollToTurn(ord);
+    backfillEarlier(); // 未装载:先回填,节点出现后由下方 layout effect 接着跳
+    setPendingJump(ord);
+  };
+
+  const stepToTurn = (dir: -1 | 1) => {
+    const next = stepTurn(curTurn?.ord ?? null, dir, turns.length);
+    if (next !== null) jumpToTurn(next);
+  };
+
+  // 回填后的补跳:等目标节点真的进 DOM 再滚,并在同一帧内完成,避免中间态闪一下
+  useLayoutEffect(() => {
+    if (pendingJump === null) return;
+    if (!chatRef.current?.querySelector(`[data-turn="${pendingJump}"]`)) return;
+    scrollToTurn(pendingJump);
+    setPendingJump(null);
+  }, [d.items, pendingJump, scrollToTurn]);
+
+  // 消息增删(新回合、回填、切会话)后重新量一次:此时滚动事件不会触发,但当前轮可能已变
+  useEffect(measureTurn, [d.items, measureTurn]);
+  useEffect(() => {
+    window.addEventListener('resize', measureTurn);
+    return () => window.removeEventListener('resize', measureTurn);
+  }, [measureTurn]);
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
+
+  // ⌘⇧O 开轮次目录 / ⌥↑ ⌥↓ 逐轮跳。用 ⌥ 而非裸方向键:输入框里的 ↑↓ 已经是历史回溯,
+  // 同一个键在同一个页面不能有两种含义。弹窗打开时让位给弹窗自己的 capture 监听。
+  const turnKeyRef = useRef({ turns, stepToTurn, outline });
+  turnKeyRef.current = { turns, stepToTurn, outline };
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const { turns, stepToTurn, outline } = turnKeyRef.current;
+      if (outline || document.querySelector('.confirm-mask')) return;
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && (e.key === 'o' || e.key === 'O')) {
+        e.preventDefault();
+        if (!turns.length) return toast('这个会话还没有可跳转的轮次');
+        taRef.current?.blur(); // 与 /wd、/model 一致:弹窗期间不让输入框吃字符,也免双焦点环
+        measureTurn();
+        setOutline(true);
+      } else if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+        if (!turns.length) return;
+        e.preventDefault();
+        stepToTurn(e.key === 'ArrowUp' ? -1 : 1);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, measureTurn]);
+
   // 消息区自动滚底 —— 仅当用户钉在底部时跟随。
   // 修复:流式输出期间向上翻历史,每条新增量都把视口拽回底部,历史根本没法看。
   // 解钉/回钉用「滚动方向」判定而非只看距底距离:程序滚底后 scroll 事件异步派发,
@@ -486,6 +649,7 @@ export function Dispatch({ active }: { active: boolean }) {
     const shrank = el.scrollHeight < prevHeight;
     if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
+    measureTurn();
   };
   // 跨天分隔线:与消息列表等长,daySeps[i] 非空表示第 i 条消息之前要插一条日期。
   // 工具卡/审批等无时间的条目不参与判定,故游标记的是「上一条有时间的消息」而非前一项。
@@ -543,7 +707,11 @@ export function Dispatch({ active }: { active: boolean }) {
           return ts !== undefined && ts >= before;
         });
         const past = cut === -1 ? r.events : r.events.slice(0, cut);
-        if (past.length) d.seedHistory(replayToChat(past));
+        if (!past.length) return;
+        const { earlier, seed } = splitHistory(past);
+        earlierRef.current = earlier;
+        setPendingEarlier(userTurnsOf(earlier));
+        d.seedHistory(replayToChat(seed));
       })
       .catch(() => {}); // 会话记录被清理时垫不了历史,保持现状即可
   }, [d.attachedHistory]);
@@ -812,6 +980,7 @@ export function Dispatch({ active }: { active: boolean }) {
   const newSession = () => {
     d.reset();
     repin();
+    resetTurnNav();
     resetHistoryBrowse();
     setResumeInfo(null);
     setSessionCwd(null);
@@ -890,6 +1059,15 @@ export function Dispatch({ active }: { active: boolean }) {
       </div>
       <div className="dispatch">
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
+          <TurnHead
+            turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
+            total={turns.length}
+            hasPrev={(curTurn?.ord ?? 0) > 0}
+            hasNext={(curTurn?.ord ?? -1) < turns.length - 1}
+            onJump={jumpToTurn}
+            onStep={stepToTurn}
+            onOpenOutline={() => setOutline(true)}
+          />
           <FindBar
             scopeRef={chatRef}
             state={find}
@@ -921,7 +1099,15 @@ export function Dispatch({ active }: { active: boolean }) {
           {d.items.map((item, i) => (
             <Fragment key={i}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
-              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} onZoom={setLightbox} />
+              <ChatRow
+                item={item}
+                turnOrd={turnOrds[i]}
+                flash={turnOrds[i] !== null && turnOrds[i] === flashOrd}
+                onDecide={d.decide}
+                onAnswer={d.answer}
+                onGrow={followScroll}
+                onZoom={setLightbox}
+              />
             </Fragment>
           ))}
         </div>
@@ -1176,6 +1362,14 @@ export function Dispatch({ active }: { active: boolean }) {
           />
           <span className="tag">settingSources: user</span>
         </div>
+        {outline && (
+          <TurnOutline
+            turns={turns}
+            curOrd={curTurn?.ord ?? null}
+            onPick={jumpToTurn}
+            onClose={() => setOutline(false)}
+          />
+        )}
         {resumePalette && (
           <ResumePalette
             cwd={effectiveCwd}
@@ -1516,12 +1710,18 @@ function QuestionCard({
  *  流式卡顿的主因之一。item 引用不变的行(未在流式中的历史消息)据此完全跳过。 */
 const ChatRow = memo(function ChatRow({
   item,
+  turnOrd,
+  flash,
   onDecide,
   onAnswer,
   onGrow,
   onZoom,
 }: {
   item: ChatItem;
+  /** 用户消息的全局轮次序号(0 基),供吸顶头与目录定位;非用户消息为 null */
+  turnOrd?: number | null;
+  /** 刚被跳转命中:描一圈玉环再淡出 */
+  flash?: boolean;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
   onGrow?: () => void;
@@ -1531,7 +1731,7 @@ const ChatRow = memo(function ChatRow({
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
     return (
-      <div className="chat-msg user">
+      <div className={cn('chat-msg', 'user', flash && 'flash')} data-turn={turnOrd ?? undefined}>
         <div className="who">你<MsgTime ts={item.ts} /></div>
         <div className="body">
           {item.images && item.images.length > 0 && (
