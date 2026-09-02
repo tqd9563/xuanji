@@ -92,6 +92,14 @@ export function isInFence(text: string, caret: number): boolean {
   return open;
 }
 
+/** 取代码块的正文(去掉开合围栏行本身)—— 消息区把用户消息渲染成 <pre> 时用 */
+export function fenceBody(block: Block): string {
+  return block.segs
+    .filter((sg) => sg.cls === 'tk-fence')
+    .map((sg) => sg.text)
+    .join('\n');
+}
+
 export type EditResult = { value: string; selStart: number; selEnd: number };
 
 /** 用反引号包裹选区(空选区则插入一对反引号并把光标放中间) */

@@ -6,7 +6,7 @@ import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/u
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { RunbookPanel } from '@/components/RunbookPanel';
 import { useRunbook } from '@/lib/runbook';
@@ -1635,7 +1635,8 @@ const ChatRow = memo(function ChatRow({
     return (
       <div className="chat-msg user">
         <div className="who">你<MsgTime ts={item.ts} /></div>
-        <div className="body">
+        {/* md 类:让气泡里的代码块/行内代码沿用消息区同一套代码样式 */}
+        <div className="body md">
           {item.images && item.images.length > 0 && (
             <div className="msg-imgs">
               {item.images.map((im, i) => (
@@ -1648,7 +1649,7 @@ const ChatRow = memo(function ChatRow({
               ))}
             </div>
           )}
-          {item.text}
+          <UserText text={item.text} />
         </div>
       </div>
     );

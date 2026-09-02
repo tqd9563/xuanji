@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { blocksToText, insertFence, isInFence, parse, wrapInline } from './composer-code';
+import { blocksToText, fenceBody, insertFence, isInFence, parse, wrapInline } from './composer-code';
 
 /** 取某个类名的全部切片文本,便于断言「哪几段被高亮成了什么」 */
 const of = (text: string, cls: string) =>
@@ -53,6 +53,18 @@ describe('parse', () => {
     const blocks = parse('```\nx\n```\n收尾说明');
     expect(blocks.map((b) => b.type)).toEqual(['fence', 'plain']);
     expect(blocks[0]).toMatchObject({ closed: true });
+  });
+});
+
+describe('fenceBody', () => {
+  it('只取正文,丢掉开合围栏与语言名', () => {
+    expect(fenceBody(parse('```ts\nconst a = 1\nconst b = 2\n```')[0]!)).toBe('const a = 1\nconst b = 2');
+  });
+  it('未闭合围栏照样取到已写下的正文', () => {
+    expect(fenceBody(parse('```py\ndf.head()')[0]!)).toBe('df.head()');
+  });
+  it('空代码块取到空串', () => {
+    expect(fenceBody(parse('```\n```')[0]!)).toBe('');
   });
 });
 
