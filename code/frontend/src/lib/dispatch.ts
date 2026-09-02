@@ -25,6 +25,8 @@ export type ChatItem =
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
   | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
   | { t: 'note'; text: string }
+  /** PR/MR 链接卡:回放装载历史时出现,实时流无此事件 */
+  | { t: 'pr'; url: string; platform: 'gitlab' | 'github' | 'other'; number?: number; repo?: string; updates: number; ts?: number; lastTs?: number }
   /** 上下文压缩点:历史装载时带摘要可展开;实时压缩事件无摘要则仅一行 */
   | { t: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string }
   | { t: 'error'; text: string };

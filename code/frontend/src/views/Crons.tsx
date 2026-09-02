@@ -8,7 +8,7 @@ import { api } from '@/api/client';
 import type { Replay, ScheduledJob, ScheduledRun } from '@/api/types';
 import { usePoll } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { CompactionCard, Drawer, Empty, Md, ToolCard, confirmBox, toast } from '@/components/shared';
+import { CompactionCard, confirmBox, Drawer, Empty, Md, PrLinkCard, toast, ToolCard } from '@/components/shared';
 import { DropUp } from '@/components/DropUp';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -835,6 +835,7 @@ export function Crons() {
         {replay?.events.map((ev, i) => {
           if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
           if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
+          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
           if (ev.kind === 'raw')
             return (
               <div className="raw-event" key={i}>

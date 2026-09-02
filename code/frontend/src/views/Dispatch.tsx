@@ -6,7 +6,7 @@ import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/u
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { RunbookPanel } from '@/components/RunbookPanel';
 import { useRunbook } from '@/lib/runbook';
@@ -187,6 +187,17 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
     if (ev.kind === 'compact')
       return { t: 'compact', trigger: ev.trigger, preTokens: ev.preTokens, durationMs: ev.durationMs, summary: ev.summary };
+    if (ev.kind === 'pr')
+      return {
+        t: 'pr',
+        url: ev.url,
+        platform: ev.platform,
+        number: ev.number,
+        repo: ev.repo,
+        updates: ev.updates,
+        ts: parseTs(ev.ts),
+        lastTs: parseTs(ev.lastTs),
+      };
     return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
   });
 }
@@ -1577,6 +1588,7 @@ const ChatRow = memo(function ChatRow({
     );
   }
   if (item.t === 'note') return <div className="resume-note">{item.text}</div>;
+  if (item.t === 'pr') return <PrLinkCard {...item} />;
   if (item.t === 'compact')
     return <CompactionCard trigger={item.trigger} preTokens={item.preTokens} durationMs={item.durationMs} summary={item.summary} />;
   return (

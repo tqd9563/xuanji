@@ -166,6 +166,8 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
   const toolIndex = new Map<string, number>();
   /** 最近一条 compact_boundary 事件索引,用于回填随后的 isCompactSummary 摘要 */
   let pendingCompactIdx = -1;
+  /** PR/MR url → 事件索引,同一个 PR 的重复事件合并到首次出现的那张卡上 */
+  const prIndex = new Map<string, number>();
 
   const rl = readline.createInterface({
     input: fs.createReadStream(jsonlPath, { encoding: 'utf8' }),
@@ -261,6 +263,33 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
           pendingCompactIdx = events.length - 1;
         }
         break;
+      case 'pr-link': {
+        // 同一个 PR 每次 push / 合并都会重写一条,全部并到首次出现的那张卡上,
+        // 只累加次数与最近时间 —— 一个会话反复 push 会写十几条,逐条出卡即刷屏
+        const url = typeof j.prUrl === 'string' ? j.prUrl : undefined;
+        if (!url) break;
+        const seen = prIndex.get(url);
+        if (seen !== undefined) {
+          const prev = events[seen];
+          if (prev?.kind === 'pr') {
+            prev.updates += 1;
+            prev.lastTs = j.timestamp;
+          }
+          break;
+        }
+        events.push({
+          kind: 'pr',
+          url,
+          platform: prPlatform(url),
+          number: typeof j.prNumber === 'number' ? j.prNumber : undefined,
+          repo: typeof j.prRepository === 'string' ? j.prRepository : undefined,
+          updates: 0,
+          ts: j.timestamp,
+          lastTs: j.timestamp,
+        });
+        prIndex.set(url, events.length - 1);
+        break;
+      }
       case 'attachment':
       case 'last-prompt':
       case 'queue-operation':
@@ -271,6 +300,19 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
     }
   }
   return { sessionId, events, skippedLines, title };
+}
+
+/** 由 PR/MR 链接的 host 判定平台;自建 GitLab 域名各异,按 host 含 gitlab 认 */
+function prPlatform(url: string): 'gitlab' | 'github' | 'other' {
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'other';
+  }
+  if (host === 'github.com' || host.endsWith('.github.com')) return 'github';
+  if (host.includes('gitlab')) return 'gitlab';
+  return 'other';
 }
 
 function compactInput(input: unknown): string {
