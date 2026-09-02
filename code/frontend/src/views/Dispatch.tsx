@@ -204,7 +204,7 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
 
 const MODELS = [
   '(默认)',
-  'claude-fable-5',
+  'claude-fable-5-1',
   'claude-opus-5',
   'claude-opus-5[1m]',
   'claude-sonnet-5',
@@ -221,7 +221,7 @@ const PERM_VALUE: Record<string, string> = {
 const DEFAULT_PERM = PERMS[2]!;
 /** /model 简写 → 完整模型名 */
 const MODEL_SHORT: Record<string, string> = {
-  fable: 'claude-fable-5',
+  fable: 'claude-fable-5-1',
   opus: 'claude-opus-5',
   'opus-1m': 'claude-opus-5[1m]',
   sonnet: 'claude-sonnet-5',
