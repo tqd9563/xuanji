@@ -10,6 +10,7 @@ import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, toast 
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { RunbookPanel } from '@/components/RunbookPanel';
 import { useRunbook } from '@/lib/runbook';
+import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
 import type { ClosedSession, ReplayEvent } from '@/api/types';
 
 /**
@@ -133,6 +134,11 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
 const CHAT_SEED_LIMIT = 200;
 /** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
 const TA_MIN_H = 56;
+/** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
+const TA_PLACEHOLDER = '描述要派发的任务…';
+const HINT_DEFAULT = 'Enter 发送 · Shift+Enter 换行 · ↑↓ 历史';
+/** 光标在代码块里时的提示:此时 Enter 是换行,发送要么把光标移出代码块,要么点「发送」 */
+const HINT_FENCE = '代码块内 · Enter 换行 · 移出代码块或点发送';
 
 /** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -301,6 +307,70 @@ export function Dispatch({ active }: { active: boolean }) {
     const target = Math.max(TA_MIN_H, ta.scrollHeight);
     ta.style.height = `${Math.min(target, max)}px`;
     composerRef.current?.classList.toggle('at-max', target > max + 1);
+    syncCode();
+  };
+  // 代码语法高亮:textarea 文字透明,底下 .ta-mirror 重绘同一段文本并给代码区间上底色。
+  // 走命令式 DOM 而非 React state:输入框每敲一个键都重渲染整个派发页(含消息区)太贵。
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<HTMLSpanElement>(null);
+  /** 只更新底栏提示(光标移动即可改变 Enter 语义,不必重绘整层镜像) */
+  const syncHint = () => {
+    const ta = taRef.current;
+    const hint = hintRef.current;
+    if (!ta || !hint) return;
+    const fenced = isInFence(ta.value, ta.selectionStart);
+    hint.classList.toggle('in-fence', fenced);
+    hint.textContent = fenced ? HINT_FENCE : HINT_DEFAULT;
+  };
+  // 挂载即画一次镜像:此时输入框通常是空的,画的是占位文案(textarea 自己的 placeholder 被透明文字色吃掉)
+  useEffect(() => {
+    syncCode();
+  }, []); // 只在挂载时跑一次:后续重绘一律由 growTa() 驱动
+  /** 落地一次编辑(包裹/插入围栏):写值、复位选区、重绘高亮。.value= 不触发 input 事件,故手动 growTa */
+  const applyEdit = (r: { value: string; selStart: number; selEnd: number }) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.value = r.value;
+    ta.setSelectionRange(r.selStart, r.selEnd);
+    historyIdxRef.current = null; // 手动编辑 → 退出历史浏览态,与 onInput 同一口径
+    growTa();
+  };
+  /** 重绘高亮镜像层。由 growTa() 统一调用 —— 所有会改动输入框内容的路径都已经过 growTa。 */
+  const syncCode = () => {
+    const ta = taRef.current;
+    const mirror = mirrorRef.current;
+    if (!ta || !mirror) return;
+    mirror.textContent = '';
+    if (!ta.value) {
+      const ph = document.createElement('span');
+      ph.className = 'ph';
+      ph.textContent = TA_PLACEHOLDER;
+      mirror.append(ph);
+    } else {
+      const frag = document.createDocumentFragment();
+      parse(ta.value).forEach((b, i) => {
+        if (i) frag.append('\n'); // 块间换行:与原文行结构一一对应
+        const nodes = b.segs.map((seg) => {
+          if (!seg.cls) return document.createTextNode(seg.text);
+          const el = document.createElement('span');
+          el.className = seg.cls;
+          el.textContent = seg.text;
+          return el;
+        });
+        if (b.type === 'fence' && !b.closed) {
+          const box = document.createElement('span');
+          box.className = 'tk-open';
+          box.append(...nodes);
+          frag.append(box);
+        } else {
+          frag.append(...nodes);
+        }
+      });
+      frag.append('\u200b'); // 尾随换行在镜像里不占行,补个零宽字符顶住,否则最后一行差一行高
+      mirror.append(frag);
+    }
+    mirror.scrollTop = ta.scrollTop;
+    syncHint();
   };
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
@@ -998,10 +1068,19 @@ export function Dispatch({ active }: { active: boolean }) {
               ))}
             </div>
           )}
+          {/* .ta-wrap:高亮镜像层与 textarea 逐像素叠放(排版属性由 CSS 强制共享,见 .ta-wrap 规则) */}
+          <div className="ta-wrap">
+          <div className="ta-mirror" ref={mirrorRef} aria-hidden="true" />
           <textarea
             ref={taRef}
             rows={2}
-            placeholder="描述要派发的任务…"
+            placeholder={TA_PLACEHOLDER}
+            onScroll={(e) => {
+              // 触顶后 textarea 内部滚动,镜像层必须同步跟滚,否则高亮与文字脱节
+              if (mirrorRef.current) mirrorRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
+            }}
+            onSelect={syncHint}
+            onClick={syncHint}
             onPaste={(e) => {
               const files = [...e.clipboardData.items]
                 .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
@@ -1037,9 +1116,30 @@ export function Dispatch({ active }: { active: boolean }) {
               })();
             }}
             onKeyDown={(e) => {
+              const ta = e.target as HTMLTextAreaElement;
+              const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+              // 选中文字按 ` 直接包成行内代码;无选区时不接管,保持原生输入(否则打断正常打字)
+              if (e.key === '`' && sel && !e.metaKey && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                applyEdit(wrapInline(ta.value, ta.selectionStart, ta.selectionEnd));
+                return;
+              }
+              // ⌘E 包裹行内代码 / ⌘⇧E 插入代码块骨架并把光标放进正文
+              if (e.metaKey && (e.key === 'e' || e.key === 'E')) {
+                e.preventDefault();
+                const edit = e.shiftKey ? insertFence : wrapInline;
+                applyEdit(edit(ta.value, ta.selectionStart, ta.selectionEnd));
+                return;
+              }
               // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
               // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
               if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
+                // 光标在代码块里:Enter 让位给换行(正在写代码的人不是想发送),
+                // 交给原生行为并在下一帧同步高亮与提示
+                if (isInFence(ta.value, ta.selectionStart)) {
+                  requestAnimationFrame(growTa);
+                  return;
+                }
                 e.preventDefault();
                 void submit();
               }
@@ -1073,6 +1173,7 @@ export function Dispatch({ active }: { active: boolean }) {
               growTa();
             }}
           />
+          </div>
           {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
           <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
@@ -1090,7 +1191,8 @@ export function Dispatch({ active }: { active: boolean }) {
             >
               <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
             </button>
-            <span className="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
+            <span className="hint" ref={hintRef}>{HINT_DEFAULT}</span>
+            <span className="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
             )}
