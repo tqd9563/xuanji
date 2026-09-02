@@ -1058,7 +1058,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
    形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到
    底部导航条后面看不清,根因正是这里,而非某个具体尺寸算错)。 */
-.chat { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+/* position:relative —— 轮次导航按 offsetTop 量当前轮,offsetParent 必须是这个滚动容器本身 */
+.chat { position: relative; flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .chat-msg.user .who { color: var(--jade); }
@@ -2095,4 +2096,86 @@ body.wall-on .statusbar.scrolled {
   .rb-row { flex-wrap: wrap; row-gap: 4px; }
   .rb-params { margin-left: 0; }
   .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
+}
+
+/* ============ 轮次导航(吸顶轮次头 + ⌘⇧O 轮次目录) ============ */
+/* 与 .find-anchor 同一套 sticky + 高度 0 的锚法;top 负值抵掉 .chat 的上内边距,
+   负 margin 抵掉左右内边距,让这条带子与容器边缘齐平。 */
+.turn-anchor { position: sticky; top: -20px; height: 0; z-index: var(--z-sticky); margin: 0 -28px; }
+.turnhead {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px 7px 20px;
+  /* 不透明底色:壁纸开启后 body 转透明,任何混进 transparent 的底色都会把壁纸漏到小字背后 */
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+  box-shadow: 0 6px 18px oklch(0.03 0 0 / 0.35);
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+}
+.turnhead.show { opacity: 1; transform: none; pointer-events: auto; }
+.turnhead .th-n {
+  flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.turnhead .th-who { flex: none; font-size: 0.6875rem; font-weight: 600; color: var(--jade); }
+/* flex:1 1 0 让它退出分行决策,长提问由省略号收口而不是把右侧导航挤下去 */
+.turnhead .th-text {
+  flex: 1 1 0; min-width: 0; font-size: 0.75rem; color: var(--ink); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;
+  background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
+  transition: color 150ms var(--ease);
+}
+.turnhead .th-text:hover { color: var(--jade); }
+.turnhead .th-nav { display: flex; align-items: center; gap: 2px; flex: none; }
+.turnhead .th-pos {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--faint);
+  font-variant-numeric: tabular-nums; margin-right: 4px;
+}
+.turnhead .th-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px;
+  border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 0.75rem;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.turnhead .th-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.turnhead .th-btn:disabled { opacity: 0.35; cursor: default; }
+.turnhead .th-sep { width: 1px; height: 14px; background: var(--line); margin: 0 4px; }
+
+/* 跳转落点:目标气泡描一圈玉环再淡出,与弹窗选中环同一套词汇 */
+.chat-msg.user .body { outline: 2px solid transparent; outline-offset: 3px; transition: outline-color 900ms var(--ease); }
+.chat-msg.user.flash .body { outline-color: var(--jade); transition: none; }
+
+/* 轮次目录弹窗:复用 .rp-box / .wd-search / .rp-list / .rp-item,只补行内三列 */
+.to-box { width: min(640px, calc(100vw - 48px)); }
+.to-box .rp-list { max-height: 400px; }
+.to-box .rp-item { gap: 12px; padding: 8px 12px; }
+.to-box .rp-item:hover { background: var(--hover); }
+.to-box .rp-item.sel:hover { background: transparent; }
+.to-n { flex: none; width: 2.6em; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.to-text { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.to-time { flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.to-cur { flex: none; font-size: 0.6875rem; color: var(--jade); }
+/* 未装载轮次:降为 muted 并挂中性标签——它在索引里但还没有节点,选中时先回填 */
+.rp-item.unloaded .to-text { color: var(--muted); font-weight: 400; }
+.to-tag { flex: none; font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; line-height: 1.5; }
+.to-foot {
+  display: flex; align-items: center; gap: 10px; padding: 8px 18px 10px;
+  border-top: 1px solid var(--line-soft); font-size: 0.6875rem; color: var(--faint);
+}
+.to-foot .spacer { flex: 1; }
+.to-foot kbd { font-family: var(--mono); font-size: 0.625rem; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); }
+
+/* 玻璃档把 --surface-2 重定义成半透明,吸顶带会被掏空 —— 正文从它底下滚过去时
+   两层字叠在一起没法读(2026-09-02 实测截图为证)。与 .dd-menu 同理:凡是「内容
+   从下面经过」的浮层都不跟随玻璃档,固定用 surface-2 的不透明基色。 */
+body.wall-glass .turnhead { background: oklch(0.165 0.007 120); }
+
+@media (max-width: 720px) {
+  .turn-anchor { margin: 0 -16px; }
+  .turnhead { padding-left: 14px; gap: 8px; }
+  .turnhead .th-who { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turnhead, .turnhead .th-text, .turnhead .th-btn, .chat-msg.user .body { transition: none; }
 }

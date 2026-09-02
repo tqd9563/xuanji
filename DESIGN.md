@@ -233,6 +233,34 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.display}"
     padding: "3px 9px"
+  turn-head:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.ink}"
+    height: "36px"
+    padding: "7px 12px 7px 20px"
+  turn-head-index:
+    textColor: "{colors.jade}"
+    typography: "{typography.data}"
+  turn-head-btn:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.chip}"
+    width: "24px"
+    height: "22px"
+  turn-head-btn-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  turn-outline:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "min(640px, calc(100vw - 48px))"
+  turn-outline-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sm}"
+    padding: "8px 12px"
+  turn-outline-item-unloaded:
+    textColor: "{colors.muted}"
 ---
 
 # Design System: 璇玑 xuanji
@@ -466,6 +494,15 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 状态灯(`.rb-dot`)沿用全局状态词汇、不新造:faint=未启动、琥珀脉动=执行中、玉=就绪/完成、muted=已退出、红=失败或拦截。每个可执行项在按钮下方**常驻插值后的完整命令**(mono faint,参数段染蓝标出「这段是你填的」)——用户点的是一条命令而不是一个黑盒按钮,这与「数据可信优先:数字必须带口径」是同一条原则的两种形态。参数按类型渲染成日期选择器/下拉/勾选框,改动实时重算上方命令行。
 
 两类「不可点」必须一眼可分,故走两个正交通道:依赖未就绪是**整行降透明 + 按钮禁用**(`.dep-wait`,语义是「还不能」,上游就绪后自动解除);命中防自斩黑名单是**红点 + 红底原因条**(`.rb-blocked`,语义是「永远不能」,并写清请改在终端手动执行)。拦截在渲染时就判定完毕,不等用户点了才报错。会话生成(未经模板入库)的项挂紫色 `.rb-origin` 标,首次执行弹完整命令确认层(复用 `.confirm-mask`),同会话内二次执行免确认。
+
+### 轮次导航(Signature Component · `.turnhead` + 轮次目录)
+长会话往回翻某一轮的两个入口,共用同一份「轮次索引」(会话里所有用户输入的序号 / 首行 / 时间)。
+
+**吸顶轮次头**(`.turnhead`)贴在消息区顶缘,只在**当前轮的提问已整条滚出视口**时淡入——提问还看得见时它是冗余的,常驻等于在每屏顶部收一道税。一行内是「#序号 · 你 · 提问首行(单行省略,可点回跳)· 位置计数 · 上/下轮 · 目录」。它与全局状态栏是两种家具:状态栏属于外壳、跨视图常驻;轮次头属于当前会话、随滚动出现,故不共用样式,但沿用同一套「静止不喧哗」的性格。底色取**不透明** `surface-2`,不往 transparent 里混——壁纸开启后 body 转透明,任何混进 transparent 的底色都会把壁纸漏到小字背后(已两次实测踩到)。
+
+**轮次目录**(⌘⇧O)复用命令弹窗那套骨架(`.rp-box` / `.wd-search` / `.rp-list` / `.rp-item`),不新造一套弹窗词汇:行 = 序号(mono faint)+ 提问首行 + 「当前」标 + 时间。打开时选中项**落在当前轮**,所以第一下 ↑ 天然就是「上一轮」;选中态仍是玉色描边环,与 `/wd`、`/resume` 完全一致。它与 ⌘F 分工明确:⌘F 找**词**,轮次目录找**轮**——前者要求你记得关键词,后者只要求你记得问过什么。
+
+**跳转的落点必须被看见**:目标气泡描一圈玉环再淡出(1.4s),否则滚动结束后用户要重新在满屏文字里找自己要的那条。超出 `CHAT_SEED_LIMIT` 尚未装载的轮次在目录里标「未加载」并降为 muted 字,选中后先插骨架占位、再换成真实消息,并按高度差回补 `scrollTop` 保证视口不跳。`⌥↑`/`⌥↓` 是不开弹窗的相邻轮跳转;用 ⌥ 而非裸方向键,是因为输入框里的 `↑↓` 已经是历史回溯,同一个键不能有两种含义。
 
 ## 6. Do's and Don'ts
 
