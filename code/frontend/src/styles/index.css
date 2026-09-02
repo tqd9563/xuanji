@@ -731,6 +731,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .replay-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .replay-msg .who.u { color: var(--jade); }
 .replay-msg .body { font-size: 0.8125rem; color: var(--ink); max-width: 68ch; text-wrap: pretty; }
+/* 用户消息是纯文本(assistant 走 .md 由 markdown 排版),保留原始换行 */
+.replay-msg .body:not(.md) { white-space: pre-wrap; }
 .toolcard {
   border: 1px solid var(--line-soft); border-radius: var(--r-s);
   background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch;
@@ -1069,6 +1071,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .chat-msg.user .body {
   background: var(--tint-jade); border-radius: var(--r-m);
   padding: 10px 14px; display: inline-block; max-width: 72%;
+  /* pre-wrap:用户输入的多行文本原样换行(复制出来也保留换行),而非被折叠成一行 */
+  white-space: pre-wrap;
 }
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s infinite; }
