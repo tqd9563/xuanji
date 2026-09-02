@@ -1,9 +1,10 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
+import { Fragment, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { cn, fullTime, msgClock, prCardText, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
+import { fenceBody, parse } from '@/lib/composer-code';
 
 // ---------- Markdown 渲染(统一出口) ----------
 
@@ -118,7 +119,7 @@ const ICON_CHECK = (
  *  外面必须包一层定位壳:pre 自身横向滚动,按钮直接挂 pre 上会随内容一起滚出可视区。
  *  取文本走 ref 读 DOM 的 textContent,而不是从 children 里拼 —— children 是
  *  react-markdown 的节点树,拼出来的字符串未必等于用户实际看到的代码。 */
-function CodeBlock({ children }: { children?: ReactNode }) {
+export function CodeBlock({ children }: { children?: ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -204,6 +205,49 @@ function remarkTrimAutolink() {
     };
     walk(tree);
   };
+}
+
+/**
+ * 用户自己发的消息:只渲染代码语法(行内 `x` 与 ``` 代码块),其余一律原样。
+ *
+ * 刻意不走完整 markdown —— 用户 prompt 里的路径、`#`、`*`、`_` 是字面内容,
+ * 被解析成标题/斜体只会毁掉原文;而代码块是用户在输入框里明确写下的结构(输入框
+ * 已经给它上了高亮),发出去必须还是代码块,不能退回成一串生 ```。
+ * 切片口径与输入框高亮共用 lib/composer-code 的 parse(),两边永远一致。
+ *
+ * 换行由容器的 white-space: pre-wrap 保留(用户消息「多行不折叠」的既有行为),
+ * 故相邻普通块之间要补回 '\n';代码块是块级元素,与相邻块之间不补,否则多出空行。
+ */
+export function UserText({ text }: { text: string }) {
+  const blocks = parse(text);
+  return (
+    <>
+      {blocks.map((b, i) => {
+        const prev = blocks[i - 1];
+        const sep = i > 0 && prev?.type === 'plain' && b.type === 'plain' ? '\n' : '';
+        if (b.type === 'fence') {
+          // 未闭合的围栏照样按代码块渲染,所见即所得
+          return (
+            <CodeBlock key={i}>
+              <code>{fenceBody(b)}</code>
+            </CodeBlock>
+          );
+        }
+        return (
+          <Fragment key={i}>
+            {sep}
+            {b.segs.map((sg, j) =>
+              sg.cls === 'tk-inline' ? (
+                <code key={j}>{sg.text.slice(1, -1)}</code>
+              ) : (
+                <Fragment key={j}>{sg.text}</Fragment>
+              ),
+            )}
+          </Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 /** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 尾巴修剪 + 外链新窗口打开 */

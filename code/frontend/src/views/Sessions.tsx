@@ -17,7 +17,7 @@ import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
-import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard } from '@/components/shared';
+import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -1040,7 +1040,7 @@ export function Sessions({
                     <Md>{ev.text}</Md>
                   </div>
                 ) : (
-                  <div className="body">{ev.text}</div>
+                  <div className="body md"><UserText text={ev.text} /></div>
                 )}
               </div>
             </Fragment>
