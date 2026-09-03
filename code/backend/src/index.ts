@@ -9,10 +9,17 @@ import { createApi } from './api/routes.js';
 import { attachWs } from './ws.js';
 import { Storage } from './storage/db.js';
 import { SchedulerService } from './services/scheduler.js';
+import { setNotifyGate } from './adapters/notify.js';
+import { readPrefs } from './services/prefs.js';
 import { refreshSkillUsage } from './services/skill-usage.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
+// 通知按「设置 › 通知」过滤:范围与事件取与,两者都开才发
+setNotifyGate((scope, kind) => {
+  const { notify } = readPrefs(storage);
+  return notify[scope] && notify[kind];
+});
 scheduler.init(); // 重启不丢任务:重新加载全部 pending/blocked 任务并注册 croner 触发器
 
 // 技能触发索引预热:冷库首扫要读近百万行 jsonl(实测 ~5s),放后台跑,

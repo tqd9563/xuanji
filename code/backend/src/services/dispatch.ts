@@ -369,6 +369,8 @@ export class DispatchSession {
               this.backgroundTasks.length > 0
                 ? `回合完成,${this.backgroundTasks.length} 个后台任务仍在执行`
                 : '回合完成,等待你的下一步指示',
+              'dispatched',
+              'turnEnd',
             );
             break;
           }
@@ -497,7 +499,12 @@ export class DispatchSession {
       }));
       this.emit({ ev: 'status', state: 'awaiting-permission', detail: '回答 Claude 的提问' });
       this.emit({ ev: 'question', requestId, questions });
-      notifyMac(this.name, `Claude 有问题问你:${questions[0]?.question.slice(0, 40) ?? ''}`);
+      notifyMac(
+        this.name,
+        `Claude 有问题问你:${questions[0]?.question.slice(0, 40) ?? ''}`,
+        'dispatched',
+        'blocked',
+      );
       return new Promise<PermissionResult>((resolve) => {
         this.pending.set(requestId, { resolve, toolName, input });
       });
@@ -511,7 +518,7 @@ export class DispatchSession {
       input: compact(input),
       hasSuggestions: !!suggestions?.length,
     });
-    notifyMac(this.name, `等待审批:${toolName}`);
+    notifyMac(this.name, `等待审批:${toolName}`, 'dispatched', 'blocked');
     return new Promise<PermissionResult>((resolve) => {
       this.pending.set(requestId, { resolve, toolName, input, suggestions });
     });

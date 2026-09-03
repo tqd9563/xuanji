@@ -71,3 +71,33 @@ describe('账户偏好', () => {
     expect(writePrefs(st, { effort: '' }).effort).toBe('');
   });
 });
+
+describe('通知过滤', () => {
+  it('范围与事件取与:任一关闭就不发', async () => {
+    const { notifyMac, setNotifyGate } = await import('../src/adapters/notify.js');
+    const seen: [string, string][] = [];
+    // gate 记录判定入参,不真的发通知(非 darwin 上 notifyMac 本就直接返回)
+    setNotifyGate((scope, kind) => {
+      seen.push([scope, kind]);
+      return false;
+    });
+    notifyMac('t', 'b', 'dispatched', 'turnEnd');
+    // 非 macOS 上 notifyMac 在 gate 之前就返回,故只在 darwin 断言调用
+    if (process.platform === 'darwin') expect(seen).toEqual([['dispatched', 'turnEnd']]);
+    setNotifyGate(() => true);
+  });
+
+  it('默认偏好下:派发的回合结束会发,终端会话不发', () => {
+    const g = (scope: 'dispatched' | 'scheduled' | 'terminal', kind: 'blocked' | 'turnEnd' | 'error') =>
+      DEFAULT_PREFS.notify[scope] && DEFAULT_PREFS.notify[kind];
+    expect(g('dispatched', 'turnEnd')).toBe(true);
+    expect(g('scheduled', 'error')).toBe(true);
+    expect(g('terminal', 'blocked')).toBe(false);
+  });
+
+  it('关掉「回合结束」后派发会话的回合结束不再发,但审批仍发', () => {
+    const notify = { ...DEFAULT_PREFS.notify, turnEnd: false };
+    expect(notify.dispatched && notify.turnEnd).toBe(false);
+    expect(notify.dispatched && notify.blocked).toBe(true);
+  });
+});

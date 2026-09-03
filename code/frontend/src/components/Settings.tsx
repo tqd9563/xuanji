@@ -59,7 +59,7 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
     label: '通知',
     icon: 'M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0',
     title: '通知',
-    desc: '范围与事件分别控制;手机端走同一套',
+    desc: '范围与事件取与——两者都开才会通知',
   },
   { id: 'adv', label: '高级', icon: 'M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4', title: '高级', desc: '不常动的东西' },
 ];
@@ -473,11 +473,15 @@ export function Settings({
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, scheduled: v } })}
           />
         </Row>
-        <Row label="终端里的交互会话" desc="默认关;你在终端前,不需要网页再提醒一次" scope="acct">
-          <Switch
-            on={prefs.notify.terminal}
-            onChange={(v) => void patchAccount({ notify: { ...prefs.notify, terminal: v } })}
-          />
+        {/* 后端目前只对派发会话与定时任务发通知,终端会话没有产生通知的路径。
+            开关照实置灰:一个打开后什么也不会发生的开关,比没有这个开关更糟。 */}
+        <Row
+          label="终端里的交互会话"
+          desc="后端暂不向终端会话发通知,此项待后续接入"
+          scope="acct"
+          off
+        >
+          <Switch on={prefs.notify.terminal} onChange={() => {}} />
         </Row>
         <Group>事件</Group>
         <Row label="需要审批 / blocked" scope="acct">
