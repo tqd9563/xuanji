@@ -2,8 +2,9 @@
  * 壁纸设置字段组:现在只作为「设置 › 外观」分区的一部分出现,不再自带侧栏入口与弹层。
  * 参数含义与默认值见 DESIGN.md「外观 · 壁纸」——默认 40/0/30/0 是用户实测确认的舒适档。
  */
-import { useRef, type ReactNode } from 'react';
+import { useRef } from 'react';
 import { toast } from '@/components/shared';
+import { SettingsRow } from '@/components/Settings';
 import { saveLocalImage, WALL_PRESETS, type WallMode, type WallState } from '@/lib/wallpaper';
 
 const MODES: { m: WallMode; label: string }[] = [
@@ -12,26 +13,29 @@ const MODES: { m: WallMode; label: string }[] = [
   { m: 'glass', label: '玻璃' },
 ];
 
-/** 由 Settings 传进来的行容器,保证壁纸各项与其它设置项共用同一套行布局与存储范围标记 */
-type RowComp = (props: {
-  label: string;
-  desc?: string;
-  scope: 'local' | 'acct';
-  children: ReactNode;
-  show?: boolean;
-  off?: boolean;
-}) => ReactNode;
-
 export function WallpaperFields({
   wall,
   patch,
-  Row,
+  hit,
 }: {
   wall: WallState;
   patch: (p: Partial<WallState>) => void;
-  Row: RowComp;
+  /** 当前搜索词的命中判定,与其它设置项共用同一套行布局与存储范围标记 */
+  hit: (...text: (string | undefined)[]) => boolean;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
+
+  const offAll = wall.mode === 'off';
+  const offGlass = wall.mode !== 'glass';
+
+  /**
+   * 选图时若壁纸是关的,顺手开到「壁纸」档。
+   *
+   * 挑图这个动作本身就表达了「我想用壁纸」,要求先盲开再挑是把顺序颠倒了;
+   * 旧的壁纸弹层在关闭档禁用整个图片行,表现为「点了本地没反应」(2026-09-03 用户实测报缺陷)。
+   * 参数滑杆仍然禁用——壁纸关着时它们确实没有可调的对象。
+   */
+  const pickSrc = (p: Partial<WallState>) => patch(offAll ? { ...p, mode: 'wall' } : p);
 
   const onPickFile = (f: File | undefined) => {
     if (!f) return;
@@ -39,18 +43,15 @@ export function WallpaperFields({
     if (wall.custom.startsWith('blob:')) URL.revokeObjectURL(wall.custom);
     saveLocalImage(f)
       .then(({ url, persistent }) => {
-        patch({ custom: url, src: 'custom' });
+        pickSrc({ custom: url, src: 'custom' });
         if (!persistent) toast('浏览器不支持本地持久化,图片仅本次会话生效');
       })
       .catch(() => toast('图片读取失败'));
   };
 
-  const offAll = wall.mode === 'off';
-  const offGlass = wall.mode !== 'glass';
-
   return (
     <>
-      <Row
+      <SettingsRow hit={hit}
         label="模式"
         desc="玻璃 = 面板半透明 + 毛玻璃;所有浮层在玻璃档下保持不透明"
         scope="local"
@@ -67,9 +68,17 @@ export function WallpaperFields({
             </button>
           ))}
         </div>
-      </Row>
+      </SettingsRow>
 
-      <Row label="图片" desc="本地图片存浏览器 IndexedDB,不写 ~/.claude" scope="local" off={offAll}>
+      <SettingsRow hit={hit}
+        label="图片"
+        desc={
+          offAll
+            ? '本地图片存浏览器 IndexedDB,不写 ~/.claude;壁纸关闭时选图会自动开启'
+            : '本地图片存浏览器 IndexedDB,不写 ~/.claude'
+        }
+        scope="local"
+      >
         <div className="stg-thumbs">
           {WALL_PRESETS.map((p) => (
             <button
@@ -78,7 +87,7 @@ export function WallpaperFields({
               style={{ backgroundImage: `url('${p.url}')` }}
               title={p.name}
               aria-label={`预设壁纸:${p.name}`}
-              onClick={() => patch({ src: `preset:${p.id}` })}
+              onClick={() => pickSrc({ src: `preset:${p.id}` })}
             />
           ))}
         </div>
@@ -105,24 +114,24 @@ export function WallpaperFields({
             if (e.key !== 'Enter') return;
             const v = e.currentTarget.value.trim();
             if (!v) return;
-            patch({ src: v });
+            pickSrc({ src: v });
             toast('已应用 URL 壁纸');
           }}
         />
-      </Row>
+      </SettingsRow>
 
-      <Row label="不透明度" scope="local" off={offAll}>
+      <SettingsRow hit={hit} label="不透明度" scope="local" off={offAll}>
         <Slider min={5} max={50} value={wall.opacity} unit="%" onChange={(v) => patch({ opacity: v })} />
-      </Row>
-      <Row label="模糊" scope="local" off={offAll}>
+      </SettingsRow>
+      <SettingsRow hit={hit} label="模糊" scope="local" off={offAll}>
         <Slider min={0} max={24} value={wall.blur} unit="px" onChange={(v) => patch({ blur: v })} />
-      </Row>
-      <Row label="表面" desc="面板底色不透明度,仅玻璃档" scope="local" off={offGlass}>
+      </SettingsRow>
+      <SettingsRow hit={hit} label="表面" desc="面板底色不透明度,仅玻璃档" scope="local" off={offGlass}>
         <Slider min={25} max={95} value={wall.surface} unit="%" onChange={(v) => patch({ surface: v })} />
-      </Row>
-      <Row label="磨砂" desc="面板毛玻璃模糊强度,仅玻璃档" scope="local" off={offGlass}>
+      </SettingsRow>
+      <SettingsRow hit={hit} label="磨砂" desc="面板毛玻璃模糊强度,仅玻璃档" scope="local" off={offGlass}>
         <Slider min={0} max={24} value={wall.frost} unit="px" onChange={(v) => patch({ frost: v })} />
-      </Row>
+      </SettingsRow>
     </>
   );
 }

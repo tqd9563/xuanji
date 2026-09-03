@@ -32,6 +32,89 @@ import { cn } from '@/lib/utils';
 
 type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'adv';
 
+/**
+ * 这四个组件必须定义在 Settings 之外。
+ *
+ * 定义在组件内部时,每次渲染都是新的函数引用,React 会当成不同的组件类型,
+ * 把整棵子树卸载重建——搜索框每敲一个字,所有行的 DOM 全被换掉。
+ * 后果不只是性能:壁纸那一行藏着 `input[type=file]`,重建会把已经打开的
+ * 系统文件选择器一并关掉(2026-09-03 实测行确实被重建)。
+ */
+interface RowProps {
+  label: string;
+  desc?: string;
+  scope: 'local' | 'acct';
+  children: React.ReactNode;
+  off?: boolean;
+  /** 当前搜索词的命中判定;不命中即整行不渲染 */
+  hit: (...text: (string | undefined)[]) => boolean;
+}
+
+/** 一行设置。scope 决定行尾那枚标记,是这个组件的语义核心 */
+export function SettingsRow({ label, desc, scope, children, off, hit }: RowProps) {
+  if (!hit(label, desc)) return null;
+  return (
+    <div className={cn('stg-row', off && 'is-off')}>
+      <div className="stg-lab">
+        <span>{label}</span>
+        {desc && <small>{desc}</small>}
+      </div>
+      <div className="stg-ctl">{children}</div>
+      <span className="stg-scope" data-scope={scope}>
+        {scope === 'local' ? '本机' : '账户'}
+      </span>
+    </div>
+  );
+}
+
+/** 分组小标题。搜索态下所有分区摊平,分组标题失去意义,故隐去 */
+function SettingsGroup({ children, show }: { children: string; show: boolean }) {
+  return show ? <div className="stg-group">{children}</div> : null;
+}
+
+function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <span
+      className={cn('switch', on && 'on')}
+      role="switch"
+      aria-checked={on}
+      tabIndex={0}
+      onClick={() => onChange(!on)}
+      onKeyDown={(e) => {
+        if (e.key === ' ' || e.key === 'Enter') {
+          e.preventDefault();
+          onChange(!on);
+        }
+      }}
+    />
+  );
+}
+
+function Tabs<T extends string>({
+  value,
+  options,
+  onChange,
+}: {
+  value: T;
+  options: { v: T; label: string }[];
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="filter-tabs" role="group">
+      {options.map((o) => (
+        <button
+          key={o.v}
+          className={value === o.v ? 'active' : ''}
+          onClick={() => onChange(o.v)}
+          aria-pressed={value === o.v}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: string }[] = [
   {
     id: 'dispatch',
@@ -171,79 +254,6 @@ export function Settings({
     toast(`「${SECTIONS.find((x) => x.id === id)!.title}」已恢复默认`);
   };
 
-  /** 一行设置。scope 决定行尾那枚标记,是这个组件的语义核心 */
-  const Row = ({
-    label,
-    desc,
-    scope,
-    children,
-    show = true,
-    off,
-  }: {
-    label: string;
-    desc?: string;
-    scope: 'local' | 'acct';
-    children: React.ReactNode;
-    show?: boolean;
-    off?: boolean;
-  }) => {
-    if (!show || !hit(label, desc)) return null;
-    return (
-      <div className={cn('stg-row', off && 'is-off')}>
-        <div className="stg-lab">
-          <span>{label}</span>
-          {desc && <small>{desc}</small>}
-        </div>
-        <div className="stg-ctl">{children}</div>
-        <span className="stg-scope" data-scope={scope}>
-          {scope === 'local' ? '本机' : '账户'}
-        </span>
-      </div>
-    );
-  };
-
-  const Switch = ({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) => (
-    <span
-      className={cn('switch', on && 'on')}
-      role="switch"
-      aria-checked={on}
-      tabIndex={0}
-      onClick={() => onChange(!on)}
-      onKeyDown={(e) => {
-        if (e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          onChange(!on);
-        }
-      }}
-    />
-  );
-
-  const Tabs = <T extends string>({
-    value,
-    options,
-    onChange,
-  }: {
-    value: T;
-    options: { v: T; label: string }[];
-    onChange: (v: T) => void;
-  }) => (
-    <div className="filter-tabs" role="group">
-      {options.map((o) => (
-        <button
-          key={o.v}
-          className={value === o.v ? 'active' : ''}
-          onClick={() => onChange(o.v)}
-          aria-pressed={value === o.v}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
-  );
-
-  const Group = ({ children, show = true }: { children: string; show?: boolean }) =>
-    !searching && show ? <div className="stg-group">{children}</div> : null;
-
   const SecHead = ({ id }: { id: SecId }) => {
     const s = SECTIONS.find((x) => x.id === id)!;
     return (
@@ -325,7 +335,7 @@ export function Settings({
     <>
       <section className="stg-sec" hidden={!secShown('dispatch')}>
         {!searching && <SecHead id="dispatch" />}
-        <Row
+        <SettingsRow hit={hit}
           label="默认模型"
           desc="现在是「上次用过的」,这里改成固定值后不再随上次漂移"
           scope="acct"
@@ -338,8 +348,8 @@ export function Settings({
             labelOf={(v) => v || '沿用上次用过的'}
             onChange={(v) => void patchAccount({ model: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow hit={hit}
           label="默认思考深度"
           desc="自动 = 按模型取默认(opus-5 → low,其余交给模型自身)"
           scope="acct"
@@ -353,8 +363,8 @@ export function Settings({
             labelOf={(v) => v || '(自动)'}
             onChange={(v) => void patchAccount({ effort: v })}
           />
-        </Row>
-        <Row label="默认权限模式" desc="后台派发(--bg)固定为 default,不受此项影响" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="默认权限模式" desc="后台派发(--bg)固定为 default,不受此项影响" scope="acct">
           <DropUp
             down
             className="dim"
@@ -364,8 +374,8 @@ export function Settings({
             labelOf={(v) => PERM_LABEL[v] ?? v}
             onChange={(v) => void patchAccount({ perm: v })}
           />
-        </Row>
-        <Row
+        </SettingsRow>
+        <SettingsRow hit={hit}
           label="默认工作目录"
           desc="候选来自 ~/.claude/projects;不设则用最近一次派发的目录"
           scope="acct"
@@ -378,12 +388,12 @@ export function Settings({
             labelOf={(v) => v || '最近一次派发的目录'}
             onChange={(v) => void patchAccount({ cwd: v })}
           />
-        </Row>
-        <Row label="默认转后台(--bg)" desc="开启后新会话默认勾选「转后台」" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="默认转后台(--bg)" desc="开启后新会话默认勾选「转后台」" scope="acct">
           <Switch on={prefs.bg} onChange={(v) => void patchAccount({ bg: v })} />
-        </Row>
-        <Group>输入框</Group>
-        <Row
+        </SettingsRow>
+        <SettingsGroup show={!searching}>输入框</SettingsGroup>
+        <SettingsRow hit={hit}
           label="发送键"
           desc="IME 候选中的回车不会触发发送;Ctrl+⏎ 始终等同 ⌘⏎"
           scope="local"
@@ -396,8 +406,8 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ sendKey: v })}
           />
-        </Row>
-        <Row label="任务总结触发语" desc="输入 /wrapup 时实际发给会话的话" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="任务总结触发语" desc="输入 /wrapup 时实际发给会话的话" scope="acct">
           <input
             className="input"
             type="text"
@@ -409,15 +419,15 @@ export function Settings({
               else e.target.value = prefs.wrapupPrompt;
             }}
           />
-        </Row>
+        </SettingsRow>
       </section>
 
       <section className="stg-sec" hidden={!secShown('look')}>
         {!searching && <SecHead id="look" />}
-        <Group>壁纸</Group>
-        <WallpaperFields wall={wall} patch={patchWall} Row={Row} />
-        <Group>阅读</Group>
-        <Row label="正文字号" scope="local">
+        <SettingsGroup show={!searching}>壁纸</SettingsGroup>
+        <WallpaperFields wall={wall} patch={patchWall} hit={hit} />
+        <SettingsGroup show={!searching}>阅读</SettingsGroup>
+        <SettingsRow hit={hit} label="正文字号" scope="local">
           <Tabs
             value={local.fontScale}
             options={[
@@ -427,11 +437,11 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ fontScale: v })}
           />
-        </Row>
-        <Row label="吸顶轮次头" desc="提问滚出视口后在顶部显示当前轮" scope="local">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="吸顶轮次头" desc="提问滚出视口后在顶部显示当前轮" scope="local">
           <Switch on={local.turnHead} onChange={(v) => patchLocal({ turnHead: v })} />
-        </Row>
-        <Row label="减少动效" desc="默认跟随系统 prefers-reduced-motion" scope="local">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="减少动效" desc="默认跟随系统 prefers-reduced-motion" scope="local">
           <Tabs
             value={local.reduceMotion}
             options={[
@@ -441,7 +451,7 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ reduceMotion: v })}
           />
-        </Row>
+        </SettingsRow>
       </section>
 
       <section className="stg-sec" hidden={!secShown('keys')}>
@@ -449,7 +459,7 @@ export function Settings({
         {keysTable.map(({ g, rows }) =>
           rows.length ? (
             <div key={g}>
-              <Group>{g}</Group>
+              <SettingsGroup show={!searching}>{g}</SettingsGroup>
               <table className="stg-keys">
                 <tbody>{rows}</tbody>
               </table>
@@ -460,53 +470,53 @@ export function Settings({
 
       <section className="stg-sec" hidden={!secShown('notify')}>
         {!searching && <SecHead id="notify" />}
-        <Group>范围</Group>
-        <Row label="璇玑派发的会话" scope="acct">
+        <SettingsGroup show={!searching}>范围</SettingsGroup>
+        <SettingsRow hit={hit} label="璇玑派发的会话" scope="acct">
           <Switch
             on={prefs.notify.dispatched}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, dispatched: v } })}
           />
-        </Row>
-        <Row label="定时任务" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="定时任务" scope="acct">
           <Switch
             on={prefs.notify.scheduled}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, scheduled: v } })}
           />
-        </Row>
+        </SettingsRow>
         {/* 后端目前只对派发会话与定时任务发通知,终端会话没有产生通知的路径。
             开关照实置灰:一个打开后什么也不会发生的开关,比没有这个开关更糟。 */}
-        <Row
+        <SettingsRow hit={hit}
           label="终端里的交互会话"
           desc="后端暂不向终端会话发通知,此项待后续接入"
           scope="acct"
           off
         >
           <Switch on={prefs.notify.terminal} onChange={() => {}} />
-        </Row>
-        <Group>事件</Group>
-        <Row label="需要审批 / blocked" scope="acct">
+        </SettingsRow>
+        <SettingsGroup show={!searching}>事件</SettingsGroup>
+        <SettingsRow hit={hit} label="需要审批 / blocked" scope="acct">
           <Switch
             on={prefs.notify.blocked}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, blocked: v } })}
           />
-        </Row>
-        <Row label="回合结束" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="回合结束" scope="acct">
           <Switch
             on={prefs.notify.turnEnd}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, turnEnd: v } })}
           />
-        </Row>
-        <Row label="出错退出" scope="acct">
+        </SettingsRow>
+        <SettingsRow hit={hit} label="出错退出" scope="acct">
           <Switch
             on={prefs.notify.error}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, error: v } })}
           />
-        </Row>
+        </SettingsRow>
       </section>
 
       <section className="stg-sec" hidden={!secShown('adv')}>
         {!searching && <SecHead id="adv" />}
-        <Row
+        <SettingsRow hit={hit}
           label="清空本机偏好"
           desc="外观、快捷键、发送键回到默认;账户偏好与壁纸图片不受影响"
           scope="local"
@@ -521,7 +531,7 @@ export function Settings({
           >
             清空…
           </button>
-        </Row>
+        </SettingsRow>
         {!searching && (
           <div className="stg-storage">
             本机偏好存 <code>localStorage</code> 的 <code>xuanji.prefs</code>,壁纸另存{' '}
