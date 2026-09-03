@@ -2258,19 +2258,24 @@ body.wall-glass .turnhead { background: oklch(0.165 0.007 120); }
 
 /* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
 .drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }
-.modal.stg-modal { width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+/* 两栏几何收在变量里:头部要按同一组数对齐,硬编码两处迟早对不上 */
+.modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
+  width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
 /* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
 body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
 
-.stg-head { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line-soft); flex: none; }
-.stg-head h2 { font-size: 0.9375rem; flex: none; }
+.stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
+/* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
+   「设置」二字也因此与下方分区导航的文字左缘对齐(两者都缩进 20px) */
+.stg-head h2 { font-size: 0.9375rem; flex: none;
+  width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
 .stg-search { flex: 1; min-width: 0; position: relative; }
 .stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; }
 .stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
 .stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
 
 .stg-body { flex: 1; min-height: 0; display: flex; }
-.stg-nav { flex: none; width: 148px; padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
 .stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
 .stg-nav button:hover { background: var(--hover); color: var(--ink); }
 .stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
@@ -2279,7 +2284,7 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
    完整存储位置说明在「高级」分区底部,不在这里重复 */
 .stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
 .stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
-.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px 24px 24px; }
+.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
 .stg-sec { padding-top: 18px; }
 .stg-sec[hidden] { display: none; }
 .stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
@@ -2338,6 +2343,7 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
 @media (max-width: 720px) {
   .drawer.stg-drawer, .modal.stg-modal { width: 100vw; height: 100dvh; max-height: none; top: 0; left: 0; right: 0; transform: none; border: 0; border-radius: 0; }
   .modal.stg-modal.show { transform: none; }
+  .stg-head h2 { width: auto; }
   .stg-body { flex-direction: column; }
   .stg-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 8px 12px; }
   .stg-nav button { flex: none; padding: 6px 10px; }
