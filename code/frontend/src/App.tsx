@@ -3,8 +3,10 @@ import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
 import { ConfirmHost, ToastHost, toast } from '@/components/shared';
-import { WallpaperSettings } from '@/components/WallpaperSettings';
-import { useWallpaper, wallSrcUrl } from '@/lib/wallpaper';
+import { Settings } from '@/components/Settings';
+import { useWallpaper, wallSrcUrl, wallStateLabel } from '@/lib/wallpaper';
+import { applyLocalToDom, loadAccount, useLocalPrefs } from '@/lib/prefs';
+import { formatCombo, matchKey } from '@/lib/keymap';
 import { TabBar, mobileTabOf, type MobileTab } from '@/components/TabBar';
 import { StatusBar } from '@/components/StatusBar';
 import { MoreMenu } from '@/components/MoreMenu';
@@ -46,7 +48,9 @@ export default function App() {
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
   const [wall, patchWall] = useWallpaper();
-  const [wallOpen, setWallOpen] = useState(false);
+  const { data: projectsData } = usePoll(api.projects, 60_000);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const localPrefs = useLocalPrefs();
   const wallUrl = wallSrcUrl(wall);
 
   // 移动端「更多」二级菜单开关:项目/技能/经验/回顾在窄屏归入此菜单(见 MOBILE_SECONDARY)。
@@ -97,6 +101,14 @@ export default function App() {
   // ws 变更订阅(M1 仅日志级消费:轮询已覆盖刷新;保留通道供 M2 扩展)
   useEffect(() => subscribeChanges(() => {}), []);
 
+  // 本机偏好(字号/动效/吸顶轮次头)落到 <html> 上由 CSS 接管;账户偏好拉一次给派发页用
+  useEffect(() => {
+    void loadAccount();
+  }, []);
+  useEffect(() => {
+    applyLocalToDom(localPrefs);
+  }, [localPrefs]);
+
   // 视图切走后把藏在 display:none 里的焦点收走:WebKit(Pake 壳)不像 Chrome 会自动 blur
   // 被隐藏的元素,残留焦点会让后续按键打进看不见的输入框(isTypingTarget 的可见性校验
   // 挡住了快捷键被吞,这里进一步防止字符键悄悄写进隐藏的派发草稿)。
@@ -112,13 +124,21 @@ export default function App() {
       // ⌘J 速记待办:任意视图可呼出(Chrome/Safari 上 ⌘J 空闲;Firefox 的「下载」会截走,
       // 那种情况从侧栏「待办」页顶部的速记行记录,或用 Raycast 全局热键)。
       // 注意这是页内快捷键:璇玑窗口没有焦点时不触发,真·全局捕获走 Raycast → POST /api/todos。
-      if ((e.key === 'j' || e.key === 'J') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      // 设置面板自己处理面板内按键(含改键录入),开着时全局键位一律让位
+      if (settingsOpen) return;
+      const km = localPrefs.keymap;
+      if (matchKey(e, km['global.settings'])) {
+        e.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (matchKey(e, km['global.todoCapture'])) {
         e.preventDefault();
         setTodoPalette(true);
         return;
       }
       // ⌘N 新建会话:跳派发页并放下当前会话(浏览器里 ⌘N 被"新建窗口"占用,Pake 壳可用)
-      if ((e.key === 'n' || e.key === 'N') && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      if (matchKey(e, km['global.newSession'])) {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent('xuanji:new-session'));
         nav('dispatch');
@@ -128,16 +148,20 @@ export default function App() {
       // 不拦 e.repeat 即可;输入框里也放行,这个组合键不产生字符。
       // ⌃⌥←/→ 是浏览器里的等价别名:Chrome/Safari 把 ⌥⌘←/→ 占作「切换标签页」,
       // 那是浏览器层的加速键,preventDefault 拦不住(桌面壳无标签页,主组合键照常可用)。
-      const navArrow =
+      // ⌃⌥←/→ 是浏览器里的等价别名(见上),不走 keymap:它是同一动作的平台兜底,
+      // 不是第二个可改键位,列进设置只会让人以为有两个可独立配置的组合。
+      const altAlias =
         (e.key === 'ArrowLeft' || e.key === 'ArrowRight') &&
         e.altKey &&
         !e.shiftKey &&
-        ((e.metaKey && !e.ctrlKey) || (e.ctrlKey && !e.metaKey));
-      if (navArrow) {
+        e.ctrlKey &&
+        !e.metaKey;
+      const prev = matchKey(e, km['global.prevView']) || (altAlias && e.key === 'ArrowLeft');
+      const next = matchKey(e, km['global.nextView']) || (altAlias && e.key === 'ArrowRight');
+      if (prev || next) {
         e.preventDefault();
         const cur = VIEW_IDS.indexOf(view);
-        const step = e.key === 'ArrowRight' ? 1 : -1;
-        nav(VIEW_IDS[(cur + step + VIEW_IDS.length) % VIEW_IDS.length]!);
+        nav(VIEW_IDS[(cur + (next ? 1 : -1) + VIEW_IDS.length) % VIEW_IDS.length]!);
         return;
       }
       const i = parseInt(e.key, 10);
@@ -152,7 +176,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [nav, view]);
+  }, [nav, view, settingsOpen, localPrefs.keymap]);
 
   const goSession = useCallback(
     (sessionId: string) => {
@@ -208,7 +232,19 @@ export default function App() {
           ))}
         </nav>
         <div className="side-foot">
-          <WallpaperSettings wall={wall} patch={patchWall} open={wallOpen} onToggle={setWallOpen} />
+          <button
+            className="stg-entry"
+            aria-haspopup="dialog"
+            aria-expanded={settingsOpen}
+            title={`设置 ${formatCombo(localPrefs.keymap['global.settings'])}`}
+            onClick={() => setSettingsOpen(true)}
+          >
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" />
+              <path d="M6.7 1.8h2.6l.4 1.6 1.4.8 1.6-.5 1.3 2.2-1.2 1.1v1.6l1.2 1.1-1.3 2.2-1.6-.5-1.4.8-.4 1.6H6.7l-.4-1.6-1.4-.8-1.6.5L2 11.6l1.2-1.1V8.9L2 7.8l1.3-2.2 1.6.5 1.4-.8z" />
+            </svg>
+            设置<span className="stg-entry-state">{wallStateLabel(wall)}</span>
+          </button>
           <div className="row">
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
             {health === null ? '连接后端…' : health.cli ? `${health.cli} · 就绪` : '后端可用 · CLI 不可达'}
@@ -267,7 +303,7 @@ export default function App() {
         </section>
         {/* 移动端「更多」菜单:桌面 mobileMore 恒为 false,这个 section 永远不 active */}
         <section className={cn('view', mobileMore && 'active')}>
-          {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} wall={wall} />}
+          {mobileMore && <MoreMenu onNav={(v) => { setMobileMore(false); nav(v); }} health={health} wall={wall} onOpenSettings={() => setSettingsOpen(true)} />}
         </section>
       </main>
 
@@ -284,6 +320,14 @@ export default function App() {
           }}
         />
       )}
+
+      <Settings
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
+        wall={wall}
+        patchWall={patchWall}
+      />
 
       <ToastHost />
       <ConfirmHost />

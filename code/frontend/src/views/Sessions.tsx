@@ -15,6 +15,8 @@ import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
+import { matchKey } from '@/lib/keymap';
+import { useLocalPrefs } from '@/lib/prefs';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
 import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
@@ -707,6 +709,10 @@ export function Sessions({
   }, [registerHandle, openReplay]);
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
+  /** document 级监听按 active 挂载,不因改键重挂;键位经 ref 读最新值 */
+  const keymap = useLocalPrefs().keymap;
+  const keymapRef = useRef(keymap);
+  keymapRef.current = keymap;
   const kbRef = useRef({ kbPos, navItemsOf, drawerOpen });
   kbRef.current = { kbPos, navItemsOf, drawerOpen };
   useEffect(() => {
@@ -715,8 +721,8 @@ export function Sessions({
     const cardsIn = (c: number) => kbRef.current.navItemsOf(COLS[c]!);
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || kbRef.current.drawerOpen) return;
-      // Ctrl+X 关闭当前选中会话
-      if (e.ctrlKey && (e.key === 'x' || e.key === 'X')) {
+      // 关闭当前选中会话(默认 ⌃X,可在设置里改键)
+      if (matchKey(e, keymapRef.current['sessions.close'])) {
         const pos = kbRef.current.kbPos;
         const s = pos ? cardsIn(pos.c)[pos.r] : undefined;
         if (s && !s.readonly) {

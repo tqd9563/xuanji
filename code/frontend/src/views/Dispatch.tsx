@@ -1,5 +1,7 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
+import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
+import { matchKey } from '@/lib/keymap';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
@@ -145,9 +147,13 @@ const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 const TA_MIN_H = 56;
 /** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
 const TA_PLACEHOLDER = '描述要派发的任务…';
-const HINT_DEFAULT = 'Enter 换行 · ⌘Enter 发送 · ↑↓ 历史';
-/** 光标在代码块里时的提示:Enter 语义与外面一致(换行),只是把「在代码块里」这件事说明白 */
-const HINT_FENCE = '代码块内 · Enter 换行 · ⌘Enter 发送';
+/** 输入框底栏提示:必须跟着「设置 › 派发 › 发送键」走——
+ *  提示与实际按键语义不一致,比没有提示更糟。 */
+const hintText = (sendKey: SendKey, fenced: boolean) => {
+  const keys = sendKey === 'enter' ? 'Enter 发送 · ⇧Enter 换行' : 'Enter 换行 · ⌘Enter 发送';
+  // 光标在代码块里时把「在代码块里」这件事说明白,键位语义与外面一致
+  return fenced ? `代码块内 · ${keys}` : `${keys} · ↑↓ 历史`;
+};
 
 /** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -267,7 +273,7 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
-/** ⚑ 任务总结的固定触发语。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
+/** ⚑ 任务总结的默认触发语(设置里可改,见 lib/prefs 的 wrapupPrompt)。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
  *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
 const WRAPUP_PROMPT =
   '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
@@ -300,10 +306,30 @@ export function Dispatch({ active }: { active: boolean }) {
   const isMobile = useIsMobile();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
+  const { prefs, loaded: prefsLoaded } = useAccountPrefs();
+  const localPrefs = useLocalPrefs();
   const [modelSel, setModelSel] = useState(initialModel);
   const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
+  /** 账户偏好是异步拉回来的:到货后把「尚未被本次会话改过」的选择器对齐到默认值。
+   *  只在没有活动会话时对齐——会话进行中把用户当场选的模型改掉是抢方向盘。 */
+  const prefsAppliedRef = useRef(false);
+  /** document 级键盘监听按 active 挂载,不应因改键而反复重挂;键位经 ref 读最新值 */
+  const keymapRef = useRef(localPrefs.keymap);
+  keymapRef.current = localPrefs.keymap;
+  /** 底栏提示由命令式代码按光标位置改写,需要一份随时可读的最新发送键语义 */
+  const sendKeyRef = useRef(localPrefs.sendKey);
+  sendKeyRef.current = localPrefs.sendKey;
+  useEffect(() => {
+    if (!prefsLoaded || prefsAppliedRef.current) return;
+    prefsAppliedRef.current = true;
+    if (prefs.model && MODELS.includes(prefs.model)) setModelSel(prefs.model);
+    if (prefs.effort && EFFORTS.includes(prefs.effort)) setEffortSel(prefs.effort);
+    const permLabel = PERMS.find((x) => PERM_VALUE[x] === prefs.perm);
+    if (permLabel) setPermSel(permLabel);
+    setBg(prefs.bg);
+  }, [prefsLoaded, prefs]);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
 
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -343,7 +369,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!ta || !hint) return;
     const fenced = isInFence(ta.value, ta.selectionStart);
     hint.classList.toggle('in-fence', fenced);
-    hint.textContent = fenced ? HINT_FENCE : HINT_DEFAULT;
+    hint.textContent = hintText(sendKeyRef.current, fenced);
   };
   // 挂载即画一次镜像:此时输入框通常是空的,画的是占位文案(textarea 自己的 placeholder 被透明文字色吃掉)
   useEffect(() => {
@@ -449,8 +475,11 @@ export function Dispatch({ active }: { active: boolean }) {
 
   const projects = projectsData?.projects ?? [];
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
-  const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
-  const effectiveCwd = cwd || cwdOptions[0] || '';
+  /** 未显式选择时依次退到:设置里的默认目录 → 候选列表首项。
+   *  默认目录可能已从 ~/.claude/projects 消失,故要校验它仍在候选里。 */
+  const prefCwd = prefs.cwd && cwdOptions.includes(prefs.cwd) ? prefs.cwd : '';
+  const effectiveCwd = cwd || prefCwd || cwdOptions[0] || '';
+  const curProject = projects.find((p) => p.path === effectiveCwd);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
@@ -684,16 +713,17 @@ export function Dispatch({ active }: { active: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       const { turns, stepToTurn, outline } = turnKeyRef.current;
       if (outline || document.querySelector('.confirm-mask')) return;
-      if ((e.metaKey || e.ctrlKey) && e.shiftKey && !e.altKey && (e.key === 'o' || e.key === 'O')) {
+      const km = keymapRef.current;
+      if (matchKey(e, km['dispatch.turnOutline'])) {
         e.preventDefault();
         if (!turns.length) return toast('这个会话还没有可跳转的轮次');
         taRef.current?.blur(); // 与 /wd、/model 一致:弹窗期间不让输入框吃字符,也免双焦点环
         measureTurn();
         setOutline(true);
-      } else if (e.altKey && !e.metaKey && !e.ctrlKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+      } else if (matchKey(e, km['dispatch.prevTurn']) || matchKey(e, km['dispatch.nextTurn'])) {
         if (!turns.length) return;
         e.preventDefault();
-        stepToTurn(e.key === 'ArrowUp' ? -1 : 1);
+        stepToTurn(matchKey(e, km['dispatch.prevTurn']) ? -1 : 1);
       }
     };
     document.addEventListener('keydown', onKey);
@@ -853,13 +883,13 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      if (e.key === 'm' || e.key === 'M') {
+      const km = keymapRef.current;
+      if (matchKey(e, km['dispatch.model'])) {
         e.preventDefault();
         taRef.current?.blur();
         setModelQuery('');
         setModelPalette(true);
-      } else if (e.key === 'd' || e.key === 'D') {
+      } else if (matchKey(e, km['dispatch.workdir'])) {
         e.preventDefault();
         taRef.current?.blur();
         setWdQuery('');
@@ -942,7 +972,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 也避免每次靠临场措辞碰运气。璇玑自己不写盘,出卡动作全在会话内由 skill 完成(架构铁律 2)。
     if (/^\/wrapup\b/.test(text)) {
       if (!canWrapup(d.started, !!resumeInfo)) return toast('这里还没有可收口的上下文,先派发或续接一个会话');
-      void submit(WRAPUP_PROMPT);
+      void submit(getAccount().wrapupPrompt || WRAPUP_PROMPT);
       return;
     }
     // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
@@ -1296,22 +1326,35 @@ export function Dispatch({ active }: { active: boolean }) {
                 applyEdit(wrapInline(ta.value, ta.selectionStart, ta.selectionEnd));
                 return;
               }
-              // ⌘E 包裹行内代码 / ⌘⇧E 插入代码块骨架并把光标放进正文
-              if (e.metaKey && (e.key === 'e' || e.key === 'E')) {
+              const km = localPrefs.keymap;
+              // 行内代码 / 代码块(默认 ⌘E / ⌘⇧E,可在设置里改键)
+              if (
+                matchKey(e.nativeEvent, km['dispatch.inlineCode']) ||
+                matchKey(e.nativeEvent, km['dispatch.codeBlock'])
+              ) {
                 e.preventDefault();
-                const edit = e.shiftKey ? insertFence : wrapInline;
+                const edit = matchKey(e.nativeEvent, km['dispatch.codeBlock'])
+                  ? insertFence
+                  : wrapInline;
                 applyEdit(edit(ta.value, ta.selectionStart, ta.selectionEnd));
                 return;
               }
-              // 发送只认 ⌘⏎(Ctrl+⏎ 兼容非 mac);裸 Enter 与 Shift+Enter 一律换行,
-              // 交给原生行为并在下一帧同步高亮与高度。isComposing:中文候选窗里的回车不劫持。
-              if (e.key === 'Enter') {
-                if ((e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+              // 发送键语义由「设置 › 派发 › 发送键」决定:
+              //   mod  = ⌘⏎/⌃⏎ 发送、裸 Enter 换行(默认,PR#45 起的现状)
+              //   enter= 裸 Enter 发送、⇧⏎ 换行
+              // 两档都不劫持 IME 候选窗里的回车(isComposing),换行一律交给原生行为
+              // 并在下一帧同步高亮与高度。
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                const mod = e.metaKey || e.ctrlKey;
+                const send = localPrefs.sendKey === 'enter' ? !mod && !e.shiftKey : mod;
+                if (send) {
                   e.preventDefault();
                   void submit();
                   return;
                 }
-                if (!e.metaKey && !e.ctrlKey) requestAnimationFrame(growTa);
+                requestAnimationFrame(growTa);
+              } else if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+                requestAnimationFrame(growTa);
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
               // ↑/↓ 回溯历史 prompt(类 shell history)。草稿态(尚未开始浏览)只在草稿不含换行时
@@ -1347,7 +1390,7 @@ export function Dispatch({ active }: { active: boolean }) {
           {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
           <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
-            <span className="hint" ref={hintRef}>{HINT_DEFAULT}</span>
+            <span className="hint" ref={hintRef}>{hintText(localPrefs.sendKey, false)}</span>
             <span className="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>

@@ -194,7 +194,12 @@ export class SchedulerService {
       const now = Date.now();
       if (now - job.runAt > GRACE_MS) {
         this.storage.updateScheduledJob(job.id, { status: 'missed', nextRunAt: null });
-        notifyMac(job.name, '定时任务已错过触发窗口(超出 30 分钟补跑宽限期)');
+        notifyMac(
+          job.name,
+          '定时任务已错过触发窗口(超出 30 分钟补跑宽限期)',
+          'scheduled',
+          'error',
+        );
         return;
       }
       const runAt = job.runAt;
@@ -253,7 +258,12 @@ export class SchedulerService {
     // croner 在系统睡眠后补触发时,再核对一次宽限期(仅一次性任务适用;手动立即运行不受限)
     if (!opts.manual && job.kind === 'once' && Date.now() - scheduledFor > GRACE_MS) {
       this.storage.updateScheduledJob(jobId, { status: 'missed', nextRunAt: null });
-      notifyMac(job.name, '定时任务已错过触发窗口(超出 30 分钟补跑宽限期)');
+      notifyMac(
+          job.name,
+          '定时任务已错过触发窗口(超出 30 分钟补跑宽限期)',
+          'scheduled',
+          'error',
+        );
       return;
     }
 
@@ -302,7 +312,7 @@ export class SchedulerService {
             error: note,
           });
           this.onOutcome(jobId, 'done', note ?? undefined);
-          if (overBudget) notifyMac(job.name, `已完成,但${note}`);
+          if (overBudget) notifyMac(job.name, `已完成,但${note}`, 'scheduled', 'turnEnd');
           unsub();
           break;
         }
@@ -347,7 +357,12 @@ export class SchedulerService {
         lastError: errorMessage ?? null,
         nextRunAt: null,
       });
-      notifyMac(job.name, `连续失败 ${failures} 次,已熔断:${errorMessage ?? ''}`.trim());
+      notifyMac(
+        job.name,
+        `连续失败 ${failures} 次,已熔断:${errorMessage ?? ''}`.trim(),
+        'scheduled',
+        'error',
+      );
     } else {
       this.storage.updateScheduledJob(jobId, {
         status: 'pending',

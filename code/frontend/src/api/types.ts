@@ -350,3 +350,23 @@ export interface WeeklyDraft {
   createdAt: number;
   finishedAt: number | null;
 }
+
+/** 账户级偏好:与后端 services/prefs.ts 的 AccountPrefs 对应 */
+export interface NotifyPrefs {
+  dispatched: boolean;
+  scheduled: boolean;
+  terminal: boolean;
+  blocked: boolean;
+  turnEnd: boolean;
+  error: boolean;
+}
+
+export interface AccountPrefs {
+  model: string;
+  effort: string;
+  perm: string;
+  cwd: string;
+  bg: boolean;
+  wrapupPrompt: string;
+  notify: NotifyPrefs;
+}

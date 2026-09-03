@@ -1,3 +1,10 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 原型 · 设置(居中对话框)</title>
+<style>
 @import "tailwindcss";
 
 /* ============================================================
@@ -1660,134 +1667,48 @@ body.wall-on .statusbar.scrolled {
   -webkit-backdrop-filter: blur(10px);
 }
 
-/* ============ 设置(居中对话框,DESIGN.md「设置」组件) ============ */
-/* 入口:替代原壁纸按钮,位置/尺寸/字号与 .wall-btn 一致 */
-.stg-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; margin: -4px -8px 8px; border-radius: var(--r-s); font-size: 0.75rem; color: var(--muted); text-align: left; }
-.stg-entry:hover { background: var(--hover); color: var(--ink); }
-.stg-entry svg { width: 14px; height: 14px; flex: none; }
-.stg-entry-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
-
-/* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
-.drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }
-/* 两栏几何收在变量里:头部要按同一组数对齐,硬编码两处迟早对不上 */
-.modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
-  width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
-/* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
-body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
-
-.stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
-/* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
-   「设置」二字也因此与下方分区导航的文字左缘对齐(两者都缩进 20px) */
-.stg-head h2 { font-size: 0.9375rem; flex: none;
-  width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
-.stg-search { flex: 1; min-width: 0; position: relative; }
-.stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; }
-.stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
-.stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
-
-.stg-body { flex: 1; min-height: 0; display: flex; }
-.stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
-.stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
-.stg-nav button:hover { background: var(--hover); color: var(--ink); }
-.stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
-.stg-nav button svg { width: 14px; height: 14px; flex: none; }
-/* 图例:每条一行不折行,标记与释义同基线;左栏窄,故释义取「是否跨设备」这一句关键区分,
-   完整存储位置说明在「高级」分区底部,不在这里重复 */
-.stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
-.stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
-.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
-.stg-sec { padding-top: 18px; }
-.stg-sec[hidden] { display: none; }
-.stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-.stg-sec-head h3 { font-size: 0.875rem; color: var(--ink); }
-.stg-sec-head p { font-size: 0.75rem; color: var(--faint); }
-.stg-sec-head .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; }
-.stg-group { font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 2px; }
-
-/* 一行一项:标签+说明 | 控件 | 存储范围标记。行与行用 line-soft 分隔,不套卡片 */
-.stg-row { display: flex; align-items: center; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
-.stg-row:last-child { border-bottom: 0; }
-.stg-row[hidden] { display: none; }
-.stg-lab { flex: 1; min-width: 0; }
-.stg-lab span { display: block; font-size: 0.8125rem; color: var(--ink); }
-.stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
-.stg-lab mark { background: var(--tint-jade); color: var(--jade); border-radius: 2px; padding: 0 1px; }
-.stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
-/* 下拉一律复用自绘 .dd.down(模态内变体),不用原生 select —— 原生弹层由 OS 绘制无法主题化。
-   语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度/权限走 .dd.dim */
-.stg-ctl .dd.down { width: 220px; }
-#stg-model-dd .dd-btn { color: var(--violet); }
-#stg-cwd-dd .dd-btn { color: var(--blue); }
-/* 菜单的容身之处:.stg-pane 会滚动,绝对定位的菜单被它裁掉;而 fixed 也不行 ——
-   .modal 用 transform 居中,transform 祖先会成为 fixed 的包含块,菜单会按对话框左上角算坐标飞出去
-   再被 overflow:hidden 裁掉。故打开时把菜单挂到既不滚动、又在对话框边界内的 .stg-body 上,
-   按触发钮算相对坐标;pane 一滚就关。实现层用带 portal 的 Select(Radix)同理,portal 目标别选 body 以外。 */
-.stg-body { position: relative; }
-.stg-body > .dd-menu { position: absolute; bottom: auto; min-width: 0; }
-.stg-body > .dd-menu.open { opacity: 1; transform: none; pointer-events: auto; }
-.stg-body > .dd-menu.dim .dd-item { font-family: var(--sans); }
-.stg-ctl .filter-tabs button { padding: 4px 10px; }
-.stg-ctl .input[type=text], .stg-ctl .input[type=url] { width: 220px; padding: 5px 10px; font-size: 0.75rem; }
-.stg-ctl input[type=range] { width: 130px; accent-color: var(--jade); }
-.stg-ctl .stg-val { width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* 存储范围标记:本机 = 只在这台浏览器;账户 = 落后端 meta 表,手机端同步 */
-.stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
-.stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
-.stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
-.stg-thumbs { display: flex; gap: 8px; }
-/* 文件选择:input 视觉上藏起但不 display:none —— 部分 WebKit 对 display:none 的 file input 不响应 label 激活 */
-.stg-file { position: relative; overflow: hidden; cursor: pointer; }
-.stg-file input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
-/* 缩略图背景由 JS 用线上同一份 WALL_PRESETS url 填充,不另造 mock */
-.stg-thumb { width: 52px; height: 32px; border-radius: 4px; border: 1px solid var(--line); background-size: cover; cursor: pointer; }
-.stg-thumb:hover { border-color: var(--muted); }
-.stg-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); }
-
-/* 快捷键表:动作 | 键位 | 改键。键位用 kbd 词汇(与 .to-foot kbd 同规格) */
-.stg-keys { width: 100%; border-collapse: collapse; }
-.stg-keys td { padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; vertical-align: middle; }
-.stg-keys td:first-child { color: var(--ink); }
-.stg-keys td small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 1px; }
-.stg-keys td.k { width: 150px; white-space: nowrap; }
-.stg-keys td.a { width: 60px; text-align: right; }
-.stg-keys td.a button { font-size: 0.6875rem; color: var(--faint); padding: 2px 6px; border-radius: 3px; }
-.stg-keys td.a button:hover { background: var(--hover); color: var(--ink); }
-.stg-keys tr.rec td.k { color: var(--jade); font-size: 0.75rem; }
-.stg-keys tr.rec td.k::after { content: "按下新组合…"; animation: stg-blink 1s steps(2) infinite; }
-.stg-keys kbd { font-family: var(--mono); font-size: 0.6875rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--surface-2); }
-.stg-keys kbd + kbd { margin-left: 3px; }
-.stg-keys tr.conflict kbd { border-color: var(--amber); color: var(--amber); }
-.stg-keys .stg-conf { font-size: 0.625rem; color: var(--amber); margin-left: 6px; }
-.stg-keys tr.fixed kbd { border-style: dashed; }
-@keyframes stg-blink { 50% { opacity: 0.3; } }
-
-.stg-storage { font-size: 0.6875rem; color: var(--faint); line-height: 1.6; margin-top: 12px; }
-.stg-storage code { font-family: var(--mono); color: var(--muted); }
-.stg-empty { padding: 40px 0; text-align: center; font-size: 0.8125rem; color: var(--faint); }
-
-/* 手机:整屏覆盖,左栏退化为顶部横向 tab */
-@media (max-width: 720px) {
-  .drawer.stg-drawer, .modal.stg-modal { width: 100vw; height: 100dvh; max-height: none; top: 0; left: 0; right: 0; transform: none; border: 0; border-radius: 0; }
-  .modal.stg-modal.show { transform: none; }
-  .stg-head h2 { width: auto; }
-  .stg-body { flex-direction: column; }
-  .stg-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 8px 12px; }
-  .stg-nav button { flex: none; padding: 6px 10px; }
-  .stg-nav .stg-nav-foot { display: none; }
-  .stg-row { flex-wrap: wrap; }
-  .stg-ctl { width: 100%; }
-  .stg-ctl .dd.down { flex: 1; width: auto; }
-  .stg-scope { order: -1; margin-left: auto; }
-  .stg-search kbd { display: none; }
-  .stg-keys td.a { display: none; }
-  /* 窄屏下标题与按钮各自不参与压缩,说明文字整行落到第二行——
-     否则 flex 会先压标题,把「派发」两个字挤成竖排(2026-09-03 实测) */
-  .stg-sec-head { flex-wrap: wrap; }
-  .stg-sec-head h3,
-  .stg-sec-head .btn-quiet { flex: none; }
-  .stg-sec-head p { flex: 1 0 100%; order: 3; margin-top: 2px; }
+.wall-btn {
+  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
+  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
+  font-size: 0.75rem; color: var(--muted); text-align: left;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
 }
+.wall-btn:hover { background: var(--hover); color: var(--ink); }
+.wall-btn svg { width: 14px; height: 14px; flex: none; }
+.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 
+.wall-pop {
+  position: fixed; left: 14px; bottom: 92px; width: 320px; /* 悬于 side-foot 之上,不遮入口按钮 */
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 14px 16px 12px; z-index: var(--z-drawer);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
+  animation: view-in 200ms var(--ease);
+}
+.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
+.wp-head h3 { font-size: 0.8125rem; }
+.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
+.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
+.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.wp-thumbs { display: flex; gap: 8px; flex: 1; }
+.wp-thumb {
+  width: 64px; height: 40px; border-radius: var(--r-s);
+  border: 1px solid var(--line); background-size: cover; background-position: center;
+  transition: border-color 150ms var(--ease); flex: none;
+}
+.wp-thumb:hover { border-color: var(--muted); }
+.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
+.wp-row input[type=range] {
+  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
+  border-radius: 99px; background: var(--line); cursor: pointer;
+}
+.wp-row input[type=range]::-webkit-slider-thumb {
+  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
+  border-radius: 50%; background: var(--jade); border: none;
+}
+.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
+.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
+.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
 
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
@@ -2308,18 +2229,721 @@ body.wall-glass .turnhead { background: oklch(0.165 0.007 120); }
   .turnhead, .turnhead .th-text, .turnhead .th-btn, .chat-msg.user .body { transition: none; }
 }
 
-/* ============ 本机偏好落到 <html>(见 lib/prefs.ts applyLocalToDom) ============ */
-/* 字号走 root font-size,既有样式全用 rem,故整站等比跟随,不必逐处改 */
-html[data-font-scale="sm"] { font-size: 15px; }
-html[data-font-scale="lg"] { font-size: 17px; }
-/* 「减少动效」显式开时按 prefers-reduced-motion 同款降级:过渡与动画一律瞬时完成。
-   显式关则强行保留动效,即便系统开了减弱开关——这是用户在本机的最终决定。 */
-html[data-motion="on"] *,
-html[data-motion="on"] *::before,
-html[data-motion="on"] *::after {
-  transition-duration: 0.01ms !important;
-  animation-duration: 0.01ms !important;
-  animation-iteration-count: 1 !important;
-  scroll-behavior: auto !important;
+/* ============ 原型脚手架(不入线上) ============ */
+.proto-hint {
+  position: fixed; left: 16px; bottom: 16px; z-index: var(--z-toast);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 10px 14px; font-size: 0.75rem; color: var(--muted);
+  box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); max-width: 300px;
 }
-html[data-turn-head="false"] .turnhead { display: none; }
+.proto-hint b { color: var(--jade); font-size: 0.6875rem; letter-spacing: .04em; display: block; margin-bottom: 6px; }
+.proto-hint .keys { margin-top: 6px; display: flex; gap: 6px; flex-wrap: wrap; }
+.proto-hint kbd {
+  font-family: var(--mono); font-size: 0.625rem; padding: 1px 5px;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--surface-2); color: var(--muted);
+}
+.proto-hint .sw { margin-top: 8px; display: flex; gap: 6px; }
+.proto-hint .sw button { border: 1px solid var(--line); border-radius: var(--r-s); padding: 3px 9px; font-size: 0.6875rem; color: var(--muted); }
+.proto-hint .sw button[aria-pressed="true"] { background: var(--tint-jade); color: var(--jade); border-color: transparent; }
+
+/* 本原型:提示框挪到右下,不遮侧栏底部的设置入口;手机不显示 */
+.proto-hint { left: auto; right: 16px; }
+@media (max-width: 720px) { .proto-hint { display: none; } }
+/* ============ 设置面板 —— 本原型新增的唯一一族样式,前缀 stg-(已 grep 线上表无撞名) ============ */
+/* 入口:替代原壁纸按钮,位置/尺寸/字号与 .wall-btn 一致 */
+.stg-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; margin: -4px -8px 8px; border-radius: var(--r-s); font-size: 0.75rem; color: var(--muted); text-align: left; }
+.stg-entry:hover { background: var(--hover); color: var(--ink); }
+.stg-entry svg { width: 14px; height: 14px; flex: none; }
+.stg-entry-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+/* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
+.drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }
+/* 两栏几何收在变量里:头部要按同一组数对齐,硬编码两处迟早对不上 */
+.modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
+  width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+/* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
+body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
+
+.stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
+/* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
+   「设置」二字也因此与下方分区导航的文字左缘对齐(两者都缩进 20px) */
+.stg-head h2 { font-size: 0.9375rem; flex: none;
+  width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
+.stg-search { flex: 1; min-width: 0; position: relative; }
+.stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; }
+.stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
+.stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
+
+.stg-body { flex: 1; min-height: 0; display: flex; }
+.stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
+.stg-nav button:hover { background: var(--hover); color: var(--ink); }
+.stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+.stg-nav button svg { width: 14px; height: 14px; flex: none; }
+/* 图例:每条一行不折行,标记与释义同基线;左栏窄,故释义取「是否跨设备」这一句关键区分,
+   完整存储位置说明在「高级」分区底部,不在这里重复 */
+.stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
+.stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
+.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
+.stg-sec { padding-top: 18px; }
+.stg-sec[hidden] { display: none; }
+.stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.stg-sec-head h3 { font-size: 0.875rem; color: var(--ink); }
+.stg-sec-head p { font-size: 0.75rem; color: var(--faint); }
+.stg-sec-head .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; }
+.stg-group { font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 2px; }
+
+/* 一行一项:标签+说明 | 控件 | 存储范围标记。行与行用 line-soft 分隔,不套卡片 */
+.stg-row { display: flex; align-items: center; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.stg-row:last-child { border-bottom: 0; }
+.stg-row[hidden] { display: none; }
+.stg-lab { flex: 1; min-width: 0; }
+.stg-lab span { display: block; font-size: 0.8125rem; color: var(--ink); }
+.stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+.stg-lab mark { background: var(--tint-jade); color: var(--jade); border-radius: 2px; padding: 0 1px; }
+.stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+/* 下拉一律复用自绘 .dd.down(模态内变体),不用原生 select —— 原生弹层由 OS 绘制无法主题化。
+   语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度/权限走 .dd.dim */
+.stg-ctl .dd.down { width: 220px; }
+#stg-model-dd .dd-btn { color: var(--violet); }
+#stg-cwd-dd .dd-btn { color: var(--blue); }
+/* 菜单的容身之处:.stg-pane 会滚动,绝对定位的菜单被它裁掉;而 fixed 也不行 ——
+   .modal 用 transform 居中,transform 祖先会成为 fixed 的包含块,菜单会按对话框左上角算坐标飞出去
+   再被 overflow:hidden 裁掉。故打开时把菜单挂到既不滚动、又在对话框边界内的 .stg-body 上,
+   按触发钮算相对坐标;pane 一滚就关。实现层用带 portal 的 Select(Radix)同理,portal 目标别选 body 以外。 */
+.stg-body { position: relative; }
+.stg-body > .dd-menu { position: absolute; bottom: auto; min-width: 0; }
+.stg-body > .dd-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.stg-body > .dd-menu.dim .dd-item { font-family: var(--sans); }
+.stg-ctl .filter-tabs button { padding: 4px 10px; }
+.stg-ctl .input[type=text], .stg-ctl .input[type=url] { width: 220px; padding: 5px 10px; font-size: 0.75rem; }
+.stg-ctl input[type=range] { width: 130px; accent-color: var(--jade); }
+.stg-ctl .stg-val { width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 存储范围标记:本机 = 只在这台浏览器;账户 = 落后端 meta 表,手机端同步 */
+.stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
+.stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
+.stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
+.stg-thumbs { display: flex; gap: 8px; }
+/* 缩略图背景由 JS 用线上同一份 WALL_PRESETS url 填充,不另造 mock */
+.stg-thumb { width: 52px; height: 32px; border-radius: 4px; border: 1px solid var(--line); background-size: cover; cursor: pointer; }
+.stg-thumb:hover { border-color: var(--muted); }
+.stg-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); }
+
+/* 快捷键表:动作 | 键位 | 改键。键位用 kbd 词汇(与 .to-foot kbd 同规格) */
+.stg-keys { width: 100%; border-collapse: collapse; }
+.stg-keys td { padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; vertical-align: middle; }
+.stg-keys td:first-child { color: var(--ink); }
+.stg-keys td small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 1px; }
+.stg-keys td.k { width: 150px; white-space: nowrap; }
+.stg-keys td.a { width: 60px; text-align: right; }
+.stg-keys td.a button { font-size: 0.6875rem; color: var(--faint); padding: 2px 6px; border-radius: 3px; }
+.stg-keys td.a button:hover { background: var(--hover); color: var(--ink); }
+.stg-keys tr.rec td.k { color: var(--jade); font-size: 0.75rem; }
+.stg-keys tr.rec td.k::after { content: "按下新组合…"; animation: stg-blink 1s steps(2) infinite; }
+.stg-keys kbd { font-family: var(--mono); font-size: 0.6875rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--surface-2); }
+.stg-keys kbd + kbd { margin-left: 3px; }
+.stg-keys tr.conflict kbd { border-color: var(--amber); color: var(--amber); }
+.stg-keys .stg-conf { font-size: 0.625rem; color: var(--amber); margin-left: 6px; }
+.stg-keys tr.fixed kbd { border-style: dashed; }
+@keyframes stg-blink { 50% { opacity: 0.3; } }
+
+.stg-storage { font-size: 0.6875rem; color: var(--faint); line-height: 1.6; margin-top: 12px; }
+.stg-storage code { font-family: var(--mono); color: var(--muted); }
+.stg-empty { padding: 40px 0; text-align: center; font-size: 0.8125rem; color: var(--faint); }
+
+/* 手机:整屏覆盖,左栏退化为顶部横向 tab */
+@media (max-width: 720px) {
+  .drawer.stg-drawer, .modal.stg-modal { width: 100vw; height: 100dvh; max-height: none; top: 0; left: 0; right: 0; transform: none; border: 0; border-radius: 0; }
+  .modal.stg-modal.show { transform: none; }
+  .stg-head h2 { width: auto; }
+  .stg-body { flex-direction: column; }
+  .stg-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 8px 12px; }
+  .stg-nav button { flex: none; padding: 6px 10px; }
+  .stg-nav .stg-nav-foot { display: none; }
+  .stg-row { flex-wrap: wrap; }
+  .stg-ctl { width: 100%; }
+  .stg-ctl .dd.down { flex: 1; width: auto; }
+  .stg-scope { order: -1; margin-left: auto; }
+  .stg-search kbd { display: none; }
+  .stg-keys td.a { display: none; }
+}
+
+</style>
+<body>
+
+<div id="wall" aria-hidden="true"></div>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="-66.9 -53.29 1438.85 1438.85" aria-hidden="true" focusable="false">
+            <g transform="translate(129.962149,1193.807683) scale(0.100000,-0.100000)" fill="currentColor" stroke="none">
+              <path d="M4950 8329 c-153 -11 -376 -50 -531 -93 -344 -95 -676 -262 -946 -476 -730 -579 -1116 -1564 -957 -2443 14 -74 19 -87 33 -82 9 4 49 15 90 26 207 53 421 -8 576 -165 81 -82 123 -149 159 -256 80 -240 9 -478 -169 -565 -180 -89 -415 16 -415 185 0 124 117 201 236 155 25 -9 48 -14 52 -10 4 3 6 33 6 65 -2 111 -86 228 -191 264 -61 21 -186 21 -249 -1 -157 -53 -283 -199 -328 -384 -21 -84 -21 -261 -1 -368 94 -492 577 -1127 1150 -1511 347 -232 711 -373 1132 -437 156 -24 537 -24 698 0 399 59 803 210 1130 424 138 91 356 265 345 276 -3 3 -30 17 -60 32 -160 80 -306 216 -366 341 -89 185 -82 424 18 604 100 179 244 290 424 327 222 45 425 -89 441 -291 6 -66 -16 -136 -55 -180 -41 -46 -138 -69 -199 -45 -57 21 -113 93 -113 144 0 14 -6 25 -13 25 -22 0 -100 -55 -136 -95 -58 -67 -76 -118 -76 -220 0 -80 3 -97 31 -155 53 -113 168 -204 309 -246 79 -24 236 -23 324 0 83 22 201 83 273 140 277 221 504 788 568 1420 27 259 2 625 -60 906 -209 942 -807 1756 -1567 2134 -72 37 -138 66 -146 66 -12 0 -13 -7 -6 -37 24 -103 2 -240 -54 -348 -38 -73 -143 -180 -217 -222 -81 -46 -188 -73 -291 -73 -389 0 -662 327 -476 571 41 54 124 99 182 99 56 0 123 -36 146 -80 32 -58 19 -153 -24 -189 -25 -20 -21 -29 21 -47 24 -11 65 -17 117 -18 70 0 86 3 134 29 89 49 131 118 147 241 7 61 -15 155 -53 226 -15 28 -60 80 -99 117 -142 133 -320 197 -609 221 -141 11 -167 11 -335 -1z m371 -2228 c270 -69 498 -296 570 -567 28 -105 30 -289 5 -389 -76 -292 -306 -522 -593 -592 -96 -23 -267 -23 -363 1 -294 73 -525 302 -597 593 -24 99 -22 285 5 384 79 295 329 527 629 584 98 18 241 13 344 -14z" />
+            </g>
+          </svg>
+      <div class="brand-text">
+        <span class="zh">璇玑</span>
+        <span class="brand-meta"><span class="version">v1.8.0</span></span>
+      </div>
+    </div>
+    <nav class="nav">
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z"/></svg>仪表盘</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7l3-4h5l2 3h8v13H3z"/></svg>项目</button>
+      <button id="nav-sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/></svg>会话<span class="count">12</span></button>
+      <button id="nav-dispatch" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z"/></svg>技能</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4"/></svg>经验</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2"/></svg>定时</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12"/></svg>回顾</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg>总结</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2"/></svg>待办<span class="count">3</span></button>
+    </nav>
+    <div class="side-foot">
+      <button class="stg-entry" id="stg-entry" aria-haspopup="dialog" aria-expanded="false" title="设置 ⌘,">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z"/><path d="M6.7 1.8h2.6l.4 1.6 1.4.8 1.6-.5 1.3 2.2-1.2 1.1v1.6l1.2 1.1-1.3 2.2-1.6-.5-1.4.8-.4 1.6H6.7l-.4-1.6-1.4-.8-1.6.5L2 11.6l1.2-1.1V8.9L2 7.8l1.3-2.2 1.6.5 1.4-.8z"/></svg>
+        设置<span class="stg-entry-state" id="stg-entry-state">星野 · 玻璃 40%</span>
+      </button>
+      <div class="row"><span class="ok"></span>claude 2.0.14 · 就绪</div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <section class="view active" id="view-dispatch">
+      <div class="view-head">
+        <h1>派发</h1>
+        <button class="btn btn-sm">‹ 会话看板</button>
+        <span class="spacer"></span>
+        <button class="btn">新会话</button>
+      </div>
+      <div class="dispatch">
+
+        <div class="chat" id="chat">
+          <div class="turn-anchor"><div class="turnhead" id="turnhead" role="region" aria-label="当前轮次">
+            <span class="th-n" id="th-n">#12</span>
+            <span class="th-who">你</span>
+            <button class="th-text" id="th-text" title="回到本轮提问">…</button>
+            <span class="th-nav">
+              <span class="th-pos" id="th-pos">12/24</span>
+              <button class="th-btn" id="th-prev" aria-label="上一轮" title="上一轮 ⌥↑">↑</button>
+              <button class="th-btn" id="th-next" aria-label="下一轮" title="下一轮 ⌥↓">↓</button>
+              <span class="th-sep"></span>
+              <button class="th-btn" id="th-list" aria-label="轮次目录" title="轮次目录 ⌘⇧O">≡</button>
+            </span>
+          </div></div>
+          <div id="chat-body"></div>
+        </div>
+
+        <div class="chat-status">
+          <span class="sess-ctx"><span class="sc-title sc-named" style="--ph:115">会话看板按项目过滤</span><span class="sc-id">7c2e91</span></span>
+          <span class="u-chips">
+            <span class="u-chip">Context<span class="u-bar"><i style="width:71%"></i></span><b>71%</b></span>
+            <span class="u-chip">Usage<span class="u-bar"><i style="width:22%"></i></span><b>22%</b></span>
+            <span class="u-chip">Weekly<span class="u-bar"><i style="width:58%"></i></span><b>58%</b></span>
+          </span>
+          <span class="cs-state"><span class="cs-dot"></span>空闲 · 回合结束</span>
+        </div>
+
+        <div class="composer">
+          <textarea rows="2" placeholder="描述要派发的任务…"></textarea>
+          <div class="c-bar">
+            <span class="hint">⌘⏎ 发送 · Enter 换行 · ↑↓ 历史 · ⌥↑↓ 上下轮 · ⌘⇧O 目录</span>
+            <label class="bg-opt"><span class="switch" role="switch" aria-checked="false"></span><span class="bg-opt-label">转后台(--bg)</span></label>
+            <button class="btn btn-primary send-btn"><span class="send-btn-label">发送</span></button>
+          </div>
+        </div>
+
+        <div class="term-line">
+          <span class="dd"><button class="dd-btn"><span class="dd-val">~/xuanji</span><span class="caret">▾</span></button></span>
+          <span class="branch mono" title="git 状态">⎇ feature/session-project-filter<span class="gs-m"> !3</span></span>
+          <span class="spacer"></span>
+          <span class="dd"><button class="dd-btn"><span class="dd-val">fable</span><span class="caret">▾</span></button></span>
+          <span class="dd dim"><button class="dd-btn"><span class="dd-val">effort: high</span><span class="caret">▾</span></button></span>
+          <span class="dd dim"><button class="dd-btn"><span class="dd-val">acceptEdits</span><span class="caret">▾</span></button></span>
+          <span class="tag">settingSources: user</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ============ 轮次目录弹窗(⌘⇧O) ============ -->
+<div class="confirm-mask" id="to-mask" hidden>
+  <div class="rp-box wd-box to-box" role="dialog" aria-modal="true" aria-label="轮次目录">
+    <div class="rp-head">轮次目录<span class="rp-hint">↑↓/Tab 选择 · Enter 跳转 · Esc 关闭</span></div>
+    <div class="wd-search"><input class="input" id="to-input" placeholder="模糊搜索你问过的话…(如 壁纸、方向键)" aria-label="搜索轮次"></div>
+    <div class="rp-list" id="to-list" role="listbox"></div>
+    <div class="to-foot"><span id="to-foot-text">24 轮 · 前 4 轮尚未加载,选中即回填</span><span class="spacer"></span><kbd>⌥↑</kbd><kbd>⌥↓</kbd><span>不开目录也能逐轮跳</span></div>
+  </div>
+</div>
+
+
+<div class="backdrop" id="stg-backdrop"></div>
+<div class="modal stg-modal" id="stg-shell" role="dialog" aria-modal="true" aria-label="设置">
+  <div class="stg-head">
+    <h2>设置</h2>
+    <div class="stg-search">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5L14 14" stroke-linecap="round"/></svg>
+      <input class="input" id="stg-q" type="search" placeholder="搜索设置项…(如 模型、发送、壁纸)" aria-label="搜索设置项" spellcheck="false">
+      <kbd>⌘F</kbd>
+    </div>
+    <button class="x-btn" id="stg-close" aria-label="关闭">✕</button>
+  </div>
+  <div class="stg-body">
+    <nav class="stg-nav" aria-label="设置分区">
+      <button data-sec="dispatch" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
+      <button data-sec="look"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M4 17l4.5-4.5 3 3 4-5 4.5 5"/></svg>外观</button>
+      <button data-sec="keys"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h1M10 10h1M14 10h1M18 10h1M7 14h10"/></svg>快捷键</button>
+      <button data-sec="notify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg>通知</button>
+      <button data-sec="adv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4"/></svg>高级</button>
+      <div class="stg-nav-foot"><span class="stg-legend"><span class="stg-scope" data-scope="local">本机</span>仅此浏览器</span><span class="stg-legend"><span class="stg-scope" data-scope="acct">账户</span>跨设备同步</span></div>
+    </nav>
+    <div class="stg-pane" id="stg-pane">
+
+      <section class="stg-sec" data-sec="dispatch">
+        <div class="stg-sec-head"><h3>派发</h3><p>新会话的初始参数;派发页底栏仍可临时改,只影响当次</p><button class="btn btn-quiet" data-reset="dispatch">恢复默认</button></div>
+        <div class="stg-row"><div class="stg-lab"><span>默认模型</span><small>现在是「上次用过的」,这里改成固定值后不再随上次漂移</small></div>
+          <div class="stg-ctl"><span class="dd down" id="stg-model-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">沿用上次(当前 fable)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">沿用上次(当前 fable)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-fable-5-1</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-opus-5</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-opus-5[1m]</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-sonnet-5</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-haiku-4-5-20251001</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>默认思考深度</span><small>自动 = 按模型取默认(opus-5 → low,其余交给模型自身)</small></div>
+          <div class="stg-ctl"><span class="dd down dim" id="stg-effort-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">(自动)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">(自动)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">low</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">medium</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">high</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">xhigh</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">max</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>默认权限模式</span><small>后台派发(--bg)固定为 default,不受此项影响</small></div>
+          <div class="stg-ctl"><span class="dd down dim" id="stg-perm-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">bypassPermissions(免审批)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">default(逐项审批)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">acceptEdits</span><span class="tick">✓</span></button><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">bypassPermissions(免审批)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">plan</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>默认工作目录</span><small>候选来自 ~/.claude/projects;现在每次都退回列表第一项</small></div>
+          <div class="stg-ctl"><span class="dd down" id="stg-cwd-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">~/xuanji</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">最近一次派发的目录</span><span class="tick">✓</span></button><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">~/xuanji</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/antifraud_skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/antifraud_skills/baize</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/PycharmProjects/lilith-offline-etl</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/yuiko-skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/.agents/skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/xuanji-remote-access</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>默认转后台(--bg)</span><small>开启后新会话默认勾选「转后台」</small></div>
+          <div class="stg-ctl"><span class="switch" role="switch" aria-checked="false" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-group">输入框</div>
+        <div class="stg-row"><div class="stg-lab"><span>发送键</span><small>IME 候选中的回车不会触发发送;Ctrl+⏎ 始终等同 ⌘⏎</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="p-send"><button class="active" data-v="cmd">⌘⏎ 发送 · Enter 换行</button><button data-v="enter">Enter 发送 · ⇧⏎ 换行</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>任务总结触发语</span><small>输入 /wrapup 时实际发给会话的话</small></div>
+          <div class="stg-ctl"><input class="input" type="text" value="执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。" spellcheck="false"></div><span class="stg-scope" data-scope="acct">账户</span></div>
+      </section>
+
+      <section class="stg-sec" data-sec="look" hidden>
+        <div class="stg-sec-head"><h3>外观</h3><p>只存本机;手机和 Mac 各自一套</p><button class="btn btn-quiet" data-reset="look">恢复默认</button></div>
+        <div class="stg-group">壁纸</div>
+        <div class="stg-row"><div class="stg-lab"><span>模式</span><small>玻璃 = 面板半透明 + 毛玻璃;所有浮层在玻璃档下保持不透明</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="w-mode"><button data-v="off">关闭</button><button data-v="wall">壁纸</button><button data-v="glass" class="active">玻璃</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row w-dep"><div class="stg-lab"><span>图片</span><small>本地图片存浏览器 IndexedDB,不写 ~/.claude</small></div>
+          <div class="stg-ctl"><div class="stg-thumbs" id="w-thumbs"><button class="stg-thumb active" data-p="xingye" title="星野" aria-label="预设壁纸:星野"></button><button class="stg-thumb" data-p="shanlan" title="山岚" aria-label="预设壁纸:山岚"></button></div><button class="btn btn-sm">本地…</button><input class="input" type="url" placeholder="https://… 回车应用" style="width:160px"></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row w-dep"><div class="stg-lab"><span>不透明度</span></div>
+          <div class="stg-ctl"><input type="range" min="5" max="50" value="40" id="w-op"><span class="stg-val" id="w-op-v">40%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row w-dep"><div class="stg-lab"><span>模糊</span></div>
+          <div class="stg-ctl"><input type="range" min="0" max="24" value="0" id="w-blur"><span class="stg-val" id="w-blur-v">0px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row w-dep w-glass"><div class="stg-lab"><span>表面</span><small>面板底色不透明度,仅玻璃档</small></div>
+          <div class="stg-ctl"><input type="range" min="25" max="95" value="30" id="w-surf"><span class="stg-val" id="w-surf-v">30%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row w-dep w-glass"><div class="stg-lab"><span>磨砂</span><small>面板毛玻璃模糊强度,仅玻璃档</small></div>
+          <div class="stg-ctl"><input type="range" min="0" max="24" value="12" id="w-frost"><span class="stg-val" id="w-frost-v">12px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-group">阅读</div>
+        <div class="stg-row"><div class="stg-lab"><span>正文字号</span></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group"><button>小</button><button class="active">标准</button><button>大</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>吸顶轮次头</span><small>提问滚出视口后在顶部显示当前轮</small></div>
+          <div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>减少动效</span><small>默认跟随系统 prefers-reduced-motion</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group"><button class="active">跟随系统</button><button>开</button><button>关</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+      </section>
+
+      <section class="stg-sec" data-sec="keys" hidden>
+        <div class="stg-sec-head"><h3>快捷键</h3><p>点「改键」后按下新组合;与已有键位冲突会标黄,不会静默覆盖</p><button class="btn btn-quiet" data-reset="keys">恢复默认</button></div>
+        <div class="stg-group">全局</div>
+        <table class="stg-keys">
+          <tr><td>新会话</td><td class="k"><kbd>⌘N</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>速记待办</td><td class="k"><kbd>⌘J</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>打开设置</td><td class="k"><kbd>⌘,</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>切换视图<small>非输入状态也可直接按数字</small></td><td class="k"><kbd>⌘1</kbd>…<kbd>⌘9</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>侧栏前后切页</td><td class="k"><kbd>⌥⌘←</kbd><kbd>⌥⌘→</kbd></td><td class="a"><button>改键</button></td></tr>
+        </table>
+        <div class="stg-group">派发</div>
+        <table class="stg-keys">
+          <tr class="fixed"><td>发送 / 换行<small>由「派发 › 发送键」决定</small></td><td class="k"><kbd>⌘⏎</kbd><kbd>Enter</kbd></td><td class="a"><button data-goto="dispatch">去设置</button></td></tr>
+          <tr><td>切换模型</td><td class="k"><kbd>⌘M</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>工作目录</td><td class="k"><kbd>⌘D</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>轮次目录</td><td class="k"><kbd>⌘⇧O</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>上一轮 / 下一轮</td><td class="k"><kbd>⌥↑</kbd><kbd>⌥↓</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>行内代码 / 代码块</td><td class="k"><kbd>⌘E</kbd><kbd>⌘⇧E</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr class="conflict"><td>输入历史<small>与「上一轮 / 下一轮」的裸 ↑↓ 语义相邻,改键时注意</small></td><td class="k"><kbd>↑</kbd><kbd>↓</kbd><span class="stg-conf">⚠ 空输入框时生效</span></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>返回会话看板</td><td class="k"><kbd>Esc</kbd><kbd>←</kbd></td><td class="a"><button>改键</button></td></tr>
+        </table>
+        <div class="stg-group">会话看板</div>
+        <table class="stg-keys">
+          <tr><td>会话内查找</td><td class="k"><kbd>⌘F</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>关闭选中会话</td><td class="k"><kbd>⌃X</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr class="fixed"><td>卡片间移动<small>固定,不可改</small></td><td class="k"><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd></td><td class="a"></td></tr>
+        </table>
+      </section>
+
+      <section class="stg-sec" data-sec="notify" hidden>
+        <div class="stg-sec-head"><h3>通知</h3><p>浏览器通知已授权;手机端走同一套范围</p><button class="btn btn-quiet" data-reset="notify">恢复默认</button></div>
+        <div class="stg-group">范围</div>
+        <div class="stg-row"><div class="stg-lab"><span>璇玑派发的会话</span></div><div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>定时任务</span></div><div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>终端里的交互会话</span><small>默认关;你在终端前,不需要网页再提醒一次</small></div><div class="stg-ctl"><span class="switch" role="switch" aria-checked="false" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-group">事件</div>
+        <div class="stg-row"><div class="stg-lab"><span>需要审批 / blocked</span></div><div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>回合结束</span></div><div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>出错退出</span></div><div class="stg-ctl"><span class="switch on" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+      </section>
+
+      <section class="stg-sec" data-sec="adv" hidden>
+        <div class="stg-sec-head"><h3>高级</h3><p>不常动的东西</p></div>
+        <div class="stg-row"><div class="stg-lab"><span>重置待验收角标</span><small>把所有会话标为已读,从现在开始重新计</small></div><div class="stg-ctl"><button class="btn btn-sm">标记全部已读</button></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>项目配色</span><small>按项目自动分配,重算会打乱你已经记住的颜色</small></div><div class="stg-ctl"><button class="btn btn-sm">重新分配</button></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>清空本机偏好</span><small>壁纸、本地图片、快捷键、已读记录全部回到默认;账户偏好不受影响</small></div><div class="stg-ctl"><button class="btn btn-sm btn-danger" id="p-wipe">清空…</button></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-storage">本机偏好存 <code>localStorage</code> 的 <code>xuanji.prefs</code>(壁纸图片在 IndexedDB <code>xuanji/wallpaper</code>);账户偏好存后端 SQLite <code>meta</code> 表,经 <code>GET/PUT /api/prefs</code>。两者都不写 <code>~/.claude</code>。后端端口 / 数据目录仍由环境变量 <code>XUANJI_PORT</code>、<code>XUANJI_DATA_DIR</code> 决定,不在此处。</div>
+      </section>
+
+      <div class="stg-empty" id="stg-empty" hidden>没有匹配的设置项</div>
+    </div>
+  </div>
+</div>
+<div class="proto-hint">
+  <b>原型 · 设置(居中对话框)</b>
+  侧栏底部「设置」或 <kbd>⌘,</kbd> 打开;顶部搜索框跨分区筛设置项;外观分区的壁纸控件是真的(用线上同一份星野/山岚),可直接切三档看对话框表现。初始态为玻璃档演示,点「恢复默认」回到线上真实默认(壁纸关)。
+  <div class="keys"><kbd>⌘,</kbd><kbd>Esc</kbd><kbd>⌘F</kbd></div>
+  <div class="sw">
+    <button id="sw-open">打开设置</button>
+    <button id="sw-off">壁纸关</button><button id="sw-wall">壁纸</button><button id="sw-glass">玻璃</button>
+  </div>
+</div>
+<script>
+/* ============================================================
+   轮次导航 —— 两个入口共用一份「轮次索引」
+   1. 索引 = 会话里所有「你」的输入(序号 / 首行 / 时间 / DOM 节点);
+   2. 目录弹窗(⌘⇧O):模糊搜索 + Enter 跳转;未加载轮次选中即回填(骨架 → 真实消息);
+   3. 吸顶轮次头:滚动时按「最后一条在视口上方的提问」定当前轮,提问滚出视口才出现;
+   4. ⌥↑ / ⌥↓:相邻轮跳转,不开弹窗;
+   5. 落点反馈:目标气泡描一圈玉环 1.4s 淡出。
+   ============================================================ */
+const TOOL = (cat, fn, title, body) => ({ kind: 'tool', cat, fn, title, body });
+const TURNS = [
+  { t: '10:02', u: '会话看板想按项目过滤,现在八个项目的卡混在四列里找不到。先别写代码,给我两三个形态。', a: ['<p>给两个形态:一是<b>项目泳道</b>,把四列按项目再横切一层;二是<b>顶部项目 chip 多选过滤</b>,四列不动,非命中的卡淡出。我倾向后者:泳道会把每列切成八段小空白,一屏里大部分是空的。</p>'] },
+  { t: '10:05', u: '泳道我想看一眼效果,出个原型。', a: ['<p>好,两个形态各出一版放同一个原型里切换,基于最近获批的 prototype-find.html 复制改内容。</p>'], tools: [TOOL('write','Write','wiki/design/prototype-project-lens.html','<!doctype html> … 2 视图 · 8 项目 · 47 张 mock 卡')] },
+  { t: '10:21', u: '泳道否掉,割裂感太强而且一屏大量空白。就做 chip 过滤。', a: ['<p>收到,泳道方案移出原型。chip 过滤定两个细节:非命中卡<b>淡出而非移除</b>——移除会让列长缩水,而列长是你一直在读的「积压量」信号;暗卡要同时退出指针与键盘两个通道,不然方向键会停在看不见的卡上。</p>'] },
+  { t: '10:24', u: '同意。淡出的卡透明度多少?别淡到看不见。', a: ['<p>取 0.28,叠在 surface 上正文对比约 1.9:1——刻意低于可读线,它的语义就是「在但不是你要的」;项目名与状态点仍然可辨。开壁纸的三档我都会量一遍。</p>'] },
+  { t: '10:31', u: '开始做吧,先建 worktree。', a: ['<p>已从 origin/dev 分出 feature/session-project-filter,worktree 在 ../xuanji-session-project-filter。</p>'], tools: [TOOL('exec','Bash','git worktree add ../xuanji-session-project-filter -b feature/session-project-filter origin/dev','Preparing worktree (new branch \'feature/session-project-filter\')\nHEAD is now at c92273e feat(replay): pr-link 事件渲染成 PR/MR 链接卡片')] },
+  { t: '10:47', u: '键盘选中态现在是按行号记的吧?淡出的卡跳过去会不会错位?', a: ['<p>会。选中态按下标记,过滤后下标与可见卡不再一一对应,方向键会落到暗卡上。改成<b>按 sessionId 认卡</b>:选中态存 id,方向键在「亮卡数组」里找相邻,过滤变化时若当前 id 变暗则就近迁移到最近的亮卡。</p>'], tools: [TOOL('write','Edit','code/frontend/src/views/Sessions.tsx','- const [selIdx, setSelIdx] = useState(0)\n+ const [selId, setSelId] = useState<string | null>(null)\n+ const lit = useMemo(() => cards.filter(c => matches(c, filter)), [cards, filter])')] },
+  { t: '11:02', u: 'chip 的样式跟状态栏那批 chip 保持一致,别再发明一套。', a: ['<p>复用 .u-chip 的骨架与 4px 圆角,只加「选中 = 玉色描边 + 玉 13% 底」一态;多选时 chip 后带计数。</p>'] },
+  { t: '11:15', u: '过滤条要不要持久化?我倾向不要。', a: ['<p>不持久化。看板是「现在有什么需要我」的扫视面,带着上次的过滤进来会漏掉别的项目的 blocked 卡——这和淡出不移除是同一个理由。刷新即全量。</p>'] },
+  { t: '11:40', u: '跑一下浏览器验证,方向键真的跳过暗卡吗?', a: ['<p>用 CDP 起真实浏览器验:构造「亮暗暗亮亮」五张卡,按 ↓ 记录选中下标序列。</p>', '<p>结果 0 → 3 → 4,中间两张暗卡被跳过;按 ↑ 回到 0。</p>'], tools: [TOOL('exec','Bash','node scripts/cdp-probe.mjs --scene lit-dim-dim-lit-lit','[probe] sel: 0\n[probe] ArrowDown → sel: 3\n[probe] ArrowDown → sel: 4\n[probe] ArrowUp → sel: 3\n[probe] ArrowUp → sel: 0')] },
+  { t: '11:52', u: '等一下,你上一版脚本里只放了一张亮卡,那个「从未落在暗卡上」的断言是不是恒真的?', a: ['<p>是,上一版的断言是空洞的——只有一张亮卡时方向键根本动不了,「从未落在暗卡上」自动成立。这一版改成五张卡并记录下标轨迹,才是能失败的断言。已把这条写进验证说明。</p>'] },
+  { t: '13:05', u: '开壁纸看了下,chip 底下有一条比周围亮的横带,是 chip 的底色漏出来了?', a: ['<p>对。chip 底色是往 transparent 里混玉色,默认黑底下看不出来,开壁纸后 body 转透明就把壁纸漏到小字背后,对比只剩 1.53:1。改成往不透明的 surface 里混,三档壁纸下都量了一遍:</p>', '<table class="table"><thead><tr><th>模式</th><th>chip 文字对比</th></tr></thead><tbody><tr><td>默认</td><td>7.9:1</td></tr><tr><td>wall-on</td><td>7.5:1</td></tr><tr><td>wall-glass</td><td>7.6:1</td></tr></tbody></table>'], tools: [TOOL('write','Edit','code/frontend/src/styles/index.css','- background: color-mix(in oklab, var(--jade) 13%, transparent);\n+ background: color-mix(in oklab, var(--jade) 13%, var(--surface));')] },
+  { t: '13:18', u: '你第一次只修了 glass 档吧?wall-on 也要。', a: ['<p>是,第一版只改了 body.wall-glass 那条规则,默认开壁纸走的是 wall-on 档,漏了。现在改在 chip 自身规则上,不再按壁纸档分支,三档一律走不透明基色。</p>'] },
+  { t: '13:30', u: '过滤条在移动端怎么放?', a: ['<p>这次不加。mobile-topbar 已经占了顶部,再塞一排 chip 会挤掉标题;手机上看板本身是单列,过滤价值也小。记为残留,交付说明里写明。</p>'] },
+  { t: '13:41', u: '好。拖拽排序和过滤一起用时会不会出问题?', a: ['<p>理论上拖拽只在亮卡间发生,暗卡 pointer-events 已关;但没有做交互测试,同样记残留。</p>'] },
+  { t: '14:02', u: '跑质量门。', a: ['<p>四道门全绿。</p>'], tools: [TOOL('exec','Bash','pnpm -r lint && pnpm -r exec tsc --noEmit && pnpm -r test && pnpm -r build','frontend: 60 passed (基线 48)\nbackend: 203 passed\nlint ✓  tsc ✓  build ✓')] },
+  { t: '14:10', u: '起验收环境。', a: ['<p>已起,地址 http://localhost:37777 ,库是宿主快照,写操作不回流。收尾用 <code>./preview.sh --stop</code>。</p>'], tools: [TOOL('exec','Bash','./preview.sh','[preview] backend :37777  vite :35173\n[preview] db snapshot → .preview/xuanji-session-project-filter.sqlite')] },
+  { t: '14:35', u: '看了,方向键跳暗卡没问题。chip 多选后计数对不上——选两个项目显示 9,实际亮了 11 张。', a: ['<p>计数用的是过滤前的 sessions 列表,归档卡也算进去了;亮卡数按可见卡数。改为同一个 lit 数组两处共用。</p>'], tools: [TOOL('write','Edit','code/frontend/src/views/Sessions.tsx','- const n = sessions.filter(s => sel.has(s.project)).length\n+ const n = lit.length')] },
+  { t: '14:48', u: '现在对了。PR 建了吗?', a: ['<p>已 push 并建 PR #38,target dev。正文含背景 / 改动 / 验证三节,残留写了三条:移动端未加过滤条、拖拽与过滤未测、需非派发会话跑 restart.sh。</p>'], tools: [TOOL('exec','Bash','gh pr create --base dev --title "feat(sessions): 会话看板按项目过滤,方向键跳过淡出的卡"','https://github.com/tqd9563/xuanji/pull/38')] },
+  { t: '15:20', u: '验收通过,可以合了。', a: ['<p>已 squash 合入 dev(064faf6),worktree 与分支已清理,收口卡落在 worklog/2026/08/2026-08-31-xuanji-session-project-filter.md。</p><p>沉了一条 memory:验收要跑用户的日常配置——壁纸差集已经连续两次漏掉真缺陷。</p>'] },
+  { t: '15:26', u: '这条 memory 和上次状态栏那条是同一个教训吧?合并到一起。', a: ['<p>是同族。已把两条合成 verify-in-users-daily-config 一条,正文标「已复发两次」,并把这次更普适的机理(任何往 transparent 里混的底色在壁纸下都会漏)写进去。</p>'] },
+  { t: '16:03', u: '顺手看看看板的卡片高度,有几张比别的高一截。', a: ['<p>是标题两行导致的:三张卡的会话名超过 22 字换行了。看板里可变字段该限行截断,全文在下钻层——这是既有原则,这几张是新命名的会话漏了。加 line-clamp:1。</p>'] },
+  { t: '16:11', u: '这个改动小,直接在 dev 上做还是开分支?', a: ['<p>它改的是样式不是文档,按规则走分支。已建 fix/session-card-clamp,一行改动,PR #39 之前先合这条。</p>'] },
+  { t: '16:30', u: '还有一个:方向键在过滤后跳到最下面那张再按 ↓ 会跳回第一张,这是有意的吗?', a: ['<p>不是有意的,是 lit 数组用了取模回绕,过滤前的实现是到底即停。改回到底即停,与未过滤时一致。</p>'], tools: [TOOL('write','Edit','code/frontend/src/views/Sessions.tsx','- const next = (i + 1) % lit.length\n+ const next = Math.min(i + 1, lit.length - 1)')] },
+  { t: '16:42', u: '好,这两个一起走 PR,验收完我来跑 restart.sh。', a: ['<p>已合进同一分支,PR #39 更新,质量门 60/203 全绿。等你验收。</p>'] },
+];
+const UNLOADED = 4;              // 模拟 CHAT_SEED_LIMIT 截断:前 4 轮不在 DOM 里
+const body = document.getElementById('chat-body');
+const chat = document.getElementById('chat');
+const turnEls = new Map();       // idx → 该轮「你」的 .chat-msg 节点
+
+const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;');
+function renderTurn(i) {
+  const t = TURNS[i];
+  const frag = document.createDocumentFragment();
+  const u = document.createElement('div');
+  u.className = 'chat-msg user'; u.dataset.turn = i;
+  u.innerHTML = `<div class="who">你<span class="msg-ts" title="2026-08-31 ${t.t}">${t.t}</span></div><div class="body">${esc(t.u)}</div>`;
+  frag.appendChild(u); turnEls.set(i, u);
+  (t.tools || []).forEach(k => {
+    const c = document.createElement('div'); c.className = 'toolcard';
+    c.innerHTML = `<button class="tc-head"><span class="fn" data-cat="${k.cat}">${k.fn}</span><span>${esc(k.title)}</span><span class="chev">▾</span></button><div class="tc-body">${esc(k.body)}</div>`;
+    c.querySelector('.tc-head').addEventListener('click', () => c.classList.toggle('open'));
+    frag.appendChild(c);
+  });
+  const a = document.createElement('div'); a.className = 'chat-msg';
+  a.innerHTML = `<div class="who">Claude<span class="msg-ts">${t.t}</span></div><div class="body md">${t.a.join('')}</div>`;
+  frag.appendChild(a);
+  return frag;
+}
+for (let i = UNLOADED; i < TURNS.length; i++) body.appendChild(renderTurn(i));
+
+/* ---- 回填更早轮次:先插骨架,再换真实消息(模拟从 /replay 补前面的事件) ---- */
+let loadedFrom = UNLOADED;
+function ensureLoaded(i) {
+  if (i >= loadedFrom) return Promise.resolve();
+  return new Promise(res => {
+    const sk = document.createElement('div');
+    sk.innerHTML = '<div class="skel right"><i></i><i></i></div><div class="skel"><i></i><i></i><i></i></div>'.repeat(loadedFrom - i);
+    const before = chat.scrollHeight, top = chat.scrollTop;
+    body.prepend(sk);
+    chat.scrollTop = top + (chat.scrollHeight - before);   // 视口不跳
+    setTimeout(() => {
+      const frag = document.createDocumentFragment();
+      for (let k = i; k < loadedFrom; k++) frag.appendChild(renderTurn(k));
+      const b2 = chat.scrollHeight, t2 = chat.scrollTop;
+      sk.replaceWith(frag);
+      chat.scrollTop = t2 + (chat.scrollHeight - b2);
+      loadedFrom = i; refreshFoot(); res();
+    }, 420);
+  });
+}
+
+/* ---- 跳转 + 落点反馈 ---- */
+let flashTimer;
+async function jumpTo(i) {
+  await ensureLoaded(i);
+  const el = turnEls.get(i); if (!el) return;
+  const headH = 36;
+  chat.scrollTo({ top: el.offsetTop - headH - 8, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash');
+  clearTimeout(flashTimer); flashTimer = setTimeout(() => el.classList.remove('flash'), 1400);
+}
+
+/* ---- 吸顶轮次头:当前轮 = 最后一条 offsetTop 在视口顶之上的提问;提问整条滚出才显示 ---- */
+const th = document.getElementById('turnhead');
+const thN = document.getElementById('th-n'), thText = document.getElementById('th-text'), thPos = document.getElementById('th-pos');
+const thPrev = document.getElementById('th-prev'), thNext = document.getElementById('th-next');
+let cur = null;
+function updateHead() {
+  const top = chat.scrollTop;
+  let found = null;
+  for (const [i, el] of turnEls) if (el.offsetTop <= top + 40) found = found === null || i > found ? i : found;
+  cur = found;
+  const el = found !== null ? turnEls.get(found) : null;
+  const gone = el && (el.offsetTop + el.offsetHeight) < top + 20;
+  th.classList.toggle('show', !!gone);
+  if (found !== null) {
+    thN.textContent = '#' + (found + 1);
+    thText.textContent = TURNS[found].u;
+    thPos.textContent = `${found + 1}/${TURNS.length}`;
+    thPrev.disabled = found === 0; thNext.disabled = found === TURNS.length - 1;
+  }
+}
+chat.addEventListener('scroll', updateHead, { passive: true });
+window.addEventListener('resize', updateHead);
+thText.addEventListener('click', () => cur !== null && jumpTo(cur));
+thPrev.addEventListener('click', () => cur !== null && jumpTo(cur - 1));
+thNext.addEventListener('click', () => cur !== null && jumpTo(cur + 1));
+document.getElementById('th-list').addEventListener('click', () => openOutline());
+
+/* ---- 轮次目录弹窗 ---- */
+const mask = document.getElementById('to-mask'), list = document.getElementById('to-list'), input = document.getElementById('to-input');
+let sel = 0, rows = [];
+function refreshFoot() {
+  document.getElementById('to-foot-text').textContent = loadedFrom > 0
+    ? `${TURNS.length} 轮 · 前 ${loadedFrom} 轮尚未加载,选中即回填`
+    : `${TURNS.length} 轮 · 已全部加载`;
+}
+function fuzzy(q, s) { // 子序列打分:连续命中加分(线上 lib/fuzzy 同思路,原型简化)
+  if (!q) return 1; let qi = 0, score = 0, run = 0;
+  for (const ch of s.toLowerCase()) { if (qi < q.length && ch === q[qi]) { qi++; run++; score += run; } else run = 0; }
+  return qi === q.length ? score : 0;
+}
+function renderList() {
+  const q = input.value.trim().toLowerCase();
+  rows = TURNS.map((t, i) => ({ i, s: fuzzy(q, t.u) })).filter(r => r.s > 0);
+  if (q) rows.sort((a, b) => b.s - a.s);
+  list.innerHTML = '';
+  if (!rows.length) { list.innerHTML = `<div class="rp-empty">没有匹配「${esc(q)}」的轮次</div>`; return; }
+  rows.forEach((r, k) => {
+    const t = TURNS[r.i];
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role','option');
+    b.className = 'rp-item' + (k === sel ? ' sel' : '') + (r.i < loadedFrom ? ' unloaded' : '');
+    b.innerHTML = `<span class="to-n">#${r.i + 1}</span><span class="to-text">${esc(t.u)}</span>`
+      + (r.i < loadedFrom ? '<span class="to-tag">未加载</span>' : '')
+      + (r.i === cur ? '<span class="to-cur">当前</span>' : '')
+      + `<span class="to-time">${t.t}</span>`;
+    b.addEventListener('click', () => pick(k));
+    b.addEventListener('mousemove', () => { if (sel !== k) { sel = k; renderList(); } });
+    list.appendChild(b);
+  });
+  list.children[sel]?.scrollIntoView({ block: 'nearest' });
+}
+function openOutline() {
+  updateHead(); input.value = '';
+  sel = Math.max(0, cur ?? 0);  // 打开时选中项落在当前轮,↑ 就是「上一轮」
+  mask.hidden = false; renderList(); refreshFoot();
+  input.focus();
+}
+function closeOutline() { mask.hidden = true; }
+function pick(k) { const r = rows[k]; if (!r) return; closeOutline(); jumpTo(r.i); }
+input.addEventListener('input', () => { sel = 0; renderList(); });
+mask.addEventListener('click', e => { if (e.target === mask) closeOutline(); });
+
+/* ---- 键盘:弹窗内 capture 吃掉导航键;全局 ⌘⇧O / ⌥↑ / ⌥↓ ---- */
+document.addEventListener('keydown', e => {
+  if (!mask.hidden) {
+    if (e.key === 'Escape') { e.preventDefault(); closeOutline(); }
+    else if (e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) { e.preventDefault(); sel = Math.min(sel + 1, rows.length - 1); renderList(); }
+    else if (e.key === 'ArrowUp' || (e.key === 'Tab' && e.shiftKey)) { e.preventDefault(); sel = Math.max(sel - 1, 0); renderList(); }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(sel); }
+    return;
+  }
+  if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') { e.preventDefault(); openOutline(); return; }
+  if (e.altKey && (e.key === 'ArrowUp' || e.key === 'ArrowDown')) {
+    e.preventDefault(); updateHead();
+    const base = cur ?? (e.key === 'ArrowUp' ? TURNS.length : -1);
+    const next = e.key === 'ArrowUp' ? base - 1 : base + 1;
+    if (next >= 0 && next < TURNS.length) jumpTo(next);
+  }
+}, true);
+
+/* ---- 原型脚手架 ---- */
+chat.scrollTop = chat.scrollHeight;   // 进入即在底部(与线上一致),往上滚即见吸顶头
+updateHead();
+</script>
+<script>
+const WALL_URLS = {"xingye":"data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221000%22%20viewBox%3D%220%200%201600%201000%22%3E%3Cdefs%3E%3CradialGradient%20id%3D%22sky%22%20cx%3D%2235%25%22%20cy%3D%2218%25%22%20r%3D%2295%25%22%3E%0A%20%20%20%20%20%20%3Cstop%20offset%3D%220%22%20stop-color%3D%22%231a2116%22%2F%3E%3Cstop%20offset%3D%220.55%22%20stop-color%3D%22%2311150d%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%230a0d08%22%2F%3E%0A%20%20%20%20%3C%2FradialGradient%3E%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%221600%22%20height%3D%221000%22%20fill%3D%22url(%23sky)%22%2F%3E%0A%20%20%20%20%3Cellipse%20cx%3D%22480%22%20cy%3D%22180%22%20rx%3D%22520%22%20ry%3D%22300%22%20fill%3D%22%2325301c%22%20opacity%3D%220.18%22%2F%3E%0A%20%20%20%20%3Ccircle%20cx%3D%22296%22%20cy%3D%22220%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%22117%22%20cy%3D%22873%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%221121%22%20cy%3D%22880%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221569%22%20cy%3D%22229%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.39%22%2F%3E%3Ccircle%20cx%3D%22685%22%20cy%3D%2247%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22649%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22701%22%20cy%3D%22993%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221573%22%20cy%3D%22483%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221107%22%20cy%3D%223%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22109%22%20cy%3D%22383%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%22308%22%20cy%3D%22966%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.44%22%2F%3E%3Ccircle%20cx%3D%221359%22%20cy%3D%22742%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221442%22%20cy%3D%2299%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.31%22%2F%3E%3Ccircle%20cx%3D%22413%22%20cy%3D%22151%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2254%22%20cy%3D%22808%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22987%22%20cy%3D%22932%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221596%22%20cy%3D%22308%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.43%22%2F%3E%3Ccircle%20cx%3D%22827%22%20cy%3D%2217%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%22562%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.21%22%2F%3E%3Ccircle%20cx%3D%22562%22%20cy%3D%221000%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221525%22%20cy%3D%22572%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221233%22%20cy%3D%2219%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22191%22%20cy%3D%22299%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.14%22%2F%3E%3Ccircle%20cx%3D%22204%22%20cy%3D%22927%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%221249%22%20cy%3D%22815%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221516%22%20cy%3D%22158%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%22543%22%20cy%3D%2293%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%22733%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.28%22%2F%3E%3Ccircle%20cx%3D%22846%22%20cy%3D%22970%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221598%22%20cy%3D%22393%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%22968%22%20cy%3D%222%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.17%22%2F%3E%3Ccircle%20cx%3D%2247%22%20cy%3D%22474%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.18%22%2F%3E%3Ccircle%20cx%3D%22430%22%20cy%3D%22991%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%221454%22%20cy%3D%22658%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221345%22%20cy%3D%2251%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.27%22%2F%3E%3Ccircle%20cx%3D%22293%22%20cy%3D%22222%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%22119%22%20cy%3D%22874%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%221125%22%20cy%3D%22879%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221568%22%20cy%3D%22227%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.39%22%2F%3E%3Ccircle%20cx%3D%22681%22%20cy%3D%2248%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22651%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22704%22%20cy%3D%22993%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221574%22%20cy%3D%22481%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221103%22%20cy%3D%222%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22107%22%20cy%3D%22386%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%22311%22%20cy%3D%22967%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.44%22%2F%3E%3Ccircle%20cx%3D%221362%22%20cy%3D%22739%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221440%22%20cy%3D%2297%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.31%22%2F%3E%3Ccircle%20cx%3D%22410%22%20cy%3D%22153%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2256%22%20cy%3D%22810%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22990%22%20cy%3D%22931%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221596%22%20cy%3D%22306%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.43%22%2F%3E%3Ccircle%20cx%3D%22823%22%20cy%3D%2217%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%2211%22%20cy%3D%22565%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.21%22%2F%3E%3Ccircle%20cx%3D%22565%22%20cy%3D%221000%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221526%22%20cy%3D%22569%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.52%22%2F%3E%3Ccircle%20cx%3D%221229%22%20cy%3D%2219%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22189%22%20cy%3D%22302%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.14%22%2F%3E%3Ccircle%20cx%3D%22207%22%20cy%3D%22928%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%221252%22%20cy%3D%22813%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221515%22%20cy%3D%22156%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%22540%22%20cy%3D%2294%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2215%22%20cy%3D%22735%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.28%22%2F%3E%3Ccircle%20cx%3D%22850%22%20cy%3D%22969%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221598%22%20cy%3D%22390%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%22964%22%20cy%3D%222%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.17%22%2F%3E%3Ccircle%20cx%3D%2246%22%20cy%3D%22476%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.18%22%2F%3E%3Ccircle%20cx%3D%22434%22%20cy%3D%22992%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%221456%22%20cy%3D%22656%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221342%22%20cy%3D%2250%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.27%22%2F%3E%3Ccircle%20cx%3D%22290%22%20cy%3D%22224%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%22121%22%20cy%3D%22876%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%221128%22%20cy%3D%22877%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221567%22%20cy%3D%22225%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.39%22%2F%3E%3Ccircle%20cx%3D%22677%22%20cy%3D%2249%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22654%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22708%22%20cy%3D%22992%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221575%22%20cy%3D%22478%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221100%22%20cy%3D%222%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22105%22%20cy%3D%22388%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%22314%22%20cy%3D%22968%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.44%22%2F%3E%3Ccircle%20cx%3D%221364%22%20cy%3D%22737%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221437%22%20cy%3D%2296%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.31%22%2F%3E%3Ccircle%20cx%3D%22407%22%20cy%3D%22154%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2257%22%20cy%3D%22812%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22994%22%20cy%3D%22929%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221595%22%20cy%3D%22304%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.43%22%2F%3E%3Ccircle%20cx%3D%22819%22%20cy%3D%2218%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%2210%22%20cy%3D%22567%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.21%22%2F%3E%3Ccircle%20cx%3D%22569%22%20cy%3D%221000%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221528%22%20cy%3D%22567%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.52%22%2F%3E%3Ccircle%20cx%3D%221226%22%20cy%3D%2218%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.23%22%2F%3E%3Ccircle%20cx%3D%22186%22%20cy%3D%22304%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.14%22%2F%3E%3Ccircle%20cx%3D%22209%22%20cy%3D%22929%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%221255%22%20cy%3D%22811%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221513%22%20cy%3D%22154%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%22536%22%20cy%3D%2296%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2216%22%20cy%3D%22738%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.28%22%2F%3E%3Ccircle%20cx%3D%22854%22%20cy%3D%22968%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221598%22%20cy%3D%22388%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.46%22%2F%3E%3Ccircle%20cx%3D%22960%22%20cy%3D%222%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.17%22%2F%3E%3Ccircle%20cx%3D%2245%22%20cy%3D%22478%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.18%22%2F%3E%3Ccircle%20cx%3D%22437%22%20cy%3D%22992%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%221458%22%20cy%3D%22654%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221339%22%20cy%3D%2249%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.27%22%2F%3E%3Ccircle%20cx%3D%22287%22%20cy%3D%22226%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%22123%22%20cy%3D%22877%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%221132%22%20cy%3D%22876%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221566%22%20cy%3D%22223%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.39%22%2F%3E%3Ccircle%20cx%3D%22674%22%20cy%3D%2250%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22656%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22712%22%20cy%3D%22992%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221576%22%20cy%3D%22476%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221096%22%20cy%3D%222%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22103%22%20cy%3D%22391%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%22317%22%20cy%3D%22969%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.44%22%2F%3E%3Ccircle%20cx%3D%221367%22%20cy%3D%22735%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221435%22%20cy%3D%2294%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.31%22%2F%3E%3Ccircle%20cx%3D%22403%22%20cy%3D%22156%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2258%22%20cy%3D%22813%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.32%22%2F%3E%3Ccircle%20cx%3D%22998%22%20cy%3D%22928%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.56%22%2F%3E%3Ccircle%20cx%3D%221595%22%20cy%3D%22301%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.43%22%2F%3E%3Ccircle%20cx%3D%22815%22%20cy%3D%2219%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.15%22%2F%3E%3Ccircle%20cx%3D%229%22%20cy%3D%22570%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.21%22%2F%3E%3Ccircle%20cx%3D%22573%22%20cy%3D%221000%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221530%22%20cy%3D%22565%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.52%22%2F%3E%3Ccircle%20cx%3D%221223%22%20cy%3D%2217%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.23%22%2F%3E%3Ccircle%20cx%3D%22184%22%20cy%3D%22306%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.14%22%2F%3E%3Ccircle%20cx%3D%22212%22%20cy%3D%22931%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.40%22%2F%3E%3Ccircle%20cx%3D%221258%22%20cy%3D%22810%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221511%22%20cy%3D%22152%22%20r%3D%221.3%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%22532%22%20cy%3D%2297%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%2217%22%20cy%3D%22740%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.28%22%2F%3E%3Ccircle%20cx%3D%22858%22%20cy%3D%22967%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221598%22%20cy%3D%22386%22%20r%3D%221.0%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.46%22%2F%3E%3Ccircle%20cx%3D%22956%22%20cy%3D%222%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.17%22%2F%3E%3Ccircle%20cx%3D%2243%22%20cy%3D%22481%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.18%22%2F%3E%3Ccircle%20cx%3D%22441%22%20cy%3D%22993%22%20r%3D%220.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.47%22%2F%3E%3Ccircle%20cx%3D%221460%22%20cy%3D%22651%22%20r%3D%220.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.55%22%2F%3E%3Ccircle%20cx%3D%221336%22%20cy%3D%2248%22%20r%3D%221.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.27%22%2F%3E%3Ccircle%20cx%3D%22284%22%20cy%3D%22228%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.12%22%2F%3E%3Ccircle%20cx%3D%22125%22%20cy%3D%22879%22%20r%3D%220.8%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.36%22%2F%3E%3Ccircle%20cx%3D%221135%22%20cy%3D%22874%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.57%22%2F%3E%3Ccircle%20cx%3D%221565%22%20cy%3D%22221%22%20r%3D%221.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.39%22%2F%3E%3Ccircle%20cx%3D%22670%22%20cy%3D%2251%22%20r%3D%221.7%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.13%22%2F%3E%3Ccircle%20cx%3D%220%22%20cy%3D%22658%22%20r%3D%221.1%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.24%22%2F%3E%3Ccircle%20cx%3D%22716%22%20cy%3D%22991%22%20r%3D%220.5%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.53%22%2F%3E%3Ccircle%20cx%3D%221577%22%20cy%3D%22473%22%20r%3D%220.9%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.50%22%2F%3E%3Ccircle%20cx%3D%221093%22%20cy%3D%222%22%20r%3D%221.6%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.20%22%2F%3E%3Ccircle%20cx%3D%22101%22%20cy%3D%22393%22%20r%3D%221.4%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.16%22%2F%3E%3Cpolyline%20points%3D%221108%2C318%201180%2C268%201262%2C282%201330%2C338%201296%2C428%201392%2C470%201472%2C404%22%20fill%3D%22none%22%20stroke%3D%22%238fa878%22%20stroke-width%3D%220.8%22%20opacity%3D%220.28%22%2F%3E%3Ccircle%20cx%3D%221108%22%20cy%3D%22318%22%20r%3D%222.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.7%22%2F%3E%3Ccircle%20cx%3D%221180%22%20cy%3D%22268%22%20r%3D%223.2%22%20fill%3D%22%23b8cf8f%22%20opacity%3D%220.95%22%2F%3E%3Ccircle%20cx%3D%221180%22%20cy%3D%22268%22%20r%3D%228%22%20fill%3D%22none%22%20stroke%3D%22%23b8cf8f%22%20stroke-width%3D%220.6%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%221262%22%20cy%3D%22282%22%20r%3D%223.2%22%20fill%3D%22%23b8cf8f%22%20opacity%3D%220.95%22%2F%3E%3Ccircle%20cx%3D%221262%22%20cy%3D%22282%22%20r%3D%228%22%20fill%3D%22none%22%20stroke%3D%22%23b8cf8f%22%20stroke-width%3D%220.6%22%20opacity%3D%220.35%22%2F%3E%3Ccircle%20cx%3D%221330%22%20cy%3D%22338%22%20r%3D%222.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.7%22%2F%3E%3Ccircle%20cx%3D%221296%22%20cy%3D%22428%22%20r%3D%222.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.7%22%2F%3E%3Ccircle%20cx%3D%221392%22%20cy%3D%22470%22%20r%3D%222.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.7%22%2F%3E%3Ccircle%20cx%3D%221472%22%20cy%3D%22404%22%20r%3D%222.2%22%20fill%3D%22%23cdd8c2%22%20opacity%3D%220.7%22%2F%3E%3C%2Fsvg%3E","shanlan":"data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%221600%22%20height%3D%221000%22%20viewBox%3D%220%200%201600%201000%22%3E%3Cdefs%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22mist%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23161c11%22%20stop-opacity%3D%220%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%231c2415%22%20stop-opacity%3D%220.5%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%20%20%3ClinearGradient%20id%3D%22air%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%220%22%20y2%3D%221%22%3E%0A%20%20%20%20%20%20%20%20%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23171d12%22%2F%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%230e120a%22%2F%3E%0A%20%20%20%20%20%20%3C%2FlinearGradient%3E%0A%20%20%20%20%3C%2Fdefs%3E%0A%20%20%20%20%3Crect%20width%3D%221600%22%20height%3D%221000%22%20fill%3D%22url(%23air)%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%20560%20L240%20380%20L430%20520%20L640%20330%20L860%20540%20L1080%20400%20L1300%20560%20L1470%20460%20L1600%20540%20L1600%201000%20L0%201000%20Z%22%20fill%3D%22%23131a0e%22%20opacity%3D%220.9%22%2F%3E%0A%20%20%20%20%3Crect%20y%3D%22480%22%20width%3D%221600%22%20height%3D%22240%22%20fill%3D%22url(%23mist)%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%20700%20L300%20540%20L560%20680%20L840%20520%20L1120%20700%20L1380%20590%20L1600%20690%20L1600%201000%20L0%201000%20Z%22%20fill%3D%22%230f150b%22%2F%3E%0A%20%20%20%20%3Cpath%20d%3D%22M0%20840%20L360%20700%20L720%20830%20L1060%20690%20L1420%20840%20L1600%20780%20L1600%201000%20L0%201000%20Z%22%20fill%3D%22%230b0f08%22%2F%3E%3C%2Fsvg%3E"};
+const WALL_DEFAULTS = {"mode":"off","src":"preset:xingye","opacity":40,"blur":0,"surface":30,"frost":0,"custom":""};
+/* ============ 设置面板 ============ */
+const shell = document.getElementById('stg-shell'), bd = document.getElementById('stg-backdrop');
+const entry = document.getElementById('stg-entry'), q = document.getElementById('stg-q');
+const pane = document.getElementById('stg-pane');
+const secs = [...pane.querySelectorAll('.stg-sec')], navBtns = [...document.querySelectorAll('.stg-nav button[data-sec]')];
+let stgOpen = false, curSec = 'dispatch';
+function openStg(sec) {
+  stgOpen = true; shell.classList.add('show'); bd.classList.add('show'); entry.setAttribute('aria-expanded', 'true');
+  if (sec) showSec(sec); q.value = ''; applyFilter(); setTimeout(() => q.focus(), 60);
+}
+function closeStg() { closeDd(); stgOpen = false; shell.classList.remove('show'); bd.classList.remove('show'); entry.setAttribute('aria-expanded', 'false'); entry.focus(); }
+function showSec(id) {
+  closeDd();
+  curSec = id;
+  navBtns.forEach(b => b.classList.toggle('active', b.dataset.sec === id));
+  secs.forEach(s => s.hidden = s.dataset.sec !== id);
+  pane.scrollTop = 0;
+}
+entry.addEventListener('click', () => stgOpen ? closeStg() : openStg());
+document.getElementById('stg-close').addEventListener('click', closeStg);
+bd.addEventListener('click', closeStg);
+navBtns.forEach(b => b.addEventListener('click', () => { q.value = ''; applyFilter(); showSec(b.dataset.sec); }));
+shell.addEventListener('click', e => {
+  if (!e.target.closest('.dd, .dd-menu')) closeDd();
+  const g = e.target.closest('[data-goto]'); if (g) { showSec(g.dataset.goto); return; }
+  const r = e.target.closest('[data-reset]'); if (r) {
+    if (r.dataset.reset === 'look') { Object.assign(wall, { mode: WALL_DEFAULTS.mode, src: WALL_DEFAULTS.src.replace('preset:', ''), op: WALL_DEFAULTS.opacity, blur: WALL_DEFAULTS.blur, surf: WALL_DEFAULTS.surface, frost: WALL_DEFAULTS.frost }); syncWallCtl(); }
+    toastMsg(`「${r.closest('.stg-sec-head').querySelector('h3').textContent}」已恢复默认`); return; }
+  const sw = e.target.closest('.switch'); if (sw) { sw.classList.toggle('on'); sw.setAttribute('aria-checked', sw.classList.contains('on')); return; }
+  const ddBtn = e.target.closest('.dd-btn'); if (ddBtn) { toggleDd(ddBtn.closest('.dd')); return; }
+  const ddItem = e.target.closest('.dd-item'); if (ddItem && ddOwner) {
+    const d = ddOwner;
+    ddItem.parentElement.querySelectorAll('.dd-item').forEach(x => { const on = x === ddItem; x.classList.toggle('sel', on); x.setAttribute('aria-selected', on); });
+    d.querySelector('.dd-val').textContent = ddItem.querySelector('.dd-item-label').textContent;
+    closeDd(); return;
+  }
+  const tab = e.target.closest('.filter-tabs button'); if (tab) { tab.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === tab)); if (tab.parentElement.id === 'w-mode') setWallMode(tab.dataset.v); return; }
+  const th = e.target.closest('.stg-thumb'); if (th) { th.parentElement.querySelectorAll('.stg-thumb').forEach(x => x.classList.toggle('active', x === th)); wall.src = th.dataset.p; applyWall(); return; }
+  const kb = e.target.closest('.stg-keys td.a button:not([data-goto])'); if (kb) { const tr = kb.closest('tr'); document.querySelectorAll('.stg-keys tr.rec').forEach(x => x.classList.remove('rec')); tr.classList.add('rec'); return; }
+});
+pane.addEventListener('keydown', e => { if (e.key === ' ' && e.target.classList.contains('switch')) { e.preventDefault(); e.target.click(); } });
+document.getElementById('p-wipe').addEventListener('click', () => toastMsg('(线上此处弹二次确认)'));
+
+/* 自绘下拉:打开时把菜单挂到 .stg-body(不滚动、且在对话框边界内),按触发钮算相对坐标;
+   关闭时挂回原 .dd 并清掉行内样式。pane 一滚就关,不做跟随。 */
+const stgBody = document.querySelector('.stg-body');
+let ddOwner = null;
+function closeDd() {
+  if (!ddOwner) return;
+  const menu = stgBody.querySelector(':scope > .dd-menu');
+  if (menu) { menu.classList.remove('open', 'dim'); menu.removeAttribute('style'); ddOwner.appendChild(menu); }
+  ddOwner.querySelector('.dd-btn').setAttribute('aria-expanded', 'false');
+  ddOwner = null;
+}
+function toggleDd(d) {
+  const same = ddOwner === d;
+  closeDd();
+  if (same) return;
+  const menu = d.querySelector('.dd-menu');
+  const bodyR = stgBody.getBoundingClientRect(), btnR = d.querySelector('.dd-btn').getBoundingClientRect();
+  stgBody.appendChild(menu);
+  menu.classList.add('open');
+  if (d.classList.contains('dim')) menu.classList.add('dim');
+  menu.style.width = btnR.width + 'px';
+  menu.style.left = (btnR.left - bodyR.left) + 'px';
+  const h = menu.offsetHeight, below = btnR.bottom - bodyR.top + 6, above = btnR.top - bodyR.top - 6 - h;
+  /* 下方放不下就向上翻;两边都放不下时仍取下方并让它贴住底缘 */
+  menu.style.top = (below + h > bodyR.height - 8 && above > 0 ? above : Math.min(below, bodyR.height - h - 8)) + 'px';
+  d.querySelector('.dd-btn').setAttribute('aria-expanded', 'true');
+  ddOwner = d;
+}
+pane.addEventListener('scroll', closeDd, { passive: true });
+
+/* 搜索:跨分区筛行,命中词高亮;清空即回到当前分区 */
+function applyFilter() {
+  closeDd();
+  const s = q.value.trim().toLowerCase();
+  const rows = [...pane.querySelectorAll('.stg-row, .stg-keys tr')];
+  rows.forEach(r => { r.querySelectorAll('mark').forEach(m => m.replaceWith(m.textContent)); });
+  if (!s) { rows.forEach(r => r.hidden = false); pane.querySelectorAll('.stg-group, .stg-sec-head').forEach(x => x.hidden = false); showSec(curSec); document.getElementById('stg-empty').hidden = true; return; }
+  let n = 0;
+  secs.forEach(sec => sec.hidden = false);
+  pane.querySelectorAll('.stg-group').forEach(x => x.hidden = true);
+  rows.forEach(r => {
+    const hit = r.textContent.toLowerCase().includes(s); r.hidden = !hit; if (!hit) return; n++;
+    const lab = r.querySelector('.stg-lab span, td:first-child'); if (!lab) return;
+    const walker = document.createTreeWalker(lab, NodeFilter.SHOW_TEXT); const nodes = []; while (walker.nextNode()) nodes.push(walker.currentNode);
+    nodes.forEach(t => { const i = t.textContent.toLowerCase().indexOf(s); if (i < 0) return; const m = document.createElement('mark'); const after = t.splitText(i); after.splitText(s.length); m.textContent = after.textContent; after.replaceWith(m); });
+  });
+  secs.forEach(sec => { const any = [...sec.querySelectorAll('.stg-row, .stg-keys tr')].some(r => !r.hidden); sec.hidden = !any; });
+  navBtns.forEach(b => b.classList.remove('active'));
+  document.getElementById('stg-empty').hidden = n > 0;
+}
+q.addEventListener('input', applyFilter);
+
+/* 壁纸:三档真的切,便于在原型里直接看容器在玻璃档下的表现 */
+const wall = { mode: 'glass', src: 'xingye', op: 40, blur: 0, surf: 30, frost: 12 };
+function setWallMode(m) { wall.mode = m; document.querySelectorAll('#w-mode button').forEach(b => b.classList.toggle('active', b.dataset.v === m)); applyWall(); }
+function applyWall() {
+  const b = document.body;
+  b.classList.toggle('wall-on', wall.mode !== 'off'); b.classList.toggle('wall-glass', wall.mode === 'glass');
+  document.getElementById('wall').style.backgroundImage = `url("${WALL_URLS[wall.src]}")`;
+  b.style.setProperty('--wall-opacity', wall.op / 100); b.style.setProperty('--wall-blur', wall.blur + 'px');
+  b.style.setProperty('--wall-surface', wall.surf + '%'); b.style.setProperty('--wall-frost', wall.frost + 'px');
+  document.querySelectorAll('.w-dep').forEach(r => r.classList.toggle('is-off', wall.mode === 'off'));
+  document.querySelectorAll('.w-glass').forEach(r => r.classList.toggle('is-off', wall.mode !== 'glass'));
+  const name = wall.src === 'xingye' ? '星野' : '山岚';
+  document.getElementById('stg-entry-state').textContent = wall.mode === 'off' ? '壁纸关' : `${name} · ${wall.mode === 'glass' ? '玻璃' : '壁纸'} ${wall.op}%`;
+}
+for (const [id, key, unit] of [['w-op','op','%'],['w-blur','blur','px'],['w-surf','surf','%'],['w-frost','frost','px']]) {
+  const el = document.getElementById(id); el.addEventListener('input', () => { wall[key] = +el.value; document.getElementById(id + '-v').textContent = el.value + unit; applyWall(); });
+}
+document.querySelectorAll('.stg-thumb').forEach(t => { t.style.backgroundImage = `url("${WALL_URLS[t.dataset.p]}")`; });
+function syncWallCtl() {
+  document.querySelectorAll('#w-mode button').forEach(b => b.classList.toggle('active', b.dataset.v === wall.mode));
+  document.querySelectorAll('.stg-thumb').forEach(t => t.classList.toggle('active', t.dataset.p === wall.src));
+  for (const [id, key, unit] of [['w-op','op','%'],['w-blur','blur','px'],['w-surf','surf','%'],['w-frost','frost','px']]) {
+    document.getElementById(id).value = wall[key];
+    document.getElementById(id + '-v').textContent = wall[key] + unit;
+  }
+  applyWall();
+}
+syncWallCtl();
+
+/* 键盘:⌘, 开关;面板内 Esc 关、⌘F 聚焦搜索;改键录入态吃一次按键 */
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === ',') { e.preventDefault(); stgOpen ? closeStg() : openStg(); return; }
+  if (!stgOpen) return;
+  const rec = document.querySelector('.stg-keys tr.rec');
+  if (rec) {
+    e.preventDefault(); e.stopPropagation();
+    if (e.key === 'Escape') { rec.classList.remove('rec'); return; }
+    if (['Meta','Control','Alt','Shift'].includes(e.key)) return;
+    const combo = (e.ctrlKey?'⌃':'') + (e.altKey?'⌥':'') + (e.shiftKey?'⇧':'') + (e.metaKey?'⌘':'') + (e.key.length === 1 ? e.key.toUpperCase() : e.key.replace('Arrow','').replace('Enter','⏎'));
+    const used = [...document.querySelectorAll('.stg-keys tr:not(.rec) kbd')].find(k => k.textContent === combo);
+    rec.classList.remove('rec'); rec.querySelector('td.k').innerHTML = `<kbd>${combo}</kbd>` + (used ? `<span class="stg-conf">⚠ 与「${used.closest('tr').querySelector('td').firstChild.textContent}」冲突</span>` : '');
+    rec.classList.toggle('conflict', !!used);
+    return;
+  }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (document.querySelector('.dd.open')) closeDd(); else closeStg(); }
+  else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); e.stopPropagation(); q.focus(); q.select(); }
+}, true);
+
+function toastMsg(t) { let el = document.querySelector('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; document.body.appendChild(el); } el.textContent = t; el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 1800); }
+
+/* 原型脚手架 */
+document.getElementById('sw-open').addEventListener('click', () => openStg());
+document.getElementById('sw-off').addEventListener('click', () => setWallMode('off'));
+document.getElementById('sw-wall').addEventListener('click', () => setWallMode('wall'));
+document.getElementById('sw-glass').addEventListener('click', () => setWallMode('glass'));
+
+</script>
+</body>
+</html>
