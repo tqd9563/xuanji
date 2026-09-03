@@ -11,7 +11,7 @@
  *
  * 两半都永不写 ~/.claude(架构铁律 2)。
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { KEYMAP_DEFAULTS, normalizeKeymap, type ActionId, type Keymap } from '@/lib/keymap';
 

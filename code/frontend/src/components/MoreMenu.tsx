@@ -4,7 +4,6 @@
 import { api } from '@/api/client';
 import { usePoll } from '@/lib/hooks';
 import type { ViewId } from '@/lib/hooks';
-import { toast } from '@/components/shared';
 import { wallStateLabel, type WallState } from '@/lib/wallpaper';
 
 const ICONS: Record<string, string> = {
@@ -34,10 +33,12 @@ export function MoreMenu({
   onNav,
   health,
   wall,
+  onOpenSettings,
 }: {
   onNav: (v: ViewId) => void;
   health: { cli: string | null } | null;
   wall: WallState;
+  onOpenSettings: () => void;
 }) {
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const { data: skillsData } = usePoll(api.skills, 60_000);
@@ -66,9 +67,9 @@ export function MoreMenu({
         />
       </div>
       <div className="more-list">
-        {/* 壁纸设置沿用桌面版词汇(面板/预设缩略图/多组滑杆),移动端触屏交互留待后续迭代;
-            此处先落地入口行 + 当前状态展示,与原型 stub 行为一致 */}
-        <Row id="wallpaper" label="壁纸" hint={wallStateLabel(wall)} onClick={() => toast('壁纸设置沿桌面版词汇,移动端后续迭代')} />
+        {/* 设置对话框在窄屏转全屏、左栏分区退化为顶部横向 tab,故移动端直接进同一个面板,
+            不再另做一套。行尾提示当前壁纸档位,与桌面侧栏入口的信息一致 */}
+        <Row id="wallpaper" label="设置" hint={wallStateLabel(wall)} onClick={onOpenSettings} />
       </div>
       <div className="more-foot">
         <div>

@@ -1660,48 +1660,125 @@ body.wall-on .statusbar.scrolled {
   -webkit-backdrop-filter: blur(10px);
 }
 
-.wall-btn {
-  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
-  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
-  font-size: 0.75rem; color: var(--muted); text-align: left;
-  transition: background 150ms var(--ease), color 150ms var(--ease);
-}
-.wall-btn:hover { background: var(--hover); color: var(--ink); }
-.wall-btn svg { width: 14px; height: 14px; flex: none; }
-.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+/* ============ 设置(居中对话框,DESIGN.md「设置」组件) ============ */
+/* 入口:替代原壁纸按钮,位置/尺寸/字号与 .wall-btn 一致 */
+.stg-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; margin: -4px -8px 8px; border-radius: var(--r-s); font-size: 0.75rem; color: var(--muted); text-align: left; }
+.stg-entry:hover { background: var(--hover); color: var(--ink); }
+.stg-entry svg { width: 14px; height: 14px; flex: none; }
+.stg-entry-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
 
-.wall-pop {
-  position: fixed; left: 14px; bottom: 92px; width: 320px; /* 悬于 side-foot 之上,不遮入口按钮 */
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
-  padding: 14px 16px 12px; z-index: var(--z-drawer);
-  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
-  animation: view-in 200ms var(--ease);
+/* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
+.drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }
+/* 两栏几何收在变量里:头部要按同一组数对齐,硬编码两处迟早对不上 */
+.modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
+  width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+/* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
+body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
+
+.stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
+/* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
+   「设置」二字也因此与下方分区导航的文字左缘对齐(两者都缩进 20px) */
+.stg-head h2 { font-size: 0.9375rem; flex: none;
+  width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
+.stg-search { flex: 1; min-width: 0; position: relative; }
+.stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; }
+.stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
+.stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
+
+.stg-body { flex: 1; min-height: 0; display: flex; }
+.stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
+.stg-nav button:hover { background: var(--hover); color: var(--ink); }
+.stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+.stg-nav button svg { width: 14px; height: 14px; flex: none; }
+/* 图例:每条一行不折行,标记与释义同基线;左栏窄,故释义取「是否跨设备」这一句关键区分,
+   完整存储位置说明在「高级」分区底部,不在这里重复 */
+.stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
+.stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
+.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
+.stg-sec { padding-top: 18px; }
+.stg-sec[hidden] { display: none; }
+.stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.stg-sec-head h3 { font-size: 0.875rem; color: var(--ink); }
+.stg-sec-head p { font-size: 0.75rem; color: var(--faint); }
+.stg-sec-head .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; }
+.stg-group { font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 2px; }
+
+/* 一行一项:标签+说明 | 控件 | 存储范围标记。行与行用 line-soft 分隔,不套卡片 */
+.stg-row { display: flex; align-items: center; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.stg-row:last-child { border-bottom: 0; }
+.stg-row[hidden] { display: none; }
+.stg-lab { flex: 1; min-width: 0; }
+.stg-lab span { display: block; font-size: 0.8125rem; color: var(--ink); }
+.stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+.stg-lab mark { background: var(--tint-jade); color: var(--jade); border-radius: 2px; padding: 0 1px; }
+.stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+/* 下拉一律复用自绘 .dd.down(模态内变体),不用原生 select —— 原生弹层由 OS 绘制无法主题化。
+   语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度/权限走 .dd.dim */
+.stg-ctl .dd.down { width: 220px; }
+#stg-model-dd .dd-btn { color: var(--violet); }
+#stg-cwd-dd .dd-btn { color: var(--blue); }
+/* 菜单的容身之处:.stg-pane 会滚动,绝对定位的菜单被它裁掉;而 fixed 也不行 ——
+   .modal 用 transform 居中,transform 祖先会成为 fixed 的包含块,菜单会按对话框左上角算坐标飞出去
+   再被 overflow:hidden 裁掉。故打开时把菜单挂到既不滚动、又在对话框边界内的 .stg-body 上,
+   按触发钮算相对坐标;pane 一滚就关。实现层用带 portal 的 Select(Radix)同理,portal 目标别选 body 以外。 */
+.stg-body { position: relative; }
+.stg-body > .dd-menu { position: absolute; bottom: auto; min-width: 0; }
+.stg-body > .dd-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.stg-body > .dd-menu.dim .dd-item { font-family: var(--sans); }
+.stg-ctl .filter-tabs button { padding: 4px 10px; }
+.stg-ctl .input[type=text], .stg-ctl .input[type=url] { width: 220px; padding: 5px 10px; font-size: 0.75rem; }
+.stg-ctl input[type=range] { width: 130px; accent-color: var(--jade); }
+.stg-ctl .stg-val { width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 存储范围标记:本机 = 只在这台浏览器;账户 = 落后端 meta 表,手机端同步 */
+.stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
+.stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
+.stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
+.stg-thumbs { display: flex; gap: 8px; }
+/* 缩略图背景由 JS 用线上同一份 WALL_PRESETS url 填充,不另造 mock */
+.stg-thumb { width: 52px; height: 32px; border-radius: 4px; border: 1px solid var(--line); background-size: cover; cursor: pointer; }
+.stg-thumb:hover { border-color: var(--muted); }
+.stg-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); }
+
+/* 快捷键表:动作 | 键位 | 改键。键位用 kbd 词汇(与 .to-foot kbd 同规格) */
+.stg-keys { width: 100%; border-collapse: collapse; }
+.stg-keys td { padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; vertical-align: middle; }
+.stg-keys td:first-child { color: var(--ink); }
+.stg-keys td small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 1px; }
+.stg-keys td.k { width: 150px; white-space: nowrap; }
+.stg-keys td.a { width: 60px; text-align: right; }
+.stg-keys td.a button { font-size: 0.6875rem; color: var(--faint); padding: 2px 6px; border-radius: 3px; }
+.stg-keys td.a button:hover { background: var(--hover); color: var(--ink); }
+.stg-keys tr.rec td.k { color: var(--jade); font-size: 0.75rem; }
+.stg-keys tr.rec td.k::after { content: "按下新组合…"; animation: stg-blink 1s steps(2) infinite; }
+.stg-keys kbd { font-family: var(--mono); font-size: 0.6875rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--surface-2); }
+.stg-keys kbd + kbd { margin-left: 3px; }
+.stg-keys tr.conflict kbd { border-color: var(--amber); color: var(--amber); }
+.stg-keys .stg-conf { font-size: 0.625rem; color: var(--amber); margin-left: 6px; }
+.stg-keys tr.fixed kbd { border-style: dashed; }
+@keyframes stg-blink { 50% { opacity: 0.3; } }
+
+.stg-storage { font-size: 0.6875rem; color: var(--faint); line-height: 1.6; margin-top: 12px; }
+.stg-storage code { font-family: var(--mono); color: var(--muted); }
+.stg-empty { padding: 40px 0; text-align: center; font-size: 0.8125rem; color: var(--faint); }
+
+/* 手机:整屏覆盖,左栏退化为顶部横向 tab */
+@media (max-width: 720px) {
+  .drawer.stg-drawer, .modal.stg-modal { width: 100vw; height: 100dvh; max-height: none; top: 0; left: 0; right: 0; transform: none; border: 0; border-radius: 0; }
+  .modal.stg-modal.show { transform: none; }
+  .stg-head h2 { width: auto; }
+  .stg-body { flex-direction: column; }
+  .stg-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 8px 12px; }
+  .stg-nav button { flex: none; padding: 6px 10px; }
+  .stg-nav .stg-nav-foot { display: none; }
+  .stg-row { flex-wrap: wrap; }
+  .stg-ctl { width: 100%; }
+  .stg-ctl .dd.down { flex: 1; width: auto; }
+  .stg-scope { order: -1; margin-left: auto; }
+  .stg-search kbd { display: none; }
+  .stg-keys td.a { display: none; }
 }
-.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
-.wp-head h3 { font-size: 0.8125rem; }
-.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
-.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
-.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.wp-thumbs { display: flex; gap: 8px; flex: 1; }
-.wp-thumb {
-  width: 64px; height: 40px; border-radius: var(--r-s);
-  border: 1px solid var(--line); background-size: cover; background-position: center;
-  transition: border-color 150ms var(--ease); flex: none;
-}
-.wp-thumb:hover { border-color: var(--muted); }
-.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
-.wp-row input[type=range] {
-  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
-  border-radius: 99px; background: var(--line); cursor: pointer;
-}
-.wp-row input[type=range]::-webkit-slider-thumb {
-  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--jade); border: none;
-}
-.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
-.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
-.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
+
 
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
@@ -2221,3 +2298,19 @@ body.wall-glass .turnhead { background: oklch(0.165 0.007 120); }
 @media (prefers-reduced-motion: reduce) {
   .turnhead, .turnhead .th-text, .turnhead .th-btn, .chat-msg.user .body { transition: none; }
 }
+
+/* ============ 本机偏好落到 <html>(见 lib/prefs.ts applyLocalToDom) ============ */
+/* 字号走 root font-size,既有样式全用 rem,故整站等比跟随,不必逐处改 */
+html[data-font-scale="sm"] { font-size: 15px; }
+html[data-font-scale="lg"] { font-size: 17px; }
+/* 「减少动效」显式开时按 prefers-reduced-motion 同款降级:过渡与动画一律瞬时完成。
+   显式关则强行保留动效,即便系统开了减弱开关——这是用户在本机的最终决定。 */
+html[data-motion="on"] *,
+html[data-motion="on"] *::before,
+html[data-motion="on"] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+html[data-turn-head="false"] .turnhead { display: none; }
