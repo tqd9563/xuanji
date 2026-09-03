@@ -145,9 +145,9 @@ const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 const TA_MIN_H = 56;
 /** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
 const TA_PLACEHOLDER = '描述要派发的任务…';
-const HINT_DEFAULT = 'Enter 发送 · Shift+Enter 换行 · ↑↓ 历史';
-/** 光标在代码块里时的提示:此时 Enter 是换行,发送要么把光标移出代码块,要么点「发送」 */
-const HINT_FENCE = '代码块内 · Enter 换行 · 移出代码块或点发送';
+const HINT_DEFAULT = 'Enter 换行 · ⌘Enter 发送 · ↑↓ 历史';
+/** 光标在代码块里时的提示:Enter 语义与外面一致(换行),只是把「在代码块里」这件事说明白 */
+const HINT_FENCE = '代码块内 · Enter 换行 · ⌘Enter 发送';
 
 /** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -336,7 +336,7 @@ export function Dispatch({ active }: { active: boolean }) {
   // 走命令式 DOM 而非 React state:输入框每敲一个键都重渲染整个派发页(含消息区)太贵。
   const mirrorRef = useRef<HTMLDivElement>(null);
   const hintRef = useRef<HTMLSpanElement>(null);
-  /** 只更新底栏提示(光标移动即可改变 Enter 语义,不必重绘整层镜像) */
+  /** 只更新底栏提示(光标进出代码块换一份提示,不必重绘整层镜像) */
   const syncHint = () => {
     const ta = taRef.current;
     const hint = hintRef.current;
@@ -848,17 +848,7 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey, true);
   }, [lightbox]);
 
-  /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
-  const wrapupRef = useRef<() => void>(() => {});
-  wrapupRef.current = () => {
-    if (!canWrapup(d.started, !!resumeInfo)) {
-      toast('这里还没有可收口的上下文,先派发或续接一个会话');
-      return;
-    }
-    void submit(WRAPUP_PROMPT);
-  };
-
-  // ⌘M 切换模型 / ⌘D 切换工作目录 / ⌘⏎ 任务总结:仅派发页生效,等同于在输入框敲 /model、/wd、/wrapup 回车
+  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车
   // (见 submit() 同名分支),直接执行而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
   useEffect(() => {
     if (!active) return;
@@ -874,10 +864,6 @@ export function Dispatch({ active }: { active: boolean }) {
         taRef.current?.blur();
         setWdQuery('');
         setWdPalette(true);
-      } else if (e.key === 'Enter' && !e.isComposing) {
-        // isComposing:中文输入法候选窗里的回车不劫持(否则选词就变成发总结)
-        e.preventDefault();
-        wrapupRef.current();
       }
     };
     document.addEventListener('keydown', onKey);
@@ -1317,21 +1303,19 @@ export function Dispatch({ active }: { active: boolean }) {
                 applyEdit(edit(ta.value, ta.selectionStart, ta.selectionEnd));
                 return;
               }
-              // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
-              // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
-              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
-                // 光标在代码块里:Enter 让位给换行(正在写代码的人不是想发送),
-                // 交给原生行为并在下一帧同步高亮与提示
-                if (isInFence(ta.value, ta.selectionStart)) {
-                  requestAnimationFrame(growTa);
+              // 发送只认 ⌘⏎(Ctrl+⏎ 兼容非 mac);裸 Enter 与 Shift+Enter 一律换行,
+              // 交给原生行为并在下一帧同步高亮与高度。isComposing:中文候选窗里的回车不劫持。
+              if (e.key === 'Enter') {
+                if ((e.metaKey || e.ctrlKey) && !e.nativeEvent.isComposing) {
+                  e.preventDefault();
+                  void submit();
                   return;
                 }
-                e.preventDefault();
-                void submit();
+                if (!e.metaKey && !e.ctrlKey) requestAnimationFrame(growTa);
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
               // ↑/↓ 回溯历史 prompt(类 shell history)。草稿态(尚未开始浏览)只在草稿不含换行时
-              // 接管方向键,避免打断 Shift+Enter 多行草稿的行间移动;一旦已经在浏览历史(某条历史
+              // 接管方向键,避免打断多行草稿的行间移动;一旦已经在浏览历史(某条历史
               // 本身可能带换行),后续 ↑/↓ 无条件继续翻,不会被中途某条多行历史卡住(2026-07-15 修复)。
               if (
                 (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
@@ -1363,20 +1347,6 @@ export function Dispatch({ active }: { active: boolean }) {
           {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
           <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
-            {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
-                但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}
-            <button
-              className="wrapup-btn"
-              onClick={() => wrapupRef.current()}
-              disabled={!canWrapup(d.started, !!resumeInfo)}
-              title={
-                canWrapup(d.started, !!resumeInfo)
-                  ? '⌘⏎ · 把本会话刚完成的任务沉淀成一张收口卡,落到 ~/.claude/worklog/(等同输入 /wrapup);边界由 Claude 识别后与你确认'
-                  : '这里还没有可收口的上下文,先派发或续接一个会话'
-              }
-            >
-              <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
-            </button>
             <span className="hint" ref={hintRef}>{HINT_DEFAULT}</span>
             <span className="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
             {d.status.state === 'working' && (

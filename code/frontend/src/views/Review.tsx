@@ -139,7 +139,7 @@ export function Review() {
           {data && data.cards.length === 0 && (
             <Empty>
               <p>本周还没有任务总结。</p>
-              <p style={{ color: 'var(--faint)' }}>任务验收后在派发页点「⚑ 任务总结」(⌘⏎)沉淀一条,周报会更准、更省。</p>
+              <p style={{ color: 'var(--faint)' }}>任务验收后在派发页输入 /wrapup 沉淀一条,周报会更准、更省。</p>
             </Empty>
           )}
           {data?.cards.map((c) => <ReviewCardRow key={c.name} c={c} />)}

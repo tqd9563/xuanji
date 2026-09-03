@@ -1210,22 +1210,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 @media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
-/* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
-   与旁边 faint 灰字 hint 一眼拉开层级;不加脉冲/发光,稀缺的玉色本身就是高亮(一成玉规则内) */
-.wrapup-btn {
-  display: inline-flex; align-items: center; gap: 6px; flex: none;
-  padding: 4px 12px; border-radius: var(--r-s);
-  border: 1px solid color-mix(in oklab, var(--jade) 40%, transparent);
-  background: var(--tint-jade); color: var(--jade);
-  font-size: 0.75rem; font-weight: 600; cursor: pointer;
-  transition: background 150ms var(--ease), border-color 150ms var(--ease);
-}
-.wrapup-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--jade) 22%, transparent); border-color: var(--jade); }
-.wrapup-btn:active:not(:disabled) { transform: translateY(1px); }
-.wrapup-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.wrapup-btn .flag { font-size: 0.8125rem; line-height: 1; }
-/* 键位角标:mono 承担「机器的话」,不与按钮文字争字重 */
-.wrapup-btn .kbd { font-family: var(--mono); font-size: 0.625rem; opacity: 0.8; letter-spacing: 0.02em; }
 .composer .bg-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); margin-left: auto; cursor: pointer; }
 /* 发送按钮:桌面文字常驻,移动端切图标(见「移动端」媒体查询块),二选一由 CSS 驱动而非 JS 条件渲染 */
 .send-btn-icon { display: none; }
@@ -1917,9 +1901,6 @@ body.wall-on .statusbar.scrolled {
   .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */
   .composer .bg-opt { min-height: 44px; gap: 0; }
   .composer .bg-opt-label { display: none; } /* 说明文字挪进 title/aria-label,腾出宽度给发送按钮 */
-  /* 任务总结:移动端无物理键盘,键位角标无意义;按钮本体保留但收窄并撑到 44px 触控区(四四触控规则) */
-  .wrapup-btn .kbd { display: none; }
-  .wrapup-btn { min-height: 44px; padding: 4px 10px; }
   /* 发送按钮在移动端切图标(44×44 方形触控区),不再是会被挤扁的文字按钮 */
   .send-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
   .send-btn-label { display: none; }
