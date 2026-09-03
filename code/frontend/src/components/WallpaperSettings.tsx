@@ -2,7 +2,6 @@
  * 壁纸设置字段组:现在只作为「设置 › 外观」分区的一部分出现,不再自带侧栏入口与弹层。
  * 参数含义与默认值见 DESIGN.md「外观 · 壁纸」——默认 40/0/30/0 是用户实测确认的舒适档。
  */
-import { useRef } from 'react';
 import { toast } from '@/components/shared';
 import { SettingsRow } from '@/components/Settings';
 import { saveLocalImage, WALL_PRESETS, type WallMode, type WallState } from '@/lib/wallpaper';
@@ -23,8 +22,6 @@ export function WallpaperFields({
   /** 当前搜索词的命中判定,与其它设置项共用同一套行布局与存储范围标记 */
   hit: (...text: (string | undefined)[]) => boolean;
 }) {
-  const fileRef = useRef<HTMLInputElement | null>(null);
-
   const offAll = wall.mode === 'off';
   const offGlass = wall.mode !== 'glass';
 
@@ -91,19 +88,20 @@ export function WallpaperFields({
             />
           ))}
         </div>
-        <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+        {/* 用 label 包住 file input,而不是按钮里 fileRef.click():
+            label 的激活行为是浏览器原生打开选择器,不依赖「程序化 click 是否被判定为用户手势」——
+            WKWebView 与部分自动化环境会拦下程序化 click,表现为「点了没反应」(2026-09-03 用户实测)。 */}
+        <label className="btn btn-sm stg-file">
           本地…
-        </button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          hidden
-          onChange={(e) => {
-            onPickFile(e.target.files?.[0]);
-            e.target.value = '';
-          }}
-        />
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              onPickFile(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
+        </label>
         <input
           className="input"
           type="url"
