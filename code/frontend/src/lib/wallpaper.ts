@@ -221,7 +221,9 @@ export function wallSrcUrl(w: WallState): string {
 }
 
 export function wallSrcName(w: WallState): string {
-  if (w.src === 'custom') return '本地图片';
+  // 「本地」而非「本地图片」:这个名字要塞进侧栏入口那条窄行,与预设名(星野/山岚)和 URL
+  // 一样保持 2 字,最小字号下才不会把后面的档位与百分比挤成省略号
+  if (w.src === 'custom') return '本地';
   if (w.src.startsWith('preset:')) {
     return (WALL_PRESETS.find((p) => p.id === w.src.slice(7)) ?? WALL_PRESETS[0]!).name;
   }
