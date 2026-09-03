@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
-import { getAccount, useAccountPrefs, useLocalPrefs } from '@/lib/prefs';
+import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
@@ -147,9 +147,13 @@ const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 const TA_MIN_H = 56;
 /** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
 const TA_PLACEHOLDER = '描述要派发的任务…';
-const HINT_DEFAULT = 'Enter 换行 · ⌘Enter 发送 · ↑↓ 历史';
-/** 光标在代码块里时的提示:Enter 语义与外面一致(换行),只是把「在代码块里」这件事说明白 */
-const HINT_FENCE = '代码块内 · Enter 换行 · ⌘Enter 发送';
+/** 输入框底栏提示:必须跟着「设置 › 派发 › 发送键」走——
+ *  提示与实际按键语义不一致,比没有提示更糟。 */
+const hintText = (sendKey: SendKey, fenced: boolean) => {
+  const keys = sendKey === 'enter' ? 'Enter 发送 · ⇧Enter 换行' : 'Enter 换行 · ⌘Enter 发送';
+  // 光标在代码块里时把「在代码块里」这件事说明白,键位语义与外面一致
+  return fenced ? `代码块内 · ${keys}` : `${keys} · ↑↓ 历史`;
+};
 
 /** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -314,6 +318,9 @@ export function Dispatch({ active }: { active: boolean }) {
   /** document 级键盘监听按 active 挂载,不应因改键而反复重挂;键位经 ref 读最新值 */
   const keymapRef = useRef(localPrefs.keymap);
   keymapRef.current = localPrefs.keymap;
+  /** 底栏提示由命令式代码按光标位置改写,需要一份随时可读的最新发送键语义 */
+  const sendKeyRef = useRef(localPrefs.sendKey);
+  sendKeyRef.current = localPrefs.sendKey;
   useEffect(() => {
     if (!prefsLoaded || prefsAppliedRef.current) return;
     prefsAppliedRef.current = true;
@@ -362,7 +369,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!ta || !hint) return;
     const fenced = isInFence(ta.value, ta.selectionStart);
     hint.classList.toggle('in-fence', fenced);
-    hint.textContent = fenced ? HINT_FENCE : HINT_DEFAULT;
+    hint.textContent = hintText(sendKeyRef.current, fenced);
   };
   // 挂载即画一次镜像:此时输入框通常是空的,画的是占位文案(textarea 自己的 placeholder 被透明文字色吃掉)
   useEffect(() => {
@@ -468,11 +475,11 @@ export function Dispatch({ active }: { active: boolean }) {
 
   const projects = projectsData?.projects ?? [];
   const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
-  const curProject = projects.find((p) => p.path === effectiveCwd);
   /** 未显式选择时依次退到:设置里的默认目录 → 候选列表首项。
    *  默认目录可能已从 ~/.claude/projects 消失,故要校验它仍在候选里。 */
   const prefCwd = prefs.cwd && cwdOptions.includes(prefs.cwd) ? prefs.cwd : '';
   const effectiveCwd = cwd || prefCwd || cwdOptions[0] || '';
+  const curProject = projects.find((p) => p.path === effectiveCwd);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
@@ -1383,7 +1390,7 @@ export function Dispatch({ active }: { active: boolean }) {
           {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
           <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
-            <span className="hint" ref={hintRef}>{HINT_DEFAULT}</span>
+            <span className="hint" ref={hintRef}>{hintText(localPrefs.sendKey, false)}</span>
             <span className="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>

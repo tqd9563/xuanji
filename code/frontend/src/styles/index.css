@@ -1777,6 +1777,12 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
   .stg-scope { order: -1; margin-left: auto; }
   .stg-search kbd { display: none; }
   .stg-keys td.a { display: none; }
+  /* 窄屏下标题与按钮各自不参与压缩,说明文字整行落到第二行——
+     否则 flex 会先压标题,把「派发」两个字挤成竖排(2026-09-03 实测) */
+  .stg-sec-head { flex-wrap: wrap; }
+  .stg-sec-head h3,
+  .stg-sec-head .btn-quiet { flex: none; }
+  .stg-sec-head p { flex: 1 0 100%; order: 3; margin-top: 2px; }
 }
 
 
