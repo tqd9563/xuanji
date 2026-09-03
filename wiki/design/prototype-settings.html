@@ -2302,7 +2302,19 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
 .stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
 .stg-lab mark { background: var(--tint-jade); color: var(--jade); border-radius: 2px; padding: 0 1px; }
 .stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
-.stg-ctl select.input { min-width: 180px; padding: 5px 28px 5px 10px; font-size: 0.75rem; font-family: var(--mono); }
+/* 下拉一律复用自绘 .dd.down(模态内变体),不用原生 select —— 原生弹层由 OS 绘制无法主题化。
+   语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度/权限走 .dd.dim */
+.stg-ctl .dd.down { width: 220px; }
+#stg-model-dd .dd-btn { color: var(--violet); }
+#stg-cwd-dd .dd-btn { color: var(--blue); }
+/* 菜单的容身之处:.stg-pane 会滚动,绝对定位的菜单被它裁掉;而 fixed 也不行 ——
+   .modal 用 transform 居中,transform 祖先会成为 fixed 的包含块,菜单会按对话框左上角算坐标飞出去
+   再被 overflow:hidden 裁掉。故打开时把菜单挂到既不滚动、又在对话框边界内的 .stg-body 上,
+   按触发钮算相对坐标;pane 一滚就关。实现层用带 portal 的 Select(Radix)同理,portal 目标别选 body 以外。 */
+.stg-body { position: relative; }
+.stg-body > .dd-menu { position: absolute; bottom: auto; min-width: 0; }
+.stg-body > .dd-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.stg-body > .dd-menu.dim .dd-item { font-family: var(--sans); }
 .stg-ctl .filter-tabs button { padding: 4px 10px; }
 .stg-ctl .input[type=text], .stg-ctl .input[type=url] { width: 220px; padding: 5px 10px; font-size: 0.75rem; }
 .stg-ctl input[type=range] { width: 130px; accent-color: var(--jade); }
@@ -2350,7 +2362,7 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
   .stg-nav .stg-nav-foot { display: none; }
   .stg-row { flex-wrap: wrap; }
   .stg-ctl { width: 100%; }
-  .stg-ctl select.input { flex: 1; }
+  .stg-ctl .dd.down { flex: 1; width: auto; }
   .stg-scope { order: -1; margin-left: auto; }
   .stg-search kbd { display: none; }
   .stg-keys td.a { display: none; }
@@ -2489,13 +2501,13 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
       <section class="stg-sec" data-sec="dispatch">
         <div class="stg-sec-head"><h3>派发</h3><p>新会话的初始参数;派发页底栏仍可临时改,只影响当次</p><button class="btn btn-quiet" data-reset="dispatch">恢复默认</button></div>
         <div class="stg-row"><div class="stg-lab"><span>默认模型</span><small>现在是「上次用过的」,这里改成固定值后不再随上次漂移</small></div>
-          <div class="stg-ctl"><select class="input" id="p-model"><option value="last">沿用上次(当前 fable)</option><option value="claude-fable-5-1">claude-fable-5-1</option><option value="claude-opus-5">claude-opus-5</option><option value="claude-opus-5[1m]">claude-opus-5[1m]</option><option value="claude-sonnet-5">claude-sonnet-5</option><option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</option></select></div><span class="stg-scope" data-scope="acct">账户</span></div>
+          <div class="stg-ctl"><span class="dd down" id="stg-model-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">沿用上次(当前 fable)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">沿用上次(当前 fable)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-fable-5-1</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-opus-5</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-opus-5[1m]</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-sonnet-5</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">claude-haiku-4-5-20251001</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>默认思考深度</span><small>自动 = 按模型取默认(opus-5 → low,其余交给模型自身)</small></div>
-          <div class="stg-ctl"><select class="input" id="p-effort"><option>(自动)</option><option>low</option><option>medium</option><option>high</option><option>xhigh</option><option>max</option></select></div><span class="stg-scope" data-scope="acct">账户</span></div>
+          <div class="stg-ctl"><span class="dd down dim" id="stg-effort-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">(自动)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">(自动)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">low</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">medium</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">high</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">xhigh</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">max</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>默认权限模式</span><small>后台派发(--bg)固定为 default,不受此项影响</small></div>
-          <div class="stg-ctl"><select class="input" id="p-perm"><option>default(逐项审批)</option><option>acceptEdits</option><option selected>bypassPermissions(免审批)</option><option>plan</option></select></div><span class="stg-scope" data-scope="acct">账户</span></div>
+          <div class="stg-ctl"><span class="dd down dim" id="stg-perm-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">bypassPermissions(免审批)</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">default(逐项审批)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">acceptEdits</span><span class="tick">✓</span></button><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">bypassPermissions(免审批)</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">plan</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>默认工作目录</span><small>候选来自 ~/.claude/projects;现在每次都退回列表第一项</small></div>
-          <div class="stg-ctl"><select class="input" id="p-cwd"><option value="">最近一次派发的目录</option><option selected>~/xuanji</option><option>~/antifraud_skills</option><option>~/antifraud_skills/baize</option><option>~/PycharmProjects/lilith-offline-etl</option><option>~/yuiko-skills</option><option>~/.agents/skills</option><option>~/xuanji-remote-access</option></select></div><span class="stg-scope" data-scope="acct">账户</span></div>
+          <div class="stg-ctl"><span class="dd down" id="stg-cwd-dd"><button class="dd-btn" aria-haspopup="listbox" aria-expanded="false"><span class="dd-val">~/xuanji</span><span class="caret">▾</span></button><div class="dd-menu" role="listbox"><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">最近一次派发的目录</span><span class="tick">✓</span></button><button class="dd-item sel" role="option" aria-selected="true"><span class="dd-item-label">~/xuanji</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/antifraud_skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/antifraud_skills/baize</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/PycharmProjects/lilith-offline-etl</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/yuiko-skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/.agents/skills</span><span class="tick">✓</span></button><button class="dd-item" role="option" aria-selected="false"><span class="dd-item-label">~/xuanji-remote-access</span><span class="tick">✓</span></button></div></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>默认转后台(--bg)</span><small>开启后新会话默认勾选「转后台」</small></div>
           <div class="stg-ctl"><span class="switch" role="switch" aria-checked="false" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-group">输入框</div>
@@ -2791,8 +2803,9 @@ function openStg(sec) {
   stgOpen = true; shell.classList.add('show'); bd.classList.add('show'); entry.setAttribute('aria-expanded', 'true');
   if (sec) showSec(sec); q.value = ''; applyFilter(); setTimeout(() => q.focus(), 60);
 }
-function closeStg() { stgOpen = false; shell.classList.remove('show'); bd.classList.remove('show'); entry.setAttribute('aria-expanded', 'false'); entry.focus(); }
+function closeStg() { closeDd(); stgOpen = false; shell.classList.remove('show'); bd.classList.remove('show'); entry.setAttribute('aria-expanded', 'false'); entry.focus(); }
 function showSec(id) {
+  closeDd();
   curSec = id;
   navBtns.forEach(b => b.classList.toggle('active', b.dataset.sec === id));
   secs.forEach(s => s.hidden = s.dataset.sec !== id);
@@ -2802,12 +2815,20 @@ entry.addEventListener('click', () => stgOpen ? closeStg() : openStg());
 document.getElementById('stg-close').addEventListener('click', closeStg);
 bd.addEventListener('click', closeStg);
 navBtns.forEach(b => b.addEventListener('click', () => { q.value = ''; applyFilter(); showSec(b.dataset.sec); }));
-pane.addEventListener('click', e => {
+shell.addEventListener('click', e => {
+  if (!e.target.closest('.dd, .dd-menu')) closeDd();
   const g = e.target.closest('[data-goto]'); if (g) { showSec(g.dataset.goto); return; }
   const r = e.target.closest('[data-reset]'); if (r) {
     if (r.dataset.reset === 'look') { Object.assign(wall, { mode: WALL_DEFAULTS.mode, src: WALL_DEFAULTS.src.replace('preset:', ''), op: WALL_DEFAULTS.opacity, blur: WALL_DEFAULTS.blur, surf: WALL_DEFAULTS.surface, frost: WALL_DEFAULTS.frost }); syncWallCtl(); }
     toastMsg(`「${r.closest('.stg-sec-head').querySelector('h3').textContent}」已恢复默认`); return; }
   const sw = e.target.closest('.switch'); if (sw) { sw.classList.toggle('on'); sw.setAttribute('aria-checked', sw.classList.contains('on')); return; }
+  const ddBtn = e.target.closest('.dd-btn'); if (ddBtn) { toggleDd(ddBtn.closest('.dd')); return; }
+  const ddItem = e.target.closest('.dd-item'); if (ddItem && ddOwner) {
+    const d = ddOwner;
+    ddItem.parentElement.querySelectorAll('.dd-item').forEach(x => { const on = x === ddItem; x.classList.toggle('sel', on); x.setAttribute('aria-selected', on); });
+    d.querySelector('.dd-val').textContent = ddItem.querySelector('.dd-item-label').textContent;
+    closeDd(); return;
+  }
   const tab = e.target.closest('.filter-tabs button'); if (tab) { tab.parentElement.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === tab)); if (tab.parentElement.id === 'w-mode') setWallMode(tab.dataset.v); return; }
   const th = e.target.closest('.stg-thumb'); if (th) { th.parentElement.querySelectorAll('.stg-thumb').forEach(x => x.classList.toggle('active', x === th)); wall.src = th.dataset.p; applyWall(); return; }
   const kb = e.target.closest('.stg-keys td.a button:not([data-goto])'); if (kb) { const tr = kb.closest('tr'); document.querySelectorAll('.stg-keys tr.rec').forEach(x => x.classList.remove('rec')); tr.classList.add('rec'); return; }
@@ -2815,8 +2836,39 @@ pane.addEventListener('click', e => {
 pane.addEventListener('keydown', e => { if (e.key === ' ' && e.target.classList.contains('switch')) { e.preventDefault(); e.target.click(); } });
 document.getElementById('p-wipe').addEventListener('click', () => toastMsg('(线上此处弹二次确认)'));
 
+/* 自绘下拉:打开时把菜单挂到 .stg-body(不滚动、且在对话框边界内),按触发钮算相对坐标;
+   关闭时挂回原 .dd 并清掉行内样式。pane 一滚就关,不做跟随。 */
+const stgBody = document.querySelector('.stg-body');
+let ddOwner = null;
+function closeDd() {
+  if (!ddOwner) return;
+  const menu = stgBody.querySelector(':scope > .dd-menu');
+  if (menu) { menu.classList.remove('open', 'dim'); menu.removeAttribute('style'); ddOwner.appendChild(menu); }
+  ddOwner.querySelector('.dd-btn').setAttribute('aria-expanded', 'false');
+  ddOwner = null;
+}
+function toggleDd(d) {
+  const same = ddOwner === d;
+  closeDd();
+  if (same) return;
+  const menu = d.querySelector('.dd-menu');
+  const bodyR = stgBody.getBoundingClientRect(), btnR = d.querySelector('.dd-btn').getBoundingClientRect();
+  stgBody.appendChild(menu);
+  menu.classList.add('open');
+  if (d.classList.contains('dim')) menu.classList.add('dim');
+  menu.style.width = btnR.width + 'px';
+  menu.style.left = (btnR.left - bodyR.left) + 'px';
+  const h = menu.offsetHeight, below = btnR.bottom - bodyR.top + 6, above = btnR.top - bodyR.top - 6 - h;
+  /* 下方放不下就向上翻;两边都放不下时仍取下方并让它贴住底缘 */
+  menu.style.top = (below + h > bodyR.height - 8 && above > 0 ? above : Math.min(below, bodyR.height - h - 8)) + 'px';
+  d.querySelector('.dd-btn').setAttribute('aria-expanded', 'true');
+  ddOwner = d;
+}
+pane.addEventListener('scroll', closeDd, { passive: true });
+
 /* 搜索:跨分区筛行,命中词高亮;清空即回到当前分区 */
 function applyFilter() {
+  closeDd();
   const s = q.value.trim().toLowerCase();
   const rows = [...pane.querySelectorAll('.stg-row, .stg-keys tr')];
   rows.forEach(r => { r.querySelectorAll('mark').forEach(m => m.replaceWith(m.textContent)); });
@@ -2880,7 +2932,7 @@ document.addEventListener('keydown', e => {
     rec.classList.toggle('conflict', !!used);
     return;
   }
-  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeStg(); }
+  if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (document.querySelector('.dd.open')) closeDd(); else closeStg(); }
   else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') { e.preventDefault(); e.stopPropagation(); q.focus(); q.select(); }
 }, true);
 
