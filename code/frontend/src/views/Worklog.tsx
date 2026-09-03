@@ -98,13 +98,13 @@ export function Worklog({ onGoSession }: { onGoSession: (sessionId: string) => v
       <div className="notice">
         <span className="ok" />
         只读扫描 <span className="mono">~/.claude/worklog/</span> · 由派发会话内的 wrapup skill 生成,璇玑不写入 ·
-        在派发页点「⚑ 任务总结」(⌘⏎)沉淀一条
+        在派发页输入 /wrapup 沉淀一条
       </div>
 
       {rows.length === 0 ? (
         <Empty>
           <p>{cards.length === 0 ? '还没有任何任务总结。' : '没有匹配的总结。'}</p>
-          <p style={{ color: 'var(--faint)' }}>任务验收后在派发页点「⚑ 任务总结」即可沉淀一条。</p>
+          <p style={{ color: 'var(--faint)' }}>任务验收后在派发页输入 /wrapup 即可沉淀一条。</p>
         </Empty>
       ) : (
         <div className="panel">
