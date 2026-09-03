@@ -262,6 +262,55 @@ components:
     padding: "8px 12px"
   turn-outline-item-unloaded:
     textColor: "{colors.muted}"
+  settings-dialog:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "min(900px, calc(100vw - 80px))"
+    height: "min(640px, calc(100vh - 80px))"
+  settings-nav-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "7px 10px"
+  settings-nav-item-active:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+  settings-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    padding: "11px 0"
+  settings-row-desc:
+    textColor: "{colors.faint}"
+    typography: "{typography.label}"
+  settings-scope-local:
+    backgroundColor: "transparent"
+    textColor: "{colors.faint}"
+    rounded: "{rounded.chip}"
+    width: "34px"
+  settings-scope-account:
+    backgroundColor: "transparent"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.chip}"
+    width: "34px"
+  settings-entry:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "6px 8px"
+  settings-entry-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  keycap:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.muted}"
+    typography: "{typography.data}"
+    rounded: "{rounded.chip}"
+    padding: "1px 6px"
+  keycap-conflict:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.chip}"
+    padding: "1px 6px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -446,7 +495,7 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 派发页输入框上下各一条超轻仪表:上条左侧 Context/Usage/Weekly 三枚用量指示(52px 微型进度条 + mono 百分比,超阈值转琥珀),右侧 agent 实时状态(等待审批琥珀脉冲/工作玉色脉冲/空闲灰);下条终端式状态行(蓝色 cwd ⎇ 玉色分支 + zsh 风格 `!n ?n ↑n` + 紫色模型名)。
 
 ### 外观 · 壁纸(Signature Component)
-侧栏底部入口按钮(`.wall-btn`,mono 态标签显示当前档位)向上弹出设置面板(`.wall-pop`:surface 底、10px 圆角、悬浮影、贴屏底 92px 上弹、Esc / 外点关闭)。三档模式 + 四个运行参数,全部经 `--wall-*` CSS 变量驱动,存 localStorage,永不写 `~/.claude`;本地大图(>1.5MB dataURL)仅当次会话生效不落盘。
+壁纸是**设置对话框「外观」分区**里的一族设置项(见下文「设置」组件);侧栏底部原 `.wall-btn` 入口升级为设置入口 `.stg-entry`,仍在标签处显示当前壁纸档位。三档模式 + 四个运行参数,全部经 `--wall-*` CSS 变量驱动,存 localStorage,永不写 `~/.claude`;本地大图(>1.5MB dataURL)仅当次会话生效不落盘。
 
 **三档模式(`.filter-tabs` 分段):**
 - **关闭:** 壁纸层隐藏,回到纯夜空底(默认)。
@@ -506,6 +555,21 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 
 **跳转的落点必须被看见**:目标气泡描一圈玉环再淡出(1.4s),否则滚动结束后用户要重新在满屏文字里找自己要的那条。超出 `CHAT_SEED_LIMIT` 尚未装载的轮次在目录里标「未加载」并降为 muted 字,选中后先插骨架占位、再换成真实消息,并按高度差回补 `scrollTop` 保证视口不跳。`⌥↑`/`⌥↓` 是不开弹窗的相邻轮跳转;用 ⌥ 而非裸方向键,是因为输入框里的 `↑↓` 已经是历史回溯,同一个键不能有两种含义。
 
+### 设置(Signature Component · `.stg-modal` 居中对话框)
+全站唯一的偏好入口,取代原先散落各处的壁纸弹层。入口两处:侧栏底部齿轮行(`.stg-entry`,mono 态标签显示当前壁纸档位,沿用被它取代的 `.wall-btn` 的位置与尺寸)与全局 `⌘,`;移动端进「更多」菜单。
+
+**为什么是居中对话框而非抽屉或独立页:** 设置是「顺手改一下再回去」的临时上下文,占一个侧栏 tab 会让它看起来像一块持续任务空间。它比抽屉承载的表单更宽(两栏 900×640),又不满屏——四周留出的底层页面是「你没有离开原地」的凭证。复用既有 `.modal` 词汇而非新造:与新建定时任务同族,都是「需要提交或放弃的编辑上下文」,区别只是设置改动即时生效、没有提交按钮。**玻璃档下 `.stg-modal` 必须钉死不透明 `surface`**,与 `.dd-menu` 同理——半透明会让底层正文透进设置项之间,而这里全是需要逐行读的短标签。
+
+**结构:** 头部一行是标题 + 跨分区搜索框 + 关闭;主体左栏 148px 分区导航(派发/外观/快捷键/通知/高级,active 态玉色 tint,与侧栏主导航同一套 active 词汇),右栏单列表单。**不套卡片**——每项一行、行间 1px `line-soft` 分隔,分组用小号 faint 大写标题起头。行内三段:标签 + 一句说明(faint,讲清「改了会怎样」而不是复述标签)、控件、存储范围标记。
+
+**存储范围标记(`.stg-scope`)是本组件的语义核心:** 每一行行尾一枚 34px mono 小标,「本机」= 只存这台浏览器的 localStorage(壁纸、字号、快捷键),「账户」= 存后端 `meta` 表并同步到手机(派发默认值、通知范围),后者玉色描边。个人工具跨设备用同一套数据,不标清楚就会反复出现「我在 Mac 上改了为什么手机没变」——用一枚常驻小标一次性答完,好过每次弹提示。**任何新增设置项都必须落在这两类之一并显式标注;两者都永不写 `~/.claude`。**
+
+**跨分区搜索:** 输入即在全部分区里筛行并高亮命中词,命中的分区标题一并露出、左栏 active 态让位——因为用户找的是「那个设置项」,不是「它在哪个分区」。清空即回到当前分区。这与 ⌘F 找词、轮次目录找轮是同一族「我知道我要什么但不记得它在哪」的解法。
+
+**快捷键分区(`.stg-keys`):** 全站键位在此汇成唯一一张表,按作用域分组(全局/派发/会话看板),键位用 `kbd` 词汇渲染(mono、1px line 边、surface-2 底),Mac 显示 ⌘、其余平台显示 Ctrl,一律由同一份 keymap 生成而非各处手写。点「改键」进录入态(键位位置闪烁提示「按下新组合…」),按下的组合若已被占用则**标黄并写明与谁冲突,绝不静默覆盖**——键位是肌肉记忆,静默换绑比拒绝改键伤得更深。语义由别处决定的键位(发送/换行)标为固定并给一条「去设置」的跳转,不在两处重复同一个开关。
+
+**恢复默认** 按分区提供,不做全局一键重置;点下即时生效并 toast 回执,回退到的是代码里的 `*_DEFAULTS` 常量而非上次保存值。
+
 ## 6. Do's and Don'ts
 
 ### Do:
@@ -516,6 +580,7 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 - **Do** 所有过渡 150–250ms、`cubic-bezier(0.22, 1, 0.36, 1)` 缓出,且只在状态变化时发生;提供 `prefers-reduced-motion` 瞬时降级。
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
 - **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
+- **Do** 任何用户偏好都经统一的设置对话框暴露,并显式标注存储范围(「本机」localStorage / 「账户」后端 `meta` 表);新增偏好先归类再落地,禁止在功能页面里就地长出第二个设置入口。
 - **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
 - **Do** 渲染外部生成的 markdown 内容(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 `Md` 组件——这些文本里的 `**粗体**` 与反引号是作者的真实表达,当纯文本贴出来就是满屏字面量星号。同理,抽屉 `.kv dd` 里的长 URL / 路径必须 `overflow-wrap: anywhere`,否则顶破右边界。
 - **Do** 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——一个写着「无」的琥珀警示块比不显示更糟,它把「不需要你」误报成「需要你」。
