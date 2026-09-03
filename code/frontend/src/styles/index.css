@@ -98,7 +98,10 @@ input, select, textarea { font: inherit; color: var(--ink); }
 ::placeholder { color: var(--muted); opacity: 1; }
 
 /* ============ 布局骨架 ============ */
-.app { display: grid; grid-template-columns: 226px 1fr; min-height: 100vh; }
+/* 侧栏宽度用 rem 而非固定 px:正文字号设成「大」时整站 rem 一起放大,
+   容器不跟着放大就会把侧栏底部的设置入口挤到竖排换行(2026-09-03 用户实测)。
+   14.125rem 在标准字号(16px)下正好是原来的 226px,默认观感一字不差。 */
+.app { display: grid; grid-template-columns: 14.125rem 1fr; min-height: 100vh; }
 
 .sidebar {
   background: var(--surface-2);
@@ -1665,7 +1668,10 @@ body.wall-on .statusbar.scrolled {
 .stg-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; margin: -4px -8px 8px; border-radius: var(--r-s); font-size: 0.75rem; color: var(--muted); text-align: left; }
 .stg-entry:hover { background: var(--hover); color: var(--ink); }
 .stg-entry svg { width: 14px; height: 14px; flex: none; }
-.stg-entry-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+/* 「设置」二字必须退出压缩:裸文本在 flex 里是可被压到一个字宽的匿名项,挤窄了会竖排 */
+.stg-entry-label { flex: none; }
+/* 状态是次要信息,空间不够时省略号截断——既不换行也不去挤压前面的标签;完整值走 title */
+.stg-entry-state { margin-left: auto; min-width: 0; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
 .drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }

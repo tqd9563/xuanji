@@ -243,7 +243,10 @@ export default function App() {
               <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" />
               <path d="M6.7 1.8h2.6l.4 1.6 1.4.8 1.6-.5 1.3 2.2-1.2 1.1v1.6l1.2 1.1-1.3 2.2-1.6-.5-1.4.8-.4 1.6H6.7l-.4-1.6-1.4-.8-1.6.5L2 11.6l1.2-1.1V8.9L2 7.8l1.3-2.2 1.6.5 1.4-.8z" />
             </svg>
-            设置<span className="stg-entry-state">{wallStateLabel(wall)}</span>
+            <span className="stg-entry-label">设置</span>
+            <span className="stg-entry-state" title={wallStateLabel(wall)}>
+              {wallStateLabel(wall)}
+            </span>
           </button>
           <div className="row">
             <span className="ok" style={!health?.cli ? { background: 'var(--red)' } : undefined} />
