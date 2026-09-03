@@ -8,6 +8,7 @@ import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
+import { readPrefs, writePrefs } from '../services/prefs.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
@@ -63,6 +64,14 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   api.get('/sessions', async (c) => c.json(await sessionsBoard(storage)));
 
   /** 项目分类色调色板:name → 序号(首次出现顺序,SQLite 固定;色相映射在前端色环) */
+  /** 账户级偏好:跨设备共享的设置(派发默认值 / 通知范围)。外观与快捷键跟着设备走,存前端不进这里 */
+  api.get('/prefs', (c) => c.json({ prefs: readPrefs(storage) }));
+
+  api.put('/prefs', async (c) => {
+    const patch = await c.req.json().catch(() => ({}));
+    return c.json({ prefs: writePrefs(storage, patch) });
+  });
+
   api.get('/palette', async (c) => {
     const [dirs, agents] = await Promise.all([scanProjectDirs(config.claudeDir), listAgents()]);
     const names: string[] = [];

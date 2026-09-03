@@ -1,4 +1,5 @@
 import type {
+  AccountPrefs,
   ClosedSession,
   CronsResult,
   Dashboard,
@@ -37,6 +38,10 @@ async function mutate<T>(path: string, method: string, body: unknown): Promise<T
 
 export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
+  /** 账户级偏好(跨设备):派发默认值与通知范围。外观/快捷键在前端 localStorage,不走这里 */
+  prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
+  putPrefs: (patch: Partial<AccountPrefs>) =>
+    mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
   /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */
