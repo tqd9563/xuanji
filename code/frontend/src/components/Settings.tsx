@@ -299,7 +299,7 @@ export function Settings({
 
   const FixedRow = ({ f }: { f: (typeof FIXED_KEYS)[number] }) =>
     hit(f.label, f.hint) ? (
-      <tr className="fixed">
+      <tr className="stg-fixed">
         <td>
           {f.label}
           {f.hint && <small>{f.hint}</small>}
