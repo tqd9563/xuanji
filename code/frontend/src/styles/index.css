@@ -1764,7 +1764,9 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
 .stg-keys kbd + kbd { margin-left: 3px; }
 .stg-keys tr.conflict kbd { border-color: var(--amber); color: var(--amber); }
 .stg-keys .stg-conf { font-size: 0.625rem; color: var(--amber); margin-left: 6px; }
-.stg-keys tr.fixed kbd { border-style: dashed; }
+/* 类名必须带 stg- 前缀:Tailwind v4 会扫描源码里出现的类名字符串按需生成工具类,
+   裸写 `fixed` 会被它生成 `.fixed{position:fixed}`,把这一行从表格流里踢出去(2026-09-03 实测) */
+.stg-keys tr.stg-fixed kbd { border-style: dashed; }
 @keyframes stg-blink { 50% { opacity: 0.3; } }
 
 .stg-storage { font-size: 0.6875rem; color: var(--faint); line-height: 1.6; margin-top: 12px; }
