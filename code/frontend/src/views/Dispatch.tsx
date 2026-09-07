@@ -900,28 +900,31 @@ export function Dispatch({ active }: { active: boolean }) {
         setWdQuery('');
         setWdPalette(true);
       } else if (matchKey(e, km['dispatch.btw'])) {
-        // 输入框为空且面板关着 → 重开面板停在最后一条答案(不必再问一次);否则预填 /btw 前缀
+        // 一个键来回切:进入 = 开面板 + 输入框加 /btw 前缀进紫色旁路模式并聚焦;
+        // 再按 = 去掉前缀回到普通会话模式 + 关面板。以「输入框是否处于旁路模式」为准,
+        // 不看面板开合——面板可能是点芯片打开的,那时按一下仍应进入提问态而不是关掉它。
         e.preventDefault();
         const ta = taRef.current;
-        if (!btwOpenRef.current && !(ta?.value.trim())) {
-          setBtwOpen(true);
+        if (!ta) return;
+        if (isBtwText(ta.value)) {
+          ta.value = ta.value.replace(/^\s*\/btw\b\s?/i, '');
+          growTa();
+          setBtwMode(false);
+          setBtwOpen(false);
+          ta.focus();
           return;
         }
-        if (ta && !isBtwText(ta.value)) {
-          ta.value = `/btw ${ta.value}`;
-          growTa();
-          setBtwMode(true);
-        }
-        ta?.focus();
-        ta?.setSelectionRange(ta.value.length, ta.value.length);
+        ta.value = `/btw ${ta.value}`;
+        growTa();
+        setBtwMode(true);
+        setBtwOpen(true);
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [active]);
-
-  const btwOpenRef = useRef(btwOpen);
-  btwOpenRef.current = btwOpen;
 
   /** 旁路提问:/btw <问题>。答案落右侧面板与自有库,不进主对话;主对话在跑也照问 */
   const askBtw = (question: string) => {

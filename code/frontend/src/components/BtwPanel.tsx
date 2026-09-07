@@ -147,7 +147,7 @@ export function BtwPanel({ state, cwd, mainIdle, onClose, onCancel, onRetry, onT
       ) : showing === 'empty' ? (
         <div className="btw-empty">
           <p>这里回答「顺便问一句」:拿着主对话的全部上下文作答,但答案<b>不进主对话</b>,不占它的 context,也不打断它正在跑的活。</p>
-          <p>在输入框里以 <code>/btw</code> 开头提问。答案一回来就自动存进这个会话的旁路记录,关掉面板也不会丢;再按快捷键或点状态条的「旁路 N」随时翻回来。</p>
+          <p>在输入框里以 <code>/btw</code> 开头提问。答案一回来就自动存进这个会话的旁路记录,关掉面板也不会丢;按 ⌘/ 在旁路模式与普通模式之间来回切,或点状态条的「旁路 N」随时翻回来。</p>
         </div>
       ) : (
         <div className="btw-one">
