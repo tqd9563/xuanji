@@ -17,7 +17,7 @@ import {
 import { listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
-import type { Storage } from '../storage/db.js';
+import type { SideQuestion, Storage } from '../storage/db.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -83,6 +83,10 @@ export type DispatchEvent =
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'model-changed'; model: string }
   | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
+  /** 旁路提问(/btw):三段式,答案落面板与自有库,永不进主对话 items */
+  | { ev: 'btw-start'; requestId: string; question: string }
+  | { ev: 'btw-result'; requestId: string; record: SideQuestion }
+  | { ev: 'btw-error'; requestId: string; question: string; message: string }
   | { ev: 'error'; message: string };
 
 /** 上下文窗口兜底值(200K)。真实值随模型而变(如 claude-opus-5[1m] 为 1M),
@@ -107,6 +111,14 @@ export interface DispatchOpts {
   resume?: string;
   fork?: boolean;
   name?: string;
+}
+
+/** sdk.mjs 0.3.258 实装但 sdk.d.ts 未声明的方法:只描述我们用到的形状 */
+interface SideQuestionCapable {
+  askSideQuestion?: (
+    question: string,
+    opts?: { signal?: AbortSignal },
+  ) => Promise<{ response: string; synthetic: boolean } | null>;
 }
 
 const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -581,6 +593,64 @@ export class DispatchSession {
 
   async interrupt() {
     await this.q?.interrupt().catch(() => {});
+  }
+
+  // ---------- 旁路提问(/btw) ----------
+
+  /** 进行中的旁路提问(同一时刻最多一个,与 CLI 面板语义一致);AbortController 供取消 */
+  private sideQuestion: { requestId: string; ac: AbortController } | null = null;
+
+  get sideQuestionInFlight(): boolean {
+    return this.sideQuestion !== null;
+  }
+
+  /**
+   * 旁路提问:复用本会话的 SDK 句柄发一次 side_question 控制请求 —— CLI 的 /btw 面板走的就是这条协议
+   * (`askSideQuestion` 在 sdk.mjs 0.3.258 里实装、sdk.d.ts 未声明,故本地补一个最小类型)。
+   * 模型拿到主对话全部历史 + 问题,单次直答、不许用工具;答案**不写回主对话**、不占它的 context,
+   * 主对话正在流式输出时也能并行问(CLI 内部就是这么做的)。答案落自有库,由 btw-result 带给前端。
+   */
+  async askSideQuestion(question: string): Promise<void> {
+    const requestId = randomUUID();
+    if (this.sideQuestion) {
+      this.emit({ ev: 'btw-error', requestId, question, message: '上一条旁路提问还没答完,等它回来或先取消' });
+      return;
+    }
+    if (!this.q || !this.sessionId) {
+      this.emit({ ev: 'btw-error', requestId, question, message: '会话尚未就绪,发出第一条消息后再问' });
+      return;
+    }
+    const ac = new AbortController();
+    this.sideQuestion = { requestId, ac };
+    this.emit({ ev: 'btw-start', requestId, question });
+    try {
+      const q = this.q as unknown as SideQuestionCapable;
+      if (typeof q.askSideQuestion !== 'function') {
+        throw new Error('当前 Agent SDK 不支持旁路提问(需要 ≥ 0.3.258)');
+      }
+      const r = await q.askSideQuestion(question, { signal: ac.signal });
+      if (r === null) {
+        this.emit({ ev: 'btw-error', requestId, question, message: '已取消' });
+        return;
+      }
+      const record = this.storage.recordSideQuestion({
+        sessionId: this.sessionId,
+        question,
+        answer: r.response,
+        synthetic: r.synthetic,
+        route: 'direct',
+      });
+      this.emit({ ev: 'btw-result', requestId, record });
+    } catch (e) {
+      const message = ac.signal.aborted ? '已取消' : e instanceof Error ? e.message : String(e);
+      this.emit({ ev: 'btw-error', requestId, question, message });
+    } finally {
+      this.sideQuestion = null;
+    }
+  }
+
+  cancelSideQuestion() {
+    this.sideQuestion?.ac.abort();
   }
 
   /** 中途切换模型(SDK setModel,下一回合生效) */

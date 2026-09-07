@@ -1,5 +1,7 @@
 /** 派发页状态机:/ws/dispatch 双向流 → 消息列表 + agent 状态 + 用量指示 */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '@/api/client';
+import type { SideQuestion } from '@/api/types';
 
 export interface QuestionSpec {
   question: string;
@@ -30,6 +32,19 @@ export type ChatItem =
   /** 上下文压缩点:历史装载时带摘要可展开;实时压缩事件无摘要则仅一行 */
   | { t: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string }
   | { t: 'error'; text: string };
+
+/**
+ * 旁路提问(/btw)状态:与主对话 items 完全隔离——答案落这里与自有库,永不进 items。
+ * records 按时间正序(面板 ⇧←/⇧→ 的翻页顺序);会话 init/attach 时从后端拉全量,之后由 btw-result 追加。
+ */
+export interface BtwState {
+  inFlight: { requestId: string; question: string; startedAt: number } | null;
+  records: SideQuestion[];
+  /** 最近一次失败(含取消):面板据此显示重问/改到主对话问 */
+  error: { requestId: string; question: string; message: string } | null;
+}
+
+const BTW_EMPTY: BtwState = { inFlight: null, records: [], error: null };
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'awaiting-permission' | 'ended' | 'none';
@@ -110,6 +125,7 @@ export function useDispatch() {
    *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
    *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
   const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
+  const [btw, setBtw] = useState<BtwState>(BTW_EMPTY);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
   const restoringRef = useRef(false);
@@ -321,6 +337,31 @@ export function useDispatch() {
           },
         ]);
         break;
+      // ---------- 旁路提问:三段式,与主对话 items 互不相干 ----------
+      case 'btw-start':
+        setBtw((b) => ({
+          ...b,
+          error: null,
+          inFlight: { requestId: String(e.requestId), question: String(e.question), startedAt: Date.now() },
+        }));
+        break;
+      case 'btw-result': {
+        const record = e.record as SideQuestion;
+        setBtw((b) => ({
+          inFlight: null,
+          error: null,
+          // attach 回放 + 拉库可能各带一份同 id 记录,按 id 去重
+          records: b.records.some((r) => r.id === record.id) ? b.records : [...b.records, record],
+        }));
+        break;
+      }
+      case 'btw-error':
+        setBtw((b) => ({
+          ...b,
+          inFlight: null,
+          error: { requestId: String(e.requestId), question: String(e.question), message: String(e.message) },
+        }));
+        break;
       case 'error':
         if (restoringRef.current && e.message === GONE_MSG) {
           // 刷新自动接回失败(后端已重启):静默回到全新状态
@@ -465,7 +506,47 @@ export function useDispatch() {
     setCostUsd(0);
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
     setAttachedHistory(null);
+    setBtw(BTW_EMPTY);
   }, [clearPendingDelta]);
+
+  // 会话确定后拉旁路记录:问过的一定还在,不依赖本 tab 是否亲历过 btw-result
+  useEffect(() => {
+    if (!sessionId) {
+      setBtw(BTW_EMPTY);
+      return;
+    }
+    let alive = true;
+    api
+      .sideQuestions(sessionId)
+      .then(({ records }) => {
+        if (!alive) return;
+        setBtw((b) => {
+          const seen = new Set(records.map((r) => r.id));
+          return { ...b, records: [...records, ...b.records.filter((r) => !seen.has(r.id))] };
+        });
+      })
+      .catch(() => {/* 记录拉不到不影响提问;面板空态兜底 */});
+    return () => {
+      alive = false;
+    };
+  }, [sessionId]);
+
+  const askBtw = useCallback((question: string) => {
+    wsRef.current?.send(JSON.stringify({ op: 'btw', question }));
+  }, []);
+
+  const cancelBtw = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ op: 'btw-cancel' }));
+  }, []);
+
+  /** 「存为经验」成功后回填 memory 路径(按钮转「已存为经验」) */
+  const markBtwMemory = useCallback((id: number, memoryFile: string) => {
+    setBtw((b) => ({ ...b, records: b.records.map((r) => (r.id === id ? { ...r, memoryFile } : r)) }));
+  }, []);
+
+  const clearBtwError = useCallback(() => {
+    setBtw((b) => ({ ...b, error: null }));
+  }, []);
 
   const pushNote = useCallback((text: string) => {
     setItems((prev) => [...prev, { t: 'note', text }]);
@@ -477,5 +558,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
+  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }

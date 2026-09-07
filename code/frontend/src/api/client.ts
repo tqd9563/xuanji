@@ -17,6 +17,7 @@ import type {
   WeeklyDraft,
   WeeklyReview,
   WorklogCard,
+  SideQuestion,
 } from './types';
 
 async function get<T>(path: string): Promise<T> {
@@ -82,6 +83,10 @@ export const api = {
   canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),
   toggleSkill: (name: string, enable: boolean) =>
     mutate<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}/toggle`, 'POST', { enable, confirm: true }),
+  // ---------- 旁路提问 ----------
+  sideQuestions: (sessionId: string) => get<{ records: SideQuestion[] }>(`/api/sessions/${sessionId}/side-questions`),
+  saveSideQuestionMemory: (id: number, cwd: string) =>
+    mutate<{ ok: boolean; file: string; existed?: boolean }>(`/api/side-questions/${id}/memory`, 'POST', { cwd, confirm: true }),
   renameSession: (sessionId: string, name: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/name`, 'PUT', { name }),
   handoff: (sessionId: string) =>

@@ -165,6 +165,18 @@ export function attachWs(server: Server, storage: Storage) {
             case 'interrupt':
               await session?.interrupt();
               break;
+            // ---------- 旁路提问(/btw) ----------
+            case 'btw': {
+              if (!session) return send({ ev: 'error', message: '尚未开始会话' });
+              const question = typeof msg.question === 'string' ? msg.question.trim() : '';
+              if (!question) return send({ ev: 'error', message: '用法:/btw 你的问题' });
+              // 不 await:提问期间主对话事件照常流,面板靠 btw-* 事件自己收敛
+              void session.askSideQuestion(question);
+              break;
+            }
+            case 'btw-cancel':
+              session?.cancelSideQuestion();
+              break;
             case 'model':
               if (!session) return send({ ev: 'error', message: '尚未开始会话' });
               if (typeof msg.model === 'string' && msg.model) await session.changeModel(msg.model);

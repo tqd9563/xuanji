@@ -13,7 +13,7 @@ import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
-import { listMemories, searchMemories } from '../services/memories.js';
+import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
@@ -106,6 +106,30 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   );
 
   api.get('/memories', async (c) => c.json({ memories: await listMemories(storage) }));
+
+  // ---------- 旁路提问记录 ----------
+  api.get('/sessions/:id/side-questions', (c) =>
+    c.json({ records: storage.listSideQuestions(c.req.param('id')) }),
+  );
+  /** 「存为经验」:把一问一答沉成 reference 类 memory(铁律 2 例外①),文件路径回填到记录 */
+  api.post('/side-questions/:id/memory', async (c) => {
+    const id = Number(c.req.param('id'));
+    const rec = Number.isFinite(id) ? storage.getSideQuestion(id) : null;
+    if (!rec) return c.json({ error: '旁路记录不存在' }, 404);
+    if (rec.memoryFile) return c.json({ ok: true, file: rec.memoryFile, existed: true });
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: string; confirm?: boolean };
+    if (!body.confirm) return c.json({ error: '写 memory 需要二次确认(confirm: true)' }, 400);
+    if (!body.cwd) return c.json({ error: '缺少 cwd' }, 400);
+    const file = await writeMemory({
+      cwd: body.cwd,
+      name: rec.question,
+      description: rec.question,
+      type: 'reference',
+      body: `**问**:${rec.question}\n\n**答**:${rec.answer}\n\n来源:璇玑旁路提问(/btw),会话 ${rec.sessionId}`,
+    });
+    storage.markSideQuestionMemory(id, file);
+    return c.json({ ok: true, file });
+  });
 
   api.get('/memories/search', async (c) => {
     const q = c.req.query('q')?.trim() ?? '';
