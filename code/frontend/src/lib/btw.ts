@@ -19,3 +19,14 @@ export function parseBtw(text: string): { question: string } | null {
 export function pinText(question: string, answer: string): string {
   return `之前旁路问过:${question}\n结论:${answer.trim()}`;
 }
+
+/** 等待超过这么多秒,承诺文案换成「还在想」——同一位置替换,不叠加第二行 */
+export const BTW_SLOW_AFTER_S = 8;
+
+/**
+ * 等待态那一行的说明文字。等待久了要改口:前 8 秒强调「主对话没被打断」,
+ * 之后重点变成「确实慢,但没卡死」——同一个位置换措辞,不额外堆一行提示。
+ */
+export function waitNote(elapsedS: number): string {
+  return elapsedS >= BTW_SLOW_AFTER_S ? '还在想,主对话不受影响' : '主对话未打断,仍在继续';
+}

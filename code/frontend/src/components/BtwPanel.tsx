@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { SideQuestion } from '@/api/types';
 import type { BtwState } from '@/lib/dispatch';
+import { waitNote } from '@/lib/btw';
 import { isTypingTarget } from '@/lib/hooks';
 import { cn } from '@/lib/utils';
 import { Md } from '@/components/shared';
@@ -31,6 +32,18 @@ const fmtTime = (ms: number) => {
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
+/** 已等秒数:提问期间每秒自增,不提问时归零(面板只在提问中显示它) */
+function useElapsed(startedAt: number | undefined) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (startedAt === undefined) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
+  return startedAt === undefined ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
 const plain = (md: string) => md.replace(/[`*_#>]/g, '').replace(/\s+/g, ' ').trim();
 
 export function BtwPanel({ state, cwd, mainIdle, onClose, onCancel, onRetry, onToMain, onPin, onMemory }: BtwPanelProps) {
@@ -43,6 +56,7 @@ export function BtwPanel({ state, cwd, mainIdle, onClose, onCancel, onRetry, onT
   const [saving, setSaving] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const elapsed = useElapsed(inFlight?.startedAt);
   const idx = pinned ?? records.length - 1;
   const cur: SideQuestion | null = records[idx] ?? null;
   // 新答案来了 → 回到跟随态(与 CLI 面板「回到 live 答案」一致)
@@ -156,11 +170,13 @@ export function BtwPanel({ state, cwd, mainIdle, onClose, onCancel, onRetry, onT
             <span className="btw-qtext">{headQ}</span>
             {headT && <span className="btw-ts">{headT}</span>}
           </div>
-          {showing === 'ask' && (
-            <div className="btw-wait" role="status">
-              <div className="btw-skel"><i /><i /><i /></div>
+          {showing === 'ask' && inFlight && (
+            <div className="btw-wait" role="status" aria-live="polite">
               <div className="btw-wait-line">
-                <span className="cs-dot think" />回答中 · 主对话未打断,仍在继续
+                <span className="btw-wait-dots" aria-hidden="true"><i /><i /><i /></span>
+                <span className="lab">回答中</span>
+                <span className="el">{elapsed}s</span>
+                <span className="note">{waitNote(elapsed)}</span>
                 <span className="spacer" />
                 <button className="btn btn-sm" onClick={onCancel}>取消 Esc</button>
               </div>
