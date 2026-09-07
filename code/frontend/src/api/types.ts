@@ -370,3 +370,17 @@ export interface AccountPrefs {
   wrapupPrompt: string;
   notify: NotifyPrefs;
 }
+
+/** 旁路提问(/btw)记录:后端 side_questions 表的镜像,答案永不进主对话 */
+export interface SideQuestion {
+  id: number;
+  sessionId: string;
+  question: string;
+  answer: string;
+  /** SDK 合成答复(模型试图调工具而非直答时的兜底) */
+  synthetic: boolean;
+  route: 'direct' | 'fork';
+  /** 「存为经验」落下的 memory 文件;null = 未沉淀 */
+  memoryFile: string | null;
+  createdAt: number;
+}

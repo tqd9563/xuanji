@@ -30,6 +30,24 @@ export const dispatchesTable = sqliteTable('dispatches', {
   activity: text('activity'),
 });
 
+/**
+ * 旁路提问(/btw)记录(自有数据):CLI 自己不落盘 side question(实测 ~/.claude 里没有任何 side_question 痕迹,
+ * 答案只活在 CLI 进程内存),所以「问过的一定还在」这条承诺只能由璇玑自己兑现。按会话挂载,答案不进主对话。
+ */
+export const sideQuestionsTable = sqliteTable('side_questions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  sessionId: text('session_id').notNull(),
+  question: text('question').notNull(),
+  answer: text('answer').notNull(),
+  /** 模型给的是「合成答复」(SDK synthetic:模型试图调工具而非直答时的兜底文案) */
+  synthetic: integer('synthetic').notNull().default(0),
+  /** direct = 复用主会话句柄;预留 fork(终端只读会话的一次性副本作答,本期未做) */
+  route: text('route').notNull().default('direct'),
+  /** 「存为经验」落下的 memory 文件路径;null = 未沉淀 */
+  memoryFile: text('memory_file'),
+  createdAt: integer('created_at').notNull(),
+});
+
 /** web 会话重命名的 display-name 覆盖(仅璇玑界面生效,不写 ~/.claude 元数据) */
 export const sessionNamesTable = sqliteTable('session_names', {
   sessionId: text('session_id').primaryKey(),
@@ -213,6 +231,30 @@ export const skillScanFilesTable = sqliteTable('skill_scan_files', {
   size: integer('size').notNull(),
 });
 
+export interface SideQuestion {
+  id: number;
+  sessionId: string;
+  question: string;
+  answer: string;
+  synthetic: boolean;
+  route: 'direct' | 'fork';
+  memoryFile: string | null;
+  createdAt: number;
+}
+
+function toSideQuestion(r: typeof sideQuestionsTable.$inferSelect): SideQuestion {
+  return {
+    id: r.id,
+    sessionId: r.sessionId,
+    question: r.question,
+    answer: r.answer,
+    synthetic: r.synthetic === 1,
+    route: r.route === 'fork' ? 'fork' : 'direct',
+    memoryFile: r.memoryFile ?? null,
+    createdAt: r.createdAt,
+  };
+}
+
 export class Storage {
   private sqlite: Database.Database;
   private orm: ReturnType<typeof drizzle>;
@@ -251,6 +293,12 @@ export class Storage {
       CREATE TABLE IF NOT EXISTS palette (
         name TEXT PRIMARY KEY, idx INTEGER NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS side_questions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT NOT NULL, question TEXT NOT NULL,
+        answer TEXT NOT NULL, synthetic INTEGER NOT NULL DEFAULT 0, route TEXT NOT NULL DEFAULT 'direct',
+        memory_file TEXT, created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS side_questions_session ON side_questions(session_id, created_at);
       CREATE TABLE IF NOT EXISTS dispatch_prompts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         session_id TEXT, cwd TEXT NOT NULL, display TEXT NOT NULL, at INTEGER NOT NULL
@@ -325,6 +373,60 @@ export class Storage {
         /* 列已存在 */
       }
     }
+  }
+
+  // ---------- 旁路提问 ----------
+
+  recordSideQuestion(row: {
+    sessionId: string;
+    question: string;
+    answer: string;
+    synthetic?: boolean;
+    route?: 'direct' | 'fork';
+  }): SideQuestion {
+    const createdAt = Date.now();
+    const r = this.orm
+      .insert(sideQuestionsTable)
+      .values({
+        sessionId: row.sessionId,
+        question: row.question,
+        answer: row.answer,
+        synthetic: row.synthetic ? 1 : 0,
+        route: row.route ?? 'direct',
+        createdAt,
+      })
+      .run();
+    return {
+      id: Number(r.lastInsertRowid),
+      sessionId: row.sessionId,
+      question: row.question,
+      answer: row.answer,
+      synthetic: !!row.synthetic,
+      route: row.route ?? 'direct',
+      memoryFile: null,
+      createdAt,
+    };
+  }
+
+  /** 某会话的旁路记录,按时间正序(面板 ⇧←/⇧→ 翻页顺序) */
+  listSideQuestions(sessionId: string): SideQuestion[] {
+    return this.orm
+      .select()
+      .from(sideQuestionsTable)
+      .where(eq(sideQuestionsTable.sessionId, sessionId))
+      .orderBy(sideQuestionsTable.createdAt, sideQuestionsTable.id)
+      .all()
+      .map(toSideQuestion);
+  }
+
+  getSideQuestion(id: number): SideQuestion | null {
+    const row = this.orm.select().from(sideQuestionsTable).where(eq(sideQuestionsTable.id, id)).get();
+    return row ? toSideQuestion(row) : null;
+  }
+
+  /** 「存为经验」落盘后回填 memory 路径,面板据此把按钮置为「已存为经验」 */
+  markSideQuestionMemory(id: number, memoryFile: string) {
+    this.orm.update(sideQuestionsTable).set({ memoryFile }).where(eq(sideQuestionsTable.id, id)).run();
   }
 
   recordDispatch(sessionId: string, cwd: string, name?: string) {

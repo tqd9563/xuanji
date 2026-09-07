@@ -22,6 +22,7 @@ export type ActionId =
   | 'dispatch.nextTurn'
   | 'dispatch.inlineCode'
   | 'dispatch.codeBlock'
+  | 'dispatch.btw'
   | 'sessions.find'
   | 'sessions.close';
 
@@ -47,6 +48,7 @@ export const KEY_ACTIONS: KeyAction[] = [
   { id: 'dispatch.nextTurn', group: '派发', label: '下一轮' },
   { id: 'dispatch.inlineCode', group: '派发', label: '行内代码' },
   { id: 'dispatch.codeBlock', group: '派发', label: '代码块' },
+  { id: 'dispatch.btw', group: '派发', label: '旁路提问', hint: '输入框为空时打开旁路面板;有内容时预填 /btw 前缀' },
   { id: 'sessions.find', group: '会话看板', label: '会话内查找' },
   { id: 'sessions.close', group: '会话看板', label: '关闭选中会话' },
 ];
@@ -64,6 +66,7 @@ export const KEYMAP_DEFAULTS: Record<ActionId, string> = {
   'dispatch.nextTurn': 'alt+arrowdown',
   'dispatch.inlineCode': 'mod+e',
   'dispatch.codeBlock': 'mod+shift+e',
+  'dispatch.btw': 'mod+/',
   'sessions.find': 'mod+f',
   'sessions.close': 'ctrl+x',
 };

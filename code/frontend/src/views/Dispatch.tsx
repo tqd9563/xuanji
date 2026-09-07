@@ -13,9 +13,11 @@ import { FindBar, useFindInPage } from '@/components/FindBar';
 import { TurnHead, TurnOutline } from '@/components/TurnNav';
 import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
 import { RunbookPanel } from '@/components/RunbookPanel';
+import { BtwPanel } from '@/components/BtwPanel';
+import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
 import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
-import type { ClosedSession, ReplayEvent } from '@/api/types';
+import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
 
 /**
  * StreamMd — 流式 markdown 渲染,块级记忆化。
@@ -434,6 +436,9 @@ export function Dispatch({ active }: { active: boolean }) {
   const earlierRef = useRef<ReplayEvent[]>([]);
   const [pendingEarlier, setPendingEarlier] = useState<{ text: string; ts?: number }[]>([]);
   const [outline, setOutline] = useState(false);
+  // 旁路提问面板开合(记录本身在 d.btw 里,关面板不丢);btwMode = 输入框以 /btw 开头(发送键语义转「问旁路」)
+  const [btwOpen, setBtwOpen] = useState(false);
+  const [btwMode, setBtwMode] = useState(false);
   const [curTurn, setCurTurn] = useState<{ ord: number; gone: boolean } | null>(null);
   const [flashOrd, setFlashOrd] = useState<number | null>(null);
   const [pendingJump, setPendingJump] = useState<number | null>(null);
@@ -894,11 +899,53 @@ export function Dispatch({ active }: { active: boolean }) {
         taRef.current?.blur();
         setWdQuery('');
         setWdPalette(true);
+      } else if (matchKey(e, km['dispatch.btw'])) {
+        // 输入框为空且面板关着 → 重开面板停在最后一条答案(不必再问一次);否则预填 /btw 前缀
+        e.preventDefault();
+        const ta = taRef.current;
+        if (!btwOpenRef.current && !(ta?.value.trim())) {
+          setBtwOpen(true);
+          return;
+        }
+        if (ta && !isBtwText(ta.value)) {
+          ta.value = `/btw ${ta.value}`;
+          growTa();
+          setBtwMode(true);
+        }
+        ta?.focus();
+        ta?.setSelectionRange(ta.value.length, ta.value.length);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [active]);
+
+  const btwOpenRef = useRef(btwOpen);
+  btwOpenRef.current = btwOpen;
+
+  /** 旁路提问:/btw <问题>。答案落右侧面板与自有库,不进主对话;主对话在跑也照问 */
+  const askBtw = (question: string) => {
+    if (!d.sessionId) return toast('会话尚未开始,发送第一条消息后再旁路提问');
+    if (d.btw.inFlight) return toast('上一条旁路提问还没答完');
+    d.askBtw(question);
+    setBtwOpen(true);
+  };
+  const saveBtwMemory = async (r: SideQuestion) => {
+    const cwd = sessionCwd ?? effectiveCwd;
+    if (!cwd) return toast('会话工作目录未知,无法定位 memory 目录');
+    try {
+      const res = await api.saveSideQuestionMemory(r.id, cwd);
+      d.markBtwMemory(r.id, res.file);
+      toast(res.existed ? '这条已经沉过经验' : `已写入 ${res.file.replace(/^.*\/projects\//, '~/.claude/projects/')}`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    }
+  };
+  /** 钉入主对话:这一问一答作为你的下一条消息发出——只有这一步才真正进主对话 */
+  const pinBtw = (r: SideQuestion) => {
+    setBtwOpen(false);
+    void submit(pinText(r.question, r.answer));
+  };
 
   /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
   const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
@@ -950,6 +997,18 @@ export function Dispatch({ active }: { active: boolean }) {
       ta!.value = '';
       growTa();
       resetHistoryBrowse();
+    }
+    // /btw 旁路提问:不进主对话,走 SDK side_question 控制请求;无参数 = 打开面板(空态自会解释用法)
+    const btwReq = parseBtw(text);
+    if (btwReq) {
+      setBtwMode(false);
+      const { question } = btwReq;
+      if (!question) {
+        setBtwOpen(true);
+        return;
+      }
+      askBtw(question);
+      return;
     }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
@@ -1065,6 +1124,8 @@ export function Dispatch({ active }: { active: boolean }) {
 
   const newSession = () => {
     d.reset();
+    setBtwOpen(false);
+    setBtwMode(false);
     repin();
     resetTurnNav();
     resetHistoryBrowse();
@@ -1143,7 +1204,7 @@ export function Dispatch({ active }: { active: boolean }) {
         <span className="spacer" />
         <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
       </div>
-      <div className="dispatch">
+      <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           <TurnHead
             turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
@@ -1198,6 +1259,31 @@ export function Dispatch({ active }: { active: boolean }) {
           ))}
         </div>
 
+        {btwOpen && !isMobile && (
+          <BtwPanel
+            state={d.btw}
+            cwd={sessionCwd ?? effectiveCwd ?? null}
+            mainIdle={d.status.state === 'idle' || d.status.state === 'ended' || d.status.state === 'none'}
+            onClose={() => {
+              setBtwOpen(false);
+              taRef.current?.focus();
+            }}
+            onCancel={d.cancelBtw}
+            onRetry={askBtw}
+            onToMain={(q) => {
+              d.clearBtwError();
+              setBtwOpen(false);
+              if (taRef.current) {
+                taRef.current.value = q;
+                growTa();
+                taRef.current.focus();
+              }
+            }}
+            onPin={pinBtw}
+            onMemory={saveBtwMemory}
+          />
+        )}
+
         {rb.runbook && (
           <RunbookPanel
             runbook={rb.runbook}
@@ -1229,6 +1315,16 @@ export function Dispatch({ active }: { active: boolean }) {
               now={nowTick}
             />
           </span>
+          {(d.btw.records.length > 0 || d.btw.inFlight) && !isMobile && (
+            <button
+              className={cn('btw-count', d.btw.inFlight && 'live')}
+              onClick={() => setBtwOpen((o) => !o)}
+              title={btwOpen ? '收起旁路面板' : '打开本会话的旁路记录'}
+              aria-pressed={btwOpen}
+            >
+              <span className="btw-bq">?</span>旁路 <b>{d.btw.records.length}</b>
+            </button>
+          )}
           <span className={cn('cs-state', statusText.cls)}>
             <span className="cs-dot" />
             {statusText.text}
@@ -1243,7 +1339,10 @@ export function Dispatch({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className={cn('composer', attachments.length && 'has-attach')} ref={composerRef}>
+        <div className={cn('composer', attachments.length && 'has-attach', btwMode && 'btw-mode')} ref={composerRef}>
+          {btwMode && (
+            <div className="btw-prefix"><span className="btw-prefix-dot" />旁路提问 · 不进主对话</div>
+          )}
           {/* 待发送图片条:在 textarea 上方、composer 边框之内 —— 图片与文字同属一条待发消息 */}
           {attachments.length > 0 && (
             <div className="attach-strip">
@@ -1380,10 +1479,11 @@ export function Dispatch({ active }: { active: boolean }) {
                 location.hash = 'sessions';
               }
             }}
-            onInput={() => {
+            onInput={(e) => {
               // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
               historyIdxRef.current = null;
               growTa();
+              setBtwMode(isBtwText((e.target as HTMLTextAreaElement).value));
             }}
           />
           </div>
@@ -1410,7 +1510,7 @@ export function Dispatch({ active }: { active: boolean }) {
               <span className="bg-opt-label">转后台(--bg)</span>
             </label>
             <button className="btn btn-primary send-btn" onClick={() => void submit()} aria-label="发送">
-              <span className="send-btn-label">发送</span>
+              <span className="send-btn-label">{btwMode ? '问旁路' : '发送'}</span>
               <svg className="send-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M22 2 11 13" />
                 <path d="M22 2 15 22l-4-9-9-4z" />

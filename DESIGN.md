@@ -311,6 +311,28 @@ components:
     textColor: "{colors.amber}"
     rounded: "{rounded.chip}"
     padding: "1px 6px"
+  btw-panel:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "400px"
+  btw-note:
+    textColor: "{colors.violet}"
+    rounded: "{rounded.chip}"
+    padding: "0 6px"
+  btw-count:
+    textColor: "{colors.muted}"
+    rounded: "{rounded.chip}"
+    padding: "0 7px 0 4px"
+  btw-count-live:
+    textColor: "{colors.ink}"
+  btw-err:
+    backgroundColor: "color-mix(in oklab, {colors.amber} 14%, transparent)"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "10px 12px"
+  composer-btw-mode:
+    backgroundColor: "{colors.violet}"
+    textColor: "{colors.on-jade}"
 ---
 
 # Design System: 璇玑 xuanji
@@ -579,6 +601,13 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 **开关必须真的接着消费端。** 通知分区的范围与事件取与(两者都开才发),由后端在发通知前统一判定;后端目前没有向终端会话发通知的路径,故该行照实置灰并写明原因——一个打开后什么也不会发生的开关,比没有这个开关更糟。
 
 **恢复默认** 按分区提供,不做全局一键重置;点下即时生效并 toast 回执,回退到的是代码里的 `*_DEFAULTS` 常量而非上次保存值。
+
+### 旁路提问(Signature Component · `.btw` 右侧停靠面板)
+「顺便问一句」的专属窗口:拿着主对话全部上下文作答,但答案**不进主对话**、不占它的 context、不打断它正在跑的回合。面板停靠在派发页右栏(400px,窄屏 340px),与消息区 / 状态条 / 输入框 / 终端行四行等高贯穿——它是主对话的**旁注**而非另一个对话,所以不做成第二个聊天流,也不做成弹窗盖住主对话。
+
+**紫 = 旁路语义**。`--violet` 在派发页原本表「模型 / 编排」,这里扩展为「与主对话隔离的旁路」:输入框以 `/btw` 开头即上紫色描边 + 顶部一行「旁路提问 · 不进主对话」标记、发送键转紫改叫「问旁路」;面板标题旁的「答案不进主对话」芯片、问句前的 `/btw` mono 前缀、状态条「旁路 N」计数的问号都用同一色。它不是装饰,是在每个入口反复确认「这一问走的是旁路」——用户最怕的是不小心把一句闲问塞进正在跑的任务里。
+
+**面板只是窗口,记录在库里**。答案一回来就自动存进自有库,底部一行「已存 · 旁路记录」是状态说明不是按钮;关面板不丢,`⌘/`(输入框为空时)或状态条计数芯片随时重开并停在最后一条,`⇧←` / `⇧→` 翻记录,`≡` 切到复用 `.rp-list` / `.rp-item` 骨架的可搜索列表。三种单条状态:提问中(骨架 + 紫点「回答中 · 主对话未打断,仍在继续」+ 取消)、已答(Markdown 正文 + 复制 / 存为经验 / 钉入主对话)、失败(琥珀 tint 块 + 重问 / 改到主对话问)。「钉入主对话」是旁路内容进入主对话的**唯一路径**,主对话正在跑时禁用;「存为经验」会写 `~/.claude`,必经确认。
 
 ## 6. Do's and Don'ts
 
