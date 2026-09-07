@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isBtwText, parseBtw, pinText } from './btw';
+import { BTW_SLOW_AFTER_S, isBtwText, parseBtw, pinText, waitNote } from './btw';
 
 describe('/btw 文本约定', () => {
   it('识别前缀:大小写不敏感、允许前导空白、必须是独立单词', () => {
@@ -19,5 +19,12 @@ describe('/btw 文本约定', () => {
 
   it('钉入主对话的正文带问与答', () => {
     expect(pinText('q', ' a \n')).toBe('之前旁路问过:q\n结论:a');
+  });
+
+  it('等待久了改口:8 秒是分界,之前强调没打断主对话,之后强调还在想', () => {
+    expect(waitNote(0)).toBe('主对话未打断,仍在继续');
+    expect(waitNote(BTW_SLOW_AFTER_S - 1)).toBe('主对话未打断,仍在继续');
+    expect(waitNote(BTW_SLOW_AFTER_S)).toBe('还在想,主对话不受影响');
+    expect(waitNote(120)).toBe('还在想,主对话不受影响');
   });
 });
