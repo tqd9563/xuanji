@@ -494,15 +494,13 @@ export function Dispatch({ active }: { active: boolean }) {
     // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
     markSeen(info.sessionId);
     repin();
-    resetHistoryBrowse(); // 换会话:↑/↓ 回溯范围重新从这个(待续接)会话算起
-    setSessionCwd(null);
+    leaveSession(); // 换会话:↑/↓ 回溯范围与轮次索引重新从这个(待续接)会话算起
     setResumeInfo(info);
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
     setCwd(info.cwd);
     d.pushNote(`↻ 将续接会话 ${info.sessionId.slice(0, 8)}(${info.name}),发送第一条消息后恢复上下文。`);
     // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)。
-    // 只渲染尾部 CHAT_SEED_LIMIT 条,更早的留给轮次目录按需回填。
-    resetTurnNav();
+    // 只渲染尾部 CHAT_SEED_LIMIT 条,更早的留给轮次目录按需回填(轮次索引已由 leaveSession 归零)。
     void api
       .replay(info.sessionId)
       .then((r) => {
@@ -573,10 +571,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
-      setSessionCwd(null);
-      setSessCtx(null);
+      leaveSession();
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
     }
     if (intent?.attach) {
@@ -585,8 +580,7 @@ export function Dispatch({ active }: { active: boolean }) {
       markSeen(intent.attach.sessionId);
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
-      resetHistoryBrowse();
-      setResumeInfo(null);
+      leaveSession();
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
       setFromBoard(true);
@@ -602,10 +596,7 @@ export function Dispatch({ active }: { active: boolean }) {
       // 且旧会话已有的 sessionId 会立刻把这条待办错绑到不相干的会话上
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
-      setSessionCwd(null);
-      setSessCtx(null);
+      leaveSession();
     }
     // 「来自待办」横幅只属于带 todoId 的这一次进入:换任何别的方式进来都清掉,
     // 否则横幅跨会话残留,后续无关派发拿到 sessionId 还会把那条待办错绑过去
@@ -959,6 +950,19 @@ export function Dispatch({ active }: { active: boolean }) {
     historyDraftRef.current = '';
   };
 
+  /** 离开当前会话(换会话 / 清空 / 接回 / 续接)的公共归零动作,收在这一处。
+   *  输入历史回溯范围、轮次索引(含尚未渲染、待回填的更早事件)、续接信息与会话上下文
+   *  必须同进同退:漏掉任何一样,上一个会话的状态就会漏进下一个会话。
+   *  2026-09-09 实测:看板接回这条入口只清了输入历史,轮次目录里于是列着上一个会话的 40 条轮次。
+   *  新增任何进入会话的入口,一律走本函数,不要在调用点各清各的。 */
+  const leaveSession = () => {
+    resetHistoryBrowse();
+    resetTurnNav();
+    setResumeInfo(null);
+    setSessionCwd(null);
+    setSessCtx(null);
+  };
+
   /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿。
    *  历史条目本身可能含换行(真实任务描述常见),所以「是否劫持方向键」只在草稿态按内容判——
    *  一旦已经在浏览历史(historyIdxRef !== null),后续 ↑/↓ 无条件继续翻,不会被途中某条多行历史卡住。 */
@@ -1130,11 +1134,7 @@ export function Dispatch({ active }: { active: boolean }) {
     setBtwOpen(false);
     setBtwMode(false);
     repin();
-    resetTurnNav();
-    resetHistoryBrowse();
-    setResumeInfo(null);
-    setSessionCwd(null);
-    setSessCtx(null);
+    leaveSession();
     setFromBoard(false);
     taRef.current?.focus();
   };
@@ -1157,8 +1157,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const target = effectiveCwd;
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
+      leaveSession();
       setSessionCwd(target);
       // 交接落地的新会话尚未发消息,还没有名称;项目已知(交接目标),先占位显示未命名
       setSessCtx({ id: null, name: null, project: curProject?.name ?? target, cwd: target });
