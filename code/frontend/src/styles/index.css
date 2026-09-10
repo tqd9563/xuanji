@@ -1220,6 +1220,27 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 移动端专属:会话标识挪进消息区顶部(见 Dispatch.tsx chat-sessctx-mobile),桌面恒隐藏 */
 .chat-sessctx-mobile { display: none; }
 
+/* ============================================================
+   快速提问标记:新会话未绑仓库时的显性标识,出现在状态行与空态两处。
+   命名带 xj- 项目前缀,避开 Tailwind 工具类命名空间(见 memory)。
+   底色混进硬编码的不透明 surface 原值,而不是 var(--surface):
+   玻璃档 body.wall-glass 会把 --surface 重定义成半透明,混进去照样漏壁纸
+   (原型实测 1.16:1)。沿用 .dd-menu 的既有先例。
+   ============================================================ */
+.xj-qa-pill {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  font-size: 0.6875rem; font-weight: 500;
+  color: var(--blue); background: color-mix(in oklab, var(--blue) 16%, oklch(0.185 0.008 120));
+  border-radius: var(--r-s); padding: 2px 7px; white-space: nowrap;
+}
+.xj-qa-pill .qa-ico { width: 12px; height: 12px; flex: none; }
+.xj-qa-badge {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  font-size: 0.75rem; color: var(--blue);
+  background: color-mix(in oklab, var(--blue) 14%, oklch(0.185 0.008 120));
+  border-radius: 999px; padding: 4px 12px 4px 10px;
+}
+.xj-qa-badge .qa-ico { width: 14px; height: 14px; flex: none; }
 .chat-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .chat-empty h2 { font-size: 1rem; margin-bottom: 6px; }
 .chat-empty p { color: var(--muted); font-size: 0.8125rem; max-width: 40em; margin-bottom: 18px; }

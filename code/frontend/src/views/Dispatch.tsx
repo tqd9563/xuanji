@@ -4,6 +4,7 @@ import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/
 import { matchKey } from '@/lib/keymap';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
+import { resolveCwd } from '@/lib/quick-ask';
 import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
@@ -32,6 +33,27 @@ const MdBlock = memo(function MdBlock({ text }: { text: string }) {
 });
 
 /** 按 markdown 顶层块切分。尊重代码栅栏,栅栏内的空白行不触发分割。 */
+/**
+ * 快速提问标记的闪电图标。笔画规格与侧栏导航图标一致(24 视框 / 1.7 线宽 / 圆头圆角),
+ * 尺寸由 .qa-ico 按所在容器给(前缀标 12px、空态徽标 14px)。
+ */
+function QuickAskIcon() {
+  return (
+    <svg
+      className="qa-ico"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13 2L4 14h7l-1 8 9-12h-7z" />
+    </svg>
+  );
+}
+
 function splitMdBlocks(text: string): string[] {
   const blocks: string[] = [];
   let cur = '';
@@ -479,11 +501,22 @@ export function Dispatch({ active }: { active: boolean }) {
   const rb = useRunbook(panelSessionId);
 
   const projects = projectsData?.projects ?? [];
-  const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
-  /** 未显式选择时依次退到:设置里的默认目录 → 候选列表首项。
-   *  默认目录可能已从 ~/.claude/projects 消失,故要校验它仍在候选里。 */
-  const prefCwd = prefs.cwd && cwdOptions.includes(prefs.cwd) ? prefs.cwd : '';
-  const effectiveCwd = cwd || prefCwd || cwdOptions[0] || '';
+  const quickAskCwd = prefs.quickAskCwd;
+  /** 目录优先级链与快速提问态判定收在 resolveCwd 一处(lib/quick-ask.ts),这里只取结果 */
+  const {
+    options: cwdOptions,
+    effectiveCwd,
+    isQuickAsk,
+  } = useMemo(
+    () =>
+      resolveCwd({
+        cwd,
+        prefCwd: prefs.cwd,
+        quickAskCwd,
+        projectPaths: projects.map((p) => p.path),
+      }),
+    [cwd, prefs.cwd, quickAskCwd, projects],
+  );
   const curProject = projects.find((p) => p.path === effectiveCwd);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
@@ -1029,7 +1062,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 旧会话不 kill:仍在跑的留在后台,可在「会话」页接回。
     if (/^\/clear\b/.test(text)) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
-      newSession();
+      newSession({ keepCwd: true });
       toast(wasLive ? '已清空上下文;上一个会话仍在后台运行,可在「会话」页接回' : '已清空上下文,开始新会话');
       return;
     }
@@ -1129,8 +1162,18 @@ export function Dispatch({ active }: { active: boolean }) {
     }
   };
 
-  const newSession = () => {
+  /**
+   * 开一个新会话。
+   *
+   * keepCwd 区分两类入口,不能合并成一种行为:
+   *  - ⌘N / 「新会话」按钮:开的是一件新任务,多半不属于上一个项目,故清掉显式选择
+   *    让目录退回默认(通常是快速提问目录);
+   *  - /clear:清的是上下文,人还在同一个项目里继续干活,目录必须原样保留
+   *    (这也是 /clear 一直以来的承诺)。
+   */
+  const newSession = (opts?: { keepCwd?: boolean }) => {
     d.reset();
+    if (!opts?.keepCwd) setCwd('');
     setBtwOpen(false);
     setBtwMode(false);
     repin();
@@ -1204,7 +1247,7 @@ export function Dispatch({ active }: { active: boolean }) {
           </button>
         )}
         <span className="spacer" />
-        <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
+        <button className="btn" title="⌘N" onClick={() => newSession()}>新会话</button>
       </div>
       <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
@@ -1233,6 +1276,12 @@ export function Dispatch({ active }: { active: boolean }) {
           )}
           {d.items.length === 0 && (
             <div className="chat-empty">
+              {isQuickAsk && (
+                <div className="xj-qa-badge">
+                  <QuickAskIcon />
+                  <span>快速提问</span>
+                </div>
+              )}
               <h2>派发一个新任务</h2>
               <p>
                 会话经 Agent SDK 执行,加载与终端一致的 skills / MCP / CLAUDE.md;工具调用逐项经你审批。
@@ -1522,6 +1571,12 @@ export function Dispatch({ active }: { active: boolean }) {
         </div>
 
         <div className="term-line">
+          {isQuickAsk && (
+            <span className="xj-qa-pill" title={`快速提问:新会话默认不绑仓库,工作目录 ${quickAskCwd}`}>
+              <QuickAskIcon />
+              快速提问
+            </span>
+          )}
           <DropUp
             id="cwd-dd"
             value={effectiveCwd}

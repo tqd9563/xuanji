@@ -1,3 +1,6 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PREFS, readPrefs, sanitize, writePrefs } from '../src/services/prefs.js';
 
@@ -20,6 +23,21 @@ describe('账户偏好', () => {
 
   it('坏 JSON 回退默认值而不是抛错', () => {
     expect(readPrefs(fakeStorage('{not json') as unknown as S)).toEqual(DEFAULT_PREFS);
+  });
+
+  it('默认的快速提问目录是家目录下的 scratch(绝对路径,便于与候选列表比较)', () => {
+    expect(DEFAULT_PREFS.quickAskCwd).toBe(join(homedir(), 'scratch'));
+    expect(DEFAULT_PREFS.quickAskCwd.startsWith('/')).toBe(true);
+  });
+
+  it('快速提问目录可改,也可清空(清空 = 关闭该默认)', () => {
+    expect(sanitize({ quickAskCwd: '/tmp/ad-hoc' }).quickAskCwd).toBe('/tmp/ad-hoc');
+    expect(sanitize({ quickAskCwd: '' }).quickAskCwd).toBe('');
+  });
+
+  it('快速提问目录传非字符串或超长时回退,不写坏值', () => {
+    expect(sanitize({ quickAskCwd: 42 as unknown as string }).quickAskCwd).toBe(DEFAULT_PREFS.quickAskCwd);
+    expect(sanitize({ quickAskCwd: 'x'.repeat(501) }).quickAskCwd).toBe(DEFAULT_PREFS.quickAskCwd);
   });
 
   it('写入是 patch 语义:只传一项不清空其余', () => {
