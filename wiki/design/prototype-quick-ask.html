@@ -1865,7 +1865,7 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
           </div></div>
           <div id="chat-body"></div>
           <div class="chat-empty" id="qa-empty">
-            <div class="xj-qa-badge" id="qa-badge"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg><span>快问 · 未绑仓库</span></div>
+            <div class="xj-qa-badge" id="qa-badge"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg><span>快速提问</span></div>
             <h2>派发一个新任务</h2>
             <p>会话经 Agent SDK 执行,加载与终端一致的 skills / MCP / CLAUDE.md;工具调用逐项经你审批。转后台的任务建议写全任务描述并放宽权限模式,避免无人值守时卡在审批上。</p>
             <div class="sugg">
@@ -1875,7 +1875,7 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
             </div>
             <!-- 原型专用:五枚候选图标并排对照,点哪枚就把徽标与状态行前缀标一起换成它 -->
             <div class="xj-qa-icopick" id="qa-icopick" aria-label="候选图标(原型对照)">
-              <button data-ico="folder" title="虚线文件夹"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg>快问</span><i>虚线文件夹</i></button><button data-ico="bolt" title="闪电线稿"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>快问</span><i>闪电线稿</i></button><button data-ico="note" title="便签"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v10l-6 6H4z"/><path d="M14 20v-6h6"/></svg>快问</span><i>便签</i></button><button data-ico="bubble" title="气泡"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/><path d="M8.5 10.5h7"/></svg>快问</span><i>气泡</i></button><button data-ico="hour" title="沙漏"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12M8 3v4l4 5 4-5V3M8 21v-4l4-5 4 5v4"/></svg>快问</span><i>沙漏</i></button>
+              <button data-ico="folder" title="虚线文件夹"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg>快速提问</span><i>虚线文件夹</i></button><button data-ico="bolt" title="闪电线稿"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>快速提问</span><i>闪电线稿</i></button><button data-ico="note" title="便签"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v10l-6 6H4z"/><path d="M14 20v-6h6"/></svg>快速提问</span><i>便签</i></button><button data-ico="bubble" title="气泡"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/><path d="M8.5 10.5h7"/></svg>快速提问</span><i>气泡</i></button><button data-ico="hour" title="沙漏"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12M8 3v4l4 5 4-5V3M8 21v-4l4-5 4 5v4"/></svg>快速提问</span><i>沙漏</i></button>
             </div>
           </div>
         </div>
@@ -1969,9 +1969,8 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
         </div>
 
         <div class="term-line" id="term-line" data-mode="quick">
-          <span class="xj-qa-pill" id="qa-pill" title="⌘N 新会话默认不绑仓库,工作目录是 ~/scratch"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg>快问</span>
+          <span class="xj-qa-pill" id="qa-pill" title="⌘N 新会话默认不绑仓库,工作目录是 ~/scratch"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>快速提问</span>
           <span class="dd" id="cwd-dd"><button class="dd-btn"><span class="dd-val" id="qa-cwd">~/scratch</span><span class="caret">▾</span></button></span>
-          <span class="xj-qa-nonrepo">非 git 仓库 · 一次性任务</span>
           <span class="branch mono xj-qa-proj" title="git 状态">⎇ feature/session-project-filter<span class="gs-m"> !3</span></span>
           <span class="spacer"></span>
           <span class="dd"><button class="dd-btn"><span class="dd-val">fable</span><span class="caret">▾</span></button></span>
@@ -1995,11 +1994,11 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
 </div>
 
 <div class="proto-hint">
-  <b>原型 · 快问默认态(⌘N)</b>
+  <b>原型 · 快速提问默认态(⌘N)</b>
   ⌘N 新会话不再沿用上次项目,默认落在 ~/scratch,并在状态行与空态各标一次;显式切目录后标记消失,回归常规项目态。
   <div class="sw">
     <span class="sw-lab">状态</span>
-    <button id="qa-sw-quick" class="on">A 快问(默认)</button>
+    <button id="qa-sw-quick" class="on">A 快速提问(默认)</button>
     <button id="qa-sw-proj">B 已切到项目</button>
   </div>
   <div class="sw" hidden>
@@ -2402,7 +2401,7 @@ $('sw-hist').addEventListener('click', renderHist);
       ['qa-pill', 'qa-badge'].forEach(id => { const el = document.getElementById(id); el.querySelector('svg').outerHTML = ICON_SVG[b.dataset.ico]; });
     });
   });
-  document.querySelector('#qa-icopick button[data-ico="folder"]').classList.add('on');
+  document.querySelector('#qa-icopick button[data-ico="bolt"]').classList.add('on');
   document.querySelectorAll('.sugg button').forEach(b => {
     b.addEventListener('click', () => {
       const ta = document.getElementById('ta');
