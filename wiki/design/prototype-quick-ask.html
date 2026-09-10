@@ -1774,11 +1774,26 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
 /* 工作目录前缀标:只在快问态出现。与 cwd 下拉同族蓝 = 它是「工作目录的一种状态」,不是新维度 */
 .xj-qa-pill {
   display: inline-flex; align-items: center; gap: 5px; flex: none;
-  font-size: 0.6875rem; font-weight: 600; letter-spacing: .02em;
+  font-size: 0.6875rem; font-weight: 500;
   color: var(--blue); background: color-mix(in oklab, var(--blue) 16%, oklch(0.185 0.008 120));
   border-radius: var(--r-s); padding: 2px 7px; white-space: nowrap;
 }
-.xj-qa-pill .qa-glyph { font-size: 0.75rem; line-height: 1; }
+.xj-qa-pill .qa-ico { width: 12px; height: 12px; flex: none; }
+/* 空态徽标:与前缀标同一枚图标、同一族蓝,尺寸放大一档;标题之上 12px */
+.xj-qa-badge {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  font-size: 0.75rem; color: var(--blue);
+  background: color-mix(in oklab, var(--blue) 14%, oklch(0.185 0.008 120));
+  border-radius: 999px; padding: 4px 12px 4px 10px;
+}
+.xj-qa-badge .qa-ico { width: 14px; height: 14px; flex: none; }
+/* 原型专用:候选图标对照条 */
+.xj-qa-icopick { margin-top: 36px; padding-top: 18px; border-top: 1px dashed var(--line); display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; }
+.xj-qa-icopick button { background: none; border: 1px solid transparent; border-radius: var(--r-s); padding: 8px 10px; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.xj-qa-icopick button i { font-style: normal; font-size: 0.6875rem; color: var(--faint); }
+.xj-qa-icopick button:hover { border-color: var(--line); }
+.xj-qa-icopick button.on { border-color: var(--blue); }
+.xj-qa-icopick button.on i { color: var(--blue); }
 /* 非仓库说明:占据快问态下 git 分支的位置(scratch 不是仓库,那里本就空着) */
 .xj-qa-nonrepo { font-size: 0.75rem; color: var(--faint); white-space: nowrap; }
 /* 模式切换:快问态下 cwd 下拉整体加一层浅描边,让「这不是常规项目」在余光里也成立 */
@@ -1787,28 +1802,6 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
 .term-line[data-mode="project"] .xj-qa-pill,
 .term-line[data-mode="project"] .xj-qa-nonrepo { display: none; }
 
-/* 快问空态:替换派发页原空态。标题直说当前在哪、产物去哪,纠错窗口在发第一条消息之前 */
-.xj-qa-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
-.xj-qa-empty .qa-badge {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
-  font-size: 0.75rem; color: var(--blue);
-  background: color-mix(in oklab, var(--blue) 14%, oklch(0.185 0.008 120));
-  border-radius: 999px; padding: 4px 12px;
-}
-.xj-qa-empty h2 { font-size: 1rem; margin-bottom: 6px; color: var(--ink); }
-.xj-qa-empty p { color: var(--muted); font-size: 0.8125rem; max-width: 42em; margin: 0 auto 6px; line-height: 1.7; }
-.xj-qa-empty p .mono { font-family: var(--mono); color: var(--ink); }
-.xj-qa-empty .qa-switch { margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
-.xj-qa-empty .qa-switch .k { font-size: 0.75rem; color: var(--faint); }
-.xj-qa-sugg { margin-top: 22px; display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.xj-qa-sugg button {
-  border: 1px solid var(--line); border-radius: var(--r-s); background: var(--surface);
-  color: var(--muted); font-size: 0.75rem; padding: 6px 12px; cursor: pointer;
-  transition: border-color 150ms var(--ease), color 150ms var(--ease);
-}
-.xj-qa-sugg button:hover { border-color: var(--blue); color: var(--ink); }
-.xj-qa-sugg button:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
-@media (max-width: 720px) { .xj-qa-sugg button { min-height: 44px; } }
 
 
 /* 本原型的说明浮层挪到右下:默认左下会正好压住本次要看的状态行前缀标 */
@@ -1871,19 +1864,18 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
             </span>
           </div></div>
           <div id="chat-body"></div>
-          <div class="xj-qa-empty" id="qa-empty">
-            <span class="qa-badge"><span>⚡</span>快问 · 未绑仓库</span>
-            <h2>派发一个一次性任务</h2>
-            <p>工作目录 <span class="mono">~/scratch</span>,不加载任何项目的 CLAUDE.md,也不会读到别的仓库。产物写进 <span class="mono">~/scratch/out/&lt;日期&gt;-&lt;主题&gt;/</span>。</p>
-            <p>要在某个项目里干活,先切工作目录——切完这枚标记消失,状态行换成该项目的路径与 git 分支。</p>
-            <div class="qa-switch">
-              <button class="btn btn-sm" id="qa-to-proj">切到项目…</button>
-              <span class="k">或按 <kbd>⌘K</kbd> · 输入 <kbd>/wd</kbd></span>
+          <div class="chat-empty" id="qa-empty">
+            <div class="xj-qa-badge" id="qa-badge"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg><span>快问 · 未绑仓库</span></div>
+            <h2>派发一个新任务</h2>
+            <p>会话经 Agent SDK 执行,加载与终端一致的 skills / MCP / CLAUDE.md;工具调用逐项经你审批。转后台的任务建议写全任务描述并放宽权限模式,避免无人值守时卡在审批上。</p>
+            <div class="sugg">
+              <button>扫描高风险 IP</button>
+              <button>收入异动归因</button>
+              <button>提炼本周经验</button>
             </div>
-            <div class="xj-qa-sugg">
-              <button>查一下 120.40.0.4 这个 IP 的风险</button>
-              <button>把这份 md 写进一个新的飞书文档</button>
-              <button>扫一下本机 skill 软链有没有断的</button>
+            <!-- 原型专用:五枚候选图标并排对照,点哪枚就把徽标与状态行前缀标一起换成它 -->
+            <div class="xj-qa-icopick" id="qa-icopick" aria-label="候选图标(原型对照)">
+              <button data-ico="folder" title="虚线文件夹"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg>快问</span><i>虚线文件夹</i></button><button data-ico="bolt" title="闪电线稿"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>快问</span><i>闪电线稿</i></button><button data-ico="note" title="便签"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 4h16v10l-6 6H4z"/><path d="M14 20v-6h6"/></svg>快问</span><i>便签</i></button><button data-ico="bubble" title="气泡"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H8l-4 4z"/><path d="M8.5 10.5h7"/></svg>快问</span><i>气泡</i></button><button data-ico="hour" title="沙漏"><span class="xj-qa-pill"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12M6 21h12M8 3v4l4 5 4-5V3M8 21v-4l4-5 4 5v4"/></svg>快问</span><i>沙漏</i></button>
             </div>
           </div>
         </div>
@@ -1977,7 +1969,7 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
         </div>
 
         <div class="term-line" id="term-line" data-mode="quick">
-          <span class="xj-qa-pill" title="⌘N 新会话默认不绑仓库,工作目录是 ~/scratch"><span class="qa-glyph">⚡</span>快问</span>
+          <span class="xj-qa-pill" id="qa-pill" title="⌘N 新会话默认不绑仓库,工作目录是 ~/scratch"><svg class="qa-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7l3-4h5l2 3h8v13H3z" stroke-dasharray="2.2 2"/></svg>快问</span>
           <span class="dd" id="cwd-dd"><button class="dd-btn"><span class="dd-val" id="qa-cwd">~/scratch</span><span class="caret">▾</span></button></span>
           <span class="xj-qa-nonrepo">非 git 仓库 · 一次性任务</span>
           <span class="branch mono xj-qa-proj" title="git 状态">⎇ feature/session-project-filter<span class="gs-m"> !3</span></span>
@@ -2402,8 +2394,16 @@ $('sw-hist').addEventListener('click', renderHist);
   }
   bQuick.addEventListener('click', () => setMode('quick'));
   bProj.addEventListener('click', () => setMode('project'));
-  document.getElementById('qa-to-proj').addEventListener('click', () => setMode('project'));
-  document.querySelectorAll('.xj-qa-sugg button').forEach(b => {
+    const ICON_SVG = {};
+  document.querySelectorAll('#qa-icopick button').forEach(b => {
+    ICON_SVG[b.dataset.ico] = b.querySelector('svg').outerHTML;
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#qa-icopick button').forEach(x => x.classList.toggle('on', x === b));
+      ['qa-pill', 'qa-badge'].forEach(id => { const el = document.getElementById(id); el.querySelector('svg').outerHTML = ICON_SVG[b.dataset.ico]; });
+    });
+  });
+  document.querySelector('#qa-icopick button[data-ico="folder"]').classList.add('on');
+  document.querySelectorAll('.sugg button').forEach(b => {
     b.addEventListener('click', () => {
       const ta = document.getElementById('ta');
       ta.value = b.textContent; ta.focus();
