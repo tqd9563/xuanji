@@ -206,12 +206,15 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
           }
           break;
         }
+        // isMeta 的 user 文本是 Claude Code 自己注入的(斜杠命令注意事项、技能基目录、图片占位符),
+        // 不是人打的一轮:60 个最新会话 92 条实测全是这几类,零条真提问。不进回放,轮次目录才不多算
+        const meta = j.isMeta === true;
         if (typeof c === 'string') {
-          events.push({ kind: 'user', text: c, ts: j.timestamp });
+          if (!meta) events.push({ kind: 'user', text: c, ts: j.timestamp });
         } else if (Array.isArray(c)) {
           for (const block of c) {
             if (block?.type === 'text' && typeof block.text === 'string') {
-              events.push({ kind: 'user', text: block.text, ts: j.timestamp });
+              if (!meta) events.push({ kind: 'user', text: block.text, ts: j.timestamp });
             } else if (block?.type === 'tool_result') {
               const idx = toolIndex.get(block.tool_use_id);
               if (idx !== undefined) {

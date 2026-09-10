@@ -111,11 +111,9 @@ describe('DispatchSession × 思考流', () => {
     fake.push(blockStop(0));
     await flush();
 
+    // 回放缓冲把连续的 thinking-delta 合并成一条(逐 token 的流只走订阅,不占缓冲)
     const deltas = session.events.filter((e) => e.ev === 'thinking-delta');
-    expect(deltas).toEqual([
-      { ev: 'thinking-delta', text: 'I should locate the actual record ' },
-      { ev: 'thinking-delta', text: 'rather than guess.' },
-    ]);
+    expect(deltas).toEqual([{ ev: 'thinking-delta', text: 'I should locate the actual record rather than guess.' }]);
 
     const end = session.events.find((e) => e.ev === 'thinking-end');
     expect(end).toBeDefined();

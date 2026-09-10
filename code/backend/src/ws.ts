@@ -87,12 +87,13 @@ export function attachWs(server: Server, storage: Storage) {
       unsubscribe?.();
       if (replayEvents) for (const e of s.events) send(e);
       unsubscribe = s.subscribe(send);
-      // 接回(replayEvents)时附带垫历史元信息:内存事件只覆盖本进程生命周期,
-      // startedAt 之前的对话要由前端从会话 jsonl 回放补齐;全新 start 无更早历史,不带
+      // 接回(replayEvents)时附带垫历史元信息:内存缓冲只覆盖 replayBefore 之后的事件
+      // (未裁剪 = 进程启动时间;裁过 = 缓冲里第一条事件的时刻),之前的对话要由前端从会话
+      // jsonl 回放补齐;全新 start 无更早历史,不带
       const histSid = s.sessionId ?? s.resumeFrom;
       send(
         replayEvents && histSid
-          ? { ev: 'attached', dispatchId: s.id, historySessionId: histSid, historyBefore: s.startedAt }
+          ? { ev: 'attached', dispatchId: s.id, historySessionId: histSid, historyBefore: s.replayBefore }
           : { ev: 'attached', dispatchId: s.id },
       );
     };
