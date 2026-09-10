@@ -5,6 +5,7 @@
  * 个人工具在 Mac 与手机上共用一套数据,不标清楚就会反复出现「我在这边改了那边没变」。
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { api } from '@/api/client';
 import { DropUp } from '@/components/DropUp';
 import { confirmBox, toast } from '@/components/shared';
 import { WallpaperFields } from '@/components/WallpaperSettings';
@@ -237,8 +238,8 @@ export function Settings({
 
   const resetSec = async (id: SecId) => {
     if (id === 'dispatch') {
-      const { model, effort, perm, cwd, bg, wrapupPrompt } = DEFAULT_ACCOUNT;
-      await patchAccount({ model, effort, perm, cwd, bg, wrapupPrompt });
+      const { model, effort, perm, cwd, quickAskCwd, bg, wrapupPrompt } = DEFAULT_ACCOUNT;
+      await patchAccount({ model, effort, perm, cwd, quickAskCwd, bg, wrapupPrompt });
     } else if (id === 'look') {
       patchLocal({
         fontScale: DEFAULT_LOCAL.fontScale,
@@ -387,6 +388,42 @@ export function Settings({
             options={['', ...cwdOptions]}
             labelOf={(v) => v || '最近一次派发的目录'}
             onChange={(v) => void patchAccount({ cwd: v })}
+          />
+        </SettingsRow>
+        <SettingsRow hit={hit}
+          label="快速提问目录"
+          desc="新会话未选目录时的落点,不绑仓库;留空则退回「候选列表首项」"
+          scope="acct"
+        >
+          <input
+            className="input"
+            type="text"
+            defaultValue={prefs.quickAskCwd}
+            spellCheck={false}
+            placeholder="~/scratch"
+            onBlur={(e) => {
+              const raw = e.target.value.trim();
+              if (raw === prefs.quickAskCwd) return;
+              // 留空 = 关闭该默认,不必校验
+              if (!raw) return void patchAccount({ quickAskCwd: '' });
+              // 存绝对路径:候选列表里的其它目录都是绝对路径,存 `~` 会让「是否同一个目录」
+              // 的比较失败,快速提问标记就再也点不亮
+              void api
+                .resolvePath(raw)
+                .then((r) => {
+                  if (!r.isDir) {
+                    toast('目录不存在,未保存');
+                    e.target.value = prefs.quickAskCwd;
+                    return;
+                  }
+                  e.target.value = r.path;
+                  return patchAccount({ quickAskCwd: r.path });
+                })
+                .catch(() => {
+                  toast('路径解析失败,未保存');
+                  e.target.value = prefs.quickAskCwd;
+                });
+            }}
           />
         </SettingsRow>
         <SettingsRow hit={hit} label="默认转后台(--bg)" desc="开启后新会话默认勾选「转后台」" scope="acct">

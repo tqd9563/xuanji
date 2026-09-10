@@ -4,6 +4,7 @@ description: 深色观象台风格的个人 AI 生产驾驶舱——近黑玉调
 colors:
   bg: "oklch(0.145 0.006 120)"
   surface: "oklch(0.185 0.008 120)"
+  surface-opaque: "oklch(0.185 0.008 120)"
   surface-2: "oklch(0.165 0.007 120)"
   hover: "oklch(0.215 0.009 120)"
   line: "oklch(0.27 0.010 120)"

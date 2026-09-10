@@ -7,6 +7,9 @@
  * 存储用 meta 表单键 JSON,不为偏好单开表:偏好是一个整体读写的小对象,拆列会让
  * 每加一项都要迁移一次 schema。~/.claude 永远不写(架构铁律 2)。
  */
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
 import type { Storage } from '../storage/db.js';
 
 const META_KEY = 'prefs';
@@ -35,6 +38,12 @@ export interface AccountPrefs {
   perm: string;
   /** 默认工作目录;空串 = 最近一次派发的目录 */
   cwd: string;
+  /**
+   * 「快速提问」目录:新会话在没有显式选目录时落在这里,不绑任何仓库。
+   * 空串 = 关闭该默认,新会话回到「沿用候选列表首项」的旧行为。
+   * 它不是第二个默认目录,而是 cwd 的兜底:cwd 有值时以 cwd 为准。
+   */
+  quickAskCwd: string;
   /** 新会话默认转后台 */
   bg: boolean;
   /** /wrapup 的固定触发语 */
@@ -48,6 +57,7 @@ export const DEFAULT_PREFS: AccountPrefs = {
   effort: '',
   perm: 'bypassPermissions',
   cwd: '',
+  quickAskCwd: join(homedir(), 'scratch'),
   bg: false,
   wrapupPrompt:
     '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。',
@@ -90,6 +100,8 @@ export function sanitize(input: unknown, base: AccountPrefs = DEFAULT_PREFS): Ac
     perm: PERMS.has(perm) ? perm : base.perm,
     /** 路径不在此校验存在性:候选目录随时可能被删,校验会让偏好读取依赖文件系统 */
     cwd: str(o.cwd, base.cwd, 500),
+    /** 同 cwd:不校验存在性。目录被删时前端按「候选里没有」处理,不至于让偏好读不出来 */
+    quickAskCwd: str(o.quickAskCwd, base.quickAskCwd, 500),
     bg: bool(o.bg, base.bg),
     wrapupPrompt: wrapup.trim() ? wrapup : base.wrapupPrompt,
     notify: {

@@ -366,6 +366,8 @@ export interface AccountPrefs {
   effort: string;
   perm: string;
   cwd: string;
+  /** 「快速提问」目录:新会话未显式选目录时的落点,不绑仓库;空串 = 关闭 */
+  quickAskCwd: string;
   bg: boolean;
   wrapupPrompt: string;
   notify: NotifyPrefs;

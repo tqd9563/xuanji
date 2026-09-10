@@ -129,6 +129,8 @@ export const DEFAULT_ACCOUNT: AccountPrefs = {
   effort: '',
   perm: 'bypassPermissions',
   cwd: '',
+  // 与后端 DEFAULT_PREFS 对齐;真实默认值(绝对路径)由 /api/prefs 返回后覆盖
+  quickAskCwd: '',
   bg: false,
   wrapupPrompt:
     '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。',
