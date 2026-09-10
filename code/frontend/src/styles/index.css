@@ -13,7 +13,10 @@
 :root {
   /* 面 */
   --bg:        oklch(0.145 0.006 120);
-  --surface:   oklch(0.185 0.008 120);
+  /* 面板基色的不透明原值。玻璃档会把 --surface 重定义成半透明,凡是「必须挡住壁纸」
+     的底色(弹出菜单、模态、状态标记)都要混进这个值,而不是混进 --surface。 */
+  --surface-opaque: oklch(0.185 0.008 120);
+  --surface:   var(--surface-opaque);
   --surface-2: oklch(0.165 0.007 120);
   --hover:     oklch(0.215 0.009 120);
   --line:      oklch(0.27 0.010 120);
@@ -1223,21 +1226,21 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* ============================================================
    快速提问标记:新会话未绑仓库时的显性标识,出现在状态行与空态两处。
    命名带 xj- 项目前缀,避开 Tailwind 工具类命名空间(见 memory)。
-   底色混进硬编码的不透明 surface 原值,而不是 var(--surface):
+   底色混进 --surface-opaque(面板基色的不透明原值),而不是 var(--surface):
    玻璃档 body.wall-glass 会把 --surface 重定义成半透明,混进去照样漏壁纸
-   (原型实测 1.16:1)。沿用 .dd-menu 的既有先例。
+   (原型实测 1.16:1)。弹出菜单与设置模态用的是同一个 token。
    ============================================================ */
 .xj-qa-pill {
   display: inline-flex; align-items: center; gap: 5px; flex: none;
   font-size: 0.6875rem; font-weight: 500;
-  color: var(--blue); background: color-mix(in oklab, var(--blue) 16%, oklch(0.185 0.008 120));
+  color: var(--blue); background: color-mix(in oklab, var(--blue) 16%, var(--surface-opaque));
   border-radius: var(--r-s); padding: 2px 7px; white-space: nowrap;
 }
 .xj-qa-pill .qa-ico { width: 12px; height: 12px; flex: none; }
 .xj-qa-badge {
   display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
   font-size: 0.75rem; color: var(--blue);
-  background: color-mix(in oklab, var(--blue) 14%, oklch(0.185 0.008 120));
+  background: color-mix(in oklab, var(--blue) 14%, var(--surface-opaque));
   border-radius: 999px; padding: 4px 12px 4px 10px;
 }
 .xj-qa-badge .qa-ico { width: 14px; height: 14px; flex: none; }
@@ -1651,7 +1654,7 @@ body.wall-on #wall { opacity: var(--wall-opacity, 0.4); filter: blur(var(--wall-
 /* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。
    表面不透明度由 --wall-surface 驱动,surface-2 恒比 surface 低一档 */
 body.wall-glass {
-  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
+  --surface:   color-mix(in oklab, var(--surface-opaque) var(--wall-surface, 30%), transparent);
   --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
 }
 body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .notice) {
@@ -1661,7 +1664,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
 /* .dd-menu 是浮在任意前景内容之上的弹出菜单(非静态外壳面板),不应跟随玻璃档变半透明——
    否则菜单会透出下方内容,干扰选项选择。固定用不透明的原始 surface 色,不随 --wall-surface 变化。 */
 body.wall-glass .dd-menu {
-  background: oklch(0.185 0.008 120);
+  background: var(--surface-opaque);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -1700,7 +1703,7 @@ body.wall-on .statusbar.scrolled {
 .modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
   width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
 /* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
-body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
+body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
 
 .stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
 /* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
