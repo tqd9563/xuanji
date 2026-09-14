@@ -139,7 +139,19 @@ interface Pending {
 export class DispatchSession {
   readonly id = randomUUID();
   sessionId: string | null = null;
+  /**
+   * 接回(attach)用的回放缓冲。三条规则让它不再把早期用户回显裁掉(2026-09-10 实测:一个 4 轮会话
+   * 塞了 1849 条 delta,撞上 2000 上限后只剩最后一轮的 user-echo,⌘⇧O 目录只列 1 轮):
+   * 1. 连续的 delta / thinking-delta 合并成一条(回放只要终态形状,不要逐 token 的流);
+   * 2. 超限时裁到下一条 user-echo 为止,缓冲永远从一轮的开头起算;
+   * 3. 记下缓冲起点时间 replayBefore,被裁掉的部分由前端从会话 jsonl 补齐。
+   */
   readonly events: DispatchEvent[] = [];
+  /** 与 events 平行:每条事件入缓冲的时刻 */
+  private eventAt: number[] = [];
+  /** 回放缓冲的起点:缓冲之前的对话要从 jsonl 补。未裁剪前 = 进程启动时间 */
+  replayBefore: number;
+  static REPLAY_CAP = 2000;
   private listeners = new Set<(e: DispatchEvent) => void>();
   private input = new AsyncQueue<SDKUserMessage>();
   private q: Query | null = null;
@@ -178,6 +190,7 @@ export class DispatchSession {
   constructor(storage: Storage, opts: DispatchOpts) {
     this.storage = storage;
     this.cwd = opts.cwd;
+    this.replayBefore = this.startedAt;
     this.name = opts.name ?? '新会话';
     this.resumeFrom = opts.resume ?? null;
     this.fork = opts.fork ?? false;
@@ -244,9 +257,27 @@ export class DispatchSession {
     if (this.sessionId && (e.ev === 'status' || e.ev === 'result' || e.ev === 'error')) {
       this.storage.updateDispatchState(this.sessionId, this.state, this.lastOutputAt ?? undefined, this.activity);
     }
-    this.events.push(e);
-    if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
+    this.buffer(e);
     for (const l of this.listeners) l(e);
+  }
+
+  private buffer(e: DispatchEvent) {
+    const last = this.events[this.events.length - 1];
+    if ((e.ev === 'delta' || e.ev === 'thinking-delta') && last?.ev === e.ev) {
+      this.events[this.events.length - 1] = { ev: e.ev, text: last.text + e.text };
+      return;
+    }
+    this.events.push(e);
+    this.eventAt.push(Date.now());
+    const cap = DispatchSession.REPLAY_CAP;
+    if (this.events.length <= cap) return;
+    // 裁到下一轮开头:从 (超出量) 位置起找第一条 user-echo;找不到(单轮就超限)退化为按量裁
+    let cut = this.events.length - cap;
+    const nextTurn = this.events.findIndex((x, i) => i >= cut && x.ev === 'user-echo');
+    if (nextTurn !== -1) cut = nextTurn;
+    this.events.splice(0, cut);
+    this.eventAt.splice(0, cut);
+    this.replayBefore = this.eventAt[0] ?? Date.now();
   }
 
   subscribe(l: (e: DispatchEvent) => void): () => void {
