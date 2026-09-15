@@ -1169,7 +1169,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   white-space: pre-wrap; word-break: break-word;
   letter-spacing: normal; tab-size: 4;
 }
-.ta-wrap textarea { position: relative; z-index: 1; color: transparent; caret-color: var(--ink); }
+/* display: block 不可省:textarea 默认 inline-block 按 baseline 对齐,会在 .ta-wrap 底部多出约 6px
+   行框余量;镜像 inset:0 铺满整个 .ta-wrap 就比 textarea 高 6px,两者可滚动范围不等——触顶后
+   textarea 滚到底时镜像还差 6px 没滚到,文字整体低于 caret/IME 下划线(2026-09-15 用户实测:
+   剪切再粘贴长文本,caret 与文字错位、拼音下划线画成删除线)。 */
+.ta-wrap textarea { display: block; position: relative; z-index: 1; color: transparent; caret-color: var(--ink); }
 .ta-wrap textarea::selection { background: color-mix(in oklab, var(--jade) 26%, transparent); }
 .ta-wrap .ta-mirror {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none;
