@@ -4,6 +4,42 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *  视图卸载重挂时先立刻展示上次数据、后台静默刷新——切换视图不再白屏等待。 */
 const pollCache = new Map<() => Promise<unknown>, unknown>();
 
+/** 已挂载的 usePoll 消费方,按 fetcher 分组;refreshPoll() 靠它把「数据变了」推给所有在看的视图 */
+const pollSubscribers = new Map<() => Promise<unknown>, Set<() => void>>();
+
+/** 供测试与 refreshPoll 使用:登记一个消费方的 refresh,返回注销函数 */
+export function subscribePoll(fetcher: () => Promise<unknown>, onRefresh: () => void): () => void {
+  let set = pollSubscribers.get(fetcher);
+  if (!set) {
+    set = new Set();
+    pollSubscribers.set(fetcher, set);
+  }
+  set.add(onRefresh);
+  return () => {
+    set.delete(onRefresh);
+    if (set.size === 0) pollSubscribers.delete(fetcher);
+  };
+}
+
+/** 数据源已知变更(如改名落库)时立即重拉,不等下一个轮询刻度:
+ *  有挂载的消费方就让它们各自 refresh;没有则自己拉一次填进缓存,下次挂载直接是新数据。 */
+export function refreshPoll(fetcher: () => Promise<unknown>): void {
+  const subs = pollSubscribers.get(fetcher);
+  if (subs && subs.size > 0) {
+    for (const fn of subs) fn();
+    return;
+  }
+  fetcher().then(
+    (d) => pollCache.set(fetcher, d),
+    () => undefined,
+  );
+}
+
+/** 测试用:读缓存 */
+export function peekPollCache<T>(fetcher: () => Promise<T>): T | undefined {
+  return pollCache.get(fetcher as () => Promise<unknown>) as T | undefined;
+}
+
 /** 轮询数据源:intervalMs 为 0 时只取一次;refresh() 手动重取 */
 export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: unknown[] = []) {
   const keyRef = useRef(fetcher as () => Promise<unknown>);
@@ -25,9 +61,13 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
 
   useEffect(() => {
     refresh();
-    if (!intervalMs) return;
+    const unsubscribe = subscribePoll(keyRef.current, refresh);
+    if (!intervalMs) return unsubscribe;
     const t = setInterval(refresh, intervalMs);
-    return () => clearInterval(t);
+    return () => {
+      clearInterval(t);
+      unsubscribe();
+    };
     // deps 由调用方显式传入,refresh 稳定
   }, [intervalMs, refresh, ...deps]);
 

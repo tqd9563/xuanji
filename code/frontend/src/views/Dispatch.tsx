@@ -2,7 +2,7 @@ import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRe
 import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
-import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
+import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
 import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
@@ -1092,6 +1092,8 @@ export function Dispatch({ active }: { active: boolean }) {
       try {
         await api.renameSession(d.sessionId, newName);
         setSessCtx((prev) => (prev ? { ...prev, name: newName } : prev));
+        // 看板卡片靠 5s 轮询取名,不主动刷新要等 0–5s 才变——改名已落库,立刻重拉
+        refreshPoll(api.sessions);
         d.pushNote(`✎ 会话已重命名为「${newName}」(存璇玑本地,看板即时生效;不写 ~/.claude)`);
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e));
