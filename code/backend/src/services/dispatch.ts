@@ -223,8 +223,17 @@ export class DispatchSession {
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
-        // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
-        env: { ...process.env, XUANJI_DISPATCH: '1' },
+        /**
+         * XUANJI_DISPATCH:标记「璇玑派发」身份,配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)。
+         *
+         * CLAUDE_CODE_ARTIFACT:开启 Artifact 工具(把本地 html 发布成 claude.ai 托管页)。
+         * CLI 对入口做了门控 —— 入口为 sdk-ts/sdk-py/sdk-cli(含 `claude -p`)或 mcp 时默认不注册该工具,
+         * 只有交互式终端才有(/config 的 Artifacts 行);判定同时留了本变量作为逃生口。
+         * 璇玑走 SDK query() 正属被门控的入口,不设此变量则派发会话拿不到 Artifact,与用户终端行为不一致。
+         * 注意另外两个同名近似开关对此无效:`enableArtifact` 设置项管的是「功能可用之后」的开关,
+         * CLAUDE_CODE_ARTIFACT_TOOLSET 管的是 comments/resolve 子工具集。
+         */
+        env: { ...process.env, XUANJI_DISPATCH: '1', CLAUDE_CODE_ARTIFACT: '1' },
         stderr: (data: string) => {
           for (const line of data.split('\n')) {
             const t = line.trim();
