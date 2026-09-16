@@ -648,6 +648,7 @@ export function Dispatch({ active }: { active: boolean }) {
     markSeen(info.sessionId);
     repin();
     leaveSession(); // 换会话:↑/↓ 回溯范围与轮次索引重新从这个(待续接)会话算起
+    d.noteSessionId(info.sessionId); // 旁路记录按会话挂载,不等第一条消息触发的 init
     setResumeInfo(info);
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
     setCwd(info.cwd);
@@ -740,6 +741,7 @@ export function Dispatch({ active }: { active: boolean }) {
       // name/project 看板已随手带过来(见 DispatchIntent.attach 注释),id 待 attach 重放 init 事件后由下方 effect 补上
       setSessCtx({ id: null, name: intent.attach.name || null, project: intent.attach.project, cwd: intent.attach.cwd });
       repin();
+      d.noteSessionId(intent.attach.sessionId); // 同 applyResume:回放缓冲若已挤掉 init,也还能拉到旁路记录
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
       setFromBoard(true);
@@ -1114,6 +1116,7 @@ export function Dispatch({ active }: { active: boolean }) {
     setResumeInfo(null);
     setSessionCwd(null);
     setSessCtx(null);
+    d.noteSessionId(null); // 已知会话 id 也随离开归零,入口自己再登记新的
   };
 
   /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿。
