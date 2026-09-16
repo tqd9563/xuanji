@@ -2054,6 +2054,8 @@ body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
   .ta-wrap textarea, .ta-wrap .ta-mirror { font-size: 1rem; }
   .xj-slash-list { max-height: 40vh; }
   .xj-slash-desc { display: none; }  /* 窄屏只留命令名,描述让位 */
+  /* 触摸目标下限 44px:桌面按行高 31px 是紧凑,手指点不准 */
+  .xj-slash-item { min-height: 44px; align-items: center; padding: 6px 12px; }
   .composer .code-help { display: none; } /* 与 .hint 同理:窄屏让位给按钮 */
   .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
   .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */

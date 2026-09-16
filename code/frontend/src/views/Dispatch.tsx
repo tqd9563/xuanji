@@ -1535,7 +1535,7 @@ export function Dispatch({ active }: { active: boolean }) {
           )}
           {/* 斜杠命令联想:锚在输入框上方,沿用 .dd-menu 的浮层词汇(不透明 surface + 边框 + 投影) */}
           {slashOpen && (
-            <div className="xj-slash" role="listbox" aria-label="斜杠命令">
+            <div className="xj-slash" id="slash-listbox" role="listbox" aria-label="斜杠命令">
               <div className="xj-slash-list" ref={slashListRef}>
                 {(() => {
                   const groups: [string, SlashCmd[]][] = [
@@ -1555,6 +1555,7 @@ export function Dispatch({ active }: { active: boolean }) {
                           return (
                             <button
                               key={c.name}
+                              id={`slash-opt-${idx}`}
                               type="button"
                               role="option"
                               aria-selected={idx === slashSelRef.current}
@@ -1590,6 +1591,14 @@ export function Dispatch({ active }: { active: boolean }) {
             ref={taRef}
             rows={2}
             placeholder={TA_PLACEHOLDER}
+            /* 联想面板开着时才按 WAI-ARIA combobox 模式关联(role + expanded + activedescendant):
+               没有这层关联,屏幕阅读器读不到「候选出现了」「现在停在哪一项」——键盘能用但听不见。
+               面板关着时不加,让它回到普通多行输入框的语义,别平白被念成组合框。 */
+            role={slashOpen ? 'combobox' : undefined}
+            aria-expanded={slashOpen ? true : undefined}
+            aria-controls={slashOpen ? 'slash-listbox' : undefined}
+            aria-activedescendant={slashOpen ? `slash-opt-${slashSelRef.current}` : undefined}
+            aria-autocomplete={slashOpen ? 'list' : undefined}
             onScroll={(e) => {
               // 触顶后 textarea 内部滚动,镜像层必须同步跟滚,否则高亮与文字脱节
               if (mirrorRef.current) mirrorRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
