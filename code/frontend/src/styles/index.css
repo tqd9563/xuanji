@@ -724,6 +724,14 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   color: var(--faint); margin-left: 8px;
   font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
+/* 本轮耗时:紧跟 .msg-ts 同排同字号——「多久」与「何时」是同类信息,不另起一行。
+   .msg-ts 本身保持不变,这里只是它右侧的同级 span。 */
+.xj-turn-dur {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 6px;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.xj-turn-dur::before { content: '·'; margin-right: 6px; opacity: 0.55; }
 /* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
    靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
 .day-sep {
@@ -977,7 +985,13 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .sess-ctx .sc-title.sc-named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
 .sess-ctx .sc-title.sc-unnamed { color: var(--faint); font-weight: 400; }
 .sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
-.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
+.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; font-variant-numeric: tabular-nums; }
+/* 状态文字变长(「已用 1m07s」「本轮 2m09s」)后整行会挤:让会话标识先让位——
+   它有 ellipsis 兜底(截掉的是能从别处看到的会话名),而状态里的数字截一半就没意义了。
+   cs-state 不参与收缩,收缩压力全部落到 sess-ctx;空间够时两者都不变。 */
+.chat-status .sess-ctx { flex: 0 20 auto; }
+.chat-status .cs-state { flex: 0 1 auto; }
+.cs-state .cs-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
 .cs-state.wait .cs-dot { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }

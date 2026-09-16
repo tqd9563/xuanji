@@ -145,6 +145,23 @@ export function daySeparator(prev: number | string | null | undefined, cur: numb
 
 export const fmtCost = (usd: number) => '$' + usd.toFixed(2);
 
+/**
+ * 一轮对话的耗时:42s / 3m12s / 1h04m。
+ * 秒级起步——轮次尺度上毫秒是噪音;进位后低位补零,让状态条里逐秒跳动的数字宽度稳定
+ * (配合 CSS 的 tabular-nums 不抖行)。与 ThinkingCard 的思考耗时(只到分)口径不同:
+ * 那里是块内耗时,这里是「你按下发送 → 回合结束」的整轮墙钟时间。
+ */
+export function fmtTurnDur(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`;
+}
+
+/** 超过这个耗时的轮次在消息头上调一级色阶(faint → muted),翻长会话时能一眼挑出重活那几轮 */
+export const LONG_TURN_MS = 5 * 60_000;
+
 export function fmtTokens(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'; // 近一周量级会上到十亿档,B 位保两位小数才分得出高低
   if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
@@ -207,4 +224,14 @@ export function prCardText(pr: {
   const label = pr.number != null ? `${pr.platform === 'gitlab' ? '!' : '#'}${pr.number}` : '链接';
   const meta = [created && `已创建 ${created}`, pr.updates > 0 && `更新 ${pr.updates} 次`].filter(Boolean).join(' · ');
   return { label, meta };
+}
+
+/**
+ * 回合结束时状态条那一行。耗时与成本都是「有才显示」:
+ * 接回存活会话拿不到本轮起点(耗时缺)、免费额度内或刚开局(成本为 0)都不该占位。
+ */
+export function idleStatusText(lastTurnMs: number | null, costUsd: number): string {
+  const turn = lastTurnMs != null ? ` · 本轮 ${fmtTurnDur(lastTurnMs)}` : '';
+  const cost = costUsd ? ` · 本会话 ${fmtCost(costUsd)}` : '';
+  return `空闲 · 回合结束${turn}${cost}`;
 }

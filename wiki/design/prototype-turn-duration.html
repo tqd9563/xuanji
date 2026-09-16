@@ -2024,8 +2024,8 @@ mark.hit.cur { background: var(--jade); color: var(--on-jade); font-weight: 600;
   </div>
   <div class="sw">
     <span class="sw-lab">结束态</span>
-    <button id="xj-m-live" class="on">B 只留消息头(推荐)</button>
-    <button id="xj-m-both">A 状态条也显示</button>
+    <button id="xj-m-both" class="on">A 状态条也显示(已选定)</button>
+    <button id="xj-m-live">B 只留消息头</button>
   </div>
   <div class="sw">
     <span class="sw-lab">会话</span>
@@ -2341,7 +2341,7 @@ function syncMode() {
 /* ---- 主对话一轮的耗时展示(本原型的主角) ----
    working:状态条实时累计「已用 N」;idle:定格为「本轮 N」,同一数字随后写进该轮 Claude 消息头。
    两处同源,都来自 result.durationMs;状态条是瞬态的,消息头是可回溯的。 */
-const mainRun = { timer: null, t0: 0, cost: 1.42, mode: 'live' };
+const mainRun = { timer: null, t0: 0, cost: 1.42, mode: 'both' };
 function setStatus(kind) {
   const el = $('cs-text'), st = $('cs-state');
   st.classList.remove('think', 'wait');
