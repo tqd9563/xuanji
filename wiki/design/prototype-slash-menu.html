@@ -1542,7 +1542,9 @@ body.wall-glass .xj-slash { background: oklch(0.185 0.008 120); backdrop-filter:
 .xj-slash-item.sel { background: var(--tint-jade); }
 .xj-slash-item.sel .xj-slash-name { color: var(--jade); }
 .xj-slash-name { font-family: var(--mono); font-size: 0.75rem; white-space: nowrap; }
-.xj-slash-name mark { background: none; color: inherit; font-weight: 700; text-decoration: underline; text-decoration-color: var(--jade); text-underline-offset: 2px; }
+.xj-slash-name { color: var(--muted); }
+.xj-slash-name mark { background: none; color: var(--ink); font-weight: 700; }   /* CLI 同款:只把已输入的前缀加粗提亮,其余字淡 */
+.xj-slash-item.sel .xj-slash-name, .xj-slash-item.sel .xj-slash-name mark { color: var(--jade); }
 .xj-slash-name .arg { color: var(--faint); font-weight: 400; margin-left: 6px; }
 .xj-slash-desc { min-width: 0; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .xj-slash-item.sel .xj-slash-desc { color: var(--ink); }
@@ -1559,6 +1561,14 @@ body.wall-glass .xj-slash { background: oklch(0.185 0.008 120); backdrop-filter:
   .xj-slash-desc { display: none; }               /* 窄屏只留命令名,描述让位 */
   .xj-slash-foot kbd, .xj-slash-foot .keys-note { display: none; }
 }
+
+/* 命中已知命令时,输入框里的命令词变玉色(CLI 同款)。textarea 本身不能局部着色,
+   叠一层同排版的镜像(display:block 与 textarea 同 padding/line-height,见 PR#56 教训)承担显示,textarea 只留光标 */
+.composer .xj-cmd-mirror { position: absolute; inset: 0; padding: 12px 16px 4px; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; pointer-events: none; color: var(--ink); display: none; }
+.composer .xj-cmd-mirror .cmd { color: var(--jade); font-weight: 600; }
+.composer.has-cmd .xj-ta-wrap textarea { color: transparent; caret-color: var(--ink); }
+.composer.has-cmd .xj-cmd-mirror { display: block; }
+.composer .xj-ta-wrap { position: relative; }
 
 .proto-hint {
   position: fixed; left: 16px; bottom: 16px; z-index: var(--z-toast);
@@ -2003,7 +2013,7 @@ body.wall-glass .xj-slash { background: oklch(0.185 0.008 120); backdrop-filter:
             <div class="xj-slash-foot"><span id="slash-foot">111 条 · 来自本会话 SDK</span><span class="spacer"></span><kbd>↑↓</kbd><kbd>Tab</kbd><span class="keys-note">补全</span><kbd>⏎</kbd><span class="keys-note">补全并发送</span><kbd>Esc</kbd></div>
           </div>
           <div class="btw-prefix" id="btw-prefix" hidden><span class="dot"></span>旁路提问 · 不进主对话</div>
-          <textarea rows="2" id="ta" placeholder="描述要派发的任务…(/btw 开头 = 旁路提问)"></textarea>
+          <div class="xj-ta-wrap"><textarea rows="2" id="ta" placeholder="描述要派发的任务…(/btw 开头 = 旁路提问)"></textarea><div class="xj-cmd-mirror" id="cmd-mirror" aria-hidden="true"></div></div>
           <div class="c-bar">
             <span class="hint" id="hint">Enter 换行 · ⌘Enter 发送 · ↑↓ 历史</span>
             <span class="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
@@ -2051,6 +2061,7 @@ body.wall-glass .xj-slash { background: oklch(0.185 0.008 120); backdrop-filter:
     <button id="ss-try-w">/w</button>
     <button id="ss-try-lark">/lark</button>
     <button id="ss-try-x">/zzz</button>
+    <button id="ss-try-hit">/baize 带参数</button>
   </div>
   <div class="sw" hidden>
     <span class="sw-lab">状态</span>
@@ -2536,10 +2547,20 @@ function pickSlash(send) {
   ta.value = '/' + r.n + ' ';
   slashEl.hidden = true; slashOpen = false; syncMode();
   if (r.h) { hint.classList.add('arg-hint'); hint.textContent = '/' + r.n + ' ' + r.h; }
-  ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+  syncCmdColor(); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
   if (send && !r.h) submit();
 }
 ta.addEventListener('input', renderSlash);
+/* 命令词着色:开头是「/已知命令」且后面是空白或结尾 → 命令词玉色,参数保持正常色 */
+const ALL_NAMES = () => new Set(BUILTIN.map(x => x.n).concat(slashSrc === 'none' ? [] : SKILLS.map(x => x.n)));
+function syncCmdColor() {
+  const m = ta.value.match(/^\/(\S+)([\s\S]*)$/);
+  const hit = m && ALL_NAMES().has(m[1]) && (m[2] === '' || /^\s/.test(m[2]));
+  composer.classList.toggle('has-cmd', !!hit);
+  $('cmd-mirror').innerHTML = hit ? `<span class="cmd">/${esc(m[1])}</span>${esc(m[2])}` : '';
+}
+ta.addEventListener('input', syncCmdColor);
+
 ta.addEventListener('keydown', e => {
   if (!slashOpen) { if (hint.classList.contains('arg-hint') && !ta.value.startsWith('/')) { hint.classList.remove('arg-hint'); syncMode(); } return; }
   if (e.key === 'ArrowDown') { e.preventDefault(); slashIdx = (slashIdx + 1) % Math.max(1, slashRows.length); renderSlash(); }
@@ -2553,10 +2574,11 @@ function setSrc(v) { slashSrc = v; ['live','stale','none'].forEach(k => $('ss-' 
 $('ss-live').addEventListener('click', () => setSrc('live'));
 $('ss-stale').addEventListener('click', () => setSrc('stale'));
 $('ss-none').addEventListener('click', () => setSrc('none'));
-function tryText(t) { ta.value = t; ta.focus(); slashIdx = 0; renderSlash(); }
+function tryText(t) { ta.value = t; ta.focus(); slashIdx = 0; renderSlash(); syncCmdColor(); }
 $('ss-try-w').addEventListener('click', () => tryText('/w'));
 $('ss-try-lark').addEventListener('click', () => tryText('/lark'));
 $('ss-try-x').addEventListener('click', () => tryText('/zzz'));
+$('ss-try-hit').addEventListener('click', () => tryText('/baize 对比一下 AFK 今天的 DAU'));
 setTimeout(() => tryText('/w'), 300);
 </script>
 </body>
