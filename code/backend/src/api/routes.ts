@@ -15,6 +15,7 @@ import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
 import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
+import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
@@ -55,6 +56,18 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   });
 
   /** /wd 手输路径的解析与校验:展开 `~`、归一为绝对路径,并回报是否真是一个目录 */
+  /**
+   * 斜杠命令目录兜底:派发页在 SDK 会话建立之前(新会话还没发第一条消息)也要能弹联想面板,
+   * 这里交出最近一次某个会话报告过的那份。`fresh:false` 恒成立 —— 属于本会话的权威列表
+   * 走 ws 的 commands 事件,到了就整份替换。
+   */
+  api.get('/slash-commands', async (c) => {
+    const cached = cachedSlashCatalog();
+    // 缓存里的目录可能是会话「第一段」下发的、还没贴频率的版本,这里补上
+    const { cmds, uses } = await withUsage(storage, cached.cmds);
+    return c.json({ ...cached, cmds, uses });
+  });
+
   api.get('/resolve-path', (c) => {
     const raw = c.req.query('path');
     if (!raw?.trim()) return c.json({ error: 'path required' }, 400);

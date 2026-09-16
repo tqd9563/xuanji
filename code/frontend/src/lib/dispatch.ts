@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { SideQuestion } from '@/api/types';
+import type { SlashCmdInfo } from '@/lib/slash';
 
 export interface QuestionSpec {
   question: string;
@@ -125,6 +126,10 @@ export function useDispatch() {
    *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
    *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
   const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
+  /** 本会话可用的斜杠命令(联想面板)。后端 commands 事件是 REPLACE 语义,整份换掉即可 */
+  const [commands, setCommands] = useState<SlashCmdInfo[] | null>(null);
+  /** 命令使用频率(含璇玑自己拦截的那几条),前端的内置命令表按它排序 */
+  const [commandUses, setCommandUses] = useState<Record<string, number>>({});
   const [btw, setBtw] = useState<BtwState>(BTW_EMPTY);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
@@ -185,6 +190,10 @@ export function useDispatch() {
         if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
           setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
         }
+        break;
+      case 'commands':
+        setCommands(e.cmds as SlashCmdInfo[]);
+        if (e.uses) setCommandUses(e.uses as Record<string, number>);
         break;
       case 'init':
         setSessionId(String(e.sessionId));
@@ -506,6 +515,8 @@ export function useDispatch() {
     setCostUsd(0);
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
     setAttachedHistory(null);
+    // commands 有意不清:命令目录跨会话基本不变,留着新会话就不必空一轮等 init,
+    // 真列表一到自会整份替换(REPLACE 语义)
     setBtw(BTW_EMPTY);
   }, [clearPendingDelta]);
 
@@ -558,5 +569,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, commands, commandUses, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }
