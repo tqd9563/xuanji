@@ -18,6 +18,7 @@ import { BtwPanel } from '@/components/BtwPanel';
 import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
 import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
+import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
 import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
 
 /**
@@ -171,6 +172,22 @@ const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 const TA_MIN_H = 56;
 /** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
 const TA_PLACEHOLDER = '描述要派发的任务…';
+/**
+ * 璇玑自己拦截的斜杠命令(不发给 CLI,行为就在本文件的 submit 里)。
+ * 这份表既是联想面板的「Commands」组,也是命令着色的判定源之一;
+ * 新增一条拦截务必同步加在这里,否则联想面板里不出现 —— lib/slash-builtin.test.ts
+ * 扫源码里的拦截正则钉住两者一致。
+ */
+const BUILTIN_CMDS: SlashCmd[] = [
+  { name: 'btw', desc: '旁路提问:不打断主对话,答案存进本会话旁路记录', arg: '<问题>', kind: 'builtin' },
+  { name: 'clear', desc: '清空上下文另起一轮,工作目录/模型/权限档不变', arg: '', kind: 'builtin' },
+  { name: 'effort', desc: '切换思考深度', arg: '<low|medium|high|xhigh|max|auto>', kind: 'builtin' },
+  { name: 'model', desc: '切换模型', arg: '<模型名>', kind: 'builtin' },
+  { name: 'rename', desc: '给当前会话改名(存璇玑自有库)', arg: '<新名字>', kind: 'builtin' },
+  { name: 'resume', desc: '列出本项目已关闭的会话,选中即续接', arg: '', kind: 'builtin' },
+  { name: 'wd', desc: '切换新会话的工作目录', arg: '[关键词]', kind: 'builtin' },
+  { name: 'wrapup', desc: '给当前任务出收口卡', arg: '', kind: 'builtin' },
+];
 /** 输入框底栏提示:必须跟着「设置 › 派发 › 发送键」走——
  *  提示与实际按键语义不一致,比没有提示更糟。 */
 const hintText = (sendKey: SendKey, fenced: boolean) => {
@@ -368,6 +385,62 @@ export function Dispatch({ active }: { active: boolean }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  // ---- 斜杠命令联想 ----
+  /** 当前联想的查询词;null = 面板关闭(文本不以 / 开头,或已敲下第一个空格) */
+  const [slashQ, setSlashQ] = useState<string | null>(null);
+  const [slashSel, setSlashSel] = useState(0);
+  /** 会话尚未报告目录时的兜底(最近一次某个会话报过的那份),只在挂载时取一次 */
+  const [fallbackCmds, setFallbackCmds] = useState<SlashCmdInfo[]>([]);
+  useEffect(() => {
+    void api.slashCommands().then((r) => setFallbackCmds(r.cmds)).catch(() => {});
+  }, []);
+  /** 候选全表:璇玑内置在前,CLI 技能在后;同名以内置为准(如 /wrapup 走自家收口提示词) */
+  const allCmds = useMemo<SlashCmd[]>(() => {
+    const src = d.commands ?? fallbackCmds;
+    const builtinNames = new Set(BUILTIN_CMDS.map((c) => c.name));
+    return [
+      ...BUILTIN_CMDS,
+      ...src.filter((c) => !builtinNames.has(c.name)).map((c) => ({ ...c, kind: 'skill' as const })),
+    ];
+  }, [d.commands, fallbackCmds]);
+  const slashRows = useMemo(
+    () => (slashQ === null ? [] : filterCmds(slashQ, allCmds)),
+    [slashQ, allCmds],
+  );
+  /** 键盘处理要读最新候选,但它挂在 textarea 的 onKeyDown 里,用 ref 取当帧值 */
+  const slashRowsRef = useRef<SlashCmd[]>([]);
+  slashRowsRef.current = slashRows;
+  const slashSelRef = useRef(0);
+  slashSelRef.current = Math.min(slashSel, Math.max(0, slashRows.length - 1));
+  const slashOpen = slashQ !== null && slashRows.length > 0;
+  const slashOpenRef = useRef(false);
+  slashOpenRef.current = slashOpen;
+  /** 命令名集合,供镜像层判断「已完整命中某个命令」 */
+  const cmdNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of allCmds) {
+      set.add(c.name);
+      set.add(completionName(c.name, allCmds)); // 补全写进去的是短名,着色也要认它
+    }
+    return set;
+  }, [allCmds]);
+  const cmdNamesRef = useRef<ReadonlySet<string>>(cmdNames);
+  cmdNamesRef.current = cmdNames;
+  const allCmdsRef = useRef<SlashCmd[]>(allCmds);
+  allCmdsRef.current = allCmds;
+  /** submit 定义在后面,补全要在它之前用,经 ref 取 */
+  const submitRef = useRef<(() => Promise<void>) | null>(null);
+  /**
+   * 用户按 Esc 主动关掉面板时记下当时的文本 —— 光把 slashQ 置空不够,
+   * 下一次重绘(哪怕只是移动光标)又会从同一段文本里算出查询词把面板弹回来。
+   * 文本一变即自动失效,继续打字仍会重新联想。
+   */
+  const slashDismissedRef = useRef<string | null>(null);
+  const slashListRef = useRef<HTMLDivElement>(null);
+  /** 键盘选中的行滚进可视区(列表最多 312px 高,候选可能几十条) */
+  useEffect(() => {
+    slashListRef.current?.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  }, [slashSel, slashQ]);
   // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
   // 给(12 行或 40vh 取小),触顶后转 textarea 内部滚动并由 .at-max 亮出底部渐隐提示。
   // `.value =` 赋值不触发 input 事件,所以每个程序化写入点(预填/交接/建议词/历史回溯/清空)
@@ -421,7 +494,17 @@ export function Dispatch({ active }: { active: boolean }) {
       mirror.append(ph);
     } else {
       const frag = document.createDocumentFragment();
-      parse(ta.value).forEach((b, i) => {
+      // 开头完整命中某个已知命令时,命令词单独上色(CLI 同款)。只变色不加粗——
+      // 镜像层字宽必须与 textarea 逐字相同,粗体会让 caret 压在末字上(2026-09-16 原型实测)。
+      const hit = splitCommand(ta.value, cmdNamesRef.current);
+      const rest = hit ? hit.rest : ta.value;
+      if (hit) {
+        const el = document.createElement('span');
+        el.className = 'tk-cmd';
+        el.textContent = hit.cmd;
+        frag.append(el);
+      }
+      parse(rest).forEach((b, i) => {
         if (i) frag.append('\n'); // 块间换行:与原文行结构一一对应
         const nodes = b.segs.map((seg) => {
           if (!seg.cls) return document.createTextNode(seg.text);
@@ -444,7 +527,34 @@ export function Dispatch({ active }: { active: boolean }) {
     }
     mirror.scrollTop = ta.scrollTop;
     syncHint();
+    // 联想查询词随内容同步。growTa() 是所有改动输入框内容的路径的统一入口,故挂在这里
+    // 就覆盖了打字/粘贴/程序化写入(预填、历史回溯、补全)全部来源。
+    // Esc 的抑制在文本**再次变化**时失效,而不是只比对相等 —— 否则删一个字再打回来
+    // 文本又与记下的那份相同,面板会二度被抑制(2026-09-16 浏览器实测踩到)。
+    if (slashDismissedRef.current !== null && slashDismissedRef.current !== ta.value) {
+      slashDismissedRef.current = null;
+    }
+    const q = slashDismissedRef.current !== null ? null : slashQuery(ta.value);
+    setSlashQ((prev) => {
+      if (prev !== q) setSlashSel(0); // 查询词一变就把选中复位到第一项
+      return q;
+    });
   };
+  /**
+   * 选中候选 → 写进输入框。短名唯一就补短名(`/watch` 而非 `/watch:watch`,与终端手感一致,
+   * 实测 CLI 认);带参数的命令补完停下等用户填参数,无参数的可直接发送。
+   */
+  const pickSlash = (send: boolean) => {
+    const ta = taRef.current;
+    const row = slashRowsRef.current[slashSelRef.current];
+    if (!ta || !row) return;
+    ta.value = `/${completionName(row.name, slashRowsRef.current.length ? allCmdsRef.current : [])} `;
+    growTa();
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    if (send && !row.arg) void submitRef.current?.();
+  };
+
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
   // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
@@ -1163,6 +1273,7 @@ export function Dispatch({ active }: { active: boolean }) {
       toast(e instanceof Error ? e.message : String(e));
     }
   };
+  submitRef.current = submit;
 
   /**
    * 开一个新会话。
@@ -1422,6 +1533,56 @@ export function Dispatch({ active }: { active: boolean }) {
               ))}
             </div>
           )}
+          {/* 斜杠命令联想:锚在输入框上方,沿用 .dd-menu 的浮层词汇(不透明 surface + 边框 + 投影) */}
+          {slashOpen && (
+            <div className="xj-slash" role="listbox" aria-label="斜杠命令">
+              <div className="xj-slash-list" ref={slashListRef}>
+                {(() => {
+                  const groups: [string, SlashCmd[]][] = [
+                    ['Commands', slashRows.filter((c) => c.kind === 'builtin')],
+                    ['Skills', slashRows.filter((c) => c.kind === 'skill')],
+                  ];
+                  let i = -1;
+                  return groups
+                    .filter(([, rows]) => rows.length)
+                    .map(([title, rows]) => (
+                      <Fragment key={title}>
+                        <div className="xj-slash-group">{title}</div>
+                        {rows.map((c) => {
+                          i += 1;
+                          const idx = i;
+                          const parts = nameParts(c.name, slashQ ?? '');
+                          return (
+                            <button
+                              key={c.name}
+                              type="button"
+                              role="option"
+                              aria-selected={idx === slashSelRef.current}
+                              className={`xj-slash-item${idx === slashSelRef.current ? ' sel' : ''}`}
+                              // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
+                              onMouseDown={(ev) => {
+                                ev.preventDefault();
+                                setSlashSel(idx);
+                                slashSelRef.current = idx;
+                                pickSlash(false);
+                              }}
+                            >
+                              <span className="xj-slash-name">
+                                /{parts.before}
+                                {parts.hit && <mark>{parts.hit}</mark>}
+                                {parts.after}
+                                {c.arg && <span className="arg">{c.arg}</span>}
+                              </span>
+                              <span className="xj-slash-desc">{c.desc}</span>
+                            </button>
+                          );
+                        })}
+                      </Fragment>
+                    ));
+                })()}
+              </div>
+            </div>
+          )}
           {/* .ta-wrap:高亮镜像层与 textarea 逐像素叠放(排版属性由 CSS 强制共享,见 .ta-wrap 规则) */}
           <div className="ta-wrap">
           <div className="ta-mirror" ref={mirrorRef} aria-hidden="true" />
@@ -1471,6 +1632,33 @@ export function Dispatch({ active }: { active: boolean }) {
             }}
             onKeyDown={(e) => {
               const ta = e.target as HTMLTextAreaElement;
+              // 联想面板开着时先吃掉导航键:↑↓ 选、Tab 补全、⏎ 补全(无参数的顺带发送)、Esc 关。
+              // 必须排在既有的 ↑↓ 历史回溯与 Enter 发送之前,否则同一下按键会被两处同时处理。
+              if (slashOpenRef.current && !e.nativeEvent.isComposing) {
+                const n = slashRowsRef.current.length;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  const step = e.key === 'ArrowDown' ? 1 : -1;
+                  setSlashSel((i) => (i + step + n) % n);
+                  return;
+                }
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  pickSlash(false);
+                  return;
+                }
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  pickSlash(true);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  slashDismissedRef.current = ta.value; // 只关面板,输入内容原样保留
+                  setSlashQ(null);
+                  return;
+                }
+              }
               const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
               // 选中文字按 ` 直接包成行内代码;无选区时不接管,保持原生输入(否则打断正常打字)
               if (e.key === '`' && sel && !e.metaKey && !e.nativeEvent.isComposing) {

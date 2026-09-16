@@ -87,6 +87,9 @@ export function attachWs(server: Server, storage: Storage) {
       unsubscribe?.();
       if (replayEvents) for (const e of s.events) send(e);
       unsubscribe = s.subscribe(send);
+      // 斜杠命令目录单独补发一次:它在 init 后即发出,长会话里会被回放缓冲的裁剪
+      // (裁到下一条 user-echo)吃掉,只靠回放的话接回会话就没有联想候选了
+      if (s.commands.length) send({ ev: 'commands', cmds: s.commands });
       // 接回(replayEvents)时附带垫历史元信息:内存缓冲只覆盖 replayBefore 之后的事件
       // (未裁剪 = 进程启动时间;裁过 = 缓冲里第一条事件的时刻),之前的对话要由前端从会话
       // jsonl 回放补齐;全新 start 无更早历史,不带

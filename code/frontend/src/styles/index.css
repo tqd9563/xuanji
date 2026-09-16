@@ -1156,6 +1156,40 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 }
 .composer textarea:focus { outline: none; }
 
+/* ============ 斜杠命令联想面板 ============
+   锚在输入框上方,沿用 .dd-menu 的浮层词汇:不透明 surface + line 边框 + 8px 投影。
+   与 .dd-menu 同理,玻璃档下不跟随变半透明——浮在前景内容之上的弹层透出底下的字会没法选。 */
+.composer { position: relative; }
+.xj-slash {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px);
+  background: var(--surface-opaque); border: 1px solid var(--line); border-radius: var(--r-m);
+  z-index: var(--z-dropdown); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  overflow: hidden;
+}
+.xj-slash-list { max-height: 312px; overflow-y: auto; padding: 4px 4px 6px; }
+.xj-slash-group { font-size: 0.625rem; letter-spacing: 0.06em; color: var(--faint); padding: 8px 10px 3px; }
+.xj-slash-group:first-child { padding-top: 5px; }
+.xj-slash-item {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline;
+  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  padding: 6px 10px; border-radius: var(--r-s); transition: background 150ms var(--ease);
+}
+.xj-slash-item:hover { background: var(--hover); }
+.xj-slash-item.sel { background: var(--tint-jade); }
+.xj-slash-name { font-family: var(--mono); font-size: 0.75rem; white-space: nowrap; color: var(--muted); }
+/* CLI 同款:只把已输入的前缀提亮加粗,其余字淡;不画下划线 */
+.xj-slash-name mark { background: none; color: var(--ink); font-weight: 700; }
+.xj-slash-item.sel .xj-slash-name, .xj-slash-item.sel .xj-slash-name mark { color: var(--jade); }
+.xj-slash-name .arg { color: var(--faint); font-weight: 400; margin-left: 6px; }
+.xj-slash-desc {
+  min-width: 0; font-size: 0.6875rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.xj-slash-item.sel .xj-slash-desc { color: var(--ink); }
+/* 输入框里完整命中的命令词。只变色不加粗:镜像层字宽必须与 textarea 逐字一致,
+   粗体会让 caret 压在命令末字上(2026-09-16 原型实测)。 */
+.ta-wrap .ta-mirror .tk-cmd { color: var(--jade); }
+
 /* ============ 输入框代码语法高亮 ============
    textarea 文字设为透明、只留 caret,底下叠一层 .ta-mirror 用完全相同的排版重绘同一段文本,
    只给代码区间上底色(解析见 lib/composer-code.ts)。字体不切等宽:切了字宽变化,镜像与
@@ -2018,6 +2052,8 @@ body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
   .composer textarea { min-height: 44px; }
   /* 镜像层字号必须跟着 textarea 走,否则窄屏下逐字错位 */
   .ta-wrap textarea, .ta-wrap .ta-mirror { font-size: 1rem; }
+  .xj-slash-list { max-height: 40vh; }
+  .xj-slash-desc { display: none; }  /* 窄屏只留命令名,描述让位 */
   .composer .code-help { display: none; } /* 与 .hint 同理:窄屏让位给按钮 */
   .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
   .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */

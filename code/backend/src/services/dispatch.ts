@@ -18,6 +18,7 @@ import { listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
+import { buildSlashCatalog, rememberSlashCatalog, type SlashCmdInfo } from './slash-commands.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -53,6 +54,11 @@ class AsyncQueue<T> implements AsyncIterable<T> {
 
 export type DispatchEvent =
   | { ev: 'init'; sessionId: string; model: string }
+  /**
+   * 本会话可用的斜杠命令目录(派发输入框的联想面板)。init 之后异步发一次,
+   * 之后 CLI 每次 commands_changed 再整份重发 —— 语义是 REPLACE,不是增量。
+   */
+  | { ev: 'commands'; cmds: SlashCmdInfo[] }
   | { ev: 'status'; state: 'working' | 'awaiting-permission' | 'idle' | 'ended'; detail?: string }
   | { ev: 'delta'; text: string }
   /**
@@ -172,6 +178,10 @@ export class DispatchSession {
   activity: string | undefined;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
+  /** 本会话的斜杠命令目录;attach 时随回放一起交给前端,免得接回会话后面板空一轮 */
+  commands: SlashCmdInfo[] = [];
+  /** init 报告的「UX 绑死在终端」命令名,commands_changed 重算时要沿用同一份 */
+  private terminalOnlyCommands: string[] = [];
   /** 顶层轮次是否已收到 result:决定 background_tasks_changed 到达时要不要压制/恢复 idle */
   private turnEnded = false;
   /**
@@ -308,6 +318,16 @@ export class DispatchSession {
               }
               this.emit({ ev: 'status', state: 'working' });
               this.refreshChips();
+              this.refreshCommands((msg as { terminal_slash_commands?: string[] }).terminal_slash_commands ?? []);
+            } else if (msg.subtype === 'commands_changed') {
+              // 会话中途技能变化(如 agent 走进带 .claude/skills 的子目录)。整份替换,不做合并。
+              const cmds = buildSlashCatalog(
+                (msg as { commands?: { name?: unknown }[] }).commands ?? [],
+                this.terminalOnlyCommands,
+              );
+              rememberSlashCatalog(cmds);
+              this.commands = cmds;
+              this.emit({ ev: 'commands', cmds });
             } else if (msg.subtype === 'background_tasks_changed') {
               // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle
               this.backgroundTasks =
@@ -474,6 +494,29 @@ export class DispatchSession {
     } else {
       this.emit({ ev: 'status', state: 'idle' });
     }
+  }
+
+  /**
+   * 拉取本会话可用的斜杠命令目录。init 只带名字数组,描述与参数提示要向 query 要,
+   * 故走 supportedCommands()。异步进行,拿不到就只是面板少一组候选,不影响会话本身。
+   */
+  private refreshCommands(terminalOnly: string[]) {
+    this.terminalOnlyCommands = terminalOnly;
+    const q = this.q;
+    // 方法不存在(旧 SDK)时直接跳过:这里是在消息泵的 for-await 里同步调用的,
+    // 让 TypeError 抛出去会打断整条流、把会话打成 ended —— 面板少一组候选,
+    // 绝不能换来会话本身挂掉。
+    if (typeof q?.supportedCommands !== 'function') return;
+    void q
+      .supportedCommands()
+      .then((raw) => {
+        const cmds = buildSlashCatalog(raw, this.terminalOnlyCommands);
+        if (!cmds.length) return;
+        rememberSlashCatalog(cmds);
+        this.commands = cmds;
+        this.emit({ ev: 'commands', cmds });
+      })
+      .catch(() => {});
   }
 
   /**
