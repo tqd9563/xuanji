@@ -1565,7 +1565,7 @@ body.wall-glass .xj-slash { background: oklch(0.185 0.008 120); backdrop-filter:
 /* 命中已知命令时,输入框里的命令词变玉色(CLI 同款)。textarea 本身不能局部着色,
    叠一层同排版的镜像(display:block 与 textarea 同 padding/line-height,见 PR#56 教训)承担显示,textarea 只留光标 */
 .composer .xj-cmd-mirror { position: absolute; inset: 0; padding: 12px 16px 4px; font-size: 0.875rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; pointer-events: none; color: var(--ink); display: none; }
-.composer .xj-cmd-mirror .cmd { color: var(--jade); font-weight: 600; }
+.composer .xj-cmd-mirror .cmd { color: var(--jade); }   /* 只变色不加粗:镜像层字宽必须与 textarea 逐字一致,否则光标错位 */
 .composer.has-cmd .xj-ta-wrap textarea { color: transparent; caret-color: var(--ink); }
 .composer.has-cmd .xj-cmd-mirror { display: block; }
 .composer .xj-ta-wrap { position: relative; }
