@@ -1684,28 +1684,24 @@ body.wall-on .statusbar {
   -webkit-backdrop-filter: none;
   transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
-/* 滚动态垫层是渐隐的,不是一条带:实色 + 底边线会在壁纸上切出一道明显的横向黑条
-   (blur 的作用域边界同样是硬边)。垫层挂在 ::before 上、向下多伸 14px,自上而下淡出
-   并用同向 mask 把模糊一起收干净——顶部够暗保文字可读、底部完全溶进壁纸;
-   不能把 mask 直接加在 .statusbar 上,那会连同 widget 文字一起淡掉。 */
+/* 滚动态不能再是一条"带":任何一块整幅宽的深色底,不管边缘多软,压在壁纸上都能看出来。
+   所以垫层只留模糊 + 极淡的着色(28% → 0,纵向渐隐,同向 mask 收掉模糊的硬边界),
+   可读性主要交给 widget 文字自己的投影(静止态文字本就是裸坐在壁纸上的,证明投影足够);
+   模糊只负责把滚到下方的正文糊成一团色块,不与状态栏文字打架。
+   垫层挂 ::before 并向下多伸 14px 给淡出留行程;mask 不能加在 .statusbar 本身,会连文字一起淡掉。 */
 body.wall-on .statusbar.scrolled {
   background: transparent;
   border-bottom-color: transparent;
 }
-/* 垫层常驻、靠 opacity 淡入淡出,沿用原先 200ms 的出现节奏 */
+body.wall-on .sb-item { text-shadow: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 8px rgb(0 0 0 / 0.45); }
 body.wall-on .statusbar::before {
   content: ''; position: absolute; inset: 0 0 -14px; z-index: -1; pointer-events: none;
   opacity: 0; transition: opacity 200ms var(--ease);
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--bg) 72%, transparent) 0%,
-    color-mix(in oklab, var(--bg) 58%, transparent) 55%,
-    transparent 100%
-  );
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 28%, transparent) 0%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
 }
 body.wall-on .statusbar.scrolled::before { opacity: 1; }
 
