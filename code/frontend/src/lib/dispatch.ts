@@ -128,6 +128,8 @@ export function useDispatch() {
   const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
   /** 本会话可用的斜杠命令(联想面板)。后端 commands 事件是 REPLACE 语义,整份换掉即可 */
   const [commands, setCommands] = useState<SlashCmdInfo[] | null>(null);
+  /** 命令使用频率(含璇玑自己拦截的那几条),前端的内置命令表按它排序 */
+  const [commandUses, setCommandUses] = useState<Record<string, number>>({});
   const [btw, setBtw] = useState<BtwState>(BTW_EMPTY);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
@@ -191,6 +193,7 @@ export function useDispatch() {
         break;
       case 'commands':
         setCommands(e.cmds as SlashCmdInfo[]);
+        if (e.uses) setCommandUses(e.uses as Record<string, number>);
         break;
       case 'init':
         setSessionId(String(e.sessionId));
@@ -566,5 +569,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, commands, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, commands, commandUses, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }

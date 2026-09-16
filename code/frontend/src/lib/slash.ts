@@ -9,7 +9,15 @@
  */
 
 /** 后端 commands 事件 / GET /slash-commands 交出的原始条目(与 backend services/slash-commands.ts 同形) */
-export type SlashCmdInfo = { name: string; desc: string; arg: string };
+export type SlashCmdInfo = {
+  name: string;
+  desc: string;
+  arg: string;
+  /** SDK 报告的别名(如 watch:watch 的 'watch');补全优先用它,比自己推断短名可靠 */
+  aliases?: string[];
+  /** 历史使用次数(后端统计),排序用;没用过为 0 */
+  uses?: number;
+};
 
 export type SlashCmd = {
   /** 命令名,不含前导斜杠;插件技能是 `plugin:skill` 形式 */
@@ -19,6 +27,9 @@ export type SlashCmd = {
   /** 参数提示(如 `<video-url-or-path> [question]`),无参数为空串 */
   arg: string;
   kind: 'builtin' | 'skill';
+  aliases?: string[];
+  /** 历史使用次数,排序用 */
+  uses?: number;
 };
 
 /**
@@ -37,24 +48,27 @@ export function shortName(name: string): string {
 }
 
 /**
- * 补全时真正写进输入框的名字:短名在全表里唯一就用短名(`/watch` 而非 `/watch:watch`,
- * 与用户在终端里的手感一致,实测 CLI 认),短名有歧义则退回全名以免补出一个错命令。
+ * 补全时真正写进输入框的名字。优先用 SDK 自己报告的别名(`watch:watch` 带 `aliases:['watch']`),
+ * 这是 CLI 的权威说法,比从名字里推断短名可靠;有多个别名取最短的,与终端手感一致。
+ * 没有别名就用全名 —— 宁可补得长一点,也不补出一个 CLI 不认识的名字。
  */
-export function completionName(name: string, all: readonly SlashCmd[]): string {
-  const s = shortName(name);
-  if (s === name) return name;
-  const clash = all.filter((c) => shortName(c.name) === s).length;
-  return clash > 1 ? name : s;
+export function completionName(cmd: Pick<SlashCmd, 'name' | 'aliases'>): string {
+  const alias = (cmd.aliases ?? []).filter((a) => a).sort((a, b) => a.length - b.length)[0];
+  return alias ?? cmd.name;
 }
 
 /**
- * 过滤 + 排序。前缀命中优先于短名前缀,短名前缀优先于子串;同层保持原顺序(后端已按名排好)。
+ * 过滤 + 排序。两级判据:
+ *  ① 命中层级 —— 全名前缀 > 短名前缀 > 子串。敲 `/ba` 时 `/baize` 一定排在 `/x:baize` 前面,
+ *     不让一个高频的子串命中盖过前缀命中(那会让人「明明打对了却要往下翻」)。
+ *  ② 同层按使用频率降序,再按字母。空查询(只敲了 `/`)时只剩这一级 —— 常用的浮在最上面。
+ *
  * 不做子序列匹配 —— 命令名是用户敲得出的短标识,子序列只会把无关项拉进来(与 fuzzy.ts
  * 面向路径/中文会话名的宽松口径不同,那里搜不到的代价更大)。
  */
 export function filterCmds(q: string, list: readonly SlashCmd[]): SlashCmd[] {
-  if (!q) return [...list];
-  const rank = (c: SlashCmd): number => {
+  const tier = (c: SlashCmd): number => {
+    if (!q) return 0;
     const n = c.name.toLowerCase();
     if (n.startsWith(q)) return 0;
     if (shortName(n).startsWith(q)) return 1;
@@ -62,9 +76,9 @@ export function filterCmds(q: string, list: readonly SlashCmd[]): SlashCmd[] {
     return -1;
   };
   return list
-    .map((c, i) => ({ c, r: rank(c), i }))
-    .filter((x) => x.r >= 0)
-    .sort((a, b) => a.r - b.r || a.i - b.i)
+    .map((c) => ({ c, t: tier(c) }))
+    .filter((x) => x.t >= 0)
+    .sort((a, b) => a.t - b.t || (b.c.uses ?? 0) - (a.c.uses ?? 0) || a.c.name.localeCompare(b.c.name))
     .map((x) => x.c);
 }
 

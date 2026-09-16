@@ -1167,8 +1167,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   overflow: hidden;
 }
 .xj-slash-list { max-height: 312px; overflow-y: auto; padding: 4px 4px 6px; }
-.xj-slash-group { font-size: 0.625rem; letter-spacing: 0.06em; color: var(--faint); padding: 8px 10px 3px; }
-.xj-slash-group:first-child { padding-top: 5px; }
 .xj-slash-item {
   display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline;
   width: 100%; text-align: left; background: none; border: none; cursor: pointer;

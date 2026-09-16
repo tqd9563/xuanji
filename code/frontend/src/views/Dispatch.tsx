@@ -391,18 +391,28 @@ export function Dispatch({ active }: { active: boolean }) {
   const [slashSel, setSlashSel] = useState(0);
   /** 会话尚未报告目录时的兜底(最近一次某个会话报过的那份),只在挂载时取一次 */
   const [fallbackCmds, setFallbackCmds] = useState<SlashCmdInfo[]>([]);
+  const [fallbackUses, setFallbackUses] = useState<Record<string, number>>({});
   useEffect(() => {
-    void api.slashCommands().then((r) => setFallbackCmds(r.cmds)).catch(() => {});
+    void api
+      .slashCommands()
+      .then((r) => {
+        setFallbackCmds(r.cmds);
+        if (r.uses) setFallbackUses(r.uses);
+      })
+      .catch(() => {});
   }, []);
   /** 候选全表:璇玑内置在前,CLI 技能在后;同名以内置为准(如 /wrapup 走自家收口提示词) */
   const allCmds = useMemo<SlashCmd[]>(() => {
     const src = d.commands ?? fallbackCmds;
+    const uses = d.commands ? d.commandUses : fallbackUses;
     const builtinNames = new Set(BUILTIN_CMDS.map((c) => c.name));
     return [
-      ...BUILTIN_CMDS,
+      // 内置命令的次数要单独贴:这张表是前端写死的,后端只给 SDK 条目贴了 uses,
+      // 不贴的话 /model /clear 这些最常用的命令会以 0 次排在所有用过的技能后面
+      ...BUILTIN_CMDS.map((c) => ({ ...c, uses: uses[c.name] ?? 0 })),
       ...src.filter((c) => !builtinNames.has(c.name)).map((c) => ({ ...c, kind: 'skill' as const })),
     ];
-  }, [d.commands, fallbackCmds]);
+  }, [d.commands, d.commandUses, fallbackCmds, fallbackUses]);
   const slashRows = useMemo(
     () => (slashQ === null ? [] : filterCmds(slashQ, allCmds)),
     [slashQ, allCmds],
@@ -420,7 +430,7 @@ export function Dispatch({ active }: { active: boolean }) {
     const set = new Set<string>();
     for (const c of allCmds) {
       set.add(c.name);
-      set.add(completionName(c.name, allCmds)); // 补全写进去的是短名,着色也要认它
+      for (const a of c.aliases ?? []) set.add(a); // 补全写进去的可能是别名,着色也要认它
     }
     return set;
   }, [allCmds]);
@@ -548,7 +558,7 @@ export function Dispatch({ active }: { active: boolean }) {
     const ta = taRef.current;
     const row = slashRowsRef.current[slashSelRef.current];
     if (!ta || !row) return;
-    ta.value = `/${completionName(row.name, slashRowsRef.current.length ? allCmdsRef.current : [])} `;
+    ta.value = `/${completionName(row)} `;
     growTa();
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -1537,50 +1547,34 @@ export function Dispatch({ active }: { active: boolean }) {
           {slashOpen && (
             <div className="xj-slash" id="slash-listbox" role="listbox" aria-label="斜杠命令">
               <div className="xj-slash-list" ref={slashListRef}>
-                {(() => {
-                  const groups: [string, SlashCmd[]][] = [
-                    ['Commands', slashRows.filter((c) => c.kind === 'builtin')],
-                    ['Skills', slashRows.filter((c) => c.kind === 'skill')],
-                  ];
-                  let i = -1;
-                  return groups
-                    .filter(([, rows]) => rows.length)
-                    .map(([title, rows]) => (
-                      <Fragment key={title}>
-                        <div className="xj-slash-group">{title}</div>
-                        {rows.map((c) => {
-                          i += 1;
-                          const idx = i;
-                          const parts = nameParts(c.name, slashQ ?? '');
-                          return (
-                            <button
-                              key={c.name}
-                              id={`slash-opt-${idx}`}
-                              type="button"
-                              role="option"
-                              aria-selected={idx === slashSelRef.current}
-                              className={`xj-slash-item${idx === slashSelRef.current ? ' sel' : ''}`}
-                              // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
-                              onMouseDown={(ev) => {
-                                ev.preventDefault();
-                                setSlashSel(idx);
-                                slashSelRef.current = idx;
-                                pickSlash(false);
-                              }}
-                            >
-                              <span className="xj-slash-name">
-                                /{parts.before}
-                                {parts.hit && <mark>{parts.hit}</mark>}
-                                {parts.after}
-                                {c.arg && <span className="arg">{c.arg}</span>}
-                              </span>
-                              <span className="xj-slash-desc">{c.desc}</span>
-                            </button>
-                          );
-                        })}
-                      </Fragment>
-                    ));
-                })()}
+                {slashRows.map((c, idx) => {
+                  const parts = nameParts(c.name, slashQ ?? '');
+                  return (
+                    <button
+                      key={c.name}
+                      id={`slash-opt-${idx}`}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === slashSelRef.current}
+                      className={`xj-slash-item${idx === slashSelRef.current ? ' sel' : ''}`}
+                      // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        setSlashSel(idx);
+                        slashSelRef.current = idx;
+                        pickSlash(false);
+                      }}
+                    >
+                      <span className="xj-slash-name">
+                        /{parts.before}
+                        {parts.hit && <mark>{parts.hit}</mark>}
+                        {parts.after}
+                        {c.arg && <span className="arg">{c.arg}</span>}
+                      </span>
+                      <span className="xj-slash-desc">{c.desc}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

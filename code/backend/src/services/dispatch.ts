@@ -18,7 +18,7 @@ import { listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
-import { buildSlashCatalog, rememberSlashCatalog, type SlashCmdInfo } from './slash-commands.js';
+import { buildSlashCatalog, rememberSlashCatalog, withUsage, type SlashCmdInfo } from './slash-commands.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -58,7 +58,7 @@ export type DispatchEvent =
    * 本会话可用的斜杠命令目录(派发输入框的联想面板)。init 之后异步发一次,
    * 之后 CLI 每次 commands_changed 再整份重发 —— 语义是 REPLACE,不是增量。
    */
-  | { ev: 'commands'; cmds: SlashCmdInfo[] }
+  | { ev: 'commands'; cmds: SlashCmdInfo[]; uses?: Record<string, number> }
   | { ev: 'status'; state: 'working' | 'awaiting-permission' | 'idle' | 'ended'; detail?: string }
   | { ev: 'delta'; text: string }
   /**
@@ -180,6 +180,8 @@ export class DispatchSession {
   private stderrTail: string[] = [];
   /** 本会话的斜杠命令目录;attach 时随回放一起交给前端,免得接回会话后面板空一轮 */
   commands: SlashCmdInfo[] = [];
+  /** 命令使用频率(含璇玑内置命令),前端给自己那份写死的内置表贴次数用 */
+  commandUses: Record<string, number> = {};
   /** init 报告的「UX 绑死在终端」命令名,commands_changed 重算时要沿用同一份 */
   private terminalOnlyCommands: string[] = [];
   /** 顶层轮次是否已收到 result:决定 background_tasks_changed 到达时要不要压制/恢复 idle */
@@ -321,13 +323,11 @@ export class DispatchSession {
               this.refreshCommands((msg as { terminal_slash_commands?: string[] }).terminal_slash_commands ?? []);
             } else if (msg.subtype === 'commands_changed') {
               // 会话中途技能变化(如 agent 走进带 .claude/skills 的子目录)。整份替换,不做合并。
-              const cmds = buildSlashCatalog(
+              const base = buildSlashCatalog(
                 (msg as { commands?: { name?: unknown }[] }).commands ?? [],
                 this.terminalOnlyCommands,
               );
-              rememberSlashCatalog(cmds);
-              this.commands = cmds;
-              this.emit({ ev: 'commands', cmds });
+              this.publishCatalog(base);
             } else if (msg.subtype === 'background_tasks_changed') {
               // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle
               this.backgroundTasks =
@@ -497,6 +497,29 @@ export class DispatchSession {
   }
 
   /**
+   * 两段式下发目录:先把目录本身发出去(面板立刻能用),使用频率算完再整份重发一次。
+   * 频率统计要扫全机会话 jsonl,实测首次约 6s(443 次 /model 那台机器) —— 让面板等这 6s
+   * 是不可接受的,而 commands 事件本就是 REPLACE 语义,重发一次天然成立。
+   * 缓存命中时第二次几乎立刻到达,用户察觉不到两段。
+   */
+  private publishCatalog(base: SlashCmdInfo[]) {
+    if (!base.length) return;
+    rememberSlashCatalog(base);
+    this.commands = base;
+    this.emit({ ev: 'commands', cmds: base });
+    void withUsage(this.storage, base)
+      .then(({ cmds, uses }) => {
+        // 期间可能已被更新的目录取代(commands_changed),别用旧的盖掉新的
+        if (this.commands !== base) return;
+        rememberSlashCatalog(cmds);
+        this.commands = cmds;
+        this.commandUses = uses;
+        this.emit({ ev: 'commands', cmds, uses });
+      })
+      .catch(() => {});
+  }
+
+  /**
    * 拉取本会话可用的斜杠命令目录。init 只带名字数组,描述与参数提示要向 query 要,
    * 故走 supportedCommands()。异步进行,拿不到就只是面板少一组候选,不影响会话本身。
    */
@@ -509,13 +532,7 @@ export class DispatchSession {
     if (typeof q?.supportedCommands !== 'function') return;
     void q
       .supportedCommands()
-      .then((raw) => {
-        const cmds = buildSlashCatalog(raw, this.terminalOnlyCommands);
-        if (!cmds.length) return;
-        rememberSlashCatalog(cmds);
-        this.commands = cmds;
-        this.emit({ ev: 'commands', cmds });
-      })
+      .then((raw) => this.publishCatalog(buildSlashCatalog(raw, this.terminalOnlyCommands)))
       .catch(() => {});
   }
 

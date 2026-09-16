@@ -494,6 +494,36 @@ export async function extractSkillInvocations(jsonlPath: string): Promise<SkillI
   return out;
 }
 
+/**
+ * 会话记录里的斜杠命令调用。CLI 每展开一条斜杠命令,就在转录里落一条 user 消息,
+ * 正文是 `<command-name>/xxx</command-name>` 信封(实测 2.1.273;`/caveman lite`
+ * 另带 `<command-args>lite</command-args>`)。这是「用户真的用过哪条命令」的唯一可靠证据 ——
+ * 比数模型侧的 Skill 工具调用准:斜杠命令里有一半(/model /compact /clear)压根不经过模型。
+ *
+ * 只取命令名,不取参数:联想面板排序只关心「这条命令用了多少次」。
+ */
+export async function extractCommandInvocations(jsonlPath: string): Promise<{ name: string; at: number }[]> {
+  const raw = await fsp.readFile(jsonlPath, 'utf8').catch(() => '');
+  if (!raw.includes('<command-name>')) return [];
+  const out: { name: string; at: number }[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.includes('<command-name>')) continue;
+    try {
+      const j = JSON.parse(line);
+      const ts = typeof j.timestamp === 'string' ? Date.parse(j.timestamp) : NaN;
+      if (!Number.isFinite(ts)) continue; // 无时间戳无法算新近度,不计入
+      const c = j.message?.content;
+      const text = typeof c === 'string' ? c : Array.isArray(c) ? JSON.stringify(c) : '';
+      // 信封在转录里出现两次(命令回显 + 展开后的正文),同一行只取第一个,免得一次调用记成两次
+      const m = /<command-name>\/([A-Za-z0-9:_-]+)<\/command-name>/.exec(text);
+      if (m) out.push({ name: m[1]!, at: ts });
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
+
 // ---------- 技能 ----------
 
 export async function scanSkills(claudeDir: string): Promise<Skill[]> {

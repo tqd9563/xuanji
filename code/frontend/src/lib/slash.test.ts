@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd } from './slash';
 
 const cmd = (name: string, kind: SlashCmd['kind'] = 'skill'): SlashCmd => ({ name, desc: '', arg: '', kind });
+/** 带使用频率的候选 */
+const used = (name: string, uses: number): SlashCmd => ({ ...cmd(name), uses });
 
 describe('slashQuery', () => {
   it('以斜杠开头且尚无空白时给出查询词', () => {
@@ -28,8 +30,19 @@ describe('slashQuery', () => {
 describe('filterCmds', () => {
   const list = [cmd('baize'), cmd('baize-issue'), cmd('watch:watch'), cmd('lark-doc'), cmd('agent-browser')];
 
-  it('空查询交出全部,顺序不变', () => {
-    expect(filterCmds('', list).map((c) => c.name)).toEqual(list.map((c) => c.name));
+  it('空查询按使用频率降序,没用过的按字母排在后面', () => {
+    const l = [cmd('zebra'), used('model', 443), cmd('alpha'), used('compact', 22)];
+    expect(filterCmds('', l).map((c) => c.name)).toEqual(['model', 'compact', 'alpha', 'zebra']);
+  });
+
+  it('前缀命中仍优先于子串命中,高频的子串项不会盖过打对了的前缀项', () => {
+    const l = [used('x:baize', 999), cmd('baize')];
+    expect(filterCmds('ba', l).map((c) => c.name)).toEqual(['baize', 'x:baize']);
+  });
+
+  it('同一命中层内才比频率', () => {
+    const l = [cmd('baize-issue'), used('baize', 50)];
+    expect(filterCmds('baize', l).map((c) => c.name)).toEqual(['baize', 'baize-issue']);
   });
 
   it('全名前缀排在短名前缀之前,短名前缀排在子串之前', () => {
@@ -48,24 +61,23 @@ describe('filterCmds', () => {
     expect(filterCmds('bze', list)).toEqual([]);
   });
 
-  it('同层保持入参顺序(后端已按名排好)', () => {
+  it('都没用过时退化成字母序,首次使用也有稳定次序', () => {
     expect(filterCmds('baize', list).map((c) => c.name)).toEqual(['baize', 'baize-issue']);
   });
 });
 
 describe('completionName', () => {
-  const list = [cmd('watch:watch'), cmd('lark-doc'), cmd('a:dup'), cmd('b:dup')];
-
-  it('短名唯一时补短名,与用户在终端里的手感一致', () => {
-    expect(completionName('watch:watch', list)).toBe('watch');
+  it('优先用 SDK 报告的别名:这是 CLI 的权威说法,比自己从名字里推短名可靠', () => {
+    expect(completionName({ name: 'watch:watch', aliases: ['watch'] })).toBe('watch');
   });
 
-  it('短名有歧义时退回全名,免得补出一个错命令', () => {
-    expect(completionName('a:dup', list)).toBe('a:dup');
+  it('多个别名取最短的,与终端手感一致', () => {
+    expect(completionName({ name: 'usage', aliases: ['stats', 'cost'] })).toBe('cost');
   });
 
-  it('本就没有插件前缀的原样返回', () => {
-    expect(completionName('lark-doc', list)).toBe('lark-doc');
+  it('没有别名就用全名:宁可补得长,也不补出一个 CLI 不认识的名字', () => {
+    expect(completionName({ name: 'a:dup' })).toBe('a:dup');
+    expect(completionName({ name: 'lark-doc', aliases: [] })).toBe('lark-doc');
   });
 });
 
