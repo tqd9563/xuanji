@@ -1684,12 +1684,26 @@ body.wall-on .statusbar {
   -webkit-backdrop-filter: none;
   transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
+/* 滚动态不能再是一条"带":任何一块整幅宽的深色底,不管边缘多软,压在壁纸上都能看出来。
+   所以垫层只留模糊 + 极淡的着色(28% → 0,纵向渐隐,同向 mask 收掉模糊的硬边界),
+   可读性主要交给 widget 文字自己的投影(静止态文字本就是裸坐在壁纸上的,证明投影足够);
+   模糊只负责把滚到下方的正文糊成一团色块,不与状态栏文字打架。
+   垫层挂 ::before 并向下多伸 14px 给淡出留行程;mask 不能加在 .statusbar 本身,会连文字一起淡掉。 */
 body.wall-on .statusbar.scrolled {
-  background: color-mix(in oklab, var(--bg) 55%, transparent);
-  border-bottom-color: var(--line-soft);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
+  border-bottom-color: transparent;
 }
+body.wall-on .sb-item { text-shadow: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 8px rgb(0 0 0 / 0.45); }
+body.wall-on .statusbar::before {
+  content: ''; position: absolute; inset: 0 0 -14px; z-index: -1; pointer-events: none;
+  opacity: 0; transition: opacity 200ms var(--ease);
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 28%, transparent) 0%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+}
+body.wall-on .statusbar.scrolled::before { opacity: 1; }
 
 /* ============ 设置(居中对话框,DESIGN.md「设置」组件) ============ */
 /* 入口:替代原壁纸按钮,位置/尺寸/字号与 .wall-btn 一致 */
