@@ -49,7 +49,7 @@ export const KEY_ACTIONS: KeyAction[] = [
   { id: 'dispatch.inlineCode', group: '派发', label: '行内代码' },
   { id: 'dispatch.codeBlock', group: '派发', label: '代码块' },
   { id: 'dispatch.btw', group: '派发', label: '旁路提问', hint: '开面板并让输入框进入 /btw 旁路模式;再按一次退出并关面板' },
-  { id: 'sessions.find', group: '会话看板', label: '会话内查找' },
+  { id: 'sessions.find', group: '会话看板', label: '页内查找', hint: '会话详情/派发页内查找;技能页聚焦右上角搜索框' },
   { id: 'sessions.close', group: '会话看板', label: '关闭选中会话' },
 ];
 

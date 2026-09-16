@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { Skill, SkillUsage } from '@/api/types';
 import { usePoll, useIsMobile } from '@/lib/hooks';
 import { Drawer, Empty, Tag, confirmBox, toast } from '@/components/shared';
 import { Input } from '@/components/ui/input';
+import { useLocalPrefs } from '@/lib/prefs';
+import { matchKey } from '@/lib/keymap';
 
 type Filter = 'all' | 'on' | 'off' | 'plugin';
 /** 统计窗口(天),与后端 USAGE_WINDOWS 对齐 */
@@ -24,6 +26,25 @@ export function Skills() {
   const [sel, setSel] = useState<Skill | null>(null);
   const [daily, setDaily] = useState<number[] | null>(null);
   const isMobile = useIsMobile();
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  /** ⌘F(与「查找」同一个键位,可在设置里改):技能页没有 FindBar,
+      页内检索就是右上角这个过滤框——把焦点送过去并全选,再按一次可直接重打 */
+  const findKey = useLocalPrefs().keymap['sessions.find'];
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!matchKey(e, findKey)) return;
+      // 视图切换用 display:none、所有视图常驻挂载:没有矩形就说明技能页此刻不可见,
+      // 不能把别的视图的 ⌘F 抢走(WebKit 下 display:none 元素仍可能持有焦点,故只认矩形)
+      const el = searchRef.current;
+      if (!el || el.getClientRects().length === 0) return;
+      e.preventDefault();
+      el.focus();
+      el.select();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [findKey]);
 
   /** 抽屉打开时才拉逐日分布:列表页不需要,省一次全表扫描 */
   useEffect(() => {
@@ -117,7 +138,7 @@ export function Skills() {
             </button>
           ))}
         </div>
-        <Input type="search" placeholder="搜索技能…" style={{ width: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input ref={searchRef} type="search" placeholder="搜索技能…" style={{ width: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
       <div className="notice">
         <span className="ok" />
