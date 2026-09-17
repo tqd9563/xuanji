@@ -5,7 +5,7 @@ import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
-import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
@@ -2246,7 +2246,12 @@ const ChatRow = memo(function ChatRow({
           Claude
           <MsgTime ts={item.ts} />
           {item.turnMs != null && (
-            <span className="xj-turn-dur" title="本轮耗时:从你发出到回合结束">{fmtTurnDur(item.turnMs)}</span>
+            <span
+              className={cn('xj-turn-dur', item.turnMs >= LONG_TURN_MS && 'long')}
+              title="本轮耗时:从你发出到回合结束"
+            >
+              {fmtTurnDur(item.turnMs)}
+            </span>
           )}
         </div>
         <div className="body md">

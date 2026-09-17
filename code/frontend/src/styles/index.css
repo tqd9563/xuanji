@@ -732,6 +732,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
 .xj-turn-dur::before { content: '·'; margin-right: 6px; opacity: 0.55; }
+/* 长回合(≥5min)上调一级色阶:翻长会话时一眼能挑出重活那几轮(原型同款) */
+.xj-turn-dur.long { color: var(--muted); }
 /* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
    靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
 .day-sep {
@@ -990,7 +992,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    它有 ellipsis 兜底(截掉的是能从别处看到的会话名),而状态里的数字截一半就没意义了。
    cs-state 不参与收缩,收缩压力全部落到 sess-ctx;空间够时两者都不变。 */
 .chat-status .sess-ctx { flex: 0 20 auto; }
-.chat-status .cs-state { flex: 0 1 auto; }
+/* 状态条不参与收缩:加上「本轮 N」后整行只差几像素就会把成本截成 $0…,而截一半的数字
+   比截掉的会话名有害得多(会话名本就带 ellipsis,且能从卡片/标题栏看到)。
+   放不下时的兜底不在这里:≤960px 由 .chat-status 的 flex-wrap 折行,≤430px 由 overflow-x 横滑。 */
+.chat-status .cs-state { flex: none; }
 .cs-state .cs-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
