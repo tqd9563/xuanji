@@ -5,7 +5,7 @@ import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
-import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
@@ -1343,18 +1343,24 @@ export function Dispatch({ active }: { active: boolean }) {
     }
   };
 
+  // 跑动中的秒表:只在轮次进行时起 interval,空闲期不空转
+  const elapsedMs = useTurnElapsed(d.status.state === 'working' ? d.turn.startedAt : null);
+
   const statusText = (() => {
     switch (d.status.state) {
       case 'none':
         return { text: '空闲 · 新会话待派发', cls: '' };
-      case 'working':
-        return { text: d.items.some((i) => i.t === 'assistant' && i.streaming) ? '回复生成中…' : '思考中…', cls: 'think' };
+      case 'working': {
+        const base = d.items.some((i) => i.t === 'assistant' && i.streaming) ? '回复生成中…' : '思考中…';
+        // 已用时间只在起点已知时显示(接回存活会话时前端没有起点,宁可不显示也不给一个错数字)
+        return { text: elapsedMs == null ? base : `${base} · 已用 ${fmtTurnDur(elapsedMs)}`, cls: 'think' };
+      }
       case 'awaiting-permission':
         return d.status.detail === '回答 Claude 的提问'
           ? { text: 'Claude 有问题等你回答', cls: 'wait' }
           : { text: `等待你审批:${d.status.detail ?? ''}`, cls: 'wait' };
       case 'idle':
-        return { text: `空闲 · 回合结束${d.costUsd ? ` · 本会话 ${fmtCost(d.costUsd)}` : ''}`, cls: '' };
+        return { text: idleStatusText(d.turn.lastMs, d.costUsd), cls: '' };
       case 'ended':
         return { text: '会话已结束', cls: '' };
     }
@@ -1502,9 +1508,11 @@ export function Dispatch({ active }: { active: boolean }) {
               <span className="btw-bq">?</span>旁路 <b>{d.btw.records.length}</b>
             </button>
           )}
-          <span className={cn('cs-state', statusText.cls)}>
+          <span className={cn('cs-state', statusText.cls)} title={statusText.text}>
             <span className="cs-dot" />
-            {statusText.text}
+            {/* 文字单独包一层:ellipsis 对 flex 容器里的裸文本节点不生效,
+                空间实在不够时要截出「…」而不是把 $0.22 截成看着像 0.2 的半个数字 */}
+            <span className="cs-text">{statusText.text}</span>
           </span>
         </div>
 
@@ -1949,6 +1957,21 @@ function untilResetShort(resetsAt: number | null | undefined, now = Date.now()):
   return `${m}m`;
 }
 
+/** 轮次秒表:startedAt 为 null(空闲/起点未知)时不起 interval,也不返回数字 */
+function useTurnElapsed(startedAt: number | null): number | null {
+  const [ms, setMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (startedAt == null) {
+      setMs(null);
+      return;
+    }
+    setMs(Date.now() - startedAt);
+    const t = setInterval(() => setMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
+  return ms;
+}
+
 /** 分钟级心跳:倒计时与时间刻度靠它自走,不再依赖流式事件顺带触发的重渲染 */
 function useMinuteTick(): number {
   const [now, setNow] = useState(() => Date.now());
@@ -2222,7 +2245,18 @@ const ChatRow = memo(function ChatRow({
   if (item.t === 'assistant')
     return (
       <div className="chat-msg">
-        <div className="who">Claude<MsgTime ts={item.ts} /></div>
+        <div className="who">
+          Claude
+          <MsgTime ts={item.ts} />
+          {item.turnMs != null && (
+            <span
+              className={cn('xj-turn-dur', item.turnMs >= LONG_TURN_MS && 'long')}
+              title="本轮耗时:从你发出到回合结束"
+            >
+              {fmtTurnDur(item.turnMs)}
+            </span>
+          )}
+        </div>
         <div className="body md">
           <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
