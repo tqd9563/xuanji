@@ -21,7 +21,8 @@ export interface InlineImage {
 
 export type ChatItem =
   | { t: 'user'; text: string; ts?: number; images?: InlineImage[] }
-  | { t: 'assistant'; text: string; streaming: boolean; ts?: number }
+  /** turnMs:本轮(你发出 → 回合结束)总耗时,回合结束时打在该轮最后一条 assistant 上 */
+  | { t: 'assistant'; text: string; streaming: boolean; ts?: number; turnMs?: number }
   /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
   | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
@@ -122,6 +123,12 @@ export function useDispatch() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
+  /** 本轮耗时:startedAt 进 working 时起算(审批等待也算在轮内,与 SDK 的 durationMs 同口径),
+   *  lastMs 由 result 事件的权威值定格。状态条读它显示「已用 N」/「本轮 N」。 */
+  const [turn, setTurn] = useState<{ startedAt: number | null; lastMs: number | null }>({ startedAt: null, lastMs: null });
+  /** 「你按下发送」的时刻。只由本前端的 send 置位——接回存活会话、装载历史回放时都没有这个动作,
+   *  那些场景的 result 必须退回 SDK 的 duration_ms,否则会把回放事件当成刚跑完的一轮算出 0s。 */
+  const turnStartRef = useRef<number | null>(null);
   /** 接回存活会话时后端随 attached 事件下发的垫历史元信息:内存事件只覆盖后端本进程
    *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
    *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
@@ -199,9 +206,21 @@ export function useDispatch() {
         setSessionId(String(e.sessionId));
         if (e.model) setModel(String(e.model));
         break;
-      case 'status':
-        setStatus({ state: e.state as AgentStatus['state'], detail: e.detail as string | undefined });
+      case 'status': {
+        const st = e.state as AgentStatus['state'];
+        setStatus({ state: st, detail: e.detail as string | undefined });
+        // 轮次起点:从「不在跑」转入 working 的那一刻。审批等待(awaiting-permission)不重新起算,
+        // 它仍属同一轮——SDK 的 durationMs 也把这段等待算在内。
+        // 秒表起点:本前端发的那一轮用 send 的时刻(与定格值同源);终端里发起、这边只是接回
+        // 观战的轮次没有发送动作,退而用「转入 working」的时刻,近似但总比不显示强。
+        if (st === 'working') setTurn((t) => (t.startedAt == null ? { ...t, startedAt: turnStartRef.current ?? Date.now() } : t));
+        else if (st === 'idle' || st === 'ended' || st === 'none') {
+          setTurn((t) => ({ ...t, startedAt: null }));
+          // 轮次没收到 result 就结束了(中断 / 报错):起点必须作废,否则会被下一轮当成自己的起点
+          turnStartRef.current = null;
+        }
         break;
+      }
       case 'user-echo':
         setItems((prev) => [
           ...prev,
@@ -291,10 +310,28 @@ export function useDispatch() {
           ),
         );
         break;
-      case 'result':
+      case 'result': {
         setChips((c) => ({ ...c, contextPct: Number(e.contextPct) }));
         setCostUsd((v) => v + Number(e.costUsd ?? 0));
+        // 口径:本前端发出的轮次用墙钟(你按下发送 → 回合结束)。SDK 的 duration_ms 从 query 真正
+        // 开跑起算,漏掉会话冷启动那几秒——实测首轮状态条已数到 9s 而 duration_ms 只给 3s,定格
+        // 时数字当场跳水。没有发送动作的轮次(接回观战、重连后装载的历史回放)退回 SDK 值。
+        const sdkMs = Number(e.durationMs);
+        const ms = turnStartRef.current != null ? Date.now() - turnStartRef.current : sdkMs;
+        if (Number.isFinite(ms) && ms > 0) {
+          setTurn({ startedAt: null, lastMs: ms });
+          turnStartRef.current = null;
+          // 打在本轮最后一条 assistant 上;该轮若只有工具调用没有正文(极少),就只剩状态条显示
+          setItems((prev) => {
+            const i = prev.map((it) => it.t).lastIndexOf('assistant');
+            if (i < 0) return prev;
+            const next = [...prev];
+            next[i] = { ...(next[i] as Extract<ChatItem, { t: 'assistant' }>), turnMs: ms };
+            return next;
+          });
+        }
         break;
+      }
       case 'context':
         // 后端 getContextUsage() 的权威上下文占用(与终端 /context 同源),覆盖 result 的估算
         setChips((c) => ({ ...c, contextPct: Number(e.pct) }));
@@ -432,6 +469,9 @@ export function useDispatch() {
       setItems([]);
       setStatus({ state: 'none' });
       setCostUsd(0);
+      setTurn({ startedAt: null, lastMs: null });
+    turnStartRef.current = null;
+      turnStartRef.current = null;
       setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
@@ -460,8 +500,9 @@ export function useDispatch() {
         // 后台会话走 claude CLI 子进程,没有内联图片通道 —— 图片在此丢弃(UI 已提前拦截)
         setItems((prev) => [...prev, { t: 'user', text }]);
         ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text }));
-        return;
+        return;   // 后台会话不在本页跑,没有 result 事件可收口,故不起表
       }
+      turnStartRef.current = Date.now();   // 轮次计时从「按下发送」起算
       if (!startedRef.current) {
         startedRef.current = true;
         setStatus({ state: 'working' });
@@ -513,6 +554,7 @@ export function useDispatch() {
     setSessionId(null);
     setModel(null);
     setCostUsd(0);
+    setTurn({ startedAt: null, lastMs: null });
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
     setAttachedHistory(null);
     // commands 有意不清:命令目录跨会话基本不变,留着新会话就不必空一轮等 init,
@@ -569,5 +611,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, commands, commandUses, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, commands, commandUses, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }
