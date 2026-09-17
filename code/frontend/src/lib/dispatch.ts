@@ -81,7 +81,7 @@ export interface DispatchIntent {
 const DISPATCH_KEY = 'xuanji-dispatch-id';
 /** 事件发生的时刻:attach 回放的事件带 at(当初入缓冲的时刻),实时事件没有 → 现在。
  *  不用它的话,接回/刷新后整条会话的消息时间会被抹成同一个「刚刚」。 */
-function evAt(e: Record<string, unknown>): number {
+export function evAt(e: Record<string, unknown>): number {
   const at = Number(e.at);
   return Number.isFinite(at) && at > 0 ? at : Date.now();
 }
