@@ -121,6 +121,12 @@ export function useDispatch() {
   const [status, setStatus] = useState<AgentStatus>({ state: 'none' });
   const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
   const [sessionId, setSessionId] = useState<string | null>(null);
+  /**
+   * 「已知会话 id」:续接/接回时前端其实早就知道要进哪个会话,但 sessionId 要等 SDK 的 init 事件
+   * (= 发出第一条消息之后)才有值。旁路记录这类「按会话挂载的自有数据」不该陪着等那一轮,
+   * 故进入会话的入口把 id 先登记在这里;init 到了以它为准(fork 会换 id)。
+   */
+  const [knownSessionId, setKnownSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
   /** 本轮耗时:startedAt 进 working 时起算(审批等待也算在轮内,与 SDK 的 durationMs 同口径),
@@ -552,6 +558,7 @@ export function useDispatch() {
     setItems([]);
     setStatus({ state: 'none' });
     setSessionId(null);
+    setKnownSessionId(null);
     setModel(null);
     setCostUsd(0);
     setTurn({ startedAt: null, lastMs: null });
@@ -562,15 +569,19 @@ export function useDispatch() {
     setBtw(BTW_EMPTY);
   }, [clearPendingDelta]);
 
-  // 会话确定后拉旁路记录:问过的一定还在,不依赖本 tab 是否亲历过 btw-result
+  /** 拉旁路记录用的会话 id:init 到了以它为准,没到就用入口登记的已知 id(续接/接回都属此列) */
+  const btwSessionId = sessionId ?? knownSessionId;
+
+  // 会话确定后拉旁路记录:问过的一定还在,不依赖本 tab 是否亲历过 btw-result,
+  // 也不依赖本轮是否已经发过消息(重启后续接老会话时,init 要等第一条消息才来)
   useEffect(() => {
-    if (!sessionId) {
+    if (!btwSessionId) {
       setBtw(BTW_EMPTY);
       return;
     }
     let alive = true;
     api
-      .sideQuestions(sessionId)
+      .sideQuestions(btwSessionId)
       .then(({ records }) => {
         if (!alive) return;
         setBtw((b) => {
@@ -582,7 +593,12 @@ export function useDispatch() {
     return () => {
       alive = false;
     };
-  }, [sessionId]);
+  }, [btwSessionId]);
+
+  /** 入口登记「即将进入哪个会话」(续接 / 接回)。传 null = 不知道,由 init 兜底 */
+  const noteSessionId = useCallback((id: string | null) => {
+    setKnownSessionId(id);
+  }, []);
 
   const askBtw = useCallback((question: string) => {
     wsRef.current?.send(JSON.stringify({ op: 'btw', question }));
@@ -611,5 +627,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, commands, commandUses, btw, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }
