@@ -27,3 +27,4 @@ describe('fmtCost', () => {
     expect(fmtCost(0)).toBe('$0.00');
   });
 });
+

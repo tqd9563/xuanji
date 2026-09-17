@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { prCardText } from '../src/lib/utils';
 
 /** 构造本地时区的时刻,避免用例随运行机器时区飘 */
-const at = (h: number, mi: number) => new Date(2026, 7, 11, h, mi).getTime();
+/** 用「今天」的时刻:msgClock 只给非今天的消息补 MM-DD,这里测的是文案结构不是日期 */
+const at = (h: number, mi: number) => new Date(new Date().setHours(h, mi, 0, 0)).getTime();
 
 describe('prCardText', () => {
   it('编号前缀随平台:GitLab 用 !,GitHub 与认不出的自建实例用 #', () => {

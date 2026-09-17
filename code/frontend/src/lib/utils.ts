@@ -102,12 +102,21 @@ export function clock(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-/** 会话消息时间戳:ms epoch 或 session jsonl 的 ISO 串 → HH:MM;无时间(如 tool 事件)返回 null */
-export function msgClock(ts: number | string | null | undefined): string | null {
+/**
+ * 会话消息时间戳:ms epoch 或 session jsonl 的 ISO 串 → HH:MM;无时间(如 tool 事件)返回 null。
+ *
+ * 跨天的会话只显示 HH:MM 会让轮次目录读不出先后(#34 的 10:34 排在 #33 的 20:09 之后,
+ * 看着像倒流),故非今天的一律补上 MM-DD;今天的不补——绝大多数消息都是今天的,
+ * 每行都挂个日期只是噪音。日期判定按本地日历日,不是「24 小时内」。
+ */
+export function msgClock(ts: number | string | null | undefined, now = Date.now()): string | null {
   if (ts == null) return null;
   const ms = typeof ts === 'number' ? ts : Date.parse(ts);
   if (!Number.isFinite(ms)) return null;
-  return clock(ms);
+  const d = new Date(ms);
+  if (dayIndex(ms) === dayIndex(now)) return clock(ms);
+  const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${mmdd} ${clock(ms)}`;
 }
 
 const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
