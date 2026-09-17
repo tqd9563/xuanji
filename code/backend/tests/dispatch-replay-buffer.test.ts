@@ -123,6 +123,24 @@ describe('DispatchSession 回放缓冲', () => {
     expect(session.replayBefore).not.toBe(session.startedAt);
   });
 
+  it('回放快照带每条事件当初发生的时刻,不是接回时刻', async () => {
+    // 2026-09-17 实测缺陷:前端拿接收时刻给回放消息打点,接回/刷新后 40 轮全显示同一个 HH:MM。
+    const { session, fake } = await newSession();
+    session.send('第一轮');
+    fake.push({ type: 'assistant', message: { content: [{ type: 'text', text: '答一' }] } });
+    await flush();
+    const t1 = Date.now();
+    await new Promise((r) => setTimeout(r, 12));
+    session.send('第二轮');
+    await flush();
+
+    const snap = session.replaySnapshot();
+    expect(snap.map((x) => x.e)).toEqual(session.events);
+    const at = (text: string) => snap.find((x) => x.e.ev === 'user-echo' && x.e.text === text)!.at;
+    expect(at('第一轮')).toBeLessThanOrEqual(t1);
+    expect(at('第二轮')).toBeGreaterThan(t1);
+  });
+
   it('单轮就超限时退化为按量裁,不会把缓冲清空', async () => {
     DispatchSession.REPLAY_CAP = 3;
     const { session, fake } = await newSession();

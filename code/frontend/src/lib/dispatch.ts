@@ -79,6 +79,13 @@ export interface DispatchIntent {
 }
 
 const DISPATCH_KEY = 'xuanji-dispatch-id';
+/** 事件发生的时刻:attach 回放的事件带 at(当初入缓冲的时刻),实时事件没有 → 现在。
+ *  不用它的话,接回/刷新后整条会话的消息时间会被抹成同一个「刚刚」。 */
+function evAt(e: Record<string, unknown>): number {
+  const at = Number(e.at);
+  return Number.isFinite(at) && at > 0 ? at : Date.now();
+}
+
 /** 刷新后自动接回:attach 报「不存在」是正常情形(后端已重启),静默清除 */
 const GONE_MSG = '派发会话不存在或已结束';
 
@@ -155,6 +162,8 @@ export function useDispatch() {
   // 思考流同样是高频 delta(实测一段思考 ~54 条),与正文共用同一个 rAF 节拍合批。
   // 两者不会同时活跃(思考块 stop 后才轮到正文),故一个 rAF 里顺序 flush 即可。
   const pendingThinkRef = useRef('');
+  /** 本批 delta 里第一条事件发生的时刻(回放事件的 at,实时则是现在),给合批出的消息打时间 */
+  const pendingAtRef = useRef<number | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
   const flushDelta = useCallback(() => {
@@ -179,9 +188,11 @@ export function useDispatch() {
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移
-      return [...prev, { t: 'assistant', text, streaming: true, ts: Date.now() }];
+      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移;
+      // 回放事件带 at(当初发生的时刻),用它而不是「现在」
+      return [...prev, { t: 'assistant', text, streaming: true, ts: pendingAtRef.current ?? Date.now() }];
     });
+    pendingAtRef.current = null;
   }, []);
 
   /** 清空未 flush 的 delta 缓冲并取消已排的 rAF:reset/attach 重建 items 前必须调用,
@@ -189,6 +200,7 @@ export function useDispatch() {
   const clearPendingDelta = useCallback(() => {
     pendingDeltaRef.current = '';
     pendingThinkRef.current = '';
+    pendingAtRef.current = null;
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
@@ -230,14 +242,16 @@ export function useDispatch() {
       case 'user-echo':
         setItems((prev) => [
           ...prev,
-          { t: 'user', text: String(e.text ?? ''), ts: Date.now(), images: e.images as InlineImage[] | undefined },
+          { t: 'user', text: String(e.text ?? ''), ts: evAt(e), images: e.images as InlineImage[] | undefined },
         ]);
         break;
       case 'delta':
+        pendingAtRef.current ??= evAt(e);
         pendingDeltaRef.current += String(e.text);
         if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
       case 'thinking-delta':
+        pendingAtRef.current ??= evAt(e);
         pendingThinkRef.current += String(e.text);
         if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
@@ -264,7 +278,7 @@ export function useDispatch() {
             // 保留流开始时打的点,不改写成本轮结束时刻
             return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false, ts: last.ts }];
           }
-          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: Date.now() }];
+          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: evAt(e) }];
         });
         break;
       case 'tool':
