@@ -144,4 +144,74 @@ describe('DispatchSession × 后台任务(background_tasks_changed)', () => {
     session.send('继续下一步');
     expect(session.state).toBe('working'); // 用户手动发消息,正常回到 working
   });
+
+  it('只剩 ambient 任务(Artifact live-update watcher):result 后照常 idle,不卡在运行中', async () => {
+    const storage = tmpStorage();
+    const session = new DispatchSession(storage, { cwd: '/tmp/proj' });
+    await flush();
+    const fake = fakes[0]!;
+
+    fake.push({ type: 'system', subtype: 'init', session_id: 'sess-4' });
+    await flush();
+
+    // CLI 在会话发布 Artifact 后自动挂上的常驻订阅:SDK 标了 ambient,不是用户工作
+    fake.push({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      session_id: 'sess-4',
+      tasks: [
+        {
+          task_id: 'bg-watch',
+          task_type: 'artifact_watch',
+          description: 'live updates for artifact https://claude.ai/code/artifact/abc',
+          ambient: true,
+        },
+      ],
+    });
+    await flush();
+    fake.push({ type: 'result', usage: {}, total_cost_usd: 0, duration_ms: 20 });
+    await flush();
+
+    expect(session.state).toBe('idle');
+    expect(dispatchBoardState(session.state)).toBe('idle');
+    expect(session.activity ?? '').not.toContain('live updates');
+  });
+
+  it('ambient 与真实后台任务并存:只按真实任务压制 idle,活动摘要不提 watcher', async () => {
+    const storage = tmpStorage();
+    const session = new DispatchSession(storage, { cwd: '/tmp/proj' });
+    await flush();
+    const fake = fakes[0]!;
+
+    fake.push({ type: 'system', subtype: 'init', session_id: 'sess-5' });
+    await flush();
+    fake.push({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      session_id: 'sess-5',
+      tasks: [
+        { task_id: 'bg-watch', task_type: 'artifact_watch', description: 'live updates for artifact', ambient: true },
+        { task_id: 'bg-agent', task_type: 'subagent', description: '探索代码库' },
+      ],
+    });
+    await flush();
+    fake.push({ type: 'result', usage: {}, total_cost_usd: 0, duration_ms: 20 });
+    await flush();
+
+    expect(session.state).toBe('working');
+    expect(session.activity).toContain('探索代码库');
+    expect(session.activity).not.toContain('live updates');
+
+    // 真实任务结束、只剩 watcher:该转 idle
+    fake.push({
+      type: 'system',
+      subtype: 'background_tasks_changed',
+      session_id: 'sess-5',
+      tasks: [
+        { task_id: 'bg-watch', task_type: 'artifact_watch', description: 'live updates for artifact', ambient: true },
+      ],
+    });
+    await flush();
+    expect(session.state).toBe('idle');
+  });
 });
