@@ -28,6 +28,7 @@ import {
   formatKeys,
   type ActionId,
 } from '@/lib/keymap';
+import { STOW_OPTS, stowLabel } from '@/lib/stow';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
 
@@ -91,7 +92,7 @@ function Switch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void 
   );
 }
 
-function Tabs<T extends string>({
+function Tabs<T extends string | number>({
   value,
   options,
   onChange,
@@ -104,7 +105,7 @@ function Tabs<T extends string>({
     <div className="filter-tabs" role="group">
       {options.map((o) => (
         <button
-          key={o.v}
+          key={String(o.v)}
           className={value === o.v ? 'active' : ''}
           onClick={() => onChange(o.v)}
           aria-pressed={value === o.v}
@@ -147,6 +148,8 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
   },
   { id: 'adv', label: '高级', icon: 'M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4', title: '高级', desc: '不常动的东西' },
 ];
+
+const STOW_TABS = STOW_OPTS.map((v) => ({ v, label: stowLabel(v) }));
 
 const MODEL_OPTS = [
   '',
@@ -245,6 +248,8 @@ export function Settings({
         fontScale: DEFAULT_LOCAL.fontScale,
         turnHead: DEFAULT_LOCAL.turnHead,
         reduceMotion: DEFAULT_LOCAL.reduceMotion,
+        stowIdle: DEFAULT_LOCAL.stowIdle,
+        stowDone: DEFAULT_LOCAL.stowDone,
       });
       patchWall(WALL_DEFAULTS);
     } else if (id === 'keys') {
@@ -488,6 +493,13 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ reduceMotion: v })}
           />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>会话看板</SettingsGroup>
+        <SettingsRow hit={hit} label="「空闲」默认展示" desc="折叠态显示最近几张,更早的点列头展开" scope="local">
+          <Tabs value={local.stowIdle} options={STOW_TABS} onChange={(v) => patchLocal({ stowIdle: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} label="「已完成」默认展示" desc="同上;归档列通常最长,调大会拉长页面" scope="local">
+          <Tabs value={local.stowDone} options={STOW_TABS} onChange={(v) => patchLocal({ stowDone: v })} />
         </SettingsRow>
       </section>
 
