@@ -187,9 +187,14 @@ export class DispatchSession {
   /** 顶层轮次是否已收到 result:决定 background_tasks_changed 到达时要不要压制/恢复 idle */
   private turnEnded = false;
   /**
-   * SDK 权威信号(system/background_tasks_changed,replace 语义)里存活的后台任务
+   * SDK 权威信号(system/background_tasks_changed,replace 语义)里存活的**用户级**后台任务
    * (Agent run_in_background 探索子代理、Ctrl+B 转后台的 Bash 等)。顶层轮次结束时若这里非空,
    * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
+   *
+   * 注意这里存的是过滤掉 `ambient` 之后的集合:CLI 自己起的杂务任务(skip_transcript 的内务任务、
+   * Artifact 发布后自动挂上的 live-update watcher)也走同一条信号,但它们不是用户工作,
+   * SDK 明确要求 host 不要把它们计进活动指示器(见 SDKBackgroundTasksChangedMessage.ambient)。
+   * 不过滤的话,一个发布过 Artifact 的会话会因为那条常驻 watcher 永远停在「运行中」。
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
   /** 本会话实际的上下文窗口大小(token)。首个 result 到达前用兜底值,之后以 SDK 上报的为准 */
@@ -338,9 +343,13 @@ export class DispatchSession {
               );
               this.publishCatalog(base);
             } else if (msg.subtype === 'background_tasks_changed') {
-              // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle
-              this.backgroundTasks =
-                (msg as { tasks?: { task_id: string; task_type: string; description: string }[] }).tasks ?? [];
+              // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle。
+              // ambient(CLI 内务任务 / Artifact live-update watcher)按 SDK 要求剔除,它们不是用户工作。
+              this.backgroundTasks = (
+                (msg as {
+                  tasks?: { task_id: string; task_type: string; description: string; ambient?: boolean }[];
+                }).tasks ?? []
+              ).filter((t) => !t.ambient);
               this.applyBackgroundState();
             } else if (msg.subtype === 'status' && msg.status === 'compacting') {
               // /compact(用户手动输入,或 SDK 到阈值自动触发):压缩期间无 delta/assistant 事件,
