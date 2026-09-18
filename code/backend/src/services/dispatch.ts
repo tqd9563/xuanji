@@ -301,6 +301,15 @@ export class DispatchSession {
     this.replayBefore = this.eventAt[0] ?? Date.now();
   }
 
+  /**
+   * 回放缓冲的快照:每条事件附上它**当初发生**的时刻(at)。
+   * attach 回放走这里而不是裸 events —— 前端收到回放时用接收时刻当消息时间的话,
+   * 接回/刷新后整个会话的时间戳会被抹成同一个「刚刚」(2026-09-17 实测:40 轮全是 17:44)。
+   */
+  replaySnapshot(): { e: DispatchEvent; at: number }[] {
+    return this.events.map((e, i) => ({ e, at: this.eventAt[i] ?? this.startedAt }));
+  }
+
   subscribe(l: (e: DispatchEvent) => void): () => void {
     this.listeners.add(l);
     return () => this.listeners.delete(l);

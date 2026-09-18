@@ -85,7 +85,7 @@ export function attachWs(server: Server, storage: Storage) {
     const attach = (s: DispatchSession, replayEvents: boolean) => {
       session = s;
       unsubscribe?.();
-      if (replayEvents) for (const e of s.events) send(e);
+      if (replayEvents) for (const { e, at } of s.replaySnapshot()) send({ ...e, at });
       unsubscribe = s.subscribe(send);
       // 斜杠命令目录单独补发一次:它在 init 后即发出,长会话里会被回放缓冲的裁剪
       // (裁到下一条 user-echo)吃掉,只靠回放的话接回会话就没有联想候选了
