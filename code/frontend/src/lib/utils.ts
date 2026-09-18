@@ -25,6 +25,9 @@ export function projHue(name: string): number {
   }
   return PROJ_HUES[(h >>> 0) % PROJ_HUES.length]!;
 }
+/** 项目在调色板里的序号(首次出现顺序,后端 SQLite 固定);未收录的返回 +∞,排序时垫底。
+ *  给需要稳定项目顺序的界面用(会话页项目过滤 chip),与分类色同源保证位置与色序一致。 */
+export const projOrder = (name: string) => paletteIdx[name] ?? Number.POSITIVE_INFINITY;
 export const projColor = (name: string) => `oklch(0.78 0.12 ${projHue(name)})`;
 export const projBg = (name: string) => `oklch(0.78 0.12 ${projHue(name)} / 0.16)`;
 
@@ -99,12 +102,21 @@ export function clock(ts: number): string {
   return new Date(ts).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
-/** 会话消息时间戳:ms epoch 或 session jsonl 的 ISO 串 → HH:MM;无时间(如 tool 事件)返回 null */
-export function msgClock(ts: number | string | null | undefined): string | null {
+/**
+ * 会话消息时间戳:ms epoch 或 session jsonl 的 ISO 串 → HH:MM;无时间(如 tool 事件)返回 null。
+ *
+ * 跨天的会话只显示 HH:MM 会让轮次目录读不出先后(#34 的 10:34 排在 #33 的 20:09 之后,
+ * 看着像倒流),故非今天的一律补上 MM-DD;今天的不补——绝大多数消息都是今天的,
+ * 每行都挂个日期只是噪音。日期判定按本地日历日,不是「24 小时内」。
+ */
+export function msgClock(ts: number | string | null | undefined, now = Date.now()): string | null {
   if (ts == null) return null;
   const ms = typeof ts === 'number' ? ts : Date.parse(ts);
   if (!Number.isFinite(ms)) return null;
-  return clock(ms);
+  const d = new Date(ms);
+  if (dayIndex(ms) === dayIndex(now)) return clock(ms);
+  const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return `${mmdd} ${clock(ms)}`;
 }
 
 const WEEKDAY = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
@@ -141,6 +153,23 @@ export function daySeparator(prev: number | string | null | undefined, cur: numb
 }
 
 export const fmtCost = (usd: number) => '$' + usd.toFixed(2);
+
+/**
+ * 一轮对话的耗时:42s / 3m12s / 1h04m。
+ * 秒级起步——轮次尺度上毫秒是噪音;进位后低位补零,让状态条里逐秒跳动的数字宽度稳定
+ * (配合 CSS 的 tabular-nums 不抖行)。与 ThinkingCard 的思考耗时(只到分)口径不同:
+ * 那里是块内耗时,这里是「你按下发送 → 回合结束」的整轮墙钟时间。
+ */
+export function fmtTurnDur(ms: number): string {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m${String(s % 60).padStart(2, '0')}s`;
+  return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, '0')}m`;
+}
+
+/** 超过这个耗时的轮次在消息头上调一级色阶(faint → muted),翻长会话时能一眼挑出重活那几轮 */
+export const LONG_TURN_MS = 5 * 60_000;
 
 export function fmtTokens(n: number): string {
   if (n >= 1e9) return (n / 1e9).toFixed(2) + 'B'; // 近一周量级会上到十亿档,B 位保两位小数才分得出高低
@@ -180,4 +209,38 @@ export function sumComp(list: ModelUsage[]): TokenComp {
     c.cacheRead += m.cacheReadTokens;
   }
   return c;
+}
+
+/** 完整日期时间(悬停提示用);无法解析返回 null,由调用方决定省略 */
+export function fullTime(ts: number | string | null | undefined): string | null {
+  if (ts == null) return null;
+  const ms = typeof ts === 'number' ? ts : Date.parse(ts);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleString('zh-CN');
+}
+
+/**
+ * PR/MR 卡片的文案:编号前缀随平台走(GitLab 用 !,GitHub 用 #),
+ * 元信息按「已创建 时刻 · 更新 N 次」组织,缺时间就只留有的那半截。
+ */
+export function prCardText(pr: {
+  platform: 'gitlab' | 'github' | 'other';
+  number?: number;
+  updates: number;
+  ts?: number | string;
+}): { label: string; meta: string } {
+  const created = msgClock(pr.ts);
+  const label = pr.number != null ? `${pr.platform === 'gitlab' ? '!' : '#'}${pr.number}` : '链接';
+  const meta = [created && `已创建 ${created}`, pr.updates > 0 && `更新 ${pr.updates} 次`].filter(Boolean).join(' · ');
+  return { label, meta };
+}
+
+/**
+ * 回合结束时状态条那一行。耗时与成本都是「有才显示」:
+ * 接回存活会话拿不到本轮起点(耗时缺)、免费额度内或刚开局(成本为 0)都不该占位。
+ */
+export function idleStatusText(lastTurnMs: number | null, costUsd: number): string {
+  const turn = lastTurnMs != null ? ` · 本轮 ${fmtTurnDur(lastTurnMs)}` : '';
+  const cost = costUsd ? ` · 本会话 ${fmtCost(costUsd)}` : '';
+  return `空闲 · 回合结束${turn}${cost}`;
 }

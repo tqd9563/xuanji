@@ -1,16 +1,25 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
-import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
+import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
+import { matchKey } from '@/lib/keymap';
+import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
-import { canWrapup, cn, daySeparator, fmtCost, markSeen, projHue } from '@/lib/utils';
+import { resolveCwd } from '@/lib/quick-ask';
+import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, ThinkingCard, ToolCard, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
+import { TurnHead, TurnOutline } from '@/components/TurnNav';
+import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
 import { RunbookPanel } from '@/components/RunbookPanel';
+import { BtwPanel } from '@/components/BtwPanel';
+import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
-import type { ClosedSession, ReplayEvent } from '@/api/types';
+import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
+import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
+import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
 
 /**
  * StreamMd — 流式 markdown 渲染,块级记忆化。
@@ -25,6 +34,27 @@ const MdBlock = memo(function MdBlock({ text }: { text: string }) {
 });
 
 /** 按 markdown 顶层块切分。尊重代码栅栏,栅栏内的空白行不触发分割。 */
+/**
+ * 快速提问标记的闪电图标。笔画规格与侧栏导航图标一致(24 视框 / 1.7 线宽 / 圆头圆角),
+ * 尺寸由 .qa-ico 按所在容器给(前缀标 12px、空态徽标 14px)。
+ */
+function QuickAskIcon() {
+  return (
+    <svg
+      className="qa-ico"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M13 2L4 14h7l-1 8 9-12h-7z" />
+    </svg>
+  );
+}
+
 function splitMdBlocks(text: string): string[] {
   const blocks: string[] = [];
   let cur = '';
@@ -129,10 +159,42 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   return <StreamMd text={shown} />;
 }
 
-/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。 */
+/** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。
+ *  超出上限的更早事件不丢弃:留在 earlierRef 里供轮次目录列出与按需回填(见 splitHistory)。 */
 const CHAT_SEED_LIMIT = 200;
+/** 吸顶轮次头的带高(与 .turnhead 实际高度同值);判「提问是否已被带子盖住」用它 */
+const TURN_HEAD_H = 36;
+/** 跳转落点在头带下方再留的呼吸位 */
+const TURN_JUMP_GAP = 8;
+/** 判「算不算当前轮」的阈值:须 ≥ 落点余量,否则刚跳到的那一轮不算数,⌥↑ 会一按跳两轮 */
+const TURN_ACTIVE_OFFSET = TURN_HEAD_H + TURN_JUMP_GAP + 4;
 /** 输入框高度下限,与 .composer textarea 的 min-height 同值(改一处必须改另一处) */
 const TA_MIN_H = 56;
+/** 输入框占位文案:textarea 与高亮镜像层共用一份(镜像层要自己画,textarea 的文字是透明的) */
+const TA_PLACEHOLDER = '描述要派发的任务…';
+/**
+ * 璇玑自己拦截的斜杠命令(不发给 CLI,行为就在本文件的 submit 里)。
+ * 这份表既是联想面板的「Commands」组,也是命令着色的判定源之一;
+ * 新增一条拦截务必同步加在这里,否则联想面板里不出现 —— lib/slash-builtin.test.ts
+ * 扫源码里的拦截正则钉住两者一致。
+ */
+const BUILTIN_CMDS: SlashCmd[] = [
+  { name: 'btw', desc: '旁路提问:不打断主对话,答案存进本会话旁路记录', arg: '<问题>', kind: 'builtin' },
+  { name: 'clear', desc: '清空上下文另起一轮,工作目录/模型/权限档不变', arg: '', kind: 'builtin' },
+  { name: 'effort', desc: '切换思考深度', arg: '<low|medium|high|xhigh|max|auto>', kind: 'builtin' },
+  { name: 'model', desc: '切换模型', arg: '<模型名>', kind: 'builtin' },
+  { name: 'rename', desc: '给当前会话改名(存璇玑自有库)', arg: '<新名字>', kind: 'builtin' },
+  { name: 'resume', desc: '列出本项目已关闭的会话,选中即续接', arg: '', kind: 'builtin' },
+  { name: 'wd', desc: '切换新会话的工作目录', arg: '[关键词]', kind: 'builtin' },
+  { name: 'wrapup', desc: '给当前任务出收口卡', arg: '', kind: 'builtin' },
+];
+/** 输入框底栏提示:必须跟着「设置 › 派发 › 发送键」走——
+ *  提示与实际按键语义不一致,比没有提示更糟。 */
+const hintText = (sendKey: SendKey, fenced: boolean) => {
+  const keys = sendKey === 'enter' ? 'Enter 发送 · ⇧Enter 换行' : 'Enter 换行 · ⌘Enter 发送';
+  // 光标在代码块里时把「在代码块里」这件事说明白,键位语义与外面一致
+  return fenced ? `代码块内 · ${keys}` : `${keys} · ↑↓ 历史`;
+};
 
 /** 粘贴图片:与后端 types.ts 的 INLINE_IMAGE_* 三个上限保持一致(改一处必须改另一处) */
 const IMG_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
@@ -167,6 +229,20 @@ function blobToPasted(blob: Blob): Promise<PastedImage> {
   });
 }
 
+/** 历史事件切成「先不装载的更早部分」与「立即渲染的尾部」两段。
+ *  更早部分不丢弃:轮次目录照样列出它们(编号才连续、才搜得到),被选中时再回填。 */
+function splitHistory(events: ReplayEvent[]): { earlier: ReplayEvent[]; seed: ReplayEvent[] } {
+  const cut = Math.max(0, events.length - CHAT_SEED_LIMIT);
+  return { earlier: events.slice(0, cut), seed: events.slice(cut) };
+}
+
+/** 回放事件里的用户输入 → 轮次索引所需的最小字段 */
+function userTurnsOf(events: ReplayEvent[]): { text: string; ts?: number }[] {
+  return events
+    .filter((ev): ev is Extract<ReplayEvent, { kind: 'user' }> => ev.kind === 'user')
+    .map((ev) => ({ text: ev.text, ts: parseTs(ev.ts) }));
+}
+
 function fmtBytes(n: number): string {
   return n > 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.round(n / 1024)} KB`;
 }
@@ -178,22 +254,33 @@ function parseTs(iso: string | undefined): number | undefined {
   return Number.isFinite(ms) ? ms : undefined;
 }
 
-/** 只读回放事件 → 派发页消息(续接时装载历史,取尾部 CHAT_SEED_LIMIT 条) */
+/** 只读回放事件 → 派发页消息 */
 function replayToChat(events: ReplayEvent[]): ChatItem[] {
-  return events.slice(-CHAT_SEED_LIMIT).map((ev, i): ChatItem => {
+  return events.map((ev, i): ChatItem => {
     if (ev.kind === 'user') return { t: 'user', text: ev.text, ts: parseTs(ev.ts) };
     if (ev.kind === 'assistant') return { t: 'assistant', text: ev.text, streaming: false, ts: parseTs(ev.ts) };
     if (ev.kind === 'tool')
       return { t: 'tool', id: `hist-${i}`, name: ev.name, input: ev.input, output: ev.output, isError: ev.isError };
     if (ev.kind === 'compact')
       return { t: 'compact', trigger: ev.trigger, preTokens: ev.preTokens, durationMs: ev.durationMs, summary: ev.summary };
+    if (ev.kind === 'pr')
+      return {
+        t: 'pr',
+        url: ev.url,
+        platform: ev.platform,
+        number: ev.number,
+        repo: ev.repo,
+        updates: ev.updates,
+        ts: parseTs(ev.ts),
+        lastTs: parseTs(ev.lastTs),
+      };
     return { t: 'note', text: `⚠ 未知事件「${ev.type}」(原始记录见回放页)` };
   });
 }
 
 const MODELS = [
   '(默认)',
-  'claude-fable-5',
+  'claude-fable-5-1',
   'claude-opus-5',
   'claude-opus-5[1m]',
   'claude-sonnet-5',
@@ -210,7 +297,7 @@ const PERM_VALUE: Record<string, string> = {
 const DEFAULT_PERM = PERMS[2]!;
 /** /model 简写 → 完整模型名 */
 const MODEL_SHORT: Record<string, string> = {
-  fable: 'claude-fable-5',
+  fable: 'claude-fable-5-1',
   opus: 'claude-opus-5',
   'opus-1m': 'claude-opus-5[1m]',
   sonnet: 'claude-sonnet-5',
@@ -227,7 +314,7 @@ const initialModel = (): string => {
   return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
 };
 
-/** ⚑ 任务总结的固定触发语。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
+/** ⚑ 任务总结的默认触发语(设置里可改,见 lib/prefs 的 wrapupPrompt)。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
  *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
 const WRAPUP_PROMPT =
   '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
@@ -260,10 +347,30 @@ export function Dispatch({ active }: { active: boolean }) {
   const isMobile = useIsMobile();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
+  const { prefs, loaded: prefsLoaded } = useAccountPrefs();
+  const localPrefs = useLocalPrefs();
   const [modelSel, setModelSel] = useState(initialModel);
   const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
+  /** 账户偏好是异步拉回来的:到货后把「尚未被本次会话改过」的选择器对齐到默认值。
+   *  只在没有活动会话时对齐——会话进行中把用户当场选的模型改掉是抢方向盘。 */
+  const prefsAppliedRef = useRef(false);
+  /** document 级键盘监听按 active 挂载,不应因改键而反复重挂;键位经 ref 读最新值 */
+  const keymapRef = useRef(localPrefs.keymap);
+  keymapRef.current = localPrefs.keymap;
+  /** 底栏提示由命令式代码按光标位置改写,需要一份随时可读的最新发送键语义 */
+  const sendKeyRef = useRef(localPrefs.sendKey);
+  sendKeyRef.current = localPrefs.sendKey;
+  useEffect(() => {
+    if (!prefsLoaded || prefsAppliedRef.current) return;
+    prefsAppliedRef.current = true;
+    if (prefs.model && MODELS.includes(prefs.model)) setModelSel(prefs.model);
+    if (prefs.effort && EFFORTS.includes(prefs.effort)) setEffortSel(prefs.effort);
+    const permLabel = PERMS.find((x) => PERM_VALUE[x] === prefs.perm);
+    if (permLabel) setPermSel(permLabel);
+    setBg(prefs.bg);
+  }, [prefsLoaded, prefs]);
   const [resumeInfo, setResumeInfo] = useState<{ sessionId: string; name: string; cwd: string; project: string } | null>(null);
 
   const [handoffBusy, setHandoffBusy] = useState(false);
@@ -278,6 +385,72 @@ export function Dispatch({ active }: { active: boolean }) {
   const [lightbox, setLightbox] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<HTMLDivElement>(null);
+  // ---- 斜杠命令联想 ----
+  /** 当前联想的查询词;null = 面板关闭(文本不以 / 开头,或已敲下第一个空格) */
+  const [slashQ, setSlashQ] = useState<string | null>(null);
+  const [slashSel, setSlashSel] = useState(0);
+  /** 会话尚未报告目录时的兜底(最近一次某个会话报过的那份),只在挂载时取一次 */
+  const [fallbackCmds, setFallbackCmds] = useState<SlashCmdInfo[]>([]);
+  const [fallbackUses, setFallbackUses] = useState<Record<string, number>>({});
+  useEffect(() => {
+    void api
+      .slashCommands()
+      .then((r) => {
+        setFallbackCmds(r.cmds);
+        if (r.uses) setFallbackUses(r.uses);
+      })
+      .catch(() => {});
+  }, []);
+  /** 候选全表:璇玑内置在前,CLI 技能在后;同名以内置为准(如 /wrapup 走自家收口提示词) */
+  const allCmds = useMemo<SlashCmd[]>(() => {
+    const src = d.commands ?? fallbackCmds;
+    const uses = d.commands ? d.commandUses : fallbackUses;
+    const builtinNames = new Set(BUILTIN_CMDS.map((c) => c.name));
+    return [
+      // 内置命令的次数要单独贴:这张表是前端写死的,后端只给 SDK 条目贴了 uses,
+      // 不贴的话 /model /clear 这些最常用的命令会以 0 次排在所有用过的技能后面
+      ...BUILTIN_CMDS.map((c) => ({ ...c, uses: uses[c.name] ?? 0 })),
+      ...src.filter((c) => !builtinNames.has(c.name)).map((c) => ({ ...c, kind: 'skill' as const })),
+    ];
+  }, [d.commands, d.commandUses, fallbackCmds, fallbackUses]);
+  const slashRows = useMemo(
+    () => (slashQ === null ? [] : filterCmds(slashQ, allCmds)),
+    [slashQ, allCmds],
+  );
+  /** 键盘处理要读最新候选,但它挂在 textarea 的 onKeyDown 里,用 ref 取当帧值 */
+  const slashRowsRef = useRef<SlashCmd[]>([]);
+  slashRowsRef.current = slashRows;
+  const slashSelRef = useRef(0);
+  slashSelRef.current = Math.min(slashSel, Math.max(0, slashRows.length - 1));
+  const slashOpen = slashQ !== null && slashRows.length > 0;
+  const slashOpenRef = useRef(false);
+  slashOpenRef.current = slashOpen;
+  /** 命令名集合,供镜像层判断「已完整命中某个命令」 */
+  const cmdNames = useMemo(() => {
+    const set = new Set<string>();
+    for (const c of allCmds) {
+      set.add(c.name);
+      for (const a of c.aliases ?? []) set.add(a); // 补全写进去的可能是别名,着色也要认它
+    }
+    return set;
+  }, [allCmds]);
+  const cmdNamesRef = useRef<ReadonlySet<string>>(cmdNames);
+  cmdNamesRef.current = cmdNames;
+  const allCmdsRef = useRef<SlashCmd[]>(allCmds);
+  allCmdsRef.current = allCmds;
+  /** submit 定义在后面,补全要在它之前用,经 ref 取 */
+  const submitRef = useRef<(() => Promise<void>) | null>(null);
+  /**
+   * 用户按 Esc 主动关掉面板时记下当时的文本 —— 光把 slashQ 置空不够,
+   * 下一次重绘(哪怕只是移动光标)又会从同一段文本里算出查询词把面板弹回来。
+   * 文本一变即自动失效,继续打字仍会重新联想。
+   */
+  const slashDismissedRef = useRef<string | null>(null);
+  const slashListRef = useRef<HTMLDivElement>(null);
+  /** 键盘选中的行滚进可视区(列表最多 312px 高,候选可能几十条) */
+  useEffect(() => {
+    slashListRef.current?.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  }, [slashSel, slashQ]);
   // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
   // 给(12 行或 40vh 取小),触顶后转 textarea 内部滚动并由 .at-max 亮出底部渐隐提示。
   // `.value =` 赋值不触发 input 事件,所以每个程序化写入点(预填/交接/建议词/历史回溯/清空)
@@ -290,15 +463,138 @@ export function Dispatch({ active }: { active: boolean }) {
     const target = Math.max(TA_MIN_H, ta.scrollHeight);
     ta.style.height = `${Math.min(target, max)}px`;
     composerRef.current?.classList.toggle('at-max', target > max + 1);
+    syncCode();
   };
+  // 代码语法高亮:textarea 文字透明,底下 .ta-mirror 重绘同一段文本并给代码区间上底色。
+  // 走命令式 DOM 而非 React state:输入框每敲一个键都重渲染整个派发页(含消息区)太贵。
+  const mirrorRef = useRef<HTMLDivElement>(null);
+  const hintRef = useRef<HTMLSpanElement>(null);
+  /** 只更新底栏提示(光标进出代码块换一份提示,不必重绘整层镜像) */
+  const syncHint = () => {
+    const ta = taRef.current;
+    const hint = hintRef.current;
+    if (!ta || !hint) return;
+    const fenced = isInFence(ta.value, ta.selectionStart);
+    hint.classList.toggle('in-fence', fenced);
+    hint.textContent = hintText(sendKeyRef.current, fenced);
+  };
+  // 挂载即画一次镜像:此时输入框通常是空的,画的是占位文案(textarea 自己的 placeholder 被透明文字色吃掉)
+  useEffect(() => {
+    syncCode();
+  }, []); // 只在挂载时跑一次:后续重绘一律由 growTa() 驱动
+  /** 落地一次编辑(包裹/插入围栏):写值、复位选区、重绘高亮。.value= 不触发 input 事件,故手动 growTa */
+  const applyEdit = (r: { value: string; selStart: number; selEnd: number }) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.value = r.value;
+    ta.setSelectionRange(r.selStart, r.selEnd);
+    historyIdxRef.current = null; // 手动编辑 → 退出历史浏览态,与 onInput 同一口径
+    growTa();
+  };
+  /** 重绘高亮镜像层。由 growTa() 统一调用 —— 所有会改动输入框内容的路径都已经过 growTa。 */
+  const syncCode = () => {
+    const ta = taRef.current;
+    const mirror = mirrorRef.current;
+    if (!ta || !mirror) return;
+    mirror.textContent = '';
+    if (!ta.value) {
+      const ph = document.createElement('span');
+      ph.className = 'ph';
+      ph.textContent = TA_PLACEHOLDER;
+      mirror.append(ph);
+    } else {
+      const frag = document.createDocumentFragment();
+      // 开头完整命中某个已知命令时,命令词单独上色(CLI 同款)。只变色不加粗——
+      // 镜像层字宽必须与 textarea 逐字相同,粗体会让 caret 压在末字上(2026-09-16 原型实测)。
+      const hit = splitCommand(ta.value, cmdNamesRef.current);
+      const rest = hit ? hit.rest : ta.value;
+      if (hit) {
+        const el = document.createElement('span');
+        el.className = 'tk-cmd';
+        el.textContent = hit.cmd;
+        frag.append(el);
+      }
+      parse(rest).forEach((b, i) => {
+        if (i) frag.append('\n'); // 块间换行:与原文行结构一一对应
+        const nodes = b.segs.map((seg) => {
+          if (!seg.cls) return document.createTextNode(seg.text);
+          const el = document.createElement('span');
+          el.className = seg.cls;
+          el.textContent = seg.text;
+          return el;
+        });
+        if (b.type === 'fence' && !b.closed) {
+          const box = document.createElement('span');
+          box.className = 'tk-open';
+          box.append(...nodes);
+          frag.append(box);
+        } else {
+          frag.append(...nodes);
+        }
+      });
+      frag.append('\u200b'); // 尾随换行在镜像里不占行,补个零宽字符顶住,否则最后一行差一行高
+      mirror.append(frag);
+    }
+    mirror.scrollTop = ta.scrollTop;
+    syncHint();
+    // 联想查询词随内容同步。growTa() 是所有改动输入框内容的路径的统一入口,故挂在这里
+    // 就覆盖了打字/粘贴/程序化写入(预填、历史回溯、补全)全部来源。
+    // Esc 的抑制在文本**再次变化**时失效,而不是只比对相等 —— 否则删一个字再打回来
+    // 文本又与记下的那份相同,面板会二度被抑制(2026-09-16 浏览器实测踩到)。
+    if (slashDismissedRef.current !== null && slashDismissedRef.current !== ta.value) {
+      slashDismissedRef.current = null;
+    }
+    const q = slashDismissedRef.current !== null ? null : slashQuery(ta.value);
+    setSlashQ((prev) => {
+      if (prev !== q) setSlashSel(0); // 查询词一变就把选中复位到第一项
+      return q;
+    });
+  };
+  /**
+   * 选中候选 → 写进输入框。短名唯一就补短名(`/watch` 而非 `/watch:watch`,与终端手感一致,
+   * 实测 CLI 认);带参数的命令补完停下等用户填参数,无参数的可直接发送。
+   */
+  const pickSlash = (send: boolean) => {
+    const ta = taRef.current;
+    const row = slashRowsRef.current[slashSelRef.current];
+    if (!ta || !row) return;
+    ta.value = `/${completionName(row)} `;
+    growTa();
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    if (send && !row.arg) void submitRef.current?.();
+  };
+
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
   // 新会话/续接切会话时 d.items 会被清空或替换(reset/attach/seedHistory),不会跨会话残留。
   // historyIdxRef === null 表示「未在浏览,停在当前草稿」;否则是 hist 数组下标(0=最早)。
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
-  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 replayToChat)
+  // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
+  // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
+  // pendingEarlier 是它们当中的用户输入(目录要列出来,故须进 state 参与渲染)。
+  const earlierRef = useRef<ReplayEvent[]>([]);
+  const [pendingEarlier, setPendingEarlier] = useState<{ text: string; ts?: number }[]>([]);
+  const [outline, setOutline] = useState(false);
+  // 旁路提问面板开合(记录本身在 d.btw 里,关面板不丢);btwMode = 输入框以 /btw 开头(发送键语义转「问旁路」)
+  const [btwOpen, setBtwOpen] = useState(false);
+  const [btwMode, setBtwMode] = useState(false);
+  const [curTurn, setCurTurn] = useState<{ ord: number; gone: boolean } | null>(null);
+  const [flashOrd, setFlashOrd] = useState<number | null>(null);
+  const [pendingJump, setPendingJump] = useState<number | null>(null);
+  const flashTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  /** 换会话:轮次索引连同待回填的更早事件一起清空,不跨会话残留 */
+  const resetTurnNav = () => {
+    earlierRef.current = [];
+    setPendingEarlier([]);
+    setOutline(false);
+    setCurTurn(null);
+    setFlashOrd(null);
+    setPendingJump(null);
+  };
   const pinnedRef = useRef(true); // 用户是否钉在消息区底部(详见下方自动滚底效应)
   const lastChatTopRef = useRef(0); // 上次观察到的消息区 scrollTop,用于判定滚动方向
   const lastChatHeightRef = useRef(0); // 上次观察到的 scrollHeight,用于区分「内容变矮」与「用户上翻」
@@ -325,9 +621,23 @@ export function Dispatch({ active }: { active: boolean }) {
   const rb = useRunbook(panelSessionId);
 
   const projects = projectsData?.projects ?? [];
-  const cwdOptions = useMemo(() => projects.map((p) => p.path), [projects]);
-  const curProject = projects.find((p) => p.path === (cwd || cwdOptions[0]));
-  const effectiveCwd = cwd || cwdOptions[0] || '';
+  const quickAskCwd = prefs.quickAskCwd;
+  /** 目录优先级链与快速提问态判定收在 resolveCwd 一处(lib/quick-ask.ts),这里只取结果 */
+  const {
+    options: cwdOptions,
+    effectiveCwd,
+    isQuickAsk,
+  } = useMemo(
+    () =>
+      resolveCwd({
+        cwd,
+        prefCwd: prefs.cwd,
+        quickAskCwd,
+        projectPaths: projects.map((p) => p.path),
+      }),
+    [cwd, prefs.cwd, quickAskCwd, projects],
+  );
+  const curProject = projects.find((p) => p.path === effectiveCwd);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
@@ -337,16 +647,22 @@ export function Dispatch({ active }: { active: boolean }) {
     // 「Space 进入只看不发」的路径会漏标,「待验收」切回看板不熄灭。
     markSeen(info.sessionId);
     repin();
-    resetHistoryBrowse(); // 换会话:↑/↓ 回溯范围重新从这个(待续接)会话算起
-    setSessionCwd(null);
+    leaveSession(); // 换会话:↑/↓ 回溯范围与轮次索引重新从这个(待续接)会话算起
+    d.noteSessionId(info.sessionId); // 旁路记录按会话挂载,不等第一条消息触发的 init
     setResumeInfo(info);
     setSessCtx({ id: info.sessionId, name: info.name || null, project: info.project, cwd: info.cwd });
     setCwd(info.cwd);
     d.pushNote(`↻ 将续接会话 ${info.sessionId.slice(0, 8)}(${info.name}),发送第一条消息后恢复上下文。`);
-    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)
+    // 装载历史对话(原型既有设计,M1 移植时丢失):失败静默(未开始的会话没有转录)。
+    // 只渲染尾部 CHAT_SEED_LIMIT 条,更早的留给轮次目录按需回填(轮次索引已由 leaveSession 归零)。
     void api
       .replay(info.sessionId)
-      .then((r) => d.seedHistory(replayToChat(r.events)))
+      .then((r) => {
+        const { earlier, seed } = splitHistory(r.events);
+        earlierRef.current = earlier;
+        setPendingEarlier(userTurnsOf(earlier));
+        d.seedHistory(replayToChat(seed));
+      })
       .catch(() => {});
   };
 
@@ -409,10 +725,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
-      setSessionCwd(null);
-      setSessCtx(null);
+      leaveSession();
       if (wasLive) toast('上一个会话仍在后台运行,可在「会话」页接回');
     }
     if (intent?.attach) {
@@ -421,14 +734,14 @@ export function Dispatch({ active }: { active: boolean }) {
       markSeen(intent.attach.sessionId);
       // 换会话先清当前状态,避免输入串进旧会话
       if (d.started) d.reset();
-      resetHistoryBrowse();
-      setResumeInfo(null);
+      leaveSession();
       setSessionCwd(intent.attach.cwd);
       setCwd(intent.attach.cwd);
       setFromBoard(true);
       // name/project 看板已随手带过来(见 DispatchIntent.attach 注释),id 待 attach 重放 init 事件后由下方 effect 补上
       setSessCtx({ id: null, name: intent.attach.name || null, project: intent.attach.project, cwd: intent.attach.cwd });
       repin();
+      d.noteSessionId(intent.attach.sessionId); // 同 applyResume:回放缓冲若已挤掉 init,也还能拉到旁路记录
       void d.attach(intent.attach.dispatchId);
     } else if (intent?.resume) {
       setFromBoard(true);
@@ -438,10 +751,7 @@ export function Dispatch({ active }: { active: boolean }) {
       // 且旧会话已有的 sessionId 会立刻把这条待办错绑到不相干的会话上
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
-      setSessionCwd(null);
-      setSessCtx(null);
+      leaveSession();
     }
     // 「来自待办」横幅只属于带 todoId 的这一次进入:换任何别的方式进来都清掉,
     // 否则横幅跨会话残留,后续无关派发拿到 sessionId 还会把那条待办错绑过去
@@ -455,6 +765,121 @@ export function Dispatch({ active }: { active: boolean }) {
     // 顶掉 /wd 等弹窗内输入框的焦点(2026-07-16 真机确认)
     if (entered || intent) setTimeout(() => taRef.current?.focus(), 0);
   }, [active, d]);
+
+  // ---- 轮次导航 ----------------------------------------------------------
+  // 一轮 = 一条用户输入及其之后的产出。吸顶轮次头与 ⌘⇧O 目录共用这份索引,
+  // 编号/排序/摘要口径全收在 lib/turns,两处显示的「第 7 轮」必须是同一轮。
+  const loadedTurns = useMemo(
+    () =>
+      d.items
+        .filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user')
+        .map((i) => ({ text: i.text, ts: i.ts })),
+    [d.items],
+  );
+  const turns = useMemo(() => buildTurns(pendingEarlier, loadedTurns), [pendingEarlier, loadedTurns]);
+  // 每条用户消息挂的全局轮次序号(含未装载的更早轮次),供 data-turn 定位与高亮
+  const turnOrds = useMemo(() => {
+    // 起点是「未装载的真轮次」数量,与 buildTurns 的过滤口径必须同源,否则序号对不上
+    let n = pendingEarlier.filter((x) => isRealTurn(x.text)).length;
+    return d.items.map((i) => (i.t === 'user' && isRealTurn(i.text) ? n++ : null));
+  }, [d.items, pendingEarlier]);
+
+  /** 按滚动位置刷新「当前轮」。offsetTop 以 .chat 为参照系(它是 position:relative 的滚动容器)。 */
+  const measureTurn = useCallback(() => {
+    const el = chatRef.current;
+    if (!el) return setCurTurn(null);
+    const boxes = [...el.querySelectorAll<HTMLElement>('[data-turn]')].map((n) => ({
+      ord: Number(n.dataset.turn),
+      top: n.offsetTop,
+      bottom: n.offsetTop + n.offsetHeight,
+    }));
+    const next = currentTurn(boxes, el.scrollTop, TURN_ACTIVE_OFFSET, TURN_HEAD_H);
+    // 同值不 setState:滚动每帧都会调到这里,不比一下会把整条消息列表重渲染成滚动卡顿
+    setCurTurn((prev) =>
+      prev?.ord === next?.ord && prev?.gone === next?.gone ? prev : next,
+    );
+  }, []);
+
+  /** 回填尚未渲染的更早历史(轮次目录选中未加载轮次时触发);一次补齐,事件本就已在客户端 */
+  const backfillEarlier = () => {
+    const ev = earlierRef.current;
+    if (!ev.length) return;
+    earlierRef.current = [];
+    setPendingEarlier([]);
+    d.seedHistory(replayToChat(ev));
+  };
+
+  const scrollToTurn = useCallback((ord: number) => {
+    const box = chatRef.current;
+    const el = box?.querySelector<HTMLElement>(`[data-turn="${ord}"]`);
+    if (!box || !el) return;
+    // 跳走 = 用户主动离开底部;不解钉的话流式输出会立刻把视口拽回去
+    pinnedRef.current = false;
+    box.scrollTo({
+      top: Math.max(0, el.offsetTop - TURN_HEAD_H - TURN_JUMP_GAP),
+      behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+    });
+    // 落点必须被看见:目标气泡描一圈玉环再淡出,否则滚完还要在满屏文字里找自己要的那条
+    setFlashOrd(ord);
+    clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = setTimeout(() => setFlashOrd(null), 1400);
+  }, []);
+
+  const jumpToTurn = (ord: number) => {
+    setOutline(false);
+    const t = turns.find((x) => x.ord === ord);
+    if (!t) return;
+    if (t.loaded) return scrollToTurn(ord);
+    backfillEarlier(); // 未装载:先回填,节点出现后由下方 layout effect 接着跳
+    setPendingJump(ord);
+  };
+
+  const stepToTurn = (dir: -1 | 1) => {
+    const next = stepTurn(curTurn?.ord ?? null, dir, turns.length);
+    if (next !== null) jumpToTurn(next);
+  };
+
+  // 回填后的补跳:等目标节点真的进 DOM 再滚,并在同一帧内完成,避免中间态闪一下
+  useLayoutEffect(() => {
+    if (pendingJump === null) return;
+    if (!chatRef.current?.querySelector(`[data-turn="${pendingJump}"]`)) return;
+    scrollToTurn(pendingJump);
+    setPendingJump(null);
+  }, [d.items, pendingJump, scrollToTurn]);
+
+  // 消息增删(新回合、回填、切会话)后重新量一次:此时滚动事件不会触发,但当前轮可能已变
+  useEffect(measureTurn, [d.items, measureTurn]);
+  useEffect(() => {
+    window.addEventListener('resize', measureTurn);
+    return () => window.removeEventListener('resize', measureTurn);
+  }, [measureTurn]);
+  useEffect(() => () => clearTimeout(flashTimerRef.current), []);
+
+  // ⌘⇧O 开轮次目录 / ⌥↑ ⌥↓ 逐轮跳。用 ⌥ 而非裸方向键:输入框里的 ↑↓ 已经是历史回溯,
+  // 同一个键在同一个页面不能有两种含义。弹窗打开时让位给弹窗自己的 capture 监听。
+  const turnKeyRef = useRef({ turns, stepToTurn, outline });
+  turnKeyRef.current = { turns, stepToTurn, outline };
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      const { turns, stepToTurn, outline } = turnKeyRef.current;
+      if (outline || document.querySelector('.confirm-mask')) return;
+      const km = keymapRef.current;
+      if (matchKey(e, km['dispatch.turnOutline'])) {
+        e.preventDefault();
+        if (!turns.length) return toast('这个会话还没有可跳转的轮次');
+        taRef.current?.blur(); // 与 /wd、/model 一致:弹窗期间不让输入框吃字符,也免双焦点环
+        measureTurn();
+        setOutline(true);
+      } else if (matchKey(e, km['dispatch.prevTurn']) || matchKey(e, km['dispatch.nextTurn'])) {
+        if (!turns.length) return;
+        e.preventDefault();
+        stepToTurn(matchKey(e, km['dispatch.prevTurn']) ? -1 : 1);
+      }
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [active, measureTurn]);
 
   // 消息区自动滚底 —— 仅当用户钉在底部时跟随。
   // 修复:流式输出期间向上翻历史,每条新增量都把视口拽回底部,历史根本没法看。
@@ -475,6 +900,7 @@ export function Dispatch({ active }: { active: boolean }) {
     const shrank = el.scrollHeight < prevHeight;
     if (!shrank && el.scrollTop < prev - 1) pinnedRef.current = false;
     else if (el.scrollHeight - el.scrollTop - el.clientHeight < 48) pinnedRef.current = true;
+    measureTurn();
   };
   // 跨天分隔线:与消息列表等长,daySeps[i] 非空表示第 i 条消息之前要插一条日期。
   // 工具卡/审批等无时间的条目不参与判定,故游标记的是「上一条有时间的消息」而非前一项。
@@ -532,7 +958,11 @@ export function Dispatch({ active }: { active: boolean }) {
           return ts !== undefined && ts >= before;
         });
         const past = cut === -1 ? r.events : r.events.slice(0, cut);
-        if (past.length) d.seedHistory(replayToChat(past));
+        if (!past.length) return;
+        const { earlier, seed } = splitHistory(past);
+        earlierRef.current = earlier;
+        setPendingEarlier(userTurnsOf(earlier));
+        d.seedHistory(replayToChat(seed));
       })
       .catch(() => {}); // 会话记录被清理时垫不了历史,保持现状即可
   }, [d.attachedHistory]);
@@ -599,41 +1029,72 @@ export function Dispatch({ active }: { active: boolean }) {
     return () => document.removeEventListener('keydown', onKey, true);
   }, [lightbox]);
 
-  /** ⚑ 任务总结的实际动作。用 ref 持有最新闭包,让下方快捷键监听只依赖 active、不必每次渲染重挂。 */
-  const wrapupRef = useRef<() => void>(() => {});
-  wrapupRef.current = () => {
-    if (!canWrapup(d.started, !!resumeInfo)) {
-      toast('这里还没有可收口的上下文,先派发或续接一个会话');
-      return;
-    }
-    void submit(WRAPUP_PROMPT);
-  };
-
-  // ⌘M 切换模型 / ⌘D 切换工作目录 / ⌘⏎ 任务总结:仅派发页生效,等同于在输入框敲 /model、/wd、/wrapup 回车
+  // ⌘M 切换模型 / ⌘D 切换工作目录:仅派发页生效,等同于在输入框敲 /model、/wd 回车
   // (见 submit() 同名分支),直接执行而不必真的经过文本解析。拦截浏览器默认行为(⌘M 最小化窗口、⌘D 加书签)。
   useEffect(() => {
     if (!active) return;
     const onKey = (e: KeyboardEvent) => {
-      if (!e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      if (e.key === 'm' || e.key === 'M') {
+      const km = keymapRef.current;
+      if (matchKey(e, km['dispatch.model'])) {
         e.preventDefault();
         taRef.current?.blur();
         setModelQuery('');
         setModelPalette(true);
-      } else if (e.key === 'd' || e.key === 'D') {
+      } else if (matchKey(e, km['dispatch.workdir'])) {
         e.preventDefault();
         taRef.current?.blur();
         setWdQuery('');
         setWdPalette(true);
-      } else if (e.key === 'Enter' && !e.isComposing) {
-        // isComposing:中文输入法候选窗里的回车不劫持(否则选词就变成发总结)
+      } else if (matchKey(e, km['dispatch.btw'])) {
+        // 一个键来回切:进入 = 开面板 + 输入框加 /btw 前缀进紫色旁路模式并聚焦;
+        // 再按 = 去掉前缀回到普通会话模式 + 关面板。以「输入框是否处于旁路模式」为准,
+        // 不看面板开合——面板可能是点芯片打开的,那时按一下仍应进入提问态而不是关掉它。
         e.preventDefault();
-        wrapupRef.current();
+        const ta = taRef.current;
+        if (!ta) return;
+        if (isBtwText(ta.value)) {
+          ta.value = ta.value.replace(/^\s*\/btw\b\s?/i, '');
+          growTa();
+          setBtwMode(false);
+          setBtwOpen(false);
+          ta.focus();
+          return;
+        }
+        ta.value = `/btw ${ta.value}`;
+        growTa();
+        setBtwMode(true);
+        setBtwOpen(true);
+        ta.focus();
+        ta.setSelectionRange(ta.value.length, ta.value.length);
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [active]);
+
+  /** 旁路提问:/btw <问题>。答案落右侧面板与自有库,不进主对话;主对话在跑也照问 */
+  const askBtw = (question: string) => {
+    if (!d.sessionId) return toast('会话尚未开始,发送第一条消息后再旁路提问');
+    if (d.btw.inFlight) return toast('上一条旁路提问还没答完');
+    d.askBtw(question);
+    setBtwOpen(true);
+  };
+  const saveBtwMemory = async (r: SideQuestion) => {
+    const cwd = sessionCwd ?? effectiveCwd;
+    if (!cwd) return toast('会话工作目录未知,无法定位 memory 目录');
+    try {
+      const res = await api.saveSideQuestionMemory(r.id, cwd);
+      d.markBtwMemory(r.id, res.file);
+      toast(res.existed ? '这条已经沉过经验' : `已写入 ${res.file.replace(/^.*\/projects\//, '~/.claude/projects/')}`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    }
+  };
+  /** 钉入主对话:这一问一答作为你的下一条消息发出——只有这一步才真正进主对话 */
+  const pinBtw = (r: SideQuestion) => {
+    setBtwOpen(false);
+    void submit(pinText(r.question, r.answer));
+  };
 
   /** 当前会话自己发过的 prompt(按发送顺序,最早在前);d.items 本就随会话切换清空/重建,天然不跨会话 */
   const promptHistory = (): string[] => d.items.filter((i): i is Extract<ChatItem, { t: 'user' }> => i.t === 'user').map((i) => i.text);
@@ -642,6 +1103,20 @@ export function Dispatch({ active }: { active: boolean }) {
   const resetHistoryBrowse = () => {
     historyIdxRef.current = null;
     historyDraftRef.current = '';
+  };
+
+  /** 离开当前会话(换会话 / 清空 / 接回 / 续接)的公共归零动作,收在这一处。
+   *  输入历史回溯范围、轮次索引(含尚未渲染、待回填的更早事件)、续接信息与会话上下文
+   *  必须同进同退:漏掉任何一样,上一个会话的状态就会漏进下一个会话。
+   *  2026-09-09 实测:看板接回这条入口只清了输入历史,轮次目录里于是列着上一个会话的 40 条轮次。
+   *  新增任何进入会话的入口,一律走本函数,不要在调用点各清各的。 */
+  const leaveSession = () => {
+    resetHistoryBrowse();
+    resetTurnNav();
+    setResumeInfo(null);
+    setSessionCwd(null);
+    setSessCtx(null);
+    d.noteSessionId(null); // 已知会话 id 也随离开归零,入口自己再登记新的
   };
 
   /** ↑(dir=-1)取更早一条,↓(dir=1)取更新一条;越过最新一条时恢复浏览前的草稿。
@@ -686,6 +1161,18 @@ export function Dispatch({ active }: { active: boolean }) {
       growTa();
       resetHistoryBrowse();
     }
+    // /btw 旁路提问:不进主对话,走 SDK side_question 控制请求;无参数 = 打开面板(空态自会解释用法)
+    const btwReq = parseBtw(text);
+    if (btwReq) {
+      setBtwMode(false);
+      const { question } = btwReq;
+      if (!question) {
+        setBtwOpen(true);
+        return;
+      }
+      askBtw(question);
+      return;
+    }
     // /resume 恢复已关闭会话:弹窗列出当前项目的隐藏会话,选中即 unhide + 续接
     if (/^\/resume\b/.test(text)) {
       // blur 派发框:弹窗期间不让输入框吃字符,也避免输入框焦点环与弹窗玉色选中环同屏双环
@@ -698,7 +1185,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 旧会话不 kill:仍在跑的留在后台,可在「会话」页接回。
     if (/^\/clear\b/.test(text)) {
       const wasLive = d.status.state === 'working' || d.status.state === 'awaiting-permission';
-      newSession();
+      newSession({ keepCwd: true });
       toast(wasLive ? '已清空上下文;上一个会话仍在后台运行,可在「会话」页接回' : '已清空上下文,开始新会话');
       return;
     }
@@ -707,7 +1194,7 @@ export function Dispatch({ active }: { active: boolean }) {
     // 也避免每次靠临场措辞碰运气。璇玑自己不写盘,出卡动作全在会话内由 skill 完成(架构铁律 2)。
     if (/^\/wrapup\b/.test(text)) {
       if (!canWrapup(d.started, !!resumeInfo)) return toast('这里还没有可收口的上下文,先派发或续接一个会话');
-      void submit(WRAPUP_PROMPT);
+      void submit(getAccount().wrapupPrompt || WRAPUP_PROMPT);
       return;
     }
     // /wd 切换工作目录:弹窗模糊搜索历史项目目录,↑↓ 选中即改新会话 cwd。
@@ -728,6 +1215,8 @@ export function Dispatch({ active }: { active: boolean }) {
       try {
         await api.renameSession(d.sessionId, newName);
         setSessCtx((prev) => (prev ? { ...prev, name: newName } : prev));
+        // 看板卡片靠 5s 轮询取名,不主动刷新要等 0–5s 才变——改名已落库,立刻重拉
+        refreshPoll(api.sessions);
         d.pushNote(`✎ 会话已重命名为「${newName}」(存璇玑本地,看板即时生效;不写 ~/.claude)`);
       } catch (e) {
         toast(e instanceof Error ? e.message : String(e));
@@ -797,14 +1286,24 @@ export function Dispatch({ active }: { active: boolean }) {
       toast(e instanceof Error ? e.message : String(e));
     }
   };
+  submitRef.current = submit;
 
-  const newSession = () => {
+  /**
+   * 开一个新会话。
+   *
+   * keepCwd 区分两类入口,不能合并成一种行为:
+   *  - ⌘N / 「新会话」按钮:开的是一件新任务,多半不属于上一个项目,故清掉显式选择
+   *    让目录退回默认(通常是快速提问目录);
+   *  - /clear:清的是上下文,人还在同一个项目里继续干活,目录必须原样保留
+   *    (这也是 /clear 一直以来的承诺)。
+   */
+  const newSession = (opts?: { keepCwd?: boolean }) => {
     d.reset();
+    if (!opts?.keepCwd) setCwd('');
+    setBtwOpen(false);
+    setBtwMode(false);
     repin();
-    resetHistoryBrowse();
-    setResumeInfo(null);
-    setSessionCwd(null);
-    setSessCtx(null);
+    leaveSession();
     setFromBoard(false);
     taRef.current?.focus();
   };
@@ -827,8 +1326,7 @@ export function Dispatch({ active }: { active: boolean }) {
       const target = effectiveCwd;
       d.reset();
       repin();
-      resetHistoryBrowse();
-      setResumeInfo(null);
+      leaveSession();
       setSessionCwd(target);
       // 交接落地的新会话尚未发消息,还没有名称;项目已知(交接目标),先占位显示未命名
       setSessCtx({ id: null, name: null, project: curProject?.name ?? target, cwd: target });
@@ -845,18 +1343,24 @@ export function Dispatch({ active }: { active: boolean }) {
     }
   };
 
+  // 跑动中的秒表:只在轮次进行时起 interval,空闲期不空转
+  const elapsedMs = useTurnElapsed(d.status.state === 'working' ? d.turn.startedAt : null);
+
   const statusText = (() => {
     switch (d.status.state) {
       case 'none':
         return { text: '空闲 · 新会话待派发', cls: '' };
-      case 'working':
-        return { text: d.items.some((i) => i.t === 'assistant' && i.streaming) ? '回复生成中…' : '思考中…', cls: 'think' };
+      case 'working': {
+        const base = d.items.some((i) => i.t === 'assistant' && i.streaming) ? '回复生成中…' : '思考中…';
+        // 已用时间只在起点已知时显示(接回存活会话时前端没有起点,宁可不显示也不给一个错数字)
+        return { text: elapsedMs == null ? base : `${base} · 已用 ${fmtTurnDur(elapsedMs)}`, cls: 'think' };
+      }
       case 'awaiting-permission':
         return d.status.detail === '回答 Claude 的提问'
           ? { text: 'Claude 有问题等你回答', cls: 'wait' }
           : { text: `等待你审批:${d.status.detail ?? ''}`, cls: 'wait' };
       case 'idle':
-        return { text: `空闲 · 回合结束${d.costUsd ? ` · 本会话 ${fmtCost(d.costUsd)}` : ''}`, cls: '' };
+        return { text: idleStatusText(d.turn.lastMs, d.costUsd), cls: '' };
       case 'ended':
         return { text: '会话已结束', cls: '' };
     }
@@ -875,10 +1379,19 @@ export function Dispatch({ active }: { active: boolean }) {
           </button>
         )}
         <span className="spacer" />
-        <button className="btn" title="⌘N" onClick={newSession}>新会话</button>
+        <button className="btn" title="⌘N" onClick={() => newSession()}>新会话</button>
       </div>
-      <div className="dispatch">
+      <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
+          <TurnHead
+            turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
+            total={turns.length}
+            hasPrev={(curTurn?.ord ?? 0) > 0}
+            hasNext={(curTurn?.ord ?? -1) < turns.length - 1}
+            onJump={jumpToTurn}
+            onStep={stepToTurn}
+            onOpenOutline={() => setOutline(true)}
+          />
           <FindBar
             scopeRef={chatRef}
             state={find}
@@ -895,6 +1408,12 @@ export function Dispatch({ active }: { active: boolean }) {
           )}
           {d.items.length === 0 && (
             <div className="chat-empty">
+              {isQuickAsk && (
+                <div className="xj-qa-badge">
+                  <QuickAskIcon />
+                  <span>快速提问</span>
+                </div>
+              )}
               <h2>派发一个新任务</h2>
               <p>
                 会话经 Agent SDK 执行,加载与终端一致的 skills / MCP / CLAUDE.md;工具调用逐项经你审批。
@@ -910,10 +1429,43 @@ export function Dispatch({ active }: { active: boolean }) {
           {d.items.map((item, i) => (
             <Fragment key={i}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
-              <ChatRow item={item} onDecide={d.decide} onAnswer={d.answer} onGrow={followScroll} onZoom={setLightbox} />
+              <ChatRow
+                item={item}
+                turnOrd={turnOrds[i]}
+                flash={turnOrds[i] !== null && turnOrds[i] === flashOrd}
+                onDecide={d.decide}
+                onAnswer={d.answer}
+                onGrow={followScroll}
+                onZoom={setLightbox}
+              />
             </Fragment>
           ))}
         </div>
+
+        {btwOpen && !isMobile && (
+          <BtwPanel
+            state={d.btw}
+            cwd={sessionCwd ?? effectiveCwd ?? null}
+            mainIdle={d.status.state === 'idle' || d.status.state === 'ended' || d.status.state === 'none'}
+            onClose={() => {
+              setBtwOpen(false);
+              taRef.current?.focus();
+            }}
+            onCancel={d.cancelBtw}
+            onRetry={askBtw}
+            onToMain={(q) => {
+              d.clearBtwError();
+              setBtwOpen(false);
+              if (taRef.current) {
+                taRef.current.value = q;
+                growTa();
+                taRef.current.focus();
+              }
+            }}
+            onPin={pinBtw}
+            onMemory={saveBtwMemory}
+          />
+        )}
 
         {rb.runbook && (
           <RunbookPanel
@@ -946,9 +1498,21 @@ export function Dispatch({ active }: { active: boolean }) {
               now={nowTick}
             />
           </span>
-          <span className={cn('cs-state', statusText.cls)}>
+          {(d.btw.records.length > 0 || d.btw.inFlight) && !isMobile && (
+            <button
+              className={cn('btw-count', d.btw.inFlight && 'live')}
+              onClick={() => setBtwOpen((o) => !o)}
+              title={btwOpen ? '收起旁路面板' : '打开本会话的旁路记录'}
+              aria-pressed={btwOpen}
+            >
+              <span className="btw-bq">?</span>旁路 <b>{d.btw.records.length}</b>
+            </button>
+          )}
+          <span className={cn('cs-state', statusText.cls)} title={statusText.text}>
             <span className="cs-dot" />
-            {statusText.text}
+            {/* 文字单独包一层:ellipsis 对 flex 容器里的裸文本节点不生效,
+                空间实在不够时要截出「…」而不是把 $0.22 截成看着像 0.2 的半个数字 */}
+            <span className="cs-text">{statusText.text}</span>
           </span>
         </div>
 
@@ -960,7 +1524,10 @@ export function Dispatch({ active }: { active: boolean }) {
           </div>
         )}
 
-        <div className={cn('composer', attachments.length && 'has-attach')} ref={composerRef}>
+        <div className={cn('composer', attachments.length && 'has-attach', btwMode && 'btw-mode')} ref={composerRef}>
+          {btwMode && (
+            <div className="btw-prefix"><span className="btw-prefix-dot" />旁路提问 · 不进主对话</div>
+          )}
           {/* 待发送图片条:在 textarea 上方、composer 边框之内 —— 图片与文字同属一条待发消息 */}
           {attachments.length > 0 && (
             <div className="attach-strip">
@@ -987,10 +1554,62 @@ export function Dispatch({ active }: { active: boolean }) {
               ))}
             </div>
           )}
+          {/* 斜杠命令联想:锚在输入框上方,沿用 .dd-menu 的浮层词汇(不透明 surface + 边框 + 投影) */}
+          {slashOpen && (
+            <div className="xj-slash" id="slash-listbox" role="listbox" aria-label="斜杠命令">
+              <div className="xj-slash-list" ref={slashListRef}>
+                {slashRows.map((c, idx) => {
+                  const parts = nameParts(c.name, slashQ ?? '');
+                  return (
+                    <button
+                      key={c.name}
+                      id={`slash-opt-${idx}`}
+                      type="button"
+                      role="option"
+                      aria-selected={idx === slashSelRef.current}
+                      className={`xj-slash-item${idx === slashSelRef.current ? ' sel' : ''}`}
+                      // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
+                      onMouseDown={(ev) => {
+                        ev.preventDefault();
+                        setSlashSel(idx);
+                        slashSelRef.current = idx;
+                        pickSlash(false);
+                      }}
+                    >
+                      <span className="xj-slash-name">
+                        /{parts.before}
+                        {parts.hit && <mark>{parts.hit}</mark>}
+                        {parts.after}
+                        {c.arg && <span className="arg">{c.arg}</span>}
+                      </span>
+                      <span className="xj-slash-desc">{c.desc}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* .ta-wrap:高亮镜像层与 textarea 逐像素叠放(排版属性由 CSS 强制共享,见 .ta-wrap 规则) */}
+          <div className="ta-wrap">
+          <div className="ta-mirror" ref={mirrorRef} aria-hidden="true" />
           <textarea
             ref={taRef}
             rows={2}
-            placeholder="描述要派发的任务…"
+            placeholder={TA_PLACEHOLDER}
+            /* 联想面板开着时才按 WAI-ARIA combobox 模式关联(role + expanded + activedescendant):
+               没有这层关联,屏幕阅读器读不到「候选出现了」「现在停在哪一项」——键盘能用但听不见。
+               面板关着时不加,让它回到普通多行输入框的语义,别平白被念成组合框。 */
+            role={slashOpen ? 'combobox' : undefined}
+            aria-expanded={slashOpen ? true : undefined}
+            aria-controls={slashOpen ? 'slash-listbox' : undefined}
+            aria-activedescendant={slashOpen ? `slash-opt-${slashSelRef.current}` : undefined}
+            aria-autocomplete={slashOpen ? 'list' : undefined}
+            onScroll={(e) => {
+              // 触顶后 textarea 内部滚动,镜像层必须同步跟滚,否则高亮与文字脱节
+              if (mirrorRef.current) mirrorRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
+            }}
+            onSelect={syncHint}
+            onClick={syncHint}
             onPaste={(e) => {
               const files = [...e.clipboardData.items]
                 .filter((it) => it.kind === 'file' && it.type.startsWith('image/'))
@@ -1026,15 +1645,74 @@ export function Dispatch({ active }: { active: boolean }) {
               })();
             }}
             onKeyDown={(e) => {
-              // 排除 metaKey:⌘⏎ 归 ⚑ 任务总结(见下方 document 级监听)。
-              // 此前这里没排除,⌘⏎ 也走发送——不改的话一次按键会既发草稿又触发总结。
-              if (e.key === 'Enter' && !e.shiftKey && !e.metaKey) {
+              const ta = e.target as HTMLTextAreaElement;
+              // 联想面板开着时先吃掉导航键:↑↓ 选、Tab 补全、⏎ 补全(无参数的顺带发送)、Esc 关。
+              // 必须排在既有的 ↑↓ 历史回溯与 Enter 发送之前,否则同一下按键会被两处同时处理。
+              if (slashOpenRef.current && !e.nativeEvent.isComposing) {
+                const n = slashRowsRef.current.length;
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                  e.preventDefault();
+                  const step = e.key === 'ArrowDown' ? 1 : -1;
+                  setSlashSel((i) => (i + step + n) % n);
+                  return;
+                }
+                if (e.key === 'Tab') {
+                  e.preventDefault();
+                  pickSlash(false);
+                  return;
+                }
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  pickSlash(true);
+                  return;
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault();
+                  slashDismissedRef.current = ta.value; // 只关面板,输入内容原样保留
+                  setSlashQ(null);
+                  return;
+                }
+              }
+              const sel = ta.value.slice(ta.selectionStart, ta.selectionEnd);
+              // 选中文字按 ` 直接包成行内代码;无选区时不接管,保持原生输入(否则打断正常打字)
+              if (e.key === '`' && sel && !e.metaKey && !e.nativeEvent.isComposing) {
                 e.preventDefault();
-                void submit();
+                applyEdit(wrapInline(ta.value, ta.selectionStart, ta.selectionEnd));
+                return;
+              }
+              const km = localPrefs.keymap;
+              // 行内代码 / 代码块(默认 ⌘E / ⌘⇧E,可在设置里改键)
+              if (
+                matchKey(e.nativeEvent, km['dispatch.inlineCode']) ||
+                matchKey(e.nativeEvent, km['dispatch.codeBlock'])
+              ) {
+                e.preventDefault();
+                const edit = matchKey(e.nativeEvent, km['dispatch.codeBlock'])
+                  ? insertFence
+                  : wrapInline;
+                applyEdit(edit(ta.value, ta.selectionStart, ta.selectionEnd));
+                return;
+              }
+              // 发送键语义由「设置 › 派发 › 发送键」决定:
+              //   mod  = ⌘⏎/⌃⏎ 发送、裸 Enter 换行(默认,PR#45 起的现状)
+              //   enter= 裸 Enter 发送、⇧⏎ 换行
+              // 两档都不劫持 IME 候选窗里的回车(isComposing),换行一律交给原生行为
+              // 并在下一帧同步高亮与高度。
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                const mod = e.metaKey || e.ctrlKey;
+                const send = localPrefs.sendKey === 'enter' ? !mod && !e.shiftKey : mod;
+                if (send) {
+                  e.preventDefault();
+                  void submit();
+                  return;
+                }
+                requestAnimationFrame(growTa);
+              } else if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+                requestAnimationFrame(growTa);
               }
               if (e.key === 'Escape') (e.target as HTMLTextAreaElement).blur();
               // ↑/↓ 回溯历史 prompt(类 shell history)。草稿态(尚未开始浏览)只在草稿不含换行时
-              // 接管方向键,避免打断 Shift+Enter 多行草稿的行间移动;一旦已经在浏览历史(某条历史
+              // 接管方向键,避免打断多行草稿的行间移动;一旦已经在浏览历史(某条历史
               // 本身可能带换行),后续 ↑/↓ 无条件继续翻,不会被中途某条多行历史卡住(2026-07-15 修复)。
               if (
                 (e.key === 'ArrowUp' || e.key === 'ArrowDown') &&
@@ -1056,30 +1734,19 @@ export function Dispatch({ active }: { active: boolean }) {
                 location.hash = 'sessions';
               }
             }}
-            onInput={() => {
+            onInput={(e) => {
               // 用户手动编辑(非程序回溯赋值,.value= 不触发 input 事件)→ 退出浏览态,回到「当前草稿」指针
               historyIdxRef.current = null;
               growTa();
+              setBtwMode(isBtwText((e.target as HTMLTextAreaElement).value));
             }}
           />
+          </div>
           {/* 触顶提示:内容超过高度上限、转为输入框内部滚动时才现出的一线渐隐,告诉人"上面还有" */}
           <div className="grow-fade" aria-hidden="true" />
           <div className="c-bar">
-            {/* ⚑ 任务总结:把刚做完的任务沉淀成一张卡(等同输入 /wrapup)。玉色 tint 与灰字 hint 拉开层级,
-                但不加脉冲/发光——wrapup 禁止自动触发,入口常驻即可,「高亮」靠稀缺的玉色本身。 */}
-            <button
-              className="wrapup-btn"
-              onClick={() => wrapupRef.current()}
-              disabled={!canWrapup(d.started, !!resumeInfo)}
-              title={
-                canWrapup(d.started, !!resumeInfo)
-                  ? '⌘⏎ · 把本会话刚完成的任务沉淀成一张收口卡,落到 ~/.claude/worklog/(等同输入 /wrapup);边界由 Claude 识别后与你确认'
-                  : '这里还没有可收口的上下文,先派发或续接一个会话'
-              }
-            >
-              <span className="flag">⚑</span>任务总结<span className="kbd">⌘⏎</span>
-            </button>
-            <span className="hint">Enter 发送 · Shift+Enter 换行 · ↑↓ 历史</span>
+            <span className="hint" ref={hintRef}>{hintText(localPrefs.sendKey, false)}</span>
+            <span className="code-help" title="选中文字按 ` 或 ⌘E 包成行内代码;⌘⇧E 插入代码块">` 包裹 · ⌘⇧E 代码块</span>
             {d.status.state === 'working' && (
               <button className="btn btn-sm" onClick={d.interrupt}>打断</button>
             )}
@@ -1098,7 +1765,7 @@ export function Dispatch({ active }: { active: boolean }) {
               <span className="bg-opt-label">转后台(--bg)</span>
             </label>
             <button className="btn btn-primary send-btn" onClick={() => void submit()} aria-label="发送">
-              <span className="send-btn-label">发送</span>
+              <span className="send-btn-label">{btwMode ? '问旁路' : '发送'}</span>
               <svg className="send-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M22 2 11 13" />
                 <path d="M22 2 15 22l-4-9-9-4z" />
@@ -1108,6 +1775,12 @@ export function Dispatch({ active }: { active: boolean }) {
         </div>
 
         <div className="term-line">
+          {isQuickAsk && (
+            <span className="xj-qa-pill" title={`快速提问:新会话默认不绑仓库,工作目录 ${quickAskCwd}`}>
+              <QuickAskIcon />
+              快速提问
+            </span>
+          )}
           <DropUp
             id="cwd-dd"
             value={effectiveCwd}
@@ -1165,6 +1838,14 @@ export function Dispatch({ active }: { active: boolean }) {
           />
           <span className="tag">settingSources: user</span>
         </div>
+        {outline && (
+          <TurnOutline
+            turns={turns}
+            curOrd={curTurn?.ord ?? null}
+            onPick={jumpToTurn}
+            onClose={() => setOutline(false)}
+          />
+        )}
         {resumePalette && (
           <ResumePalette
             cwd={effectiveCwd}
@@ -1274,6 +1955,21 @@ function untilResetShort(resetsAt: number | null | undefined, now = Date.now()):
   if (d > 0) return `${d}d${h}h`;
   if (h > 0) return `${h}h${m}m`;
   return `${m}m`;
+}
+
+/** 轮次秒表:startedAt 为 null(空闲/起点未知)时不起 interval,也不返回数字 */
+function useTurnElapsed(startedAt: number | null): number | null {
+  const [ms, setMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (startedAt == null) {
+      setMs(null);
+      return;
+    }
+    setMs(Date.now() - startedAt);
+    const t = setInterval(() => setMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(t);
+  }, [startedAt]);
+  return ms;
 }
 
 /** 分钟级心跳:倒计时与时间刻度靠它自走,不再依赖流式事件顺带触发的重渲染 */
@@ -1505,12 +2201,18 @@ function QuestionCard({
  *  流式卡顿的主因之一。item 引用不变的行(未在流式中的历史消息)据此完全跳过。 */
 const ChatRow = memo(function ChatRow({
   item,
+  turnOrd,
+  flash,
   onDecide,
   onAnswer,
   onGrow,
   onZoom,
 }: {
   item: ChatItem;
+  /** 用户消息的全局轮次序号(0 基),供吸顶头与目录定位;非用户消息为 null */
+  turnOrd?: number | null;
+  /** 刚被跳转命中:描一圈玉环再淡出 */
+  flash?: boolean;
   onDecide: (id: string, d: 'allow' | 'always' | 'deny') => void;
   onAnswer: (id: string, answers: Record<string, string>) => void;
   onGrow?: () => void;
@@ -1520,9 +2222,10 @@ const ChatRow = memo(function ChatRow({
   if (item.t === 'question') return <QuestionCard item={item} onAnswer={onAnswer} />;
   if (item.t === 'user')
     return (
-      <div className="chat-msg user">
+      <div className={cn('chat-msg', 'user', flash && 'flash')} data-turn={turnOrd ?? undefined}>
         <div className="who">你<MsgTime ts={item.ts} /></div>
-        <div className="body">
+        {/* md 类:让气泡里的代码块/行内代码沿用消息区同一套代码样式 */}
+        <div className="body md">
           {item.images && item.images.length > 0 && (
             <div className="msg-imgs">
               {item.images.map((im, i) => (
@@ -1535,14 +2238,25 @@ const ChatRow = memo(function ChatRow({
               ))}
             </div>
           )}
-          {item.text}
+          <UserText text={item.text} />
         </div>
       </div>
     );
   if (item.t === 'assistant')
     return (
       <div className="chat-msg">
-        <div className="who">Claude<MsgTime ts={item.ts} /></div>
+        <div className="who">
+          Claude
+          <MsgTime ts={item.ts} />
+          {item.turnMs != null && (
+            <span
+              className={cn('xj-turn-dur', item.turnMs >= LONG_TURN_MS && 'long')}
+              title="本轮耗时:从你发出到回合结束"
+            >
+              {fmtTurnDur(item.turnMs)}
+            </span>
+          )}
+        </div>
         <div className="body md">
           <TypewriterMd text={item.text} streaming={item.streaming} onGrow={onGrow} />
           {item.streaming && <span className="typing"><i /><i /><i /></span>}
@@ -1577,6 +2291,7 @@ const ChatRow = memo(function ChatRow({
     );
   }
   if (item.t === 'note') return <div className="resume-note">{item.text}</div>;
+  if (item.t === 'pr') return <PrLinkCard {...item} />;
   if (item.t === 'compact')
     return <CompactionCard trigger={item.trigger} preTokens={item.preTokens} durationMs={item.durationMs} summary={item.summary} />;
   return (

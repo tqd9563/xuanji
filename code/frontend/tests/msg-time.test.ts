@@ -6,9 +6,21 @@ const at = (y: number, mo: number, d: number, h: number, mi: number) =>
   new Date(y, mo - 1, d, h, mi).getTime();
 
 describe('msgClock', () => {
-  it('ms epoch 与 ISO 串都归一为 HH:MM', () => {
-    expect(msgClock(at(2026, 8, 19, 9, 5))).toBe('09:05');
-    expect(msgClock(new Date(at(2026, 8, 19, 23, 47)).toISOString())).toBe('23:47');
+  /** 「今天」按传入的 now 判定,用例才不随运行日期飘 */
+  const now = at(2026, 8, 19, 18, 41);
+
+  it('今天的消息:ms epoch 与 ISO 串都归一为 HH:MM,不带日期', () => {
+    expect(msgClock(at(2026, 8, 19, 9, 5), now)).toBe('09:05');
+    expect(msgClock(new Date(at(2026, 8, 19, 23, 47)).toISOString(), now)).toBe('23:47');
+  });
+
+  /** 跨天会话只显示 HH:MM 时,轮次目录里昨天 20:09 的下一行是今天 10:34,读上去像时间倒流
+   *  (2026-09-17 用户实测截图)。非今天补 MM-DD,今天不补 —— 绝大多数消息都是今天的。 */
+  it('非今天补 MM-DD;判定按本地日历日而非「24 小时内」', () => {
+    expect(msgClock(at(2026, 8, 18, 20, 9), now)).toBe('08-18 20:09');
+    expect(msgClock(at(2025, 12, 31, 23, 59), now)).toBe('12-31 23:59');
+    // 5 小时前,但已是昨天
+    expect(msgClock(at(2026, 8, 18, 23, 30), at(2026, 8, 19, 4, 30))).toBe('08-18 23:30');
   });
 
   it('无时间(工具事件)与不可解析的串返回 null,不渲染占位', () => {

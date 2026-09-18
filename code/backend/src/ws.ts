@@ -85,14 +85,18 @@ export function attachWs(server: Server, storage: Storage) {
     const attach = (s: DispatchSession, replayEvents: boolean) => {
       session = s;
       unsubscribe?.();
-      if (replayEvents) for (const e of s.events) send(e);
+      if (replayEvents) for (const { e, at } of s.replaySnapshot()) send({ ...e, at });
       unsubscribe = s.subscribe(send);
-      // 接回(replayEvents)时附带垫历史元信息:内存事件只覆盖本进程生命周期,
-      // startedAt 之前的对话要由前端从会话 jsonl 回放补齐;全新 start 无更早历史,不带
+      // 斜杠命令目录单独补发一次:它在 init 后即发出,长会话里会被回放缓冲的裁剪
+      // (裁到下一条 user-echo)吃掉,只靠回放的话接回会话就没有联想候选了
+      if (s.commands.length) send({ ev: 'commands', cmds: s.commands, uses: s.commandUses });
+      // 接回(replayEvents)时附带垫历史元信息:内存缓冲只覆盖 replayBefore 之后的事件
+      // (未裁剪 = 进程启动时间;裁过 = 缓冲里第一条事件的时刻),之前的对话要由前端从会话
+      // jsonl 回放补齐;全新 start 无更早历史,不带
       const histSid = s.sessionId ?? s.resumeFrom;
       send(
         replayEvents && histSid
-          ? { ev: 'attached', dispatchId: s.id, historySessionId: histSid, historyBefore: s.startedAt }
+          ? { ev: 'attached', dispatchId: s.id, historySessionId: histSid, historyBefore: s.replayBefore }
           : { ev: 'attached', dispatchId: s.id },
       );
     };
@@ -164,6 +168,18 @@ export function attachWs(server: Server, storage: Storage) {
               break;
             case 'interrupt':
               await session?.interrupt();
+              break;
+            // ---------- 旁路提问(/btw) ----------
+            case 'btw': {
+              if (!session) return send({ ev: 'error', message: '尚未开始会话' });
+              const question = typeof msg.question === 'string' ? msg.question.trim() : '';
+              if (!question) return send({ ev: 'error', message: '用法:/btw 你的问题' });
+              // 不 await:提问期间主对话事件照常流,面板靠 btw-* 事件自己收敛
+              void session.askSideQuestion(question);
+              break;
+            }
+            case 'btw-cancel':
+              session?.cancelSideQuestion();
               break;
             case 'model':
               if (!session) return send({ ev: 'error', message: '尚未开始会话' });

@@ -100,6 +100,20 @@ export type ReplayEvent =
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
   | { kind: 'raw'; type: string; json: string }
   | {
+      /** PR/MR 链接:Claude Code 在创建、push、合并时各写一条 pr-link 元事件 */
+      kind: 'pr';
+      url: string;
+      /** 由 URL host 判定;认不出的自建实例归 other,仍出卡片只是不上品牌色 */
+      platform: 'gitlab' | 'github' | 'other';
+      number?: number;
+      repo?: string;
+      /** 同一 URL 的后续事件数(每次 push / 合并都会重写一条),0 表示只创建过 */
+      updates: number;
+      /** 最近一次事件时间;updates 为 0 时与 ts 相同 */
+      lastTs?: string;
+      ts?: string;
+    }
+  | {
       kind: 'compact';
       /** manual(/compact) 或 auto(上下文自动压缩) */
       trigger?: string;

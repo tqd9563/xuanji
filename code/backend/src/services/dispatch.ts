@@ -17,7 +17,8 @@ import {
 import { listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
-import type { Storage } from '../storage/db.js';
+import type { SideQuestion, Storage } from '../storage/db.js';
+import { buildSlashCatalog, rememberSlashCatalog, withUsage, type SlashCmdInfo } from './slash-commands.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -53,6 +54,11 @@ class AsyncQueue<T> implements AsyncIterable<T> {
 
 export type DispatchEvent =
   | { ev: 'init'; sessionId: string; model: string }
+  /**
+   * 本会话可用的斜杠命令目录(派发输入框的联想面板)。init 之后异步发一次,
+   * 之后 CLI 每次 commands_changed 再整份重发 —— 语义是 REPLACE,不是增量。
+   */
+  | { ev: 'commands'; cmds: SlashCmdInfo[]; uses?: Record<string, number> }
   | { ev: 'status'; state: 'working' | 'awaiting-permission' | 'idle' | 'ended'; detail?: string }
   | { ev: 'delta'; text: string }
   /**
@@ -83,6 +89,10 @@ export type DispatchEvent =
   | { ev: 'forked'; from: string; to: string }
   | { ev: 'model-changed'; model: string }
   | { ev: 'compact'; trigger: 'manual' | 'auto'; preTokens: number; postTokens?: number }
+  /** 旁路提问(/btw):三段式,答案落面板与自有库,永不进主对话 items */
+  | { ev: 'btw-start'; requestId: string; question: string }
+  | { ev: 'btw-result'; requestId: string; record: SideQuestion }
+  | { ev: 'btw-error'; requestId: string; question: string; message: string }
   | { ev: 'error'; message: string };
 
 /** 上下文窗口兜底值(200K)。真实值随模型而变(如 claude-opus-5[1m] 为 1M),
@@ -109,6 +119,14 @@ export interface DispatchOpts {
   name?: string;
 }
 
+/** sdk.mjs 0.3.258 实装但 sdk.d.ts 未声明的方法:只描述我们用到的形状 */
+interface SideQuestionCapable {
+  askSideQuestion?: (
+    question: string,
+    opts?: { signal?: AbortSignal },
+  ) => Promise<{ response: string; synthetic: boolean } | null>;
+}
+
 const EFFORT_LEVELS: readonly string[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
 /** 外部输入(WS 消息 / REST body)转 EffortLevel:非法值一律当未指定,不让脏值传进 SDK */
@@ -127,7 +145,19 @@ interface Pending {
 export class DispatchSession {
   readonly id = randomUUID();
   sessionId: string | null = null;
+  /**
+   * 接回(attach)用的回放缓冲。三条规则让它不再把早期用户回显裁掉(2026-09-10 实测:一个 4 轮会话
+   * 塞了 1849 条 delta,撞上 2000 上限后只剩最后一轮的 user-echo,⌘⇧O 目录只列 1 轮):
+   * 1. 连续的 delta / thinking-delta 合并成一条(回放只要终态形状,不要逐 token 的流);
+   * 2. 超限时裁到下一条 user-echo 为止,缓冲永远从一轮的开头起算;
+   * 3. 记下缓冲起点时间 replayBefore,被裁掉的部分由前端从会话 jsonl 补齐。
+   */
   readonly events: DispatchEvent[] = [];
+  /** 与 events 平行:每条事件入缓冲的时刻 */
+  private eventAt: number[] = [];
+  /** 回放缓冲的起点:缓冲之前的对话要从 jsonl 补。未裁剪前 = 进程启动时间 */
+  replayBefore: number;
+  static REPLAY_CAP = 2000;
   private listeners = new Set<(e: DispatchEvent) => void>();
   private input = new AsyncQueue<SDKUserMessage>();
   private q: Query | null = null;
@@ -148,12 +178,23 @@ export class DispatchSession {
   activity: string | undefined;
   /** SDK 子进程 stderr 尾部环形缓冲:进程异常退出时是唯一的真实报错来源 */
   private stderrTail: string[] = [];
+  /** 本会话的斜杠命令目录;attach 时随回放一起交给前端,免得接回会话后面板空一轮 */
+  commands: SlashCmdInfo[] = [];
+  /** 命令使用频率(含璇玑内置命令),前端给自己那份写死的内置表贴次数用 */
+  commandUses: Record<string, number> = {};
+  /** init 报告的「UX 绑死在终端」命令名,commands_changed 重算时要沿用同一份 */
+  private terminalOnlyCommands: string[] = [];
   /** 顶层轮次是否已收到 result:决定 background_tasks_changed 到达时要不要压制/恢复 idle */
   private turnEnded = false;
   /**
-   * SDK 权威信号(system/background_tasks_changed,replace 语义)里存活的后台任务
+   * SDK 权威信号(system/background_tasks_changed,replace 语义)里存活的**用户级**后台任务
    * (Agent run_in_background 探索子代理、Ctrl+B 转后台的 Bash 等)。顶层轮次结束时若这里非空,
    * 说明还有后台工作在跑,不能把看板打成「空闲」掩盖掉——不靠猜测工具名/完成时机,直接读 SDK 的权威集合。
+   *
+   * 注意这里存的是过滤掉 `ambient` 之后的集合:CLI 自己起的杂务任务(skip_transcript 的内务任务、
+   * Artifact 发布后自动挂上的 live-update watcher)也走同一条信号,但它们不是用户工作,
+   * SDK 明确要求 host 不要把它们计进活动指示器(见 SDKBackgroundTasksChangedMessage.ambient)。
+   * 不过滤的话,一个发布过 Artifact 的会话会因为那条常驻 watcher 永远停在「运行中」。
    */
   private backgroundTasks: { task_id: string; task_type: string; description: string }[] = [];
   /** 本会话实际的上下文窗口大小(token)。首个 result 到达前用兜底值,之后以 SDK 上报的为准 */
@@ -166,6 +207,7 @@ export class DispatchSession {
   constructor(storage: Storage, opts: DispatchOpts) {
     this.storage = storage;
     this.cwd = opts.cwd;
+    this.replayBefore = this.startedAt;
     this.name = opts.name ?? '新会话';
     this.resumeFrom = opts.resume ?? null;
     this.fork = opts.fork ?? false;
@@ -198,8 +240,17 @@ export class DispatchSession {
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         // 与终端一致的 user 级 skills / MCP / CLAUDE.md(含项目级)
         settingSources: ['user', 'project', 'local'],
-        // 标记「璇玑派发」身份:配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)
-        env: { ...process.env, XUANJI_DISPATCH: '1' },
+        /**
+         * XUANJI_DISPATCH:标记「璇玑派发」身份,配合项目 CLAUDE.md 的防自斩规则(派发会话禁止重启宿主后端)。
+         *
+         * CLAUDE_CODE_ARTIFACT:开启 Artifact 工具(把本地 html 发布成 claude.ai 托管页)。
+         * CLI 对入口做了门控 —— 入口为 sdk-ts/sdk-py/sdk-cli(含 `claude -p`)或 mcp 时默认不注册该工具,
+         * 只有交互式终端才有(/config 的 Artifacts 行);判定同时留了本变量作为逃生口。
+         * 璇玑走 SDK query() 正属被门控的入口,不设此变量则派发会话拿不到 Artifact,与用户终端行为不一致。
+         * 注意另外两个同名近似开关对此无效:`enableArtifact` 设置项管的是「功能可用之后」的开关,
+         * CLAUDE_CODE_ARTIFACT_TOOLSET 管的是 comments/resolve 子工具集。
+         */
+        env: { ...process.env, XUANJI_DISPATCH: '1', CLAUDE_CODE_ARTIFACT: '1' },
         stderr: (data: string) => {
           for (const line of data.split('\n')) {
             const t = line.trim();
@@ -232,9 +283,36 @@ export class DispatchSession {
     if (this.sessionId && (e.ev === 'status' || e.ev === 'result' || e.ev === 'error')) {
       this.storage.updateDispatchState(this.sessionId, this.state, this.lastOutputAt ?? undefined, this.activity);
     }
-    this.events.push(e);
-    if (this.events.length > 2000) this.events.splice(0, this.events.length - 2000);
+    this.buffer(e);
     for (const l of this.listeners) l(e);
+  }
+
+  private buffer(e: DispatchEvent) {
+    const last = this.events[this.events.length - 1];
+    if ((e.ev === 'delta' || e.ev === 'thinking-delta') && last?.ev === e.ev) {
+      this.events[this.events.length - 1] = { ev: e.ev, text: last.text + e.text };
+      return;
+    }
+    this.events.push(e);
+    this.eventAt.push(Date.now());
+    const cap = DispatchSession.REPLAY_CAP;
+    if (this.events.length <= cap) return;
+    // 裁到下一轮开头:从 (超出量) 位置起找第一条 user-echo;找不到(单轮就超限)退化为按量裁
+    let cut = this.events.length - cap;
+    const nextTurn = this.events.findIndex((x, i) => i >= cut && x.ev === 'user-echo');
+    if (nextTurn !== -1) cut = nextTurn;
+    this.events.splice(0, cut);
+    this.eventAt.splice(0, cut);
+    this.replayBefore = this.eventAt[0] ?? Date.now();
+  }
+
+  /**
+   * 回放缓冲的快照:每条事件附上它**当初发生**的时刻(at)。
+   * attach 回放走这里而不是裸 events —— 前端收到回放时用接收时刻当消息时间的话,
+   * 接回/刷新后整个会话的时间戳会被抹成同一个「刚刚」(2026-09-17 实测:40 轮全是 17:44)。
+   */
+  replaySnapshot(): { e: DispatchEvent; at: number }[] {
+    return this.events.map((e, i) => ({ e, at: this.eventAt[i] ?? this.startedAt }));
   }
 
   subscribe(l: (e: DispatchEvent) => void): () => void {
@@ -256,10 +334,22 @@ export class DispatchSession {
               }
               this.emit({ ev: 'status', state: 'working' });
               this.refreshChips();
+              this.refreshCommands((msg as { terminal_slash_commands?: string[] }).terminal_slash_commands ?? []);
+            } else if (msg.subtype === 'commands_changed') {
+              // 会话中途技能变化(如 agent 走进带 .claude/skills 的子目录)。整份替换,不做合并。
+              const base = buildSlashCatalog(
+                (msg as { commands?: { name?: unknown }[] }).commands ?? [],
+                this.terminalOnlyCommands,
+              );
+              this.publishCatalog(base);
             } else if (msg.subtype === 'background_tasks_changed') {
-              // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle
-              this.backgroundTasks =
-                (msg as { tasks?: { task_id: string; task_type: string; description: string }[] }).tasks ?? [];
+              // 存活后台任务的全量快照(REPLACE 语义):顶层轮次已结束时据此决定是否压制 idle。
+              // ambient(CLI 内务任务 / Artifact live-update watcher)按 SDK 要求剔除,它们不是用户工作。
+              this.backgroundTasks = (
+                (msg as {
+                  tasks?: { task_id: string; task_type: string; description: string; ambient?: boolean }[];
+                }).tasks ?? []
+              ).filter((t) => !t.ambient);
               this.applyBackgroundState();
             } else if (msg.subtype === 'status' && msg.status === 'compacting') {
               // /compact(用户手动输入,或 SDK 到阈值自动触发):压缩期间无 delta/assistant 事件,
@@ -369,6 +459,8 @@ export class DispatchSession {
               this.backgroundTasks.length > 0
                 ? `回合完成,${this.backgroundTasks.length} 个后台任务仍在执行`
                 : '回合完成,等待你的下一步指示',
+              'dispatched',
+              'turnEnd',
             );
             break;
           }
@@ -420,6 +512,46 @@ export class DispatchSession {
     } else {
       this.emit({ ev: 'status', state: 'idle' });
     }
+  }
+
+  /**
+   * 两段式下发目录:先把目录本身发出去(面板立刻能用),使用频率算完再整份重发一次。
+   * 频率统计要扫全机会话 jsonl,实测首次约 6s(443 次 /model 那台机器) —— 让面板等这 6s
+   * 是不可接受的,而 commands 事件本就是 REPLACE 语义,重发一次天然成立。
+   * 缓存命中时第二次几乎立刻到达,用户察觉不到两段。
+   */
+  private publishCatalog(base: SlashCmdInfo[]) {
+    if (!base.length) return;
+    rememberSlashCatalog(base);
+    this.commands = base;
+    this.emit({ ev: 'commands', cmds: base });
+    void withUsage(this.storage, base)
+      .then(({ cmds, uses }) => {
+        // 期间可能已被更新的目录取代(commands_changed),别用旧的盖掉新的
+        if (this.commands !== base) return;
+        rememberSlashCatalog(cmds);
+        this.commands = cmds;
+        this.commandUses = uses;
+        this.emit({ ev: 'commands', cmds, uses });
+      })
+      .catch(() => {});
+  }
+
+  /**
+   * 拉取本会话可用的斜杠命令目录。init 只带名字数组,描述与参数提示要向 query 要,
+   * 故走 supportedCommands()。异步进行,拿不到就只是面板少一组候选,不影响会话本身。
+   */
+  private refreshCommands(terminalOnly: string[]) {
+    this.terminalOnlyCommands = terminalOnly;
+    const q = this.q;
+    // 方法不存在(旧 SDK)时直接跳过:这里是在消息泵的 for-await 里同步调用的,
+    // 让 TypeError 抛出去会打断整条流、把会话打成 ended —— 面板少一组候选,
+    // 绝不能换来会话本身挂掉。
+    if (typeof q?.supportedCommands !== 'function') return;
+    void q
+      .supportedCommands()
+      .then((raw) => this.publishCatalog(buildSlashCatalog(raw, this.terminalOnlyCommands)))
+      .catch(() => {});
   }
 
   /**
@@ -497,7 +629,12 @@ export class DispatchSession {
       }));
       this.emit({ ev: 'status', state: 'awaiting-permission', detail: '回答 Claude 的提问' });
       this.emit({ ev: 'question', requestId, questions });
-      notifyMac(this.name, `Claude 有问题问你:${questions[0]?.question.slice(0, 40) ?? ''}`);
+      notifyMac(
+        this.name,
+        `Claude 有问题问你:${questions[0]?.question.slice(0, 40) ?? ''}`,
+        'dispatched',
+        'blocked',
+      );
       return new Promise<PermissionResult>((resolve) => {
         this.pending.set(requestId, { resolve, toolName, input });
       });
@@ -511,7 +648,7 @@ export class DispatchSession {
       input: compact(input),
       hasSuggestions: !!suggestions?.length,
     });
-    notifyMac(this.name, `等待审批:${toolName}`);
+    notifyMac(this.name, `等待审批:${toolName}`, 'dispatched', 'blocked');
     return new Promise<PermissionResult>((resolve) => {
       this.pending.set(requestId, { resolve, toolName, input, suggestions });
     });
@@ -574,6 +711,64 @@ export class DispatchSession {
 
   async interrupt() {
     await this.q?.interrupt().catch(() => {});
+  }
+
+  // ---------- 旁路提问(/btw) ----------
+
+  /** 进行中的旁路提问(同一时刻最多一个,与 CLI 面板语义一致);AbortController 供取消 */
+  private sideQuestion: { requestId: string; ac: AbortController } | null = null;
+
+  get sideQuestionInFlight(): boolean {
+    return this.sideQuestion !== null;
+  }
+
+  /**
+   * 旁路提问:复用本会话的 SDK 句柄发一次 side_question 控制请求 —— CLI 的 /btw 面板走的就是这条协议
+   * (`askSideQuestion` 在 sdk.mjs 0.3.258 里实装、sdk.d.ts 未声明,故本地补一个最小类型)。
+   * 模型拿到主对话全部历史 + 问题,单次直答、不许用工具;答案**不写回主对话**、不占它的 context,
+   * 主对话正在流式输出时也能并行问(CLI 内部就是这么做的)。答案落自有库,由 btw-result 带给前端。
+   */
+  async askSideQuestion(question: string): Promise<void> {
+    const requestId = randomUUID();
+    if (this.sideQuestion) {
+      this.emit({ ev: 'btw-error', requestId, question, message: '上一条旁路提问还没答完,等它回来或先取消' });
+      return;
+    }
+    if (!this.q || !this.sessionId) {
+      this.emit({ ev: 'btw-error', requestId, question, message: '会话尚未就绪,发出第一条消息后再问' });
+      return;
+    }
+    const ac = new AbortController();
+    this.sideQuestion = { requestId, ac };
+    this.emit({ ev: 'btw-start', requestId, question });
+    try {
+      const q = this.q as unknown as SideQuestionCapable;
+      if (typeof q.askSideQuestion !== 'function') {
+        throw new Error('当前 Agent SDK 不支持旁路提问(需要 ≥ 0.3.258)');
+      }
+      const r = await q.askSideQuestion(question, { signal: ac.signal });
+      if (r === null) {
+        this.emit({ ev: 'btw-error', requestId, question, message: '已取消' });
+        return;
+      }
+      const record = this.storage.recordSideQuestion({
+        sessionId: this.sessionId,
+        question,
+        answer: r.response,
+        synthetic: r.synthetic,
+        route: 'direct',
+      });
+      this.emit({ ev: 'btw-result', requestId, record });
+    } catch (e) {
+      const message = ac.signal.aborted ? '已取消' : e instanceof Error ? e.message : String(e);
+      this.emit({ ev: 'btw-error', requestId, question, message });
+    } finally {
+      this.sideQuestion = null;
+    }
+  }
+
+  cancelSideQuestion() {
+    this.sideQuestion?.ac.abort();
   }
 
   /** 中途切换模型(SDK setModel,下一回合生效) */

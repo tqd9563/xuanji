@@ -1,6 +1,8 @@
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildMatcher, countLabel, matchRanges } from '@/lib/find';
 import { cn } from '@/lib/utils';
+import { matchKey } from '@/lib/keymap';
+import { useLocalPrefs } from '@/lib/prefs';
 
 /** 会话内查找(⌘F):在一个滚动容器里查当前已渲染的文本,仿浏览器 find-in-page。
  *
@@ -77,11 +79,17 @@ export function useFindInPage(scopeRef: RefObject<HTMLElement>, enabled = true) 
   }, []);
   const hide = useCallback(() => setOpen(false), []);
 
+  const keymap = useLocalPrefs().keymap;
+
+  const keymapRef = useRef(keymap);
+
+  keymapRef.current = keymap;
+
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      // ⌘F / Ctrl+F:输入框里也放行(与浏览器原生查找的手感一致)
-      if ((e.key === 'f' || e.key === 'F') && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+      // 会话内查找(默认 ⌘F,可在设置里改键):输入框里也放行,与浏览器原生查找的手感一致
+      if (matchKey(e, keymapRef.current['sessions.find'])) {
         // 视图切换用 display:none,所有视图始终挂载:必须按可见性判断该由谁接管 ⌘F,
         // 否则藏起来的派发页会把会话看板的 ⌘F 抢走(与 isTypingTarget 同一套判据)。
         if (!scopeRef.current || scopeRef.current.getClientRects().length === 0) return;

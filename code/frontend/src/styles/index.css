@@ -13,11 +13,17 @@
 :root {
   /* 面 */
   --bg:        oklch(0.145 0.006 120);
-  --surface:   oklch(0.185 0.008 120);
+  /* 面板基色的不透明原值。玻璃档会把 --surface 重定义成半透明,凡是「必须挡住壁纸」
+     的底色(弹出菜单、模态、状态标记)都要混进这个值,而不是混进 --surface。 */
+  --surface-opaque: oklch(0.185 0.008 120);
+  --surface:   var(--surface-opaque);
   --surface-2: oklch(0.165 0.007 120);
   --hover:     oklch(0.215 0.009 120);
   --line:      oklch(0.27 0.010 120);
   --line-soft: oklch(0.225 0.009 120);
+  /* 代码底色:输入框内代码区间的填充,比 composer 所在的 surface 亮一档半;
+     与消息区 .md code「代码块比周围底浅一档」同一语汇 */
+  --code-tint: oklch(0.265 0.011 120);
 
   /* 墨 */
   --ink:   oklch(0.93 0.008 110);
@@ -44,6 +50,11 @@
   --tool-skill: oklch(0.78 0.12 345);  /* Skill / SlashCommand */
   --tool-exec:  oklch(0.78 0.13 180);  /* Bash / BashOutput / KillShell */
   --tool-write: oklch(0.78 0.12 55);   /* Edit / Write / NotebookEdit */
+
+  /* 平台品牌色:只用于 PR/MR 卡片标识代码托管平台,不参与状态语义。
+     取官方色相、按深色底提亮到可读明度(GitLab #FC6D26 / GitHub #8250DF) */
+  --pr-gitlab: oklch(0.75 0.165 45);
+  --pr-github: oklch(0.74 0.145 296);
   /* 读取/检索复用 --blue,编排/规划复用 --violet(与派发状态行的模型紫同族) */
 
   --tint-jade:  color-mix(in oklab, var(--jade) 13%, transparent);
@@ -90,7 +101,10 @@ input, select, textarea { font: inherit; color: var(--ink); }
 ::placeholder { color: var(--muted); opacity: 1; }
 
 /* ============ 布局骨架 ============ */
-.app { display: grid; grid-template-columns: 226px 1fr; min-height: 100vh; }
+/* 侧栏宽度用 rem 而非固定 px:正文字号设成「大」时整站 rem 一起放大,
+   容器不跟着放大就会把侧栏底部的设置入口挤到竖排换行(2026-09-03 用户实测)。
+   14.125rem 在标准字号(16px)下正好是原来的 226px,默认观感一字不差。 */
+.app { display: grid; grid-template-columns: 14.125rem 1fr; min-height: 100vh; }
 
 .sidebar {
   background: var(--surface-2);
@@ -443,6 +457,11 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* ============ 会话看板 ============ */
 /* 看板锁定一个视口高:列头常驻可见(数量全貌是重要信号),卡片在列内滚动 */
 .board { display: grid; grid-template-columns: repeat(4, minmax(252px, 1fr)); gap: 14px; overflow-x: auto; padding-bottom: 8px; height: calc(100vh - 196px); min-height: 340px; }
+/* 过滤条在场时,看板高度改由 flex 分配而非再减一个魔数:项目多到 chip 换行(8+ 个项目
+   实测就会)时,减固定值会让看板底部溢出视口。外壳锁一个视口高,过滤条占自然高度,
+   看板吃掉剩下的。 */
+.board-wrap { display: flex; flex-direction: column; height: calc(100vh - 196px); min-height: 340px; }
+.board-wrap .board { flex: 1; height: auto; min-height: 0; }
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 /* flex:1 —— 列体撑满整列高度。不撑满时它只有内容那么高,空闲列一两张卡就意味着拖拽落点
    只是顶部一条窄带,拖到列中段接不住(2026-08-05 实测:已完成列卡多能接,空闲列接不到)。 */
@@ -486,6 +505,43 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .scard .unarchive:hover { color: var(--jade); }
 /* 拖拽处置:原位卡留半透明占位,跟手的那张由 DragOverlay 画;落点列悬停时显出接纳边框 */
 .scard.dragging { opacity: 0.4; cursor: grabbing; border-style: dashed; border-color: var(--jade); }
+
+/* ---- 项目过滤:非命中卡淡出而非移除 ----
+   移除会让列长随过滤缩水,而列长在本产品里是「积压量」的信号(验收中列刻意不折叠即为此)。
+   留位淡出后,收窄的是注意力、不是事实。暗卡同时退出指针与键盘两个输入通道。 */
+.scard.pf-dim { opacity: 0.22; pointer-events: none; }
+.scard.pf-dim, .scard.pf-dim * { transition: none; }
+
+/* ============ 项目过滤条(会话看板) ============ */
+/* 过滤是「聚焦」不是「导航」:单行、紧贴看板上沿,不做侧栏也不做下拉 */
+.proj-filter { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+/* 这行标签是全页少数直接坐在 body(壁纸)上的小字,用 --muted 而非更暗的 --faint:
+   开壁纸时 faint 实测只有 2.87:1,muted 才回到可读区间 */
+.proj-filter .pf-label { font-size: 0.75rem; color: var(--muted); flex: none; }
+/* --pf-base 固定取不透明的 surface-2 原色,不走 var(--surface-2):chip 是控件不是外壳表面
+   (同 .dd-menu 的理由)。开壁纸时 body 转透明,任何「往 transparent 里混」的底色都会把壁纸
+   漏进这行 0.75rem 小字背后——选中态实测掉到 1.44:1。混进不透明基色则三种模式一律 7:1 以上。 */
+.pf-chip {
+  --pf-base: oklch(0.165 0.007 120);
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 0.75rem; font-weight: 500;
+  padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  color: var(--muted); background: var(--pf-base); border: 1px solid var(--line-soft);
+  transition: color 150ms var(--ease), border-color 150ms var(--ease), background 150ms var(--ease);
+}
+.pf-chip:hover { border-color: var(--muted); color: var(--ink); }
+.pf-chip:focus-visible { outline: 2px solid var(--jade); outline-offset: 2px; }
+/* 选中态:项目分类色经 --pc 注入,tint 底 + 同色描边——与卡上 .proj-chip 同一套词汇 */
+.pf-chip.on { color: var(--pc); background: color-mix(in oklab, var(--pc) 14%, var(--pf-base)); border-color: color-mix(in oklab, var(--pc) 45%, transparent); }
+.pf-chip .pf-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pc); flex: none; }
+.pf-chip .pf-n { font-size: 0.6875rem; color: var(--faint); }
+.pf-chip.on .pf-n { color: color-mix(in oklab, var(--pc) 70%, var(--ink)); }
+/* 待验收角标:琥珀专表「等你处理」,与 chip 的分类色分守两套词汇 */
+.pf-chip .pf-warn { font-size: 0.6875rem; font-weight: 650; color: oklch(0.24 0.05 85); background: var(--amber); border-radius: 999px; padding: 0 6px; flex: none; }
+.pf-chip.pf-all.on { color: var(--ink); background: oklch(0.215 0.009 120); border-color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .pf-chip { transition: none; }
+}
 /* 跟手卡:抬起来的质感(阴影 + 玉色描边),不再被相邻列或列体滚动容器盖住 */
 .drag-ghost .scard { cursor: grabbing; border-color: var(--jade); box-shadow: 0 12px 28px rgb(0 0 0 / 0.45); margin-bottom: 0; }
 .col-body.drop-over {
@@ -668,6 +724,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   color: var(--faint); margin-left: 8px;
   font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
 }
+/* 本轮耗时:紧跟 .msg-ts 同排同字号——「多久」与「何时」是同类信息,不另起一行。
+   .msg-ts 本身保持不变,这里只是它右侧的同级 span。 */
+.xj-turn-dur {
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 400;
+  color: var(--faint); margin-left: 6px;
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.xj-turn-dur::before { content: '·'; margin-right: 6px; opacity: 0.55; }
+/* 长回合(≥5min)上调一级色阶:翻长会话时一眼能挑出重活那几轮(原型同款) */
+.xj-turn-dur.long { color: var(--muted); }
 /* 跨天分隔线:时间只显示 HH:MM,日期由分隔线交代(隔夜后台任务、多天续接的会话
    靠它还原时间脉络)。会话首条消息前也插一条,交代这段对话发生在哪天。 */
 .day-sep {
@@ -684,6 +750,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .replay-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .replay-msg .who.u { color: var(--jade); }
 .replay-msg .body { font-size: 0.8125rem; color: var(--ink); max-width: 68ch; text-wrap: pretty; }
+/* 用户消息是纯文本(assistant 走 .md 由 markdown 排版),保留原始换行 */
+.replay-msg .body:not(.md) { white-space: pre-wrap; }
 .toolcard {
   border: 1px solid var(--line-soft); border-radius: var(--r-s);
   background: var(--surface); margin: 8px 0; overflow: hidden; max-width: 68ch;
@@ -776,6 +844,38 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   border-top: 1px dashed var(--line); padding: 10px 12px;
   font-size: 0.8125rem; color: var(--muted); max-height: 480px; overflow-y: auto;
 }
+
+/* PR/MR 链接卡片:与 .compactcard 同为元事件条(小字、muted、非消息层级),
+   但它可点,故用实线边框区分于虚线的压缩卡。平台色只给 GitLab/GitHub 两家品牌用,
+   不进状态色词汇表 —— 认不出的自建实例走 other,保持中性 */
+.prcard {
+  display: inline-flex; align-items: center; gap: 8px;
+  max-width: min(68ch, 100%); margin: 10px 0; padding: 6px 12px 6px 10px;
+  border: 1px solid var(--line-soft); border-radius: var(--r-s);
+  background: var(--surface-2);
+  font-size: 0.75rem; color: var(--muted); text-decoration: none;
+  transition: border-color 150ms var(--ease), background 150ms var(--ease), color 150ms var(--ease);
+}
+.prcard .pr-ico { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.prcard .pr-ico svg { width: 100%; height: 100%; display: block; }
+.prcard .pr-num { flex: none; font-family: var(--mono); color: var(--ink); }
+.prcard .pr-repo {
+  flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--mono); font-size: 0.71875rem; color: var(--muted);
+}
+.prcard .pr-meta { flex: none; color: var(--faint); }
+.prcard .pr-go { flex: none; color: var(--faint); opacity: 0; transition: opacity 150ms var(--ease); }
+
+.prcard[data-platform='gitlab'] .pr-ico, .prcard[data-platform='gitlab'] .pr-num { color: var(--pr-gitlab); }
+.prcard[data-platform='github'] .pr-ico, .prcard[data-platform='github'] .pr-num { color: var(--pr-github); }
+
+.prcard:hover { border-color: color-mix(in oklab, var(--ink) 22%, var(--line)); background: var(--hover); color: var(--ink); }
+.prcard:hover .pr-go { opacity: 1; color: var(--muted); }
+.prcard[data-platform='gitlab']:hover { border-color: color-mix(in oklab, var(--pr-gitlab) 42%, var(--line)); }
+.prcard[data-platform='github']:hover { border-color: color-mix(in oklab, var(--pr-github) 42%, var(--line)); }
+.prcard:focus-visible .pr-go { opacity: 1; }
+@media (hover: none) { .prcard .pr-go { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .prcard, .prcard .pr-go { transition: none; } }
 
 .raw-event {
   border: 1px dashed var(--line); border-radius: var(--r-s); padding: 8px 12px; margin: 8px 0;
@@ -887,7 +987,16 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .sess-ctx .sc-title.sc-named { color: oklch(0.82 0.155 var(--ph)); text-shadow: 0 0 12px oklch(0.82 0.155 var(--ph) / 0.4); }
 .sess-ctx .sc-title.sc-unnamed { color: var(--faint); font-weight: 400; }
 .sess-ctx .sc-id { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; }
-.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; }
+.cs-state { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-left: auto; font-variant-numeric: tabular-nums; }
+/* 状态文字变长(「已用 1m07s」「本轮 2m09s」)后整行会挤:让会话标识先让位——
+   它有 ellipsis 兜底(截掉的是能从别处看到的会话名),而状态里的数字截一半就没意义了。
+   cs-state 不参与收缩,收缩压力全部落到 sess-ctx;空间够时两者都不变。 */
+.chat-status .sess-ctx { flex: 0 20 auto; }
+/* 状态条不参与收缩:加上「本轮 N」后整行只差几像素就会把成本截成 $0…,而截一半的数字
+   比截掉的会话名有害得多(会话名本就带 ellipsis,且能从卡片/标题栏看到)。
+   放不下时的兜底不在这里:≤960px 由 .chat-status 的 flex-wrap 折行,≤430px 由 overflow-x 横滑。 */
+.chat-status .cs-state { flex: none; }
+.cs-state .cs-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); flex: none; transition: background 150ms var(--ease); }
 .cs-state.think .cs-dot { background: var(--jade); animation: pulse 1.2s ease-in-out infinite; }
 .cs-state.wait .cs-dot { background: var(--amber); animation: pulse 1.2s ease-in-out infinite; }
@@ -979,7 +1088,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    (含若干 Android 内嵌 WebView)下会拒绝收缩到小于内容自然高度,导致 flex:1 + overflow-y:auto
    形同虚设——内容直接把父容器撑高,溢出屏幕(2026-07-23 真机反馈:嵌入式浏览器里发送按钮被顶到
    底部导航条后面看不清,根因正是这里,而非某个具体尺寸算错)。 */
-.chat { flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+/* position:relative —— 轮次导航按 offsetTop 量当前轮,offsetParent 必须是这个滚动容器本身 */
+.chat { position: relative; flex: 1; min-height: 0; overflow-y: auto; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
 .chat-msg { margin-bottom: 20px; }
 .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
 .chat-msg.user .who { color: var(--jade); }
@@ -990,6 +1100,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .chat-msg.user .body {
   background: var(--tint-jade); border-radius: var(--r-m);
   padding: 10px 14px; display: inline-block; max-width: 72%;
+  /* pre-wrap:用户输入的多行文本原样换行(复制出来也保留换行),而非被折叠成一行 */
+  white-space: pre-wrap;
 }
 .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
 .typing i { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: pulse 1.2s infinite; }
@@ -1056,12 +1168,99 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    触顶后转输入框内部滚动。不给 height 加 transition——逐键动画会抖,瞬时跟手才是输入框手感。 */
 .composer textarea {
   width: 100%; background: none; border: none; resize: none;
-  padding: 12px 16px 4px; min-height: 56px; font-size: 0.875rem; line-height: 1.5;
+  min-height: 56px;
   max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
   overflow-y: auto;
   scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .composer textarea:focus { outline: none; }
+
+/* ============ 斜杠命令联想面板 ============
+   锚在输入框上方,沿用 .dd-menu 的浮层词汇:不透明 surface + line 边框 + 8px 投影。
+   与 .dd-menu 同理,玻璃档下不跟随变半透明——浮在前景内容之上的弹层透出底下的字会没法选。 */
+.composer { position: relative; }
+.xj-slash {
+  position: absolute; left: 0; right: 0; bottom: calc(100% + 6px);
+  background: var(--surface-opaque); border: 1px solid var(--line); border-radius: var(--r-m);
+  z-index: var(--z-dropdown); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+  overflow: hidden;
+}
+.xj-slash-list { max-height: 312px; overflow-y: auto; padding: 4px 4px 6px; }
+.xj-slash-item {
+  display: grid; grid-template-columns: auto 1fr; column-gap: 10px; align-items: baseline;
+  width: 100%; text-align: left; background: none; border: none; cursor: pointer;
+  padding: 6px 10px; border-radius: var(--r-s); transition: background 150ms var(--ease);
+}
+.xj-slash-item:hover { background: var(--hover); }
+.xj-slash-item.sel { background: var(--tint-jade); }
+.xj-slash-name { font-family: var(--mono); font-size: 0.75rem; white-space: nowrap; color: var(--muted); }
+/* CLI 同款:只把已输入的前缀提亮加粗,其余字淡;不画下划线 */
+.xj-slash-name mark { background: none; color: var(--ink); font-weight: 700; }
+.xj-slash-item.sel .xj-slash-name, .xj-slash-item.sel .xj-slash-name mark { color: var(--jade); }
+.xj-slash-name .arg { color: var(--faint); font-weight: 400; margin-left: 6px; }
+.xj-slash-desc {
+  min-width: 0; font-size: 0.6875rem; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.xj-slash-item.sel .xj-slash-desc { color: var(--ink); }
+/* 输入框里完整命中的命令词。只变色不加粗:镜像层字宽必须与 textarea 逐字一致,
+   粗体会让 caret 压在命令末字上(2026-09-16 原型实测)。 */
+.ta-wrap .ta-mirror .tk-cmd { color: var(--jade); }
+
+/* ============ 输入框代码语法高亮 ============
+   textarea 文字设为透明、只留 caret,底下叠一层 .ta-mirror 用完全相同的排版重绘同一段文本,
+   只给代码区间上底色(解析见 lib/composer-code.ts)。字体不切等宽:切了字宽变化,镜像与
+   textarea 必然逐字错位,代码的辨识度交给底色。 */
+.ta-wrap { position: relative; }
+/* 镜像与 textarea 必须共享的一切排版属性 —— 改任一处必须同步改另一处,否则字不对位 */
+.ta-wrap textarea,
+.ta-wrap .ta-mirror {
+  font-family: inherit; font-size: 0.875rem; line-height: 1.5;
+  padding: 12px 16px 4px;
+  white-space: pre-wrap; word-break: break-word;
+  letter-spacing: normal; tab-size: 4;
+}
+/* display: block 不可省:textarea 默认 inline-block 按 baseline 对齐,会在 .ta-wrap 底部多出约 6px
+   行框余量;镜像 inset:0 铺满整个 .ta-wrap 就比 textarea 高 6px,两者可滚动范围不等——触顶后
+   textarea 滚到底时镜像还差 6px 没滚到,文字整体低于 caret/IME 下划线(2026-09-15 用户实测:
+   剪切再粘贴长文本,caret 与文字错位、拼音下划线画成删除线)。 */
+.ta-wrap textarea { display: block; position: relative; z-index: 1; color: transparent; caret-color: var(--ink); }
+.ta-wrap textarea::selection { background: color-mix(in oklab, var(--jade) 26%, transparent); }
+.ta-wrap .ta-mirror {
+  position: absolute; inset: 0; overflow: hidden; pointer-events: none;
+  color: var(--ink); border-radius: var(--r-m);
+}
+.ta-wrap .ta-mirror .ph { color: var(--faint); } /* 空输入的占位文案(textarea 自身 placeholder 被透明色吃掉) */
+/* 行内代码 `x`:与消息区 .md code 同一层语汇 —— 比所在面亮一档 + 一条细边。
+   描边用 inset shadow 而非 border/padding:零布局影响,字形位置不动。 */
+.tk-inline {
+  background: var(--code-tint); box-shadow: inset 0 0 0 1px var(--line);
+  border-radius: 4px; color: var(--ink);
+}
+/* 代码块正文:与行内同底,逐行连成一片以示「整段」 */
+.tk-fence {
+  background: var(--code-tint); box-shadow: inset 0 0 0 1px var(--line-soft);
+  border-radius: 3px; color: var(--ink);
+}
+/* 围栏标记 ``` 与语言名:是语法不是内容,退到 faint/玉暗 */
+.tk-mark { color: var(--faint); }
+.tk-lang { color: var(--jade-dim); }
+/* 未闭合的围栏:琥珀描边 —— 本产品里琥珀 = 「等你处理」,这里等的是一条收尾 ``` */
+.tk-open { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--amber) 55%, transparent); border-radius: 4px; }
+/* 底栏 hint 在围栏内换词:玉点提示 Enter 语义已切换,是状态不是装饰 */
+.composer .hint.in-fence { color: var(--jade-dim); }
+.composer .hint.in-fence::before {
+  content: ''; display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--jade); margin-right: 6px; vertical-align: middle;
+}
+/* 语法提示:只在输入框聚焦时现身,不常驻抢注意力 */
+.composer .code-help {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none;
+  border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px 7px;
+  opacity: 0; transition: opacity 150ms var(--ease);
+}
+.composer:focus-within .code-help { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .composer .code-help { transition: none; } }
 /* 触顶渐隐:只在 .at-max 时现出,负 margin 压在输入框底部一线,不占布局高度 */
 .composer .grow-fade {
   height: 14px; margin-top: -14px; position: relative; pointer-events: none;
@@ -1072,22 +1271,6 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 @media (prefers-reduced-motion: reduce) { .composer .grow-fade { transition: none; } }
 .composer .c-bar { display: flex; align-items: center; gap: 12px; padding: 6px 10px 8px 16px; }
 .composer .hint { font-size: 0.6875rem; color: var(--faint); }
-/* ⚑ 任务总结:composer 底栏的收口入口。玉色 tint 底 + 玉字 = 与导航 active 同一「主操作」词汇,
-   与旁边 faint 灰字 hint 一眼拉开层级;不加脉冲/发光,稀缺的玉色本身就是高亮(一成玉规则内) */
-.wrapup-btn {
-  display: inline-flex; align-items: center; gap: 6px; flex: none;
-  padding: 4px 12px; border-radius: var(--r-s);
-  border: 1px solid color-mix(in oklab, var(--jade) 40%, transparent);
-  background: var(--tint-jade); color: var(--jade);
-  font-size: 0.75rem; font-weight: 600; cursor: pointer;
-  transition: background 150ms var(--ease), border-color 150ms var(--ease);
-}
-.wrapup-btn:hover:not(:disabled) { background: color-mix(in oklab, var(--jade) 22%, transparent); border-color: var(--jade); }
-.wrapup-btn:active:not(:disabled) { transform: translateY(1px); }
-.wrapup-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-.wrapup-btn .flag { font-size: 0.8125rem; line-height: 1; }
-/* 键位角标:mono 承担「机器的话」,不与按钮文字争字重 */
-.wrapup-btn .kbd { font-family: var(--mono); font-size: 0.625rem; opacity: 0.8; letter-spacing: 0.02em; }
 .composer .bg-opt { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); margin-left: auto; cursor: pointer; }
 /* 发送按钮:桌面文字常驻,移动端切图标(见「移动端」媒体查询块),二选一由 CSS 驱动而非 JS 条件渲染 */
 .send-btn-icon { display: none; }
@@ -1095,6 +1278,27 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 /* 移动端专属:会话标识挪进消息区顶部(见 Dispatch.tsx chat-sessctx-mobile),桌面恒隐藏 */
 .chat-sessctx-mobile { display: none; }
 
+/* ============================================================
+   快速提问标记:新会话未绑仓库时的显性标识,出现在状态行与空态两处。
+   命名带 xj- 项目前缀,避开 Tailwind 工具类命名空间(见 memory)。
+   底色混进 --surface-opaque(面板基色的不透明原值),而不是 var(--surface):
+   玻璃档 body.wall-glass 会把 --surface 重定义成半透明,混进去照样漏壁纸
+   (原型实测 1.16:1)。弹出菜单与设置模态用的是同一个 token。
+   ============================================================ */
+.xj-qa-pill {
+  display: inline-flex; align-items: center; gap: 5px; flex: none;
+  font-size: 0.6875rem; font-weight: 500;
+  color: var(--blue); background: color-mix(in oklab, var(--blue) 16%, var(--surface-opaque));
+  border-radius: var(--r-s); padding: 2px 7px; white-space: nowrap;
+}
+.xj-qa-pill .qa-ico { width: 12px; height: 12px; flex: none; }
+.xj-qa-badge {
+  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;
+  font-size: 0.75rem; color: var(--blue);
+  background: color-mix(in oklab, var(--blue) 14%, var(--surface-opaque));
+  border-radius: 999px; padding: 4px 12px 4px 10px;
+}
+.xj-qa-badge .qa-ico { width: 14px; height: 14px; flex: none; }
 .chat-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
 .chat-empty h2 { font-size: 1rem; margin-bottom: 6px; }
 .chat-empty p { color: var(--muted); font-size: 0.8125rem; max-width: 40em; margin-bottom: 18px; }
@@ -1505,7 +1709,7 @@ body.wall-on #wall { opacity: var(--wall-opacity, 0.4); filter: blur(var(--wall-
 /* 玻璃档:表面半透明 + backdrop 模糊。仅用户显式选择,不是默认。
    表面不透明度由 --wall-surface 驱动,surface-2 恒比 surface 低一档 */
 body.wall-glass {
-  --surface:   color-mix(in oklab, oklch(0.185 0.008 120) var(--wall-surface, 30%), transparent);
+  --surface:   color-mix(in oklab, var(--surface-opaque) var(--wall-surface, 30%), transparent);
   --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) calc(var(--wall-surface, 30%) - 6%), transparent);
 }
 body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-pop, .scard, .notice) {
@@ -1515,7 +1719,7 @@ body.wall-glass :is(.sidebar, .panel, .drawer, .composer, .chat, .toast, .wall-p
 /* .dd-menu 是浮在任意前景内容之上的弹出菜单(非静态外壳面板),不应跟随玻璃档变半透明——
    否则菜单会透出下方内容,干扰选项选择。固定用不透明的原始 surface 色,不随 --wall-surface 变化。 */
 body.wall-glass .dd-menu {
-  background: oklch(0.185 0.008 120);
+  background: var(--surface-opaque);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
 }
@@ -1531,55 +1735,160 @@ body.wall-on .statusbar {
   -webkit-backdrop-filter: none;
   transition: background 200ms var(--ease), border-color 200ms var(--ease);
 }
+/* 滚动态不能再是一条"带":任何一块整幅宽的深色底,不管边缘多软,压在壁纸上都能看出来。
+   所以垫层只留模糊 + 极淡的着色(28% → 0,纵向渐隐,同向 mask 收掉模糊的硬边界),
+   可读性主要交给 widget 文字自己的投影(静止态文字本就是裸坐在壁纸上的,证明投影足够);
+   模糊只负责把滚到下方的正文糊成一团色块,不与状态栏文字打架。
+   垫层挂 ::before 并向下多伸 14px 给淡出留行程;mask 不能加在 .statusbar 本身,会连文字一起淡掉。 */
 body.wall-on .statusbar.scrolled {
-  background: color-mix(in oklab, var(--bg) 55%, transparent);
-  border-bottom-color: var(--line-soft);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: transparent;
+  border-bottom-color: transparent;
+}
+body.wall-on .sb-item { text-shadow: 0 1px 2px rgb(0 0 0 / 0.6), 0 0 8px rgb(0 0 0 / 0.45); }
+body.wall-on .statusbar::before {
+  content: ''; position: absolute; inset: 0 0 -14px; z-index: -1; pointer-events: none;
+  opacity: 0; transition: opacity 200ms var(--ease);
+  background: linear-gradient(to bottom, color-mix(in oklab, var(--bg) 28%, transparent) 0%, transparent 100%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 45%, transparent 100%);
+}
+body.wall-on .statusbar.scrolled::before { opacity: 1; }
+
+/* ============ 设置(居中对话框,DESIGN.md「设置」组件) ============ */
+/* 入口:替代原壁纸按钮,位置/尺寸/字号与 .wall-btn 一致 */
+.stg-entry { display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; margin: -4px -8px 8px; border-radius: var(--r-s); font-size: 0.75rem; color: var(--muted); text-align: left; }
+.stg-entry:hover { background: var(--hover); color: var(--ink); }
+.stg-entry svg { width: 14px; height: 14px; flex: none; }
+/* 「设置」二字必须退出压缩:裸文本在 flex 里是可被压到一个字宽的匿名项,挤窄了会竖排 */
+.stg-entry-label { flex: none; }
+/* 状态是次要信息,空间不够时省略号截断——既不换行也不去挤压前面的标签;完整值走 title */
+.stg-entry-state { margin-left: auto; min-width: 0; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 容器:抽屉版加宽到 760(两栏需要),对话框版是 900×640 的大框,内部自己滚 */
+.drawer.stg-drawer { width: min(760px, 94vw); padding: 0; }
+/* 两栏几何收在变量里:头部要按同一组数对齐,硬编码两处迟早对不上 */
+.modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
+  width: min(900px, calc(100vw - 80px)); height: min(640px, calc(100vh - 80px)); max-height: none; overflow: hidden; display: flex; flex-direction: column; padding: 0; }
+/* 玻璃档:--surface 本身会被重定义成半透明,对话框不在 backdrop 名单里,会透出正文——按 .dd-menu 先例固定不透明 */
+body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
+
+.stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
+/* 标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上 —— 头部与主体共用同一条竖轴。
+   「设置」二字也因此与下方分区导航的文字左缘对齐(两者都缩进 20px) */
+.stg-head h2 { font-size: 0.9375rem; flex: none;
+  width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
+.stg-search { flex: 1; min-width: 0; position: relative; }
+.stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; }
+.stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
+.stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
+
+.stg-body { flex: 1; min-height: 0; display: flex; }
+.stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
+.stg-nav button:hover { background: var(--hover); color: var(--ink); }
+.stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+.stg-nav button svg { width: 14px; height: 14px; flex: none; }
+/* 图例:每条一行不折行,标记与释义同基线;左栏窄,故释义取「是否跨设备」这一句关键区分,
+   完整存储位置说明在「高级」分区底部,不在这里重复 */
+.stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
+.stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
+.stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
+.stg-sec { padding-top: 18px; }
+.stg-sec[hidden] { display: none; }
+.stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.stg-sec-head h3 { font-size: 0.875rem; color: var(--ink); }
+.stg-sec-head p { font-size: 0.75rem; color: var(--faint); }
+.stg-sec-head .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; }
+.stg-group { font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 2px; }
+
+/* 一行一项:标签+说明 | 控件 | 存储范围标记。行与行用 line-soft 分隔,不套卡片 */
+.stg-row { display: flex; align-items: center; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+.stg-row:last-child { border-bottom: 0; }
+.stg-row[hidden] { display: none; }
+.stg-lab { flex: 1; min-width: 0; }
+.stg-lab span { display: block; font-size: 0.8125rem; color: var(--ink); }
+.stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+.stg-lab mark { background: var(--tint-jade); color: var(--jade); border-radius: 2px; padding: 0 1px; }
+.stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+/* 下拉一律复用自绘 .dd.down(模态内变体),不用原生 select —— 原生弹层由 OS 绘制无法主题化。
+   语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度/权限走 .dd.dim */
+.stg-ctl .dd.down { width: 220px; }
+#stg-model-dd .dd-btn { color: var(--violet); }
+#stg-cwd-dd .dd-btn { color: var(--blue); }
+/* 菜单的容身之处:.stg-pane 会滚动,绝对定位的菜单被它裁掉;而 fixed 也不行 ——
+   .modal 用 transform 居中,transform 祖先会成为 fixed 的包含块,菜单会按对话框左上角算坐标飞出去
+   再被 overflow:hidden 裁掉。故打开时把菜单挂到既不滚动、又在对话框边界内的 .stg-body 上,
+   按触发钮算相对坐标;pane 一滚就关。实现层用带 portal 的 Select(Radix)同理,portal 目标别选 body 以外。 */
+.stg-body { position: relative; }
+.stg-body > .dd-menu { position: absolute; bottom: auto; min-width: 0; }
+.stg-body > .dd-menu.open { opacity: 1; transform: none; pointer-events: auto; }
+.stg-body > .dd-menu.dim .dd-item { font-family: var(--sans); }
+.stg-ctl .filter-tabs button { padding: 4px 10px; }
+.stg-ctl .input[type=text], .stg-ctl .input[type=url] { width: 220px; padding: 5px 10px; font-size: 0.75rem; }
+.stg-ctl input[type=range] { width: 130px; accent-color: var(--jade); }
+.stg-ctl .stg-val { width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* 存储范围标记:本机 = 只在这台浏览器;账户 = 落后端 meta 表,手机端同步 */
+.stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
+.stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
+.stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
+.stg-thumbs { display: flex; gap: 8px; }
+/* 文件选择:input 视觉上藏起但不 display:none —— 部分 WebKit 对 display:none 的 file input 不响应 label 激活 */
+.stg-file { position: relative; overflow: hidden; cursor: pointer; }
+.stg-file input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+/* 缩略图背景由 JS 用线上同一份 WALL_PRESETS url 填充,不另造 mock */
+.stg-thumb { width: 52px; height: 32px; border-radius: 4px; border: 1px solid var(--line); background-size: cover; cursor: pointer; }
+.stg-thumb:hover { border-color: var(--muted); }
+.stg-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); }
+
+/* 快捷键表:动作 | 键位 | 改键。键位用 kbd 词汇(与 .to-foot kbd 同规格) */
+.stg-keys { width: 100%; border-collapse: collapse; }
+.stg-keys td { padding: 8px 0; border-bottom: 1px solid var(--line-soft); font-size: 0.8125rem; vertical-align: middle; }
+.stg-keys td:first-child { color: var(--ink); }
+.stg-keys td small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 1px; }
+.stg-keys td.k { width: 150px; white-space: nowrap; }
+.stg-keys td.a { width: 60px; text-align: right; }
+.stg-keys td.a button { font-size: 0.6875rem; color: var(--faint); padding: 2px 6px; border-radius: 3px; }
+.stg-keys td.a button:hover { background: var(--hover); color: var(--ink); }
+.stg-keys tr.rec td.k { color: var(--jade); font-size: 0.75rem; }
+.stg-keys tr.rec td.k::after { content: "按下新组合…"; animation: stg-blink 1s steps(2) infinite; }
+.stg-keys kbd { font-family: var(--mono); font-size: 0.6875rem; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); background: var(--surface-2); }
+.stg-keys kbd + kbd { margin-left: 3px; }
+.stg-keys tr.conflict kbd { border-color: var(--amber); color: var(--amber); }
+.stg-keys .stg-conf { font-size: 0.625rem; color: var(--amber); margin-left: 6px; }
+/* 类名必须带 stg- 前缀:Tailwind v4 会扫描源码里出现的类名字符串按需生成工具类,
+   裸写 `fixed` 会被它生成 `.fixed{position:fixed}`,把这一行从表格流里踢出去(2026-09-03 实测) */
+.stg-keys tr.stg-fixed kbd { border-style: dashed; }
+@keyframes stg-blink { 50% { opacity: 0.3; } }
+
+.stg-storage { font-size: 0.6875rem; color: var(--faint); line-height: 1.6; margin-top: 12px; }
+.stg-storage code { font-family: var(--mono); color: var(--muted); }
+.stg-empty { padding: 40px 0; text-align: center; font-size: 0.8125rem; color: var(--faint); }
+
+/* 手机:整屏覆盖,左栏退化为顶部横向 tab */
+@media (max-width: 720px) {
+  .drawer.stg-drawer, .modal.stg-modal { width: 100vw; height: 100dvh; max-height: none; top: 0; left: 0; right: 0; transform: none; border: 0; border-radius: 0; }
+  .modal.stg-modal.show { transform: none; }
+  .stg-head h2 { width: auto; }
+  .stg-body { flex-direction: column; }
+  .stg-nav { width: auto; flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line-soft); padding: 8px 12px; }
+  .stg-nav button { flex: none; padding: 6px 10px; }
+  .stg-nav .stg-nav-foot { display: none; }
+  .stg-row { flex-wrap: wrap; }
+  .stg-ctl { width: 100%; }
+  .stg-ctl .dd.down { flex: 1; width: auto; }
+  .stg-scope { order: -1; margin-left: auto; }
+  .stg-search kbd { display: none; }
+  .stg-keys td.a { display: none; }
+  /* 窄屏下标题与按钮各自不参与压缩,说明文字整行落到第二行——
+     否则 flex 会先压标题,把「派发」两个字挤成竖排(2026-09-03 实测) */
+  .stg-sec-head { flex-wrap: wrap; }
+  .stg-sec-head h3,
+  .stg-sec-head .btn-quiet { flex: none; }
+  .stg-sec-head p { flex: 1 0 100%; order: 3; margin-top: 2px; }
 }
 
-.wall-btn {
-  display: flex; align-items: center; gap: 7px; width: calc(100% + 16px);
-  margin: 0 0 8px -8px; padding: 5px 8px; border-radius: var(--r-s);
-  font-size: 0.75rem; color: var(--muted); text-align: left;
-  transition: background 150ms var(--ease), color 150ms var(--ease);
-}
-.wall-btn:hover { background: var(--hover); color: var(--ink); }
-.wall-btn svg { width: 14px; height: 14px; flex: none; }
-.wall-btn .wp-state { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
-
-.wall-pop {
-  position: fixed; left: 14px; bottom: 92px; width: 320px; /* 悬于 side-foot 之上,不遮入口按钮 */
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
-  padding: 14px 16px 12px; z-index: var(--z-drawer);
-  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.45);
-  animation: view-in 200ms var(--ease);
-}
-.wp-head { display: flex; align-items: center; margin-bottom: 12px; }
-.wp-head h3 { font-size: 0.8125rem; }
-.wp-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.wp-label { flex: none; width: 56px; font-size: 0.75rem; color: var(--muted); }
-.wp-row .input { flex: 1; min-width: 0; padding: 4px 10px; font-size: 0.75rem; }
-.wp-val { flex: none; width: 40px; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-.wp-thumbs { display: flex; gap: 8px; flex: 1; }
-.wp-thumb {
-  width: 64px; height: 40px; border-radius: var(--r-s);
-  border: 1px solid var(--line); background-size: cover; background-position: center;
-  transition: border-color 150ms var(--ease); flex: none;
-}
-.wp-thumb:hover { border-color: var(--muted); }
-.wp-thumb.active { border-color: var(--jade); outline: 1px solid var(--jade); outline-offset: 0; }
-.wp-row input[type=range] {
-  flex: 1; appearance: none; -webkit-appearance: none; height: 4px;
-  border-radius: 99px; background: var(--line); cursor: pointer;
-}
-.wp-row input[type=range]::-webkit-slider-thumb {
-  appearance: none; -webkit-appearance: none; width: 14px; height: 14px;
-  border-radius: 50%; background: var(--jade); border: none;
-}
-.wp-row input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--jade); border: none; }
-.wall-pop .is-off { opacity: 0.45; pointer-events: none; }
-.wp-note { font-size: 0.6875rem; color: var(--faint); margin-top: 4px; line-height: 1.5; }
 
 /* ============ 响应式 ============ */
 @media (max-width: 960px) {
@@ -1596,6 +1905,8 @@ body.wall-on .statusbar.scrolled {
   .statusbar { position: static; padding: 0 16px; margin: 0 -16px 8px; }
   .dash-now, .dash-grid, .rv-grid { grid-template-columns: minmax(0, 1fr); }
   .board { grid-template-columns: repeat(4, 272px); height: auto; }
+  /* 窄屏改为整页滚动:外壳不再锁视口高,看板恢复内容高度 */
+  .board-wrap { display: block; height: auto; min-height: 0; }
   .col-body { overflow-y: visible; }
   .dispatch { height: auto; }
   .chat { min-height: 380px; max-height: 60vh; }
@@ -1769,14 +2080,18 @@ body.wall-on .statusbar.scrolled {
   .u-chip.wk2 .u-bar { width: 56px; }
   .u-chip.wk2 .u-reset { display: none; }
   .cs-state { flex: none; }
-  .composer textarea { font-size: 1rem; min-height: 44px; }
+  .composer textarea { min-height: 44px; }
+  /* 镜像层字号必须跟着 textarea 走,否则窄屏下逐字错位 */
+  .ta-wrap textarea, .ta-wrap .ta-mirror { font-size: 1rem; }
+  .xj-slash-list { max-height: 40vh; }
+  .xj-slash-desc { display: none; }  /* 窄屏只留命令名,描述让位 */
+  /* 触摸目标下限 44px:桌面按行高 31px 是紧凑,手指点不准 */
+  .xj-slash-item { min-height: 44px; align-items: center; padding: 6px 12px; }
+  .composer .code-help { display: none; } /* 与 .hint 同理:窄屏让位给按钮 */
   .composer .c-bar { flex-wrap: nowrap; gap: 10px; }
   .composer .hint { display: none; } /* 低价值提示,窄屏让位给按钮 */
   .composer .bg-opt { min-height: 44px; gap: 0; }
   .composer .bg-opt-label { display: none; } /* 说明文字挪进 title/aria-label,腾出宽度给发送按钮 */
-  /* 任务总结:移动端无物理键盘,键位角标无意义;按钮本体保留但收窄并撑到 44px 触控区(四四触控规则) */
-  .wrapup-btn .kbd { display: none; }
-  .wrapup-btn { min-height: 44px; padding: 4px 10px; }
   /* 发送按钮在移动端切图标(44×44 方形触控区),不再是会被挤扁的文字按钮 */
   .send-btn { width: 44px; padding: 0; justify-content: center; flex: none; }
   .send-btn-label { display: none; }
@@ -2015,3 +2330,172 @@ body.wall-on .statusbar.scrolled {
   .rb-params { margin-left: 0; }
   .rb-cmd, .rb-out, .rb-links, .rb-expect, .rb-resp-meta, .rb-blocked { margin-left: 0; }
 }
+
+/* ============ 轮次导航(吸顶轮次头 + ⌘⇧O 轮次目录) ============ */
+/* 与 .find-anchor 同一套 sticky + 高度 0 的锚法;top 负值抵掉 .chat 的上内边距,
+   负 margin 抵掉左右内边距,让这条带子与容器边缘齐平。 */
+.turn-anchor { position: sticky; top: -20px; height: 0; z-index: var(--z-sticky); margin: 0 -28px; }
+.turnhead {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 12px 7px 20px;
+  /* 不透明底色:壁纸开启后 body 转透明,任何混进 transparent 的底色都会把壁纸漏到小字背后 */
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line-soft);
+  box-shadow: 0 6px 18px oklch(0.03 0 0 / 0.35);
+  opacity: 0; transform: translateY(-6px); pointer-events: none;
+  transition: opacity 160ms var(--ease), transform 160ms var(--ease);
+}
+.turnhead.show { opacity: 1; transform: none; pointer-events: auto; }
+.turnhead .th-n {
+  flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--jade);
+  font-variant-numeric: tabular-nums; letter-spacing: 0.02em;
+}
+.turnhead .th-who { flex: none; font-size: 0.6875rem; font-weight: 600; color: var(--jade); }
+/* flex:1 1 0 让它退出分行决策,长提问由省略号收口而不是把右侧导航挤下去 */
+.turnhead .th-text {
+  flex: 1 1 0; min-width: 0; font-size: 0.75rem; color: var(--ink); line-height: 1.4;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left;
+  background: none; border: 0; padding: 0; cursor: pointer; font-family: inherit;
+  transition: color 150ms var(--ease);
+}
+.turnhead .th-text:hover { color: var(--jade); }
+.turnhead .th-nav { display: flex; align-items: center; gap: 2px; flex: none; }
+.turnhead .th-pos {
+  font-family: var(--mono); font-size: 0.6875rem; color: var(--faint);
+  font-variant-numeric: tabular-nums; margin-right: 4px;
+}
+.turnhead .th-btn, .btw .th-btn {
+  display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 22px;
+  border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer;
+  font-family: var(--mono); font-size: 0.75rem;
+  transition: background 150ms var(--ease), color 150ms var(--ease);
+}
+.turnhead .th-btn:hover:not(:disabled), .btw .th-btn:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.turnhead .th-btn:disabled, .btw .th-btn:disabled { opacity: 0.35; cursor: default; }
+.turnhead .th-sep { width: 1px; height: 14px; background: var(--line); margin: 0 4px; }
+
+/* 跳转落点:目标气泡描一圈玉环再淡出,与弹窗选中环同一套词汇 */
+.chat-msg.user .body { outline: 2px solid transparent; outline-offset: 3px; transition: outline-color 900ms var(--ease); }
+.chat-msg.user.flash .body { outline-color: var(--jade); transition: none; }
+
+/* 轮次目录弹窗:复用 .rp-box / .wd-search / .rp-list / .rp-item,只补行内三列 */
+.to-box { width: min(640px, calc(100vw - 48px)); }
+.to-box .rp-list { max-height: 400px; }
+.to-box .rp-item { gap: 12px; padding: 8px 12px; }
+.to-box .rp-item:hover { background: var(--hover); }
+.to-box .rp-item.sel:hover { background: transparent; }
+.to-n { flex: none; width: 2.6em; text-align: right; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.to-text { flex: 1 1 0; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.to-time { flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-variant-numeric: tabular-nums; }
+.to-cur { flex: none; font-size: 0.6875rem; color: var(--jade); }
+/* 未装载轮次:降为 muted 并挂中性标签——它在索引里但还没有节点,选中时先回填 */
+.rp-item.unloaded .to-text { color: var(--muted); font-weight: 400; }
+.to-tag { flex: none; font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; line-height: 1.5; }
+.to-foot {
+  display: flex; align-items: center; gap: 10px; padding: 8px 18px 10px;
+  border-top: 1px solid var(--line-soft); font-size: 0.6875rem; color: var(--faint);
+}
+.to-foot .spacer { flex: 1; }
+.to-foot kbd { font-family: var(--mono); font-size: 0.625rem; padding: 0 5px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); }
+
+/* 玻璃档把 --surface-2 重定义成半透明,吸顶带会被掏空 —— 正文从它底下滚过去时
+   两层字叠在一起没法读(2026-09-02 实测截图为证)。与 .dd-menu 同理:凡是「内容
+   从下面经过」的浮层都不跟随玻璃档,固定用 surface-2 的不透明基色。 */
+body.wall-glass .turnhead { background: oklch(0.165 0.007 120); }
+
+@media (max-width: 720px) {
+  .turn-anchor { margin: 0 -16px; }
+  .turnhead { padding-left: 14px; gap: 8px; }
+  .turnhead .th-who { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .turnhead, .turnhead .th-text, .turnhead .th-btn, .chat-msg.user .body { transition: none; }
+}
+
+/* ============ 本机偏好落到 <html>(见 lib/prefs.ts applyLocalToDom) ============ */
+/* 字号走 root font-size,既有样式全用 rem,故整站等比跟随,不必逐处改 */
+html[data-font-scale="sm"] { font-size: 15px; }
+html[data-font-scale="lg"] { font-size: 17px; }
+/* 「减少动效」显式开时按 prefers-reduced-motion 同款降级:过渡与动画一律瞬时完成。
+   显式关则强行保留动效,即便系统开了减弱开关——这是用户在本机的最终决定。 */
+html[data-motion="on"] *,
+html[data-motion="on"] *::before,
+html[data-motion="on"] *::after {
+  transition-duration: 0.01ms !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+}
+html[data-turn-head="false"] .turnhead { display: none; }
+
+/* ============ 旁路提问(/btw):右侧停靠面板(原型 prototype-btw.html 形态 A) ============ */
+/* 输入框顶部的旁路标记:文本以 /btw 开头时现出,发送键语义随之改为「问旁路」;紫 = 与主对话隔离的旁路语义 */
+.btw-prefix { display: flex; align-items: center; gap: 7px; padding: 6px 12px 0; font-size: 0.6875rem; font-weight: 600; color: var(--violet); }
+.btw-prefix-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--violet); }
+.composer.btw-mode { border-color: var(--violet); }
+.composer.btw-mode .send-btn { background: var(--violet); }
+/* 状态条里的旁路计数:开合面板的第二入口 */
+.btw-count { display: inline-flex; align-items: center; gap: 5px; font: inherit; color: var(--muted); background: none; border: 1px solid var(--line-soft); border-radius: 4px; padding: 0 7px 0 4px; cursor: pointer; white-space: nowrap; transition: color 150ms var(--ease), border-color 150ms var(--ease); }
+.btw-count:hover { color: var(--ink); border-color: var(--line); }
+.btw-count[aria-pressed="true"] { border-color: var(--violet); color: var(--ink); }
+.btw-count .btw-bq { font-family: var(--mono); font-weight: 600; color: var(--violet); }
+.btw-count b { font-family: var(--mono); font-weight: 500; color: var(--ink); }
+.btw-count.live .btw-bq { animation: pulse 1.2s ease-in-out infinite; }
+/* 停靠:主栏与面板并排,面板贯穿四行(消息区 / 状态条 / 输入框 / 终端行) */
+.dispatch.btw-open { display: grid; grid-template-columns: minmax(0, 1fr) 400px; grid-template-rows: minmax(0, 1fr) auto auto auto auto; column-gap: 12px; }
+.dispatch.btw-open > *:not(.btw) { grid-column: 1; }
+.dispatch.btw-open > .btw { grid-column: 2; grid-row: 1 / -1; }
+/* 停靠后主栏变窄:状态条各段允许压缩、用量条收短,不溢出到面板底下(原型实测 1440 宽) */
+.dispatch.btw-open .chat-status { min-width: 0; gap: 10px; }
+.dispatch.btw-open .sess-ctx { max-width: 22%; }
+.dispatch.btw-open .u-chips { flex: 1 1 0; min-width: 0; gap: 8px; overflow: hidden; }
+.dispatch.btw-open .u-chip { gap: 5px; }
+.dispatch.btw-open .u-chip .u-bar { width: 30px; }
+@media (max-width: 1180px) { .dispatch.btw-open { grid-template-columns: minmax(0, 1fr) 340px; } }
+
+.btw { display: flex; flex-direction: column; min-height: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); animation: btw-in 200ms var(--ease); }
+@keyframes btw-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.btw-head { display: flex; align-items: center; gap: 8px; padding: 9px 10px 9px 14px; border-bottom: 1px solid var(--line-soft); }
+.btw-title { font-size: 0.875rem; font-weight: 600; }
+.btw-note { font-size: 0.6875rem; color: var(--violet); border: 1px solid color-mix(in oklab, var(--violet) 40%, transparent); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.btw-nav { display: flex; align-items: center; gap: 4px; }
+.btw-nav .th-pos { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+.btw .th-btn { font-size: 0.8125rem; }
+.btw-route { padding: 6px 14px; font-size: 0.6875rem; color: var(--faint); border-bottom: 1px solid var(--line-soft); }
+.btw-one { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.btw-q { display: flex; align-items: baseline; gap: 8px; padding: 12px 14px 6px; font-size: 0.875rem; color: var(--ink); line-height: 1.5; }
+.btw-cmd { font-family: var(--mono); font-size: 0.75rem; color: var(--violet); flex: none; }
+.btw-qtext { min-width: 0; overflow-wrap: anywhere; }
+.btw-ts { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); flex: none; }
+.btw-a { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 14px 12px; font-size: 0.875rem; line-height: 1.6; color: var(--ink); }
+.btw-synth { margin-bottom: 8px; font-size: 0.75rem; color: var(--amber); }
+/* 等待态:不放占位骨架——旁路答案长短未知,骨架填的是实色,开壁纸时会退化成几条黑板。
+   只留一行状态:三点(与助手正文 .typing 同一词汇,染成旁路紫)+ 已等秒数 + 承诺文案 + 取消。 */
+.btw-wait { padding: 10px 14px 12px; }
+.btw-wait-line { display: flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--muted); min-height: 26px; }
+.btw-wait-dots { display: inline-flex; gap: 4px; flex: none; }
+.btw-wait-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--violet); animation: pulse 1.2s ease-in-out infinite; }
+.btw-wait-dots i:nth-child(2) { animation-delay: 0.2s; }
+.btw-wait-dots i:nth-child(3) { animation-delay: 0.4s; }
+.btw-wait-line .lab { color: var(--ink); font-weight: 600; flex: none; }
+.btw-wait-line .el { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-variant-numeric: tabular-nums; flex: none; }
+.btw-wait-line .note { color: var(--faint); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.btw-wait-line .el::before, .btw-wait-line .note::before { content: '\00b7'; margin-right: 6px; }
+.btw-err { margin: 8px 14px 12px; padding: 10px 12px; border-radius: var(--r-s); background: var(--tint-amber); color: var(--amber); font-size: 0.8125rem; line-height: 1.6; }
+.btw-err b { margin-right: 4px; }
+.btw-err-act { display: flex; gap: 8px; margin-top: 8px; }
+.btw-foot { display: flex; align-items: center; gap: 8px; padding: 8px 10px 10px 14px; border-top: 1px solid var(--line-soft); }
+.btw-saved { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--muted); white-space: nowrap; }
+.btw-ok { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.btw-hist { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.btw-hist .rp-list { flex: 1; min-height: 0; overflow-y: auto; }
+.btw-hist .rp-item { align-items: flex-start; }
+.btw-h-q { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.btw-h-a { display: block; font-weight: 400; color: var(--muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.btw-h-t { flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+.btw-h-mem { flex: none; font-size: 0.6875rem; color: var(--green); }
+.btw-empty { padding: 18px 16px; font-size: 0.8125rem; color: var(--muted); line-height: 1.7; }
+.btw-empty p + p { margin-top: 10px; }
+.btw-empty code { font-family: var(--mono); color: var(--violet); }
+@media (prefers-reduced-motion: reduce) { .btw { animation: none; } .btw-count.live .btw-bq, .btw-wait-dots i { animation: none; } }

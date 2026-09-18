@@ -50,6 +50,17 @@ export type ReplayEvent =
   | { kind: 'assistant'; text: string; model?: string; ts?: string }
   | { kind: 'tool'; name: string; input: string; output?: string; isError?: boolean }
   | { kind: 'raw'; type: string; json: string }
+  | {
+      /** PR/MR 链接:同一 URL 的多条 pr-link 事件已在 adapter 合并成一条 */
+      kind: 'pr';
+      url: string;
+      platform: 'gitlab' | 'github' | 'other';
+      number?: number;
+      repo?: string;
+      updates: number;
+      lastTs?: string;
+      ts?: string;
+    }
   | { kind: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string; ts?: string };
 
 export interface Replay {
@@ -338,4 +349,40 @@ export interface WeeklyDraft {
   sessionId: string | null;
   createdAt: number;
   finishedAt: number | null;
+}
+
+/** 账户级偏好:与后端 services/prefs.ts 的 AccountPrefs 对应 */
+export interface NotifyPrefs {
+  dispatched: boolean;
+  scheduled: boolean;
+  terminal: boolean;
+  blocked: boolean;
+  turnEnd: boolean;
+  error: boolean;
+}
+
+export interface AccountPrefs {
+  model: string;
+  effort: string;
+  perm: string;
+  cwd: string;
+  /** 「快速提问」目录:新会话未显式选目录时的落点,不绑仓库;空串 = 关闭 */
+  quickAskCwd: string;
+  bg: boolean;
+  wrapupPrompt: string;
+  notify: NotifyPrefs;
+}
+
+/** 旁路提问(/btw)记录:后端 side_questions 表的镜像,答案永不进主对话 */
+export interface SideQuestion {
+  id: number;
+  sessionId: string;
+  question: string;
+  answer: string;
+  /** SDK 合成答复(模型试图调工具而非直答时的兜底) */
+  synthetic: boolean;
+  route: 'direct' | 'fork';
+  /** 「存为经验」落下的 memory 文件;null = 未沉淀 */
+  memoryFile: string | null;
+  createdAt: number;
 }

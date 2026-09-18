@@ -166,6 +166,8 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
   const toolIndex = new Map<string, number>();
   /** 最近一条 compact_boundary 事件索引,用于回填随后的 isCompactSummary 摘要 */
   let pendingCompactIdx = -1;
+  /** PR/MR url → 事件索引,同一个 PR 的重复事件合并到首次出现的那张卡上 */
+  const prIndex = new Map<string, number>();
 
   const rl = readline.createInterface({
     input: fs.createReadStream(jsonlPath, { encoding: 'utf8' }),
@@ -204,12 +206,15 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
           }
           break;
         }
+        // isMeta 的 user 文本是 Claude Code 自己注入的(斜杠命令注意事项、技能基目录、图片占位符),
+        // 不是人打的一轮:60 个最新会话 92 条实测全是这几类,零条真提问。不进回放,轮次目录才不多算
+        const meta = j.isMeta === true;
         if (typeof c === 'string') {
-          events.push({ kind: 'user', text: c, ts: j.timestamp });
+          if (!meta) events.push({ kind: 'user', text: c, ts: j.timestamp });
         } else if (Array.isArray(c)) {
           for (const block of c) {
             if (block?.type === 'text' && typeof block.text === 'string') {
-              events.push({ kind: 'user', text: block.text, ts: j.timestamp });
+              if (!meta) events.push({ kind: 'user', text: block.text, ts: j.timestamp });
             } else if (block?.type === 'tool_result') {
               const idx = toolIndex.get(block.tool_use_id);
               if (idx !== undefined) {
@@ -261,6 +266,33 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
           pendingCompactIdx = events.length - 1;
         }
         break;
+      case 'pr-link': {
+        // 同一个 PR 每次 push / 合并都会重写一条,全部并到首次出现的那张卡上,
+        // 只累加次数与最近时间 —— 一个会话反复 push 会写十几条,逐条出卡即刷屏
+        const url = typeof j.prUrl === 'string' ? j.prUrl : undefined;
+        if (!url) break;
+        const seen = prIndex.get(url);
+        if (seen !== undefined) {
+          const prev = events[seen];
+          if (prev?.kind === 'pr') {
+            prev.updates += 1;
+            prev.lastTs = j.timestamp;
+          }
+          break;
+        }
+        events.push({
+          kind: 'pr',
+          url,
+          platform: prPlatform(url),
+          number: typeof j.prNumber === 'number' ? j.prNumber : undefined,
+          repo: typeof j.prRepository === 'string' ? j.prRepository : undefined,
+          updates: 0,
+          ts: j.timestamp,
+          lastTs: j.timestamp,
+        });
+        prIndex.set(url, events.length - 1);
+        break;
+      }
       case 'attachment':
       case 'last-prompt':
       case 'queue-operation':
@@ -271,6 +303,19 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
     }
   }
   return { sessionId, events, skippedLines, title };
+}
+
+/** 由 PR/MR 链接的 host 判定平台;自建 GitLab 域名各异,按 host 含 gitlab 认 */
+function prPlatform(url: string): 'gitlab' | 'github' | 'other' {
+  let host = '';
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'other';
+  }
+  if (host === 'github.com' || host.endsWith('.github.com')) return 'github';
+  if (host.includes('gitlab')) return 'gitlab';
+  return 'other';
 }
 
 function compactInput(input: unknown): string {
@@ -442,6 +487,36 @@ export async function extractSkillInvocations(jsonlPath: string): Promise<SkillI
         if (typeof skill !== 'string' || !skill) continue;
         out.push({ skill, day: localDay(ts), at: ts });
       }
+    } catch {
+      /* skip */
+    }
+  }
+  return out;
+}
+
+/**
+ * 会话记录里的斜杠命令调用。CLI 每展开一条斜杠命令,就在转录里落一条 user 消息,
+ * 正文是 `<command-name>/xxx</command-name>` 信封(实测 2.1.273;`/caveman lite`
+ * 另带 `<command-args>lite</command-args>`)。这是「用户真的用过哪条命令」的唯一可靠证据 ——
+ * 比数模型侧的 Skill 工具调用准:斜杠命令里有一半(/model /compact /clear)压根不经过模型。
+ *
+ * 只取命令名,不取参数:联想面板排序只关心「这条命令用了多少次」。
+ */
+export async function extractCommandInvocations(jsonlPath: string): Promise<{ name: string; at: number }[]> {
+  const raw = await fsp.readFile(jsonlPath, 'utf8').catch(() => '');
+  if (!raw.includes('<command-name>')) return [];
+  const out: { name: string; at: number }[] = [];
+  for (const line of raw.split('\n')) {
+    if (!line.includes('<command-name>')) continue;
+    try {
+      const j = JSON.parse(line);
+      const ts = typeof j.timestamp === 'string' ? Date.parse(j.timestamp) : NaN;
+      if (!Number.isFinite(ts)) continue; // 无时间戳无法算新近度,不计入
+      const c = j.message?.content;
+      const text = typeof c === 'string' ? c : Array.isArray(c) ? JSON.stringify(c) : '';
+      // 信封在转录里出现两次(命令回显 + 展开后的正文),同一行只取第一个,免得一次调用记成两次
+      const m = /<command-name>\/([A-Za-z0-9:_-]+)<\/command-name>/.exec(text);
+      if (m) out.push({ name: m[1]!, at: ts });
     } catch {
       /* skip */
     }

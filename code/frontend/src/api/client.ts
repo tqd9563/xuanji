@@ -1,4 +1,5 @@
 import type {
+  AccountPrefs,
   ClosedSession,
   CronsResult,
   Dashboard,
@@ -16,7 +17,9 @@ import type {
   WeeklyDraft,
   WeeklyReview,
   WorklogCard,
+  SideQuestion,
 } from './types';
+import type { SlashCmdInfo } from '@/lib/slash';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -37,6 +40,12 @@ async function mutate<T>(path: string, method: string, body: unknown): Promise<T
 
 export const api = {
   dashboard: () => get<Dashboard>('/api/dashboard'),
+  /** 斜杠命令兜底目录:会话建立前先拿这份,本会话的权威列表随后由 ws commands 事件整份替换 */
+  slashCommands: () => get<{ cmds: SlashCmdInfo[]; fresh: boolean; uses?: Record<string, number> }>('/api/slash-commands'),
+  /** 账户级偏好(跨设备):派发默认值与通知范围。外观/快捷键在前端 localStorage,不走这里 */
+  prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
+  putPrefs: (patch: Partial<AccountPrefs>) =>
+    mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
   /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */
@@ -77,6 +86,10 @@ export const api = {
   canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),
   toggleSkill: (name: string, enable: boolean) =>
     mutate<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}/toggle`, 'POST', { enable, confirm: true }),
+  // ---------- 旁路提问 ----------
+  sideQuestions: (sessionId: string) => get<{ records: SideQuestion[] }>(`/api/sessions/${sessionId}/side-questions`),
+  saveSideQuestionMemory: (id: number, cwd: string) =>
+    mutate<{ ok: boolean; file: string; existed?: boolean }>(`/api/side-questions/${id}/memory`, 'POST', { cwd, confirm: true }),
   renameSession: (sessionId: string, name: string) =>
     mutate<{ ok: boolean }>(`/api/sessions/${sessionId}/name`, 'PUT', { name }),
   handoff: (sessionId: string) =>

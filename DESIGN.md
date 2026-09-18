@@ -4,10 +4,12 @@ description: 深色观象台风格的个人 AI 生产驾驶舱——近黑玉调
 colors:
   bg: "oklch(0.145 0.006 120)"
   surface: "oklch(0.185 0.008 120)"
+  surface-opaque: "oklch(0.185 0.008 120)"
   surface-2: "oklch(0.165 0.007 120)"
   hover: "oklch(0.215 0.009 120)"
   line: "oklch(0.27 0.010 120)"
   line-soft: "oklch(0.225 0.009 120)"
+  code-tint: "oklch(0.265 0.011 120)"
   ink: "oklch(0.93 0.008 110)"
   muted: "oklch(0.71 0.015 110)"
   faint: "oklch(0.60 0.012 110)"
@@ -25,6 +27,8 @@ colors:
   tool-skill: "oklch(0.78 0.12 345)"
   tool-exec: "oklch(0.78 0.13 180)"
   tool-write: "oklch(0.78 0.12 55)"
+  pr-gitlab: "oklch(0.75 0.165 45)"
+  pr-github: "oklch(0.74 0.145 296)"
 typography:
   display:
     fontFamily: "ui-monospace, SF Mono, Menlo, Consolas, monospace"
@@ -146,6 +150,14 @@ components:
     backgroundColor: "{colors.surface}"
     rounded: "{rounded.md}"
     padding: "18px 20px 20px"
+  pr-link-card:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "6px 12px 6px 10px"
+  pr-link-card-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
   brand-mark:
     textColor: "{colors.jade}"
     width: "48px"
@@ -223,6 +235,105 @@ components:
     textColor: "{colors.ink}"
     typography: "{typography.display}"
     padding: "3px 9px"
+  turn-head:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.ink}"
+    height: "36px"
+    padding: "7px 12px 7px 20px"
+  turn-head-index:
+    textColor: "{colors.jade}"
+    typography: "{typography.data}"
+  turn-head-btn:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.chip}"
+    width: "24px"
+    height: "22px"
+  turn-head-btn-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  turn-outline:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "min(640px, calc(100vw - 48px))"
+  turn-outline-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sm}"
+    padding: "8px 12px"
+  turn-outline-item-unloaded:
+    textColor: "{colors.muted}"
+  settings-dialog:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "min(900px, calc(100vw - 80px))"
+    height: "min(640px, calc(100vh - 80px))"
+  settings-nav-item:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "7px 10px"
+  settings-nav-item-active:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    textColor: "{colors.jade}"
+  settings-row:
+    backgroundColor: "transparent"
+    textColor: "{colors.ink}"
+    padding: "11px 0"
+  settings-row-desc:
+    textColor: "{colors.faint}"
+    typography: "{typography.label}"
+  settings-scope-local:
+    backgroundColor: "transparent"
+    textColor: "{colors.faint}"
+    rounded: "{rounded.chip}"
+    width: "34px"
+  settings-scope-account:
+    backgroundColor: "transparent"
+    textColor: "{colors.jade}"
+    rounded: "{rounded.chip}"
+    width: "34px"
+  settings-entry:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "6px 8px"
+  settings-entry-hover:
+    backgroundColor: "{colors.hover}"
+    textColor: "{colors.ink}"
+  keycap:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.muted}"
+    typography: "{typography.data}"
+    rounded: "{rounded.chip}"
+    padding: "1px 6px"
+  keycap-conflict:
+    backgroundColor: "{colors.surface-2}"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.chip}"
+    padding: "1px 6px"
+  btw-panel:
+    backgroundColor: "{colors.surface}"
+    rounded: "{rounded.md}"
+    width: "400px"
+  btw-note:
+    textColor: "{colors.violet}"
+    rounded: "{rounded.chip}"
+    padding: "0 6px"
+  btw-count:
+    textColor: "{colors.muted}"
+    rounded: "{rounded.chip}"
+    padding: "0 7px 0 4px"
+  btw-count-live:
+    textColor: "{colors.ink}"
+  btw-err:
+    backgroundColor: "color-mix(in oklab, {colors.amber} 14%, transparent)"
+    textColor: "{colors.amber}"
+    rounded: "{rounded.sm}"
+    padding: "10px 12px"
+  composer-btw-mode:
+    backgroundColor: "{colors.violet}"
+    textColor: "{colors.on-jade}"
 ---
 
 # Design System: 璇玑 xuanji
@@ -263,6 +374,7 @@ components:
 - **夜空 bg** (oklch(0.145 0.006 120)):页面底。**surface-2** (oklch(0.165 0.007 120)):侧栏与聊天区等第二层。**surface** (oklch(0.185 0.008 120)):面板/卡片/输入框。**hover** (oklch(0.215 0.009 120)):悬停提亮。四层构成色调深度阶梯。
 - **墨 ink** (oklch(0.93 0.008 110)):正文与数据主体。**muted** (oklch(0.71 0.015 110)):次要说明。**faint** (oklch(0.60 0.012 110)):元数据与占位——三阶封顶,不再细分。
 - **线 line / line-soft** (oklch(0.27/0.225 ~0.01 120)):1px 边框与分隔,永不加粗充当强调。
+- **代码底 code-tint** (oklch(0.265 0.011 120)):派发输入框里行内代码 `x` 与代码块 ``` 的填充,比所在面(surface)亮一档半,配 1px inset 描边;与消息区 `.md code`「代码块比周围底浅一档」同一语汇。仅用于代码区间,不作通用高亮底。
 
 ### Chart Series
 - **chart-1/2/3** (oklch(0.68 0.075 115) / oklch(0.65 0.065 300) / oklch(0.65 0.065 245)):堆叠图大面积填充专用(fable/opus/sonnet),比状态色低两档饱和,防大色块刺眼。图表永不直接使用状态色作系列色。
@@ -276,6 +388,12 @@ components:
 - **编排/规划**:Task / TodoWrite / EnterPlanMode / ExitPlanMode 复用 **--violet**(与模型标识同族,见上文 Named Rules 更新)。
 - **其余(含 `mcp__*` 长尾与未知工具)**:muted 中性,不参与争色。
 - `isError` 时一律红色内联覆盖,优先级高于类别色,与状态色语义一致。
+
+### 平台品牌色(唯一的非语义色)
+PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一一处颜色不表状态的用法,故单列并严格圈定作用域:
+- **pr-gitlab** (oklch(0.75 0.165 45)):GitLab 官方橙 #FC6D26 的色相,按深色底提亮至可读明度(实测 8.08:1)。只出现在 `.prcard[data-platform="gitlab"]` 的图标与编号上。
+- **pr-github** (oklch(0.74 0.145 296)):GitHub 紫 #8250DF 同源。**与 --violet(300°)仅差 4°**,故严禁扩散到卡片以外——紫在本产品的既有语义是「待验收 / 编排类工具」,两者一旦同屏出现在同类元素上即不可分辨。
+- 认不出的自建实例(platform=other)不上色,走中性 ink + 通用合并图形,不为「凑齐平台」而编造第三种品牌色。
 
 ### Named Rules
 **状态色即语义规则。** 玉=运行、琥珀=等待、绿=完成、蓝=纯信息、红=错误/熔断。「已完成」与「信息」是两件事:前者是终结状态,必须绿色;后者是事实标注(路径、计数、目录),永远蓝色,两者不得混用同一色相。状态色只出现在表达状态的元素上,任何装饰性使用都被禁止;状态永远配文字标签,不允许 color-alone。
@@ -382,6 +500,14 @@ components:
 - **对比度纪律:** 正文与耗时均为 `{colors.faint}` 实色,实测 4.89:1 过 AA。耗时曾用 75% 透明度写法,实测仅 3.22:1——**层次由字体族/字重承担(mono 400 vs sans 600),不靠降透明度**。
 - **不渲染的情形:** 模型未思考、或思考明文被服务端剥空时,不留任何占位(空卡片比没有卡片更糟)。历史会话回放一律不含思考卡。
 
+### PR / MR 链接卡(Signature Component · 回放时间线里的元事件条)
+- **性格:** 与「上下文已压缩」卡同属元事件层级(0.75rem、muted、非消息高度),但它可点,故用**实线** 1px `{colors.line-soft}` 边框与虚线的压缩卡分家;宽度 fit-content 上限 68ch,不占满行宽。
+- **结构:** 单行 = 平台图标(14px,GitLab tanuki / GitHub mark / 通用合并图形)+ 编号(mono,GitLab 用 `!8087`、GitHub 用 `#38`)+ 仓库路径(mono 11.5px,`flex: 1 1 0` 截断)+ 元信息(「已创建 14:27 · 更新 26 次」)+ 悬停浮现的 `↗`。
+- **状态:** 静止只有平台色在图标与编号上;悬停整条转 hover 底 + 平台色边框、`↗` 显形;`:focus-visible` 走全局玉色 outline,键盘可达。触屏(`hover: none`)下 `↗` 常显。
+- **合并纪律:** 同一个 PR 的多条 `pr-link` 事件(每次 push / 合并都会重写一条,实测单会话可达 26 条)在 adapter 层合并为一张卡,只累加次数与最近时间。**逐条出卡即刷屏**,这是本组件存在的首要理由。
+- **不表状态:** 事件本身无状态字段,创建/推送/合并写的是同一种记录,故卡片只报次数不报「已合并」——宁可少说,不可臆断。
+- **跨天提示:** 行内时间只有时分,更新常跨天(实测跨 5 天),故完整日期放 `title` 悬停,避免「创建 14:27 · 最近更新 14:11」读成时间倒流。
+
 ### 自绘下拉(Signature Component)
 原生 select 弹层由 OS 绘制无法主题化,故一律自绘(实现层用 shadcn/ui Select):无边触发钮(mono 字,按语义着色——目录蓝/模型紫)+ 悬浮菜单(surface 底、1px line 边、10px 圆角、悬浮影),选中项玉色对勾,Esc/外点关闭,贴近屏底的向上弹出。**模态内变体**(`.dd.down`):表单字段贴顶部而非屏底时,菜单改为向下弹出、触发钮补满字段宽度并现出 surface 底 + line 边框(而非无边贴文本),其余选中态/对勾/关闭逻辑与默认下拉完全一致——仅弹出方向与触发钮外观随上下文调整,组件词汇不分叉。
 
@@ -392,7 +518,7 @@ components:
 派发页输入框上下各一条超轻仪表:上条左侧 Context/Usage/Weekly 三枚用量指示(52px 微型进度条 + mono 百分比,超阈值转琥珀),右侧 agent 实时状态(等待审批琥珀脉冲/工作玉色脉冲/空闲灰);下条终端式状态行(蓝色 cwd ⎇ 玉色分支 + zsh 风格 `!n ?n ↑n` + 紫色模型名)。
 
 ### 外观 · 壁纸(Signature Component)
-侧栏底部入口按钮(`.wall-btn`,mono 态标签显示当前档位)向上弹出设置面板(`.wall-pop`:surface 底、10px 圆角、悬浮影、贴屏底 92px 上弹、Esc / 外点关闭)。三档模式 + 四个运行参数,全部经 `--wall-*` CSS 变量驱动,存 localStorage,永不写 `~/.claude`;本地大图(>1.5MB dataURL)仅当次会话生效不落盘。
+壁纸是**设置对话框「外观」分区**里的一族设置项(见下文「设置」组件);侧栏底部原 `.wall-btn` 入口升级为设置入口 `.stg-entry`,仍在标签处显示当前壁纸档位。三档模式 + 四个运行参数,全部经 `--wall-*` CSS 变量驱动,存 localStorage,永不写 `~/.claude`;本地大图(>1.5MB dataURL)仅当次会话生效不落盘。
 
 **三档模式(`.filter-tabs` 分段):**
 - **关闭:** 壁纸层隐藏,回到纯夜空底(默认)。
@@ -443,6 +569,47 @@ components:
 
 两类「不可点」必须一眼可分,故走两个正交通道:依赖未就绪是**整行降透明 + 按钮禁用**(`.dep-wait`,语义是「还不能」,上游就绪后自动解除);命中防自斩黑名单是**红点 + 红底原因条**(`.rb-blocked`,语义是「永远不能」,并写清请改在终端手动执行)。拦截在渲染时就判定完毕,不等用户点了才报错。会话生成(未经模板入库)的项挂紫色 `.rb-origin` 标,首次执行弹完整命令确认层(复用 `.confirm-mask`),同会话内二次执行免确认。
 
+### 轮次导航(Signature Component · `.turnhead` + 轮次目录)
+长会话往回翻某一轮的两个入口,共用同一份「轮次索引」(会话里所有用户输入的序号 / 首行 / 时间)。
+
+**吸顶轮次头**(`.turnhead`)贴在消息区顶缘,只在**当前轮的提问已整条滚出视口**时淡入——提问还看得见时它是冗余的,常驻等于在每屏顶部收一道税。一行内是「#序号 · 你 · 提问首行(单行省略,可点回跳)· 位置计数 · 上/下轮 · 目录」。它与全局状态栏是两种家具:状态栏属于外壳、跨视图常驻;轮次头属于当前会话、随滚动出现,故不共用样式,但沿用同一套「静止不喧哗」的性格。底色取**不透明** `surface-2`,不往 transparent 里混——壁纸开启后 body 转透明,任何混进 transparent 的底色都会把壁纸漏到小字背后(已两次实测踩到)。
+
+**轮次目录**(⌘⇧O)复用命令弹窗那套骨架(`.rp-box` / `.wd-search` / `.rp-list` / `.rp-item`),不新造一套弹窗词汇:行 = 序号(mono faint)+ 提问首行 + 「当前」标 + 时间。打开时选中项**落在当前轮**,所以第一下 ↑ 天然就是「上一轮」;选中态仍是玉色描边环,与 `/wd`、`/resume` 完全一致。它与 ⌘F 分工明确:⌘F 找**词**,轮次目录找**轮**——前者要求你记得关键词,后者只要求你记得问过什么。
+
+**跳转的落点必须被看见**:目标气泡描一圈玉环再淡出(1.4s),否则滚动结束后用户要重新在满屏文字里找自己要的那条。超出 `CHAT_SEED_LIMIT` 尚未装载的轮次在目录里标「未加载」并降为 muted 字,选中后先插骨架占位、再换成真实消息,并按高度差回补 `scrollTop` 保证视口不跳。`⌥↑`/`⌥↓` 是不开弹窗的相邻轮跳转;用 ⌥ 而非裸方向键,是因为输入框里的 `↑↓` 已经是历史回溯,同一个键不能有两种含义。
+
+### 设置(Signature Component · `.stg-modal` 居中对话框)
+全站唯一的偏好入口,取代原先散落各处的壁纸弹层。入口两处:侧栏底部齿轮行(`.stg-entry`,mono 态标签显示当前壁纸档位,沿用被它取代的 `.wall-btn` 的位置与尺寸)与全局 `⌘,`;移动端进「更多」菜单。
+
+**为什么是居中对话框而非抽屉或独立页:** 设置是「顺手改一下再回去」的临时上下文,占一个侧栏 tab 会让它看起来像一块持续任务空间。它比抽屉承载的表单更宽(两栏 900×640),又不满屏——四周留出的底层页面是「你没有离开原地」的凭证。复用既有 `.modal` 词汇而非新造:与新建定时任务同族,都是「需要提交或放弃的编辑上下文」,区别只是设置改动即时生效、没有提交按钮。**玻璃档下 `.stg-modal` 必须钉死不透明 `surface`**,与 `.dd-menu` 同理——半透明会让底层正文透进设置项之间,而这里全是需要逐行读的短标签。
+
+**结构:** 头部一行是标题 + 跨分区搜索框 + 关闭;主体左栏 148px 分区导航(派发/外观/快捷键/通知/高级,active 态玉色 tint,与侧栏主导航同一套 active 词汇),右栏单列表单。**头部与主体共用同一条竖轴**:标题占满左栏那一格,使搜索框左缘正好落在右栏内容线上(与分区标题、每个设置项标签同一条线),标题自身则与分区导航的文字左缘对齐。让头部按 flex 自然排布会把搜索框的左缘丢在左栏中间,既不贴分隔线也不贴内容线,是一条断掉的竖线。两栏几何(栏宽 / 栏内缩进 / 头部缩进与间隔)收在 CSS 变量里由两处共同引用,不各写一份数。移动端左栏变顶部横向 tab、竖轴不复存在,标题让回自然宽度把余量给搜索框。**不套卡片**——每项一行、行间 1px `line-soft` 分隔,分组用小号 faint 大写标题起头。行内三段:标签 + 一句说明(faint,讲清「改了会怎样」而不是复述标签)、控件、存储范围标记。
+
+**存储范围标记(`.stg-scope`)是本组件的语义核心:** 每一行行尾一枚 34px mono 小标,「本机」= 只存这台浏览器的 localStorage(壁纸、字号、快捷键),「账户」= 存后端 `meta` 表并同步到手机(派发默认值、通知范围),后者玉色描边。个人工具跨设备用同一套数据,不标清楚就会反复出现「我在 Mac 上改了为什么手机没变」——用一枚常驻小标一次性答完,好过每次弹提示。**任何新增设置项都必须落在这两类之一并显式标注;两者都永不写 `~/.claude`。**
+
+**跨分区搜索:** 输入即在全部分区里筛行并高亮命中词,命中的分区标题一并露出、左栏 active 态让位——因为用户找的是「那个设置项」,不是「它在哪个分区」。清空即回到当前分区。这与 ⌘F 找词、轮次目录找轮是同一族「我知道我要什么但不记得它在哪」的解法。
+
+**快捷键分区(`.stg-keys`):** 全站键位在此汇成唯一一张表,按作用域分组(全局/派发/会话看板),键位用 `kbd` 词汇渲染(mono、1px line 边、surface-2 底),Mac 显示 ⌘、其余平台显示 Ctrl,一律由同一份 keymap 生成而非各处手写。点「改键」进录入态(键位位置闪烁提示「按下新组合…」),按下的组合若已被占用则**标黄并写明与谁冲突,绝不静默覆盖**——键位是肌肉记忆,静默换绑比拒绝改键伤得更深。语义由别处决定的键位(发送/换行)标为固定并给一条「去设置」的跳转,不在两处重复同一个开关。
+
+**下拉一律用自绘 `.dd.down`(模态内变体),不用原生 `select`** —— 原生弹层由 OS 绘制,蓝底高亮与系统圆角在这套近黑玉调里是异物。语义着色与派发页底栏保持同一套:模型紫、工作目录蓝,思考深度与权限走 `.dd.dim`(muted + sans);同一个概念在设置里和在派发底栏里必须是同一个颜色,否则用户要记两套。
+
+**菜单的容身之处是这个组件唯一的结构陷阱:** 右栏 `.stg-pane` 是滚动容器,绝对定位的菜单会被它裁掉;而改 `position: fixed` 同样不行 —— `.modal` 用 `transform` 居中,**transform 祖先会成为 fixed 的包含块**,菜单于是按对话框左上角而非视口算坐标、飞到对话框外,再被 `overflow: hidden` 裁成一条。正确解法是打开时把菜单挂到既不滚动、又在对话框边界内的 `.stg-body` 上,按触发钮算相对坐标,下方放不下就向上翻;`.stg-pane` 一滚、切分区、进搜索一律收起,不做跟随。实现层用带 portal 的 Select(Radix)时同理:portal 目标要么是 body(此时菜单需自行避让对话框),要么就是这一层,别默认挂在触发钮原地。
+
+**壁纸关闭时仍可挑图,选中即自动开到「壁纸」档。** 挑图这个动作本身就表达了「我想用壁纸」,要求先盲开再挑是把顺序颠倒了;参数滑杆才是真正该在关闭档禁用的东西——壁纸关着时它们没有可调的对象。
+
+**行组件必须定义在面板组件之外。** 定义在内部时每次渲染都是新的组件类型,React 会把整棵子树卸载重建,壁纸那一行藏着的 `input[type=file]` 会连同已经打开的系统文件选择器一起被关掉。
+
+**开关必须真的接着消费端。** 通知分区的范围与事件取与(两者都开才发),由后端在发通知前统一判定;后端目前没有向终端会话发通知的路径,故该行照实置灰并写明原因——一个打开后什么也不会发生的开关,比没有这个开关更糟。
+
+**恢复默认** 按分区提供,不做全局一键重置;点下即时生效并 toast 回执,回退到的是代码里的 `*_DEFAULTS` 常量而非上次保存值。
+
+### 旁路提问(Signature Component · `.btw` 右侧停靠面板)
+「顺便问一句」的专属窗口:拿着主对话全部上下文作答,但答案**不进主对话**、不占它的 context、不打断它正在跑的回合。面板停靠在派发页右栏(400px,窄屏 340px),与消息区 / 状态条 / 输入框 / 终端行四行等高贯穿——它是主对话的**旁注**而非另一个对话,所以不做成第二个聊天流,也不做成弹窗盖住主对话。
+
+**紫 = 旁路语义**。`--violet` 在派发页原本表「模型 / 编排」,这里扩展为「与主对话隔离的旁路」:输入框以 `/btw` 开头即上紫色描边 + 顶部一行「旁路提问 · 不进主对话」标记、发送键转紫改叫「问旁路」;面板标题旁的「答案不进主对话」芯片、问句前的 `/btw` mono 前缀、状态条「旁路 N」计数的问号都用同一色。它不是装饰,是在每个入口反复确认「这一问走的是旁路」——用户最怕的是不小心把一句闲问塞进正在跑的任务里。
+
+**面板只是窗口,记录在库里**。答案一回来就自动存进自有库,底部一行「已存 · 旁路记录」是状态说明不是按钮;关面板不丢,`⌘/`(输入框为空时)或状态条计数芯片随时重开并停在最后一条,`⇧←` / `⇧→` 翻记录,`≡` 切到复用 `.rp-list` / `.rp-item` 骨架的可搜索列表。三种单条状态:提问中(骨架 + 紫点「回答中 · 主对话未打断,仍在继续」+ 取消)、已答(Markdown 正文 + 复制 / 存为经验 / 钉入主对话)、失败(琥珀 tint 块 + 重问 / 改到主对话问)。「钉入主对话」是旁路内容进入主对话的**唯一路径**,主对话正在跑时禁用;「存为经验」会写 `~/.claude`,必经确认。
+
 ## 6. Do's and Don'ts
 
 ### Do:
@@ -453,6 +620,7 @@ components:
 - **Do** 所有过渡 150–250ms、`cubic-bezier(0.22, 1, 0.36, 1)` 缓出,且只在状态变化时发生;提供 `prefers-reduced-motion` 瞬时降级。
 - **Do** 可变长度文案(标题/摘要/命令)一律限行截断,全文放下钻层或悬停提示。
 - **Do** 壁纸作为可选个性化层:默认关闭,开启后默认参数为不透明度 40% / 壁纸模糊 0 / 玻璃表面 30% / 磨砂 0;所有 `--wall-*` 参数用户可调、存 localStorage,永不写 `~/.claude`;预设一律暗色,新增预设须沿用暗色低饱和以守夜间底线。
+- **Do** 任何用户偏好都经统一的设置对话框暴露,并显式标注存储范围(「本机」localStorage / 「账户」后端 `meta` 表);新增偏好先归类再落地,禁止在功能页面里就地长出第二个设置入口。
 - **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
 - **Do** 渲染外部生成的 markdown 内容(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 `Md` 组件——这些文本里的 `**粗体**` 与反引号是作者的真实表达,当纯文本贴出来就是满屏字面量星号。同理,抽屉 `.kv dd` 里的长 URL / 路径必须 `overflow-wrap: anywhere`,否则顶破右边界。
 - **Do** 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——一个写着「无」的琥珀警示块比不显示更糟,它把「不需要你」误报成「需要你」。

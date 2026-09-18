@@ -39,7 +39,7 @@ describe('parseReplay', () => {
     expect(replay.skippedLines).toBe(1); // "this line is not json at all"
 
     const kinds = replay.events.map((e) => e.kind);
-    expect(kinds).toEqual(['user', 'assistant', 'tool', 'assistant', 'assistant', 'raw', 'compact']);
+    expect(kinds).toEqual(['user', 'assistant', 'tool', 'assistant', 'assistant', 'pr', 'pr', 'raw', 'compact']);
 
     // compact_boundary 出卡,随后的 isCompactSummary 伪 user 消息回填摘要而非混入普通消息
     const compact = replay.events.find((e) => e.kind === 'compact');
@@ -52,6 +52,23 @@ describe('parseReplay', () => {
 
     const raw = replay.events.find((e) => e.kind === 'raw');
     expect((raw as any).type).toBe('x-future-event');
+
+    // pr-link:同一个 MR 的 3 条事件(中间还夹着别家的 PR)合并成一张卡,只累加次数与最近时间
+    const prs = replay.events.filter((e) => e.kind === 'pr') as any[];
+    expect(prs[0]).toMatchObject({
+      platform: 'gitlab',
+      number: 8087,
+      repo: 'team/etl',
+      updates: 2,
+      ts: '2026-07-08T10:00:10.000Z',
+      lastTs: '2026-07-08T10:00:40.000Z',
+    });
+    // 平台由 host 判定,自建 GitLab 域名同样认得
+    expect(prs[1]).toMatchObject({ platform: 'github', number: 12, repo: 'me/demo-app', updates: 0 });
+    // 缺 prUrl 的坏记录直接丢弃:卡片的唯一价值是可点,没有 URL 就没有卡
+    expect(prs).toHaveLength(2);
+    // pr-link 不再降级成 raw 噪音
+    expect(replay.events.filter((e) => e.kind === 'raw')).toHaveLength(1);
 
     // thinking 块不进回放
     expect(JSON.stringify(replay.events)).not.toContain('secret');

@@ -8,12 +8,14 @@ import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
+import { readPrefs, writePrefs } from '../services/prefs.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
-import { listMemories, searchMemories } from '../services/memories.js';
+import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
+import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
@@ -54,6 +56,18 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   });
 
   /** /wd 手输路径的解析与校验:展开 `~`、归一为绝对路径,并回报是否真是一个目录 */
+  /**
+   * 斜杠命令目录兜底:派发页在 SDK 会话建立之前(新会话还没发第一条消息)也要能弹联想面板,
+   * 这里交出最近一次某个会话报告过的那份。`fresh:false` 恒成立 —— 属于本会话的权威列表
+   * 走 ws 的 commands 事件,到了就整份替换。
+   */
+  api.get('/slash-commands', async (c) => {
+    const cached = cachedSlashCatalog();
+    // 缓存里的目录可能是会话「第一段」下发的、还没贴频率的版本,这里补上
+    const { cmds, uses } = await withUsage(storage, cached.cmds);
+    return c.json({ ...cached, cmds, uses });
+  });
+
   api.get('/resolve-path', (c) => {
     const raw = c.req.query('path');
     if (!raw?.trim()) return c.json({ error: 'path required' }, 400);
@@ -63,6 +77,14 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   api.get('/sessions', async (c) => c.json(await sessionsBoard(storage)));
 
   /** 项目分类色调色板:name → 序号(首次出现顺序,SQLite 固定;色相映射在前端色环) */
+  /** 账户级偏好:跨设备共享的设置(派发默认值 / 通知范围)。外观与快捷键跟着设备走,存前端不进这里 */
+  api.get('/prefs', (c) => c.json({ prefs: readPrefs(storage) }));
+
+  api.put('/prefs', async (c) => {
+    const patch = await c.req.json().catch(() => ({}));
+    return c.json({ prefs: writePrefs(storage, patch) });
+  });
+
   api.get('/palette', async (c) => {
     const [dirs, agents] = await Promise.all([scanProjectDirs(config.claudeDir), listAgents()]);
     const names: string[] = [];
@@ -97,6 +119,30 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   );
 
   api.get('/memories', async (c) => c.json({ memories: await listMemories(storage) }));
+
+  // ---------- 旁路提问记录 ----------
+  api.get('/sessions/:id/side-questions', (c) =>
+    c.json({ records: storage.listSideQuestions(c.req.param('id')) }),
+  );
+  /** 「存为经验」:把一问一答沉成 reference 类 memory(铁律 2 例外①),文件路径回填到记录 */
+  api.post('/side-questions/:id/memory', async (c) => {
+    const id = Number(c.req.param('id'));
+    const rec = Number.isFinite(id) ? storage.getSideQuestion(id) : null;
+    if (!rec) return c.json({ error: '旁路记录不存在' }, 404);
+    if (rec.memoryFile) return c.json({ ok: true, file: rec.memoryFile, existed: true });
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: string; confirm?: boolean };
+    if (!body.confirm) return c.json({ error: '写 memory 需要二次确认(confirm: true)' }, 400);
+    if (!body.cwd) return c.json({ error: '缺少 cwd' }, 400);
+    const file = await writeMemory({
+      cwd: body.cwd,
+      name: rec.question,
+      description: rec.question,
+      type: 'reference',
+      body: `**问**:${rec.question}\n\n**答**:${rec.answer}\n\n来源:璇玑旁路提问(/btw),会话 ${rec.sessionId}`,
+    });
+    storage.markSideQuestionMemory(id, file);
+    return c.json({ ok: true, file });
+  });
 
   api.get('/memories/search', async (c) => {
     const q = c.req.query('q')?.trim() ?? '';

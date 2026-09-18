@@ -15,8 +15,12 @@ import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
 import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
-import { clock, daySeparator, isUnread, markSeen, timeAgo } from '@/lib/utils';
-import { CompactionCard, Drawer, Empty, Md, MsgTime, Pill, ProjChip, Tag, ToolCard, confirmBox, toast } from '@/components/shared';
+import { matchKey } from '@/lib/keymap';
+import { useLocalPrefs } from '@/lib/prefs';
+import { recentOf } from '@/lib/stow';
+import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
+import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
+import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -62,13 +66,9 @@ const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
   { key: 'done', label: '已完成' },
 ];
 
-/** 已完成 = 归档:默认展示最近条数,更早的折叠 */
-const DONE_RECENT = 5;
-/** 空闲 = 停车场:同样紧凑折叠,把注意力让给验收中 */
-const IDLE_RECENT = 3;
-/** 收纳列(紧凑卡 + 折叠):与验收中/进行态的完整卡区分开 */
+/** 收纳列(紧凑卡 + 折叠):与验收中/进行态的完整卡区分开。
+    折叠态展示条数由设置「外观 → 会话看板」给出,见 lib/stow.ts */
 const STOWED: SessionState[] = ['idle', 'done'];
-const recentOf = (key: SessionState) => (key === 'done' ? DONE_RECENT : IDLE_RECENT);
 
 export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
@@ -98,6 +98,8 @@ const DRAGGABLE_COLS: SessionState[] = ['review', 'idle'];
 interface CardProps {
   s: AgentSession;
   sel: boolean;
+  /** 项目过滤生效且本卡不命中:淡出留位(列长仍表全局积压量),不可点也不可键盘选中 */
+  dim: boolean;
   /** 拖拽可用性:运行中/等待输入的卡不可拖(那是真实进行态),移动端整体关闭 */
   drag: boolean;
   onOpen: () => void;
@@ -162,14 +164,14 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
 }
 
 /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
-function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive, onUnsuspend }: CardProps) {
+function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsuspend }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
-      className={`scard compact ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      className={`scard compact ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
       title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
@@ -217,14 +219,14 @@ function CompactCard({ s, sel, drag, onOpen, onClose, onUnarchive, onUnsuspend }
 }
 
 /** blk = 左侧琥珀立柱,在合并列里标出「它在等你回话」;与 kb-sel 走不同视觉通道,可叠加显示 */
-function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
+function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
-      className={`scard ${s.state === 'blocked' ? 'blk' : ''} ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      className={`scard ${s.state === 'blocked' ? 'blk' : ''} ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
       title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
@@ -307,14 +309,14 @@ function FullCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive
  * 该列刻意不折叠:列的长度就是积压量的信号,收起来等于回到「看不见就忘」,
  * 所以只能从单卡高度上要空间。
  */
-function MidCard({ s, sel, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
+function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
-      className={`scard mid ${sel ? 'kb-sel' : ''} ${d.isDragging ? 'dragging' : ''}`}
+      className={`scard mid ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
       title={`${s.name}${s.detail ? ' — ' + s.detail : ''}`}
@@ -378,6 +380,58 @@ function ColDropZone({ id, children }: { id: string; children: React.ReactNode }
   );
 }
 
+/**
+ * 项目过滤条:四列看板之上的一行 chip,可多选(空 = 全部)。
+ *
+ * 项目色只作辨识不作唯一信息载体(chip 始终带项目名),待验收数用琥珀角标——
+ * 琥珀在本产品里专表「等你处理」,与 chip 自身的分类色分守两套词汇。
+ */
+function ProjFilter({
+  facets,
+  active,
+  onToggle,
+  onClear,
+  total,
+}: {
+  facets: ReturnType<typeof projectFacets>;
+  active: ReadonlySet<string>;
+  onToggle: (name: string) => void;
+  onClear: () => void;
+  total: number;
+}) {
+  if (facets.length < 2) return null; // 只有一个项目时过滤没有意义,整条不占位
+  return (
+    <div className="proj-filter" role="group" aria-label="按项目过滤会话">
+      <span className="pf-label">项目</span>
+      <button
+        className={`pf-chip pf-all ${active.size === 0 ? 'on' : ''}`}
+        aria-pressed={active.size === 0}
+        onClick={onClear}
+      >
+        全部 <span className="pf-n">{total}</span>
+      </button>
+      {facets.map((f) => (
+        <button
+          key={f.name}
+          className={`pf-chip ${active.has(f.name) ? 'on' : ''}`}
+          style={{ ['--pc' as string]: projColor(f.name) }}
+          aria-pressed={active.has(f.name)}
+          title={`${f.name} · ${f.total} 个会话${f.unread ? ` · ${f.unread} 待验收` : ''}`}
+          onClick={() => onToggle(f.name)}
+        >
+          <span className="pf-dot" />
+          {f.name} <span className="pf-n">{f.total}</span>
+          {f.unread > 0 && (
+            <span className="pf-warn" aria-label={`${f.unread} 个待验收`}>
+              {f.unread}
+            </span>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function Sessions({
   active,
   registerHandle,
@@ -386,6 +440,7 @@ export function Sessions({
   registerHandle?: (h: SessionsHandle) => void;
 }) {
   const { data, refresh } = usePoll(api.sessions, 5_000);
+  const prefs = useLocalPrefs();
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -416,6 +471,9 @@ export function Sessions({
       return next;
     });
   const isMobile = useIsMobile();
+  /** 项目过滤(空 = 全部)。刻意不持久化:过滤是「此刻聚焦某个项目」的临时动作,
+   *  下次打开驾驶舱默认应看到全景,而不是继承上次残留的收窄视野。 */
+  const [projFilter, setProjFilter] = useState<Set<string>>(() => new Set());
   const [mobileTab, setMobileTab] = useState<SessionState>('blocked');
   const [mobileDoneOpen, setMobileDoneOpen] = useState(false);
   /** 拖拽归档的乐观集合:后端确认(轮询数据里已进 done)前先让卡片就位,失败则回滚 */
@@ -467,6 +525,44 @@ export function Sessions({
     },
     [columns],
   );
+
+  /**
+   * 键盘可达的卡:渲染列表(itemsOf)去掉折叠区与被项目过滤的暗卡。
+   * 暗卡在 CSS 上是 pointer-events: none,键盘通道必须同步跳过,否则两个输入通道
+   * 对「这张卡能不能选」给出不同答案。渲染与键盘仍共用 itemsOf 这一个源头。
+   */
+  const navItemsOf = useCallback(
+    (col: (typeof COLS)[number]): AgentSession[] => {
+      const arr = itemsOf(col);
+      const shown =
+        STOWED.includes(col.key) && !openCols.has(col.key) ? arr.slice(0, recentOf(col.key, prefs)) : arr;
+      return narrow(shown, projFilter);
+    },
+    [itemsOf, openCols, projFilter, prefs],
+  );
+
+  /** 选中态按 sessionId 认卡而非「第几行」:渲染遍历的是完整列表、键盘走的是收窄列表,
+   *  用下标对齐两者迟早错位(过滤一变就指到别的卡上)。 */
+  const selId = useMemo(() => {
+    if (!kbPos) return null;
+    const col = COLS[kbPos.c];
+    return col ? (navItemsOf(col)[kbPos.r]?.sessionId ?? null) : null;
+  }, [kbPos, navItemsOf]);
+
+  /** 项目 chip 的数据源(含各项目待验收数),顺序稳定 */
+  const facets = useMemo(() => (columns ? projectFacets(columns) : []), [columns]);
+
+  // 过滤条件或看板数据变化后校准选中位:被滤掉/被折叠时落到同列首张可达卡,不凭空消失
+  useEffect(() => {
+    setKbPos((prev) => {
+      if (!prev) return prev;
+      const next = recalibrate(
+        prev,
+        COLS.map((c) => navItemsOf(c).length),
+      );
+      return next && next.c === prev.c && next.r === prev.r ? prev : next;
+    });
+  }, [navItemsOf]);
 
   // 后端已把某张卡真正归档进 done,撤下对应的乐观标记(避免它永久盖住真实数据)
   useEffect(() => {
@@ -611,23 +707,20 @@ export function Sessions({
   }, [registerHandle, openReplay]);
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
-  const kbRef = useRef({ kbPos, itemsOf, drawerOpen, openCols });
-  kbRef.current = { kbPos, itemsOf, drawerOpen, openCols };
+  /** document 级监听按 active 挂载,不因改键重挂;键位经 ref 读最新值 */
+  const keymap = prefs.keymap;
+  const keymapRef = useRef(keymap);
+  keymapRef.current = keymap;
+  const kbRef = useRef({ kbPos, navItemsOf, drawerOpen });
+  kbRef.current = { kbPos, navItemsOf, drawerOpen };
   useEffect(() => {
     if (!active) return;
-    // 与渲染共用 itemsOf(合并列同序);收纳列折叠区里的卡不参与键盘导航
-    const cardsIn = (c: number) => {
-      const col = COLS[c]!;
-      const arr = kbRef.current.itemsOf(col);
-      if (STOWED.includes(col.key) && !kbRef.current.openCols.has(col.key)) {
-        return arr.slice(0, recentOf(col.key));
-      }
-      return arr;
-    };
+    // 与渲染共用 itemsOf(合并列同序);折叠区与被项目过滤的暗卡不参与键盘导航
+    const cardsIn = (c: number) => kbRef.current.navItemsOf(COLS[c]!);
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || kbRef.current.drawerOpen) return;
-      // Ctrl+X 关闭当前选中会话
-      if (e.ctrlKey && (e.key === 'x' || e.key === 'X')) {
+      // 关闭当前选中会话(默认 ⌃X,可在设置里改键)
+      if (matchKey(e, keymapRef.current['sessions.close'])) {
         const pos = kbRef.current.kbPos;
         const s = pos ? cardsIn(pos.c)[pos.r] : undefined;
         if (s && !s.readonly) {
@@ -679,10 +772,11 @@ export function Sessions({
     return () => document.removeEventListener('keydown', onKey);
   }, [active, openReplay, refresh]);
 
-  // 卡片渲染:桌面(键盘选中态按列/行坐标)与移动端(单列,无键盘选中)共用同一套组件
-  const cardProps = (s: AgentSession, sel: boolean, drag: boolean): CardProps => ({
+  // 卡片渲染:桌面(键盘选中态按 sessionId)与移动端(单列,无键盘选中)共用同一套组件
+  const cardProps = (s: AgentSession, sel: boolean, drag: boolean, dim = false): CardProps => ({
     s,
     sel,
+    dim,
     drag,
     onOpen: () => void openReplay(s.sessionId, s),
     onClose: () => void closeSession(s, refresh),
@@ -725,25 +819,36 @@ export function Sessions({
           onDragCancel={() => setDragId(null)}
           onDragEnd={onDragEnd}
         >
-          <div className="board">
+          <div className="board-wrap">
+          <ProjFilter
+            facets={facets}
+            active={projFilter}
+            total={facets.reduce((n, f) => n + f.total, 0)}
+            onToggle={(name) => setProjFilter((prev) => toggle(prev, name))}
+            onClear={() => setProjFilter(new Set())}
+          />
+          <div className={`board ${projFilter.size ? 'filtering' : ''}`}>
             {COLS.map((col, ci) => {
               const items = itemsOf(col);
               const isDone = col.key === 'done';
               // 空闲与已完成都是收纳区:紧凑卡 + 折叠,注意力让位给验收中
               const stowed = STOWED.includes(col.key);
-              const recent = recentOf(col.key);
+              const recent = recentOf(col.key, prefs);
               const open = openCols.has(col.key);
               const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
               // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
               const waiting =
                 col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
               // 运行中/等待输入是真实进行态,不给拖;验收中(→空闲/已完成)与空闲(→已完成)可拖
-              const card = (s: AgentSession, ri: number) => {
-                const p = cardProps(s, kbPos?.c === ci && kbPos?.r === ri, DRAGGABLE_COLS.includes(col.key));
-                // 点击卡片同步键盘选中位:此后 Space/Enter 从鼠标停留处继续,而非跳回首卡
+              const card = (s: AgentSession) => {
+                const hit = matches(s, projFilter);
+                const p = cardProps(s, s.sessionId === selId, DRAGGABLE_COLS.includes(col.key) && hit, !hit);
+                // 点击卡片同步键盘选中位:此后 Space/Enter 从鼠标停留处继续,而非跳回首卡。
+                // 行号在键盘可达列表里取,与 selId 的口径一致。
                 const baseOpen = p.onOpen;
                 p.onOpen = () => {
-                  setKbPos({ c: ci, r: ri });
+                  const r = navItemsOf(col).findIndex((x) => x.sessionId === s.sessionId);
+                  if (r >= 0) setKbPos({ c: ci, r });
                   baseOpen();
                 };
                 if (stowed) return <CompactCard key={s.id} {...p} />;
@@ -752,13 +857,13 @@ export function Sessions({
               };
               const body = (
                 <>
-                  {items.slice(0, stowed ? recent : undefined).map((s, ri) => card(s, ri))}
+                  {items.slice(0, stowed ? recent : undefined).map((s) => card(s))}
                   {olderCount > 0 && (
                     <button className="col-more" onClick={() => toggleCol(col.key)}>
                       {open ? '收起 ▴' : `更早的 ${olderCount} 条 ▾`}
                     </button>
                   )}
-                  {stowed && open && items.slice(recent).map((s, i) => card(s, recent + i))}
+                  {stowed && open && items.slice(recent).map((s) => card(s))}
                   {items.length === 0 && (
                     <div className="empty" style={{ padding: '24px 12px' }}>
                       <p>
@@ -793,6 +898,7 @@ export function Sessions({
                 </div>
               );
             })}
+          </div>
           </div>
           {/* 跟手的那张:渲染在 body 层,不被列的 overflow 裁掉,也不被右侧列盖住 */}
           <DragOverlay dropAnimation={null} className="drag-ghost">
@@ -829,7 +935,7 @@ export function Sessions({
           {(() => {
             const items = columns?.[mobileTab] ?? [];
             const stowed = STOWED.includes(mobileTab);
-            const recent = recentOf(mobileTab);
+            const recent = recentOf(mobileTab, prefs);
             const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
             // 移动端是 tab 切换而非并排看板,没有可拖的落点,处置全走卡片自身入口
             const card = (s: AgentSession) => {
@@ -917,6 +1023,7 @@ export function Sessions({
         {replay?.events.map((ev, i) => {
           if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
           if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
+          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
           if (ev.kind === 'raw')
             return (
               <div className="raw-event" key={i}>
@@ -937,7 +1044,7 @@ export function Sessions({
                     <Md>{ev.text}</Md>
                   </div>
                 ) : (
-                  <div className="body">{ev.text}</div>
+                  <div className="body md"><UserText text={ev.text} /></div>
                 )}
               </div>
             </Fragment>

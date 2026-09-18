@@ -1,5 +1,8 @@
 /** 派发页状态机:/ws/dispatch 双向流 → 消息列表 + agent 状态 + 用量指示 */
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { api } from '@/api/client';
+import type { SideQuestion } from '@/api/types';
+import type { SlashCmdInfo } from '@/lib/slash';
 
 export interface QuestionSpec {
   question: string;
@@ -18,16 +21,32 @@ export interface InlineImage {
 
 export type ChatItem =
   | { t: 'user'; text: string; ts?: number; images?: InlineImage[] }
-  | { t: 'assistant'; text: string; streaming: boolean; ts?: number }
+  /** turnMs:本轮(你发出 → 回合结束)总耗时,回合结束时打在该轮最后一条 assistant 上 */
+  | { t: 'assistant'; text: string; streaming: boolean; ts?: number; turnMs?: number }
   /** 思考块:streaming 时展开逐字流出,收到 thinking-end 后带耗时收起为一行 */
   | { t: 'thinking'; text: string; streaming: boolean; durationMs?: number }
   | { t: 'tool'; id: string; name: string; input: string; output?: string; isError?: boolean }
   | { t: 'approval'; requestId: string; toolName: string; title: string; input: string; decision?: string }
   | { t: 'question'; requestId: string; questions: QuestionSpec[]; answers?: Record<string, string> }
   | { t: 'note'; text: string }
+  /** PR/MR 链接卡:回放装载历史时出现,实时流无此事件 */
+  | { t: 'pr'; url: string; platform: 'gitlab' | 'github' | 'other'; number?: number; repo?: string; updates: number; ts?: number; lastTs?: number }
   /** 上下文压缩点:历史装载时带摘要可展开;实时压缩事件无摘要则仅一行 */
   | { t: 'compact'; trigger?: string; preTokens?: number; durationMs?: number; summary?: string }
   | { t: 'error'; text: string };
+
+/**
+ * 旁路提问(/btw)状态:与主对话 items 完全隔离——答案落这里与自有库,永不进 items。
+ * records 按时间正序(面板 ⇧←/⇧→ 的翻页顺序);会话 init/attach 时从后端拉全量,之后由 btw-result 追加。
+ */
+export interface BtwState {
+  inFlight: { requestId: string; question: string; startedAt: number } | null;
+  records: SideQuestion[];
+  /** 最近一次失败(含取消):面板据此显示重问/改到主对话问 */
+  error: { requestId: string; question: string; message: string } | null;
+}
+
+const BTW_EMPTY: BtwState = { inFlight: null, records: [], error: null };
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'awaiting-permission' | 'ended' | 'none';
@@ -60,6 +79,13 @@ export interface DispatchIntent {
 }
 
 const DISPATCH_KEY = 'xuanji-dispatch-id';
+/** 事件发生的时刻:attach 回放的事件带 at(当初入缓冲的时刻),实时事件没有 → 现在。
+ *  不用它的话,接回/刷新后整条会话的消息时间会被抹成同一个「刚刚」。 */
+export function evAt(e: Record<string, unknown>): number {
+  const at = Number(e.at);
+  return Number.isFinite(at) && at > 0 ? at : Date.now();
+}
+
 /** 刷新后自动接回:attach 报「不存在」是正常情形(后端已重启),静默清除 */
 const GONE_MSG = '派发会话不存在或已结束';
 
@@ -102,12 +128,29 @@ export function useDispatch() {
   const [status, setStatus] = useState<AgentStatus>({ state: 'none' });
   const [chips, setChips] = useState<UsageChips>({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
   const [sessionId, setSessionId] = useState<string | null>(null);
+  /**
+   * 「已知会话 id」:续接/接回时前端其实早就知道要进哪个会话,但 sessionId 要等 SDK 的 init 事件
+   * (= 发出第一条消息之后)才有值。旁路记录这类「按会话挂载的自有数据」不该陪着等那一轮,
+   * 故进入会话的入口把 id 先登记在这里;init 到了以它为准(fork 会换 id)。
+   */
+  const [knownSessionId, setKnownSessionId] = useState<string | null>(null);
   const [model, setModel] = useState<string | null>(null);
   const [costUsd, setCostUsd] = useState(0);
+  /** 本轮耗时:startedAt 进 working 时起算(审批等待也算在轮内,与 SDK 的 durationMs 同口径),
+   *  lastMs 由 result 事件的权威值定格。状态条读它显示「已用 N」/「本轮 N」。 */
+  const [turn, setTurn] = useState<{ startedAt: number | null; lastMs: number | null }>({ startedAt: null, lastMs: null });
+  /** 「你按下发送」的时刻。只由本前端的 send 置位——接回存活会话、装载历史回放时都没有这个动作,
+   *  那些场景的 result 必须退回 SDK 的 duration_ms,否则会把回放事件当成刚跑完的一轮算出 0s。 */
+  const turnStartRef = useRef<number | null>(null);
   /** 接回存活会话时后端随 attached 事件下发的垫历史元信息:内存事件只覆盖后端本进程
    *  生命周期,before(= dispatch startedAt)之前的对话需从会话 jsonl 回放补齐(消费方 Dispatch.tsx)。
    *  每次 attach 都换新对象引用,重连接回(items 已被清空)也能重新触发消费 effect。 */
   const [attachedHistory, setAttachedHistory] = useState<{ sessionId: string; before: number } | null>(null);
+  /** 本会话可用的斜杠命令(联想面板)。后端 commands 事件是 REPLACE 语义,整份换掉即可 */
+  const [commands, setCommands] = useState<SlashCmdInfo[] | null>(null);
+  /** 命令使用频率(含璇玑自己拦截的那几条),前端的内置命令表按它排序 */
+  const [commandUses, setCommandUses] = useState<Record<string, number>>({});
+  const [btw, setBtw] = useState<BtwState>(BTW_EMPTY);
   const wsRef = useRef<WebSocket | null>(null);
   const startedRef = useRef(false);
   const restoringRef = useRef(false);
@@ -119,6 +162,8 @@ export function useDispatch() {
   // 思考流同样是高频 delta(实测一段思考 ~54 条),与正文共用同一个 rAF 节拍合批。
   // 两者不会同时活跃(思考块 stop 后才轮到正文),故一个 rAF 里顺序 flush 即可。
   const pendingThinkRef = useRef('');
+  /** 本批 delta 里第一条事件发生的时刻(回放事件的 at,实时则是现在),给合批出的消息打时间 */
+  const pendingAtRef = useRef<number | null>(null);
   const rafIdRef = useRef<number | null>(null);
 
   const flushDelta = useCallback(() => {
@@ -143,9 +188,11 @@ export function useDispatch() {
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移
-      return [...prev, { t: 'assistant', text, streaming: true, ts: Date.now() }];
+      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移;
+      // 回放事件带 at(当初发生的时刻),用它而不是「现在」
+      return [...prev, { t: 'assistant', text, streaming: true, ts: pendingAtRef.current ?? Date.now() }];
     });
+    pendingAtRef.current = null;
   }, []);
 
   /** 清空未 flush 的 delta 缓冲并取消已排的 rAF:reset/attach 重建 items 前必须调用,
@@ -153,6 +200,7 @@ export function useDispatch() {
   const clearPendingDelta = useCallback(() => {
     pendingDeltaRef.current = '';
     pendingThinkRef.current = '';
+    pendingAtRef.current = null;
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
@@ -168,24 +216,42 @@ export function useDispatch() {
           setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
         }
         break;
+      case 'commands':
+        setCommands(e.cmds as SlashCmdInfo[]);
+        if (e.uses) setCommandUses(e.uses as Record<string, number>);
+        break;
       case 'init':
         setSessionId(String(e.sessionId));
         if (e.model) setModel(String(e.model));
         break;
-      case 'status':
-        setStatus({ state: e.state as AgentStatus['state'], detail: e.detail as string | undefined });
+      case 'status': {
+        const st = e.state as AgentStatus['state'];
+        setStatus({ state: st, detail: e.detail as string | undefined });
+        // 轮次起点:从「不在跑」转入 working 的那一刻。审批等待(awaiting-permission)不重新起算,
+        // 它仍属同一轮——SDK 的 durationMs 也把这段等待算在内。
+        // 秒表起点:本前端发的那一轮用 send 的时刻(与定格值同源);终端里发起、这边只是接回
+        // 观战的轮次没有发送动作,退而用「转入 working」的时刻,近似但总比不显示强。
+        if (st === 'working') setTurn((t) => (t.startedAt == null ? { ...t, startedAt: turnStartRef.current ?? Date.now() } : t));
+        else if (st === 'idle' || st === 'ended' || st === 'none') {
+          setTurn((t) => ({ ...t, startedAt: null }));
+          // 轮次没收到 result 就结束了(中断 / 报错):起点必须作废,否则会被下一轮当成自己的起点
+          turnStartRef.current = null;
+        }
         break;
+      }
       case 'user-echo':
         setItems((prev) => [
           ...prev,
-          { t: 'user', text: String(e.text ?? ''), ts: Date.now(), images: e.images as InlineImage[] | undefined },
+          { t: 'user', text: String(e.text ?? ''), ts: evAt(e), images: e.images as InlineImage[] | undefined },
         ]);
         break;
       case 'delta':
+        pendingAtRef.current ??= evAt(e);
         pendingDeltaRef.current += String(e.text);
         if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
       case 'thinking-delta':
+        pendingAtRef.current ??= evAt(e);
         pendingThinkRef.current += String(e.text);
         if (rafIdRef.current === null) rafIdRef.current = requestAnimationFrame(flushDelta);
         break;
@@ -212,7 +278,7 @@ export function useDispatch() {
             // 保留流开始时打的点,不改写成本轮结束时刻
             return [...prev.slice(0, -1), { t: 'assistant', text: String(e.text), streaming: false, ts: last.ts }];
           }
-          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: Date.now() }];
+          return [...prev, { t: 'assistant', text: String(e.text), streaming: false, ts: evAt(e) }];
         });
         break;
       case 'tool':
@@ -264,10 +330,28 @@ export function useDispatch() {
           ),
         );
         break;
-      case 'result':
+      case 'result': {
         setChips((c) => ({ ...c, contextPct: Number(e.contextPct) }));
         setCostUsd((v) => v + Number(e.costUsd ?? 0));
+        // 口径:本前端发出的轮次用墙钟(你按下发送 → 回合结束)。SDK 的 duration_ms 从 query 真正
+        // 开跑起算,漏掉会话冷启动那几秒——实测首轮状态条已数到 9s 而 duration_ms 只给 3s,定格
+        // 时数字当场跳水。没有发送动作的轮次(接回观战、重连后装载的历史回放)退回 SDK 值。
+        const sdkMs = Number(e.durationMs);
+        const ms = turnStartRef.current != null ? Date.now() - turnStartRef.current : sdkMs;
+        if (Number.isFinite(ms) && ms > 0) {
+          setTurn({ startedAt: null, lastMs: ms });
+          turnStartRef.current = null;
+          // 打在本轮最后一条 assistant 上;该轮若只有工具调用没有正文(极少),就只剩状态条显示
+          setItems((prev) => {
+            const i = prev.map((it) => it.t).lastIndexOf('assistant');
+            if (i < 0) return prev;
+            const next = [...prev];
+            next[i] = { ...(next[i] as Extract<ChatItem, { t: 'assistant' }>), turnMs: ms };
+            return next;
+          });
+        }
         break;
+      }
       case 'context':
         // 后端 getContextUsage() 的权威上下文占用(与终端 /context 同源),覆盖 result 的估算
         setChips((c) => ({ ...c, contextPct: Number(e.pct) }));
@@ -318,6 +402,31 @@ export function useDispatch() {
               : `后台派发失败:${e.output}`,
           },
         ]);
+        break;
+      // ---------- 旁路提问:三段式,与主对话 items 互不相干 ----------
+      case 'btw-start':
+        setBtw((b) => ({
+          ...b,
+          error: null,
+          inFlight: { requestId: String(e.requestId), question: String(e.question), startedAt: Date.now() },
+        }));
+        break;
+      case 'btw-result': {
+        const record = e.record as SideQuestion;
+        setBtw((b) => ({
+          inFlight: null,
+          error: null,
+          // attach 回放 + 拉库可能各带一份同 id 记录,按 id 去重
+          records: b.records.some((r) => r.id === record.id) ? b.records : [...b.records, record],
+        }));
+        break;
+      }
+      case 'btw-error':
+        setBtw((b) => ({
+          ...b,
+          inFlight: null,
+          error: { requestId: String(e.requestId), question: String(e.question), message: String(e.message) },
+        }));
         break;
       case 'error':
         if (restoringRef.current && e.message === GONE_MSG) {
@@ -380,6 +489,9 @@ export function useDispatch() {
       setItems([]);
       setStatus({ state: 'none' });
       setCostUsd(0);
+      setTurn({ startedAt: null, lastMs: null });
+    turnStartRef.current = null;
+      turnStartRef.current = null;
       setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
       const ws = await ensureWs();
       ws.send(JSON.stringify({ op: 'attach', dispatchId }));
@@ -408,8 +520,9 @@ export function useDispatch() {
         // 后台会话走 claude CLI 子进程,没有内联图片通道 —— 图片在此丢弃(UI 已提前拦截)
         setItems((prev) => [...prev, { t: 'user', text }]);
         ws.send(JSON.stringify({ op: 'bg', cwd: opts.cwd, prompt: text }));
-        return;
+        return;   // 后台会话不在本页跑,没有 result 事件可收口,故不起表
       }
+      turnStartRef.current = Date.now();   // 轮次计时从「按下发送」起算
       if (!startedRef.current) {
         startedRef.current = true;
         setStatus({ state: 'working' });
@@ -459,11 +572,64 @@ export function useDispatch() {
     setItems([]);
     setStatus({ state: 'none' });
     setSessionId(null);
+    setKnownSessionId(null);
     setModel(null);
     setCostUsd(0);
+    setTurn({ startedAt: null, lastMs: null });
     setChips({ contextPct: null, fiveHourPct: null, sevenDayPct: null, fiveHourResetsAt: null, sevenDayResetsAt: null, modelWeeklyPct: null, modelWeeklyName: null });
     setAttachedHistory(null);
+    // commands 有意不清:命令目录跨会话基本不变,留着新会话就不必空一轮等 init,
+    // 真列表一到自会整份替换(REPLACE 语义)
+    setBtw(BTW_EMPTY);
   }, [clearPendingDelta]);
+
+  /** 拉旁路记录用的会话 id:init 到了以它为准,没到就用入口登记的已知 id(续接/接回都属此列) */
+  const btwSessionId = sessionId ?? knownSessionId;
+
+  // 会话确定后拉旁路记录:问过的一定还在,不依赖本 tab 是否亲历过 btw-result,
+  // 也不依赖本轮是否已经发过消息(重启后续接老会话时,init 要等第一条消息才来)
+  useEffect(() => {
+    if (!btwSessionId) {
+      setBtw(BTW_EMPTY);
+      return;
+    }
+    let alive = true;
+    api
+      .sideQuestions(btwSessionId)
+      .then(({ records }) => {
+        if (!alive) return;
+        setBtw((b) => {
+          const seen = new Set(records.map((r) => r.id));
+          return { ...b, records: [...records, ...b.records.filter((r) => !seen.has(r.id))] };
+        });
+      })
+      .catch(() => {/* 记录拉不到不影响提问;面板空态兜底 */});
+    return () => {
+      alive = false;
+    };
+  }, [btwSessionId]);
+
+  /** 入口登记「即将进入哪个会话」(续接 / 接回)。传 null = 不知道,由 init 兜底 */
+  const noteSessionId = useCallback((id: string | null) => {
+    setKnownSessionId(id);
+  }, []);
+
+  const askBtw = useCallback((question: string) => {
+    wsRef.current?.send(JSON.stringify({ op: 'btw', question }));
+  }, []);
+
+  const cancelBtw = useCallback(() => {
+    wsRef.current?.send(JSON.stringify({ op: 'btw-cancel' }));
+  }, []);
+
+  /** 「存为经验」成功后回填 memory 路径(按钮转「已存为经验」) */
+  const markBtwMemory = useCallback((id: number, memoryFile: string) => {
+    setBtw((b) => ({ ...b, records: b.records.map((r) => (r.id === id ? { ...r, memoryFile } : r)) }));
+  }, []);
+
+  const clearBtwError = useCallback(() => {
+    setBtw((b) => ({ ...b, error: null }));
+  }, []);
 
   const pushNote = useCallback((text: string) => {
     setItems((prev) => [...prev, { t: 'note', text }]);
@@ -475,5 +641,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, started, attachedHistory, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory };
+  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }
