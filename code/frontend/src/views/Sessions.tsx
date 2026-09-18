@@ -17,6 +17,7 @@ import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
+import { recentOf } from '@/lib/stow';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
 import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
@@ -65,13 +66,9 @@ const MOBILE_TABS: { key: SessionState; label: string; warn?: boolean }[] = [
   { key: 'done', label: '已完成' },
 ];
 
-/** 已完成 = 归档:默认展示最近条数,更早的折叠 */
-const DONE_RECENT = 5;
-/** 空闲 = 停车场:同样紧凑折叠,把注意力让给验收中 */
-const IDLE_RECENT = 3;
-/** 收纳列(紧凑卡 + 折叠):与验收中/进行态的完整卡区分开 */
+/** 收纳列(紧凑卡 + 折叠):与验收中/进行态的完整卡区分开。
+    折叠态展示条数由设置「外观 → 会话看板」给出,见 lib/stow.ts */
 const STOWED: SessionState[] = ['idle', 'done'];
-const recentOf = (key: SessionState) => (key === 'done' ? DONE_RECENT : IDLE_RECENT);
 
 export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
@@ -443,6 +440,7 @@ export function Sessions({
   registerHandle?: (h: SessionsHandle) => void;
 }) {
   const { data, refresh } = usePoll(api.sessions, 5_000);
+  const prefs = useLocalPrefs();
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -537,10 +535,10 @@ export function Sessions({
     (col: (typeof COLS)[number]): AgentSession[] => {
       const arr = itemsOf(col);
       const shown =
-        STOWED.includes(col.key) && !openCols.has(col.key) ? arr.slice(0, recentOf(col.key)) : arr;
+        STOWED.includes(col.key) && !openCols.has(col.key) ? arr.slice(0, recentOf(col.key, prefs)) : arr;
       return narrow(shown, projFilter);
     },
-    [itemsOf, openCols, projFilter],
+    [itemsOf, openCols, projFilter, prefs],
   );
 
   /** 选中态按 sessionId 认卡而非「第几行」:渲染遍历的是完整列表、键盘走的是收窄列表,
@@ -710,7 +708,7 @@ export function Sessions({
 
   /** 键盘导航:方向键选卡(跳过空列),Space/Enter 打开回放,对齐 claude agents TUI */
   /** document 级监听按 active 挂载,不因改键重挂;键位经 ref 读最新值 */
-  const keymap = useLocalPrefs().keymap;
+  const keymap = prefs.keymap;
   const keymapRef = useRef(keymap);
   keymapRef.current = keymap;
   const kbRef = useRef({ kbPos, navItemsOf, drawerOpen });
@@ -835,7 +833,7 @@ export function Sessions({
               const isDone = col.key === 'done';
               // 空闲与已完成都是收纳区:紧凑卡 + 折叠,注意力让位给验收中
               const stowed = STOWED.includes(col.key);
-              const recent = recentOf(col.key);
+              const recent = recentOf(col.key, prefs);
               const open = openCols.has(col.key);
               const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
               // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
@@ -937,7 +935,7 @@ export function Sessions({
           {(() => {
             const items = columns?.[mobileTab] ?? [];
             const stowed = STOWED.includes(mobileTab);
-            const recent = recentOf(mobileTab);
+            const recent = recentOf(mobileTab, prefs);
             const olderCount = stowed ? Math.max(0, items.length - recent) : 0;
             // 移动端是 tab 切换而非并排看板,没有可拖的落点,处置全走卡片自身入口
             const card = (s: AgentSession) => {

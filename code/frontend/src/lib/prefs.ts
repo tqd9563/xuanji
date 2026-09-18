@@ -14,6 +14,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { KEYMAP_DEFAULTS, normalizeKeymap, type ActionId, type Keymap } from '@/lib/keymap';
+import { STOW_OPTS, type StowRecent } from '@/lib/stow';
 
 const LOCAL_KEY = 'xuanji.prefs';
 
@@ -29,6 +30,10 @@ export interface LocalPrefs {
   turnHead: boolean;
   /** 减少动效;system = 跟随 prefers-reduced-motion */
   reduceMotion: MotionPref;
+  /** 「空闲」列折叠态展示条数;0 = 全部 */
+  stowIdle: StowRecent;
+  /** 「已完成」列折叠态展示条数;0 = 全部 */
+  stowDone: StowRecent;
   keymap: Keymap;
 }
 
@@ -37,8 +42,13 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   fontScale: 'md',
   turnHead: true,
   reduceMotion: 'system',
+  stowIdle: 5,
+  stowDone: 5,
   keymap: KEYMAP_DEFAULTS,
 };
+
+const stowOf = (v: unknown, fb: StowRecent): StowRecent =>
+  (STOW_OPTS as readonly number[]).includes(v as number) ? (v as StowRecent) : fb;
 
 const oneOf = <T extends string>(v: unknown, allow: readonly T[], fb: T): T =>
   typeof v === 'string' && (allow as readonly string[]).includes(v) ? (v as T) : fb;
@@ -50,6 +60,8 @@ function normalizeLocal(raw: unknown): LocalPrefs {
     fontScale: oneOf(o.fontScale, ['sm', 'md', 'lg'] as const, DEFAULT_LOCAL.fontScale),
     turnHead: typeof o.turnHead === 'boolean' ? o.turnHead : DEFAULT_LOCAL.turnHead,
     reduceMotion: oneOf(o.reduceMotion, ['system', 'on', 'off'] as const, DEFAULT_LOCAL.reduceMotion),
+    stowIdle: stowOf(o.stowIdle, DEFAULT_LOCAL.stowIdle),
+    stowDone: stowOf(o.stowDone, DEFAULT_LOCAL.stowDone),
     keymap: normalizeKeymap(o.keymap),
   };
 }
