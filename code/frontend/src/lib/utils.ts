@@ -54,10 +54,24 @@ function seenBaseline(): number {
   return b;
 }
 
+/** 已读表的版本号与订阅者:已读表存 localStorage,写入不经过 React,消费方(看板卡片、
+ *  仪表盘待处置队列)必须靠它才能在 markSeen 的同一帧重渲染。否则角标要等下一个
+ *  5s 轮询刻度才熄灭——从会话退回看板时肉眼可见「角标滞留一下、卡片才下沉」。
+ *  单点收在这里而不是各消费方自己 refresh:入口有六条,消费侧只有一处(useSeenVersion)。 */
+let seenVersion = 0;
+const seenSubs = new Set<() => void>();
+export function subscribeSeen(fn: () => void): () => void {
+  seenSubs.add(fn);
+  return () => seenSubs.delete(fn);
+}
+export const getSeenVersion = () => seenVersion;
+
 export function markSeen(sessionId: string) {
   const m = seenMap();
   m[sessionId] = Date.now();
   localStorage.setItem(SEEN_KEY, JSON.stringify(m));
+  seenVersion++;
+  for (const fn of seenSubs) fn();
 }
 
 /**

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import type { ModelUsage, ProjectUsage, SessionUsage, TokenTotals, UsageRange, UsageReport } from '@/api/types';
-import { usePoll } from '@/lib/hooks';
+import { usePoll, useSeenVersion } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import {
   CACHE_READ_WEIGHT,
@@ -88,6 +88,8 @@ function DashTodos() {
 
 export function Dashboard({ onGoSession }: { onGoSession: (sessionId: string) => void }) {
   const { data } = usePoll(api.dashboard, 15_000);
+  // 待处置队列的琥珀/紫罗兰分档靠 isUnread,已读表变了要立刻改档
+  useSeenVersion();
 
   if (!data) return <div className="view-head"><h1>仪表盘</h1><span className="sub">加载中…</span></div>;
 
