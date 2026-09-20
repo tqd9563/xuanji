@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
+import { Fragment, memo, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
@@ -218,7 +218,7 @@ function remarkTrimAutolink() {
  * 换行由容器的 white-space: pre-wrap 保留(用户消息「多行不折叠」的既有行为),
  * 故相邻普通块之间要补回 '\n';代码块是块级元素,与相邻块之间不补,否则多出空行。
  */
-export function UserText({ text }: { text: string }) {
+export const UserText = memo(function UserText({ text }: { text: string }) {
   const blocks = parse(text);
   return (
     <>
@@ -248,16 +248,16 @@ export function UserText({ text }: { text: string }) {
       })}
     </>
   );
-}
+});
 
 /** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 尾巴修剪 + 外链新窗口打开 */
-export function Md({ children }: { children: string }) {
+export const Md = memo(function Md({ children }: { children: string }) {
   return (
     <Markdown remarkPlugins={[remarkGfm, remarkTrimAutolink]} components={MD_COMPONENTS}>
       {children}
     </Markdown>
   );
-}
+});
 
 // ---------- 状态胶囊 ----------
 
@@ -524,7 +524,7 @@ export function ThinkingCard({ text, streaming, durationMs }: { text: string; st
 }
 
 /** 回放时间线里的「上下文已压缩」卡片:头部一行元信息,展开看压缩摘要全文 */
-export function CompactionCard({
+export const CompactionCard = memo(function CompactionCard({
   trigger,
   preTokens,
   durationMs,
@@ -558,7 +558,7 @@ export function CompactionCard({
       )}
     </div>
   );
-}
+});
 
 const PR_ICON = {
   gitlab: (
@@ -584,7 +584,7 @@ const PR_ICON = {
  * 同一个 PR 的重复事件已在 adapter 合并,这里一个 PR 只出一张卡。
  * 事件本身没有状态字段(创建/push/合并写的是同一种记录),故只报次数不报状态。
  */
-export function PrLinkCard({
+export const PrLinkCard = memo(function PrLinkCard({
   url,
   platform,
   number,
@@ -620,9 +620,9 @@ export function PrLinkCard({
       </span>
     </a>
   );
-}
+});
 
-export function ToolCard({ name, input, output, isError }: { name: string; input: string; output?: string; isError?: boolean }) {
+export const ToolCard = memo(function ToolCard({ name, input, output, isError }: { name: string; input: string; output?: string; isError?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={cn('toolcard', open && 'open')}>
@@ -636,4 +636,4 @@ export function ToolCard({ name, input, output, isError }: { name: string; input
       <div className="tc-body">{output ?? '(无输出)'}</div>
     </div>
   );
-}
+});
