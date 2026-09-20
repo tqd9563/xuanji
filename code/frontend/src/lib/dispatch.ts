@@ -40,13 +40,15 @@ export type ChatItem =
  * records 按时间正序(面板 ⇧←/⇧→ 的翻页顺序);会话 init/attach 时从后端拉全量,之后由 btw-result 追加。
  */
 export interface BtwState {
+  /** records 属于哪个会话。跨会话残留是本状态的历史缺陷(见拉取 effect),归属显式化后一眼可判 */
+  sessionId: string | null;
   inFlight: { requestId: string; question: string; startedAt: number } | null;
   records: SideQuestion[];
   /** 最近一次失败(含取消):面板据此显示重问/改到主对话问 */
   error: { requestId: string; question: string; message: string } | null;
 }
 
-const BTW_EMPTY: BtwState = { inFlight: null, records: [], error: null };
+const BTW_EMPTY: BtwState = { sessionId: null, inFlight: null, records: [], error: null };
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'awaiting-permission' | 'ended' | 'none';
@@ -222,6 +224,9 @@ export function useDispatch() {
         break;
       case 'init':
         setSessionId(String(e.sessionId));
+        // 会话真实 id 以 init 为准(续接 fork 会换 id):同步覆盖入口登记的已知 id,
+        // 否则旁路记录会继续挂在被 fork 掉的那个旧会话上
+        setKnownSessionId(String(e.sessionId));
         if (e.model) setModel(String(e.model));
         break;
       case 'status': {
@@ -414,6 +419,7 @@ export function useDispatch() {
       case 'btw-result': {
         const record = e.record as SideQuestion;
         setBtw((b) => ({
+          ...b,
           inFlight: null,
           error: null,
           // attach 回放 + 拉库可能各带一份同 id 记录,按 id 去重
@@ -583,8 +589,11 @@ export function useDispatch() {
     setBtw(BTW_EMPTY);
   }, [clearPendingDelta]);
 
-  /** 拉旁路记录用的会话 id:init 到了以它为准,没到就用入口登记的已知 id(续接/接回都属此列) */
-  const btwSessionId = sessionId ?? knownSessionId;
+  /** 拉旁路记录用的会话 id:入口登记的已知 id 最权威(续接/接回进入的就是它),
+   *  没登记过才退回 SDK init 给的 sessionId(全新派发 / fork 换 id 都属此列)。
+   *  2026-09-20:反过来让 sessionId 优先,会让「离开会话但没触发 reset」的入口
+   *  把上一个会话的 id 一直挂着,状态条于是显示别的会话的旁路条数。 */
+  const btwSessionId = knownSessionId ?? sessionId;
 
   // 会话确定后拉旁路记录:问过的一定还在,不依赖本 tab 是否亲历过 btw-result,
   // 也不依赖本轮是否已经发过消息(重启后续接老会话时,init 要等第一条消息才来)
@@ -593,14 +602,19 @@ export function useDispatch() {
       setBtw(BTW_EMPTY);
       return;
     }
+    // 先按新会话归零:拉取是异步的,不清则这一拍状态条还挂着上一个会话的条数
+    setBtw((b) => (b.sessionId === btwSessionId ? b : { ...BTW_EMPTY, sessionId: btwSessionId }));
     let alive = true;
     api
       .sideQuestions(btwSessionId)
       .then(({ records }) => {
         if (!alive) return;
+        // REPLACE 语义:records 按会话挂载,换会话时上一个会话的记录必须整份换掉,
+        // 只保留本地刚收到、库里还没有的同会话记录(btw-result 与拉库的竞态)。
         setBtw((b) => {
           const seen = new Set(records.map((r) => r.id));
-          return { ...b, records: [...records, ...b.records.filter((r) => !seen.has(r.id))] };
+          const local = b.sessionId === btwSessionId ? b.records.filter((r) => !seen.has(r.id)) : [];
+          return { ...b, sessionId: btwSessionId, records: [...records, ...local] };
         });
       })
       .catch(() => {/* 记录拉不到不影响提问;面板空态兜底 */});
