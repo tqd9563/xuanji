@@ -18,6 +18,7 @@ import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
 import { recentOf } from '@/lib/stow';
+import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
 import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
@@ -463,6 +464,48 @@ export function Sessions({
       return sep;
     });
   }, [replay]);
+  /**
+   * 回放事件的元素列表:整体 useMemo,让 5s 轮询引起的 Sessions 重渲染不再重建它们
+   * (实测抽屉开着时每次轮询要多花 ~370ms 主线程——每条助手消息都被 react-markdown
+   * 重新解析一遍)。配合 shared.tsx 里各卡片的 memo,轮询期间这块开销降到零。
+   * mountCount 由 useProgressiveMount 逐片放开,首屏只付前 30 条的代价。
+   */
+  const mountCount = useProgressiveMount(replay?.events.length ?? 0, replay);
+  const replayRows = useMemo(
+    () =>
+      (replay?.events ?? []).slice(0, mountCount).map((ev, i) => {
+          if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
+          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
+          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
+          if (ev.kind === 'raw')
+            return (
+              <div className="raw-event" key={i}>
+                <div className="note">⚠ 未知事件类型「{ev.type}」,已按原始文本降级展示(adapter 兜底)</div>
+                {ev.json}
+              </div>
+            );
+          return (
+            <Fragment key={i}>
+              {replayDaySeps[i] && <div className="day-sep">{replayDaySeps[i]}</div>}
+              <div className="replay-msg">
+                <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>
+                  {ev.kind === 'user' ? '你' : 'Claude'}
+                  <MsgTime ts={ev.ts} />
+                </div>
+                {ev.kind === 'assistant' ? (
+                  <div className="body md">
+                    <Md>{ev.text}</Md>
+                  </div>
+                ) : (
+                  <div className="body md"><UserText text={ev.text} /></div>
+                )}
+              </div>
+            </Fragment>
+          );
+        }),
+    [replay, mountCount, replayDaySeps],
+  );
+
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   /** 收纳列(空闲/已完成)的展开状态:两列各自独立折叠 */
   const [openCols, setOpenCols] = useState<Set<SessionState>>(() => new Set());
@@ -1023,36 +1066,7 @@ export function Sessions({
       >
         <FindBar scopeRef={drawerBodyRef} state={find} placeholder="在本次回放中查找" />
         {!replay && <Empty><p>回放加载中…</p></Empty>}
-        {replay?.events.map((ev, i) => {
-          if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
-          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
-          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
-          if (ev.kind === 'raw')
-            return (
-              <div className="raw-event" key={i}>
-                <div className="note">⚠ 未知事件类型「{ev.type}」,已按原始文本降级展示(adapter 兜底)</div>
-                {ev.json}
-              </div>
-            );
-          return (
-            <Fragment key={i}>
-              {replayDaySeps[i] && <div className="day-sep">{replayDaySeps[i]}</div>}
-              <div className="replay-msg">
-                <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>
-                  {ev.kind === 'user' ? '你' : 'Claude'}
-                  <MsgTime ts={ev.ts} />
-                </div>
-                {ev.kind === 'assistant' ? (
-                  <div className="body md">
-                    <Md>{ev.text}</Md>
-                  </div>
-                ) : (
-                  <div className="body md"><UserText text={ev.text} /></div>
-                )}
-              </div>
-            </Fragment>
-          );
-        })}
+        {replayRows}
         {replay && replay.events.length === 0 && <Empty><p>此会话没有可回放的事件。</p></Empty>}
       </Drawer>
     </>
