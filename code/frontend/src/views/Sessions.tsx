@@ -13,7 +13,7 @@ import {
 } from '@dnd-kit/core';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
-import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
+import { usePoll, isTypingTarget, useIsMobile, useSeenVersion } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
@@ -440,6 +440,8 @@ export function Sessions({
   registerHandle?: (h: SessionsHandle) => void;
 }) {
   const { data, refresh } = usePoll(api.sessions, 5_000);
+  // 已读表版本:markSeen 后立刻重渲染(角标 + 未读排顶),不等 5s 轮询
+  const seenVer = useSeenVersion();
   const prefs = useLocalPrefs();
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
@@ -509,7 +511,8 @@ export function Sessions({
       out[key] = [...out[key]].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a)));
     }
     return out;
-  }, [data, pendingArchive]);
+    // seenVer:排序用了 isUnread,已读表一变就要重排
+  }, [data, pendingArchive, pendingSuspend, seenVer]);
 
   /**
    * 桌面列 → 卡片列表。合并列把多个状态拼起来,等你回话的(blocked)排最前——

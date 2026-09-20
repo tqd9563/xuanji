@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { getSeenVersion, subscribeSeen } from '@/lib/utils';
 
 /** 跨挂载 stale-while-revalidate 缓存(键 = fetcher 引用,调用点均为稳定的 api.*):
  *  视图卸载重挂时先立刻展示上次数据、后台静默刷新——切换视图不再白屏等待。 */
@@ -72,6 +73,12 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
   }, [intervalMs, refresh, ...deps]);
 
   return { data, error, refresh };
+}
+
+/** 订阅已读表(「待验收」判定的数据源之一):凡渲染里调用 isUnread 的视图都要用它,
+ *  否则 markSeen 之后这一帧不重渲染,角标与排序要等轮询刻度才跟上。 */
+export function useSeenVersion(): number {
+  return useSyncExternalStore(subscribeSeen, getSeenVersion, getSeenVersion);
 }
 
 export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review' | 'worklog' | 'todo';
