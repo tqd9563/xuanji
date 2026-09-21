@@ -21,7 +21,7 @@ import { recentOf } from '@/lib/stow';
 import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
-import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
+import { CompactionCard, confirmBox, Drawer, Empty, LazyMd, ScrollRootContext, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
@@ -468,9 +468,20 @@ export function Sessions({
    * 回放事件的元素列表:整体 useMemo,让 5s 轮询引起的 Sessions 重渲染不再重建它们
    * (实测抽屉开着时每次轮询要多花 ~370ms 主线程——每条助手消息都被 react-markdown
    * 重新解析一遍)。配合 shared.tsx 里各卡片的 memo,轮询期间这块开销降到零。
-   * mountCount 由 useProgressiveMount 逐片放开,首屏只付前 30 条的代价。
+   * mountCount 由 useProgressiveMount 按滚动放开,首屏只付前 12 条的代价。
    */
-  const mountCount = useProgressiveMount(replay?.events.length ?? 0, replay);
+  const mountSentinelRef = useRef<HTMLDivElement>(null);
+  const { mounted: mountCount, mountAll } = useProgressiveMount(
+    replay?.events.length ?? 0,
+    replay,
+    mountSentinelRef,
+    drawerBodyRef,
+  );
+  // ⌘F 靠扫 DOM 查找:开查找条的那一刻把没挂的事件补齐,否则搜不到还没滚到的部分
+  useEffect(() => {
+    if (find.open) mountAll();
+  }, [find.open, mountAll]);
+
   const replayRows = useMemo(
     () =>
       (replay?.events ?? []).slice(0, mountCount).map((ev, i) => {
@@ -494,7 +505,7 @@ export function Sessions({
                 </div>
                 {ev.kind === 'assistant' ? (
                   <div className="body md">
-                    <Md>{ev.text}</Md>
+                    <LazyMd>{ev.text}</LazyMd>
                   </div>
                 ) : (
                   <div className="body md"><UserText text={ev.text} /></div>
@@ -1064,10 +1075,16 @@ export function Sessions({
           </>
         }
       >
+        <ScrollRootContext.Provider value={drawerBodyRef}>
         <FindBar scopeRef={drawerBodyRef} state={find} placeholder="在本次回放中查找" />
         {!replay && <Empty><p>回放加载中…</p></Empty>}
         {replayRows}
+        {/* 挂载哨兵:进入视野就追加下一片(见 useProgressiveMount) */}
+        {replay && mountCount < replay.events.length && (
+          <div ref={mountSentinelRef} aria-hidden="true" style={{ height: 1 }} />
+        )}
         {replay && replay.events.length === 0 && <Empty><p>此会话没有可回放的事件。</p></Empty>}
+        </ScrollRootContext.Provider>
       </Drawer>
     </>
   );

@@ -2503,3 +2503,7 @@ html[data-turn-head="false"] .turnhead { display: none; }
 .btw-empty p + p { margin-top: 10px; }
 .btw-empty code { font-family: var(--mono); color: var(--violet); }
 @media (prefers-reduced-motion: reduce) { .btw { animation: none; } .btw-count.live .btw-bq, .btw-wait-dots i { animation: none; } }
+
+/* 视口外的助手消息:markdown 还没解析,先按纯文本放着(LazyMd 占位)。
+   排版与 .body.md 的正文一致,进视口换成真 markdown 时高度变化才小。 */
+.md-pending { white-space: pre-wrap; word-break: break-word; }
