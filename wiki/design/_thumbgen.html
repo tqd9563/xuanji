@@ -1,0 +1,35 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:#111">
+<script src="./live2d-assets/lib/live2dcubismcore.min.js"></script>
+<script src="./live2d-assets/lib/pixi.min.js"></script>
+<script src="./live2d-assets/lib/cubism4.min.js"></script>
+<script>
+window.shot = async function (name, headTop, headFrac) {
+  const S = 160;
+  const cv = document.createElement('canvas');
+  cv.width = S; cv.height = S; document.body.appendChild(cv);
+  const app = new PIXI.Application({ view: cv, transparent: true, width: S, height: S, autoStart: true });
+  const m = await PIXI.live2d.Live2DModel.from(`./live2d-assets/${name}/${name}.model3.json`, { autoInteract: false });
+  app.stage.addChild(m);
+  m.anchor.set(0.5, 0.5);
+  m.scale.set(1);
+  /* 把「全身高的 headFrac 段」放大铺满方形画布,headTop = 头顶在全身高里的占比 */
+  const natH = m.height, natW = m.width;
+  const s = S / (natH * headFrac);
+  m.scale.set(s);
+  m.x = S / 2;
+  m.y = S / 2 - (headTop + headFrac / 2 - 0.5) * natH * s;
+  m.update(16);
+  app.render();
+  await new Promise(r => setTimeout(r, 900));
+  app.render();
+  return cv.toDataURL('image/png');
+};
+
+const SPEC = [['Hiyori',0.02,0.30],['Mao',0.02,0.32],['Wanko',0.10,0.55]];
+window.__out = {}; window.__done = false; window.__err = null;
+(async () => {
+  try { for (const [n,t,f] of SPEC) window.__out[n] = await window.shot(n,t,f); }
+  catch (e) { window.__err = String(e && e.stack || e); }
+  window.__done = true;
+})();
+</script></body>

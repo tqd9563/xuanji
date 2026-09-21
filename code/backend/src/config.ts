@@ -14,6 +14,11 @@ export const config = {
   claudeDir: process.env.XUANJI_CLAUDE_DIR ?? path.join(os.homedir(), '.claude'),
   dataDir: process.env.XUANJI_DATA_DIR ?? path.join(import.meta.dirname, '..', 'data'),
   /**
+   * 看板娘模型库。用户自己下载/购买的资产,放用户目录而非 dataDir:
+   * dataDir 的契约是「可重建」,且仓库内路径在各 worktree 之间不共享。
+   */
+  live2dDir: process.env.XUANJI_LIVE2D_DIR ?? path.join(os.homedir(), '.xuanji', 'live2d'),
+  /**
    * 噪音(非开发)目录分类。同时匹配编码目录名与解码路径,'-'/'/' 等价。
    * - scan(扫描归因):multica workspaces + narrate-cwd。narrate 是 baize multica 任务里
    *   `claude -p` 叙述会话的固定 cwd(如 ~/baize-runs/.narrate-cwd,历史上还有

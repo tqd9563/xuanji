@@ -4,6 +4,8 @@ import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/
 import { setPalette, cn } from '@/lib/utils';
 import { ConfirmHost, MdWarmup, ToastHost, toast } from '@/components/shared';
 import { Settings } from '@/components/Settings';
+import { useLive2d } from '@/lib/live2d';
+import { Live2dStage } from '@/components/Live2dStage';
 import { useWallpaper, wallSrcUrl, wallStateLabel } from '@/lib/wallpaper';
 import { applyLocalToDom, loadAccount, useLocalPrefs } from '@/lib/prefs';
 import { formatCombo, matchKey } from '@/lib/keymap';
@@ -48,6 +50,7 @@ export default function App() {
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
   const [wall, patchWall] = useWallpaper();
+  const [live2d, patchLive2d] = useLive2d();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const localPrefs = useLocalPrefs();
@@ -201,6 +204,7 @@ export default function App() {
   return (
     <div className="app">
       <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
+      <Live2dStage state={live2d} />
       <aside className="sidebar">
         <div className="brand">
           {/* 璇玑玉璧剪影,1:1 还原获批原型 wiki/design/prototype.html(feat(design) 48d1935);
@@ -330,6 +334,8 @@ export default function App() {
         cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
         wall={wall}
         patchWall={patchWall}
+        live2d={live2d}
+        patchLive2d={patchLive2d}
       />
 
       <ToastHost />

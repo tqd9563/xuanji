@@ -8,7 +8,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import { DropUp } from '@/components/DropUp';
 import { confirmBox, toast } from '@/components/shared';
+import { Live2dFields } from '@/components/Live2dSettings';
 import { WallpaperFields } from '@/components/WallpaperSettings';
+import { type Live2dState } from '@/lib/live2d';
 import {
   DEFAULT_ACCOUNT,
   DEFAULT_LOCAL,
@@ -174,12 +176,16 @@ export function Settings({
   cwdOptions,
   wall,
   patchWall,
+  live2d,
+  patchLive2d,
 }: {
   open: boolean;
   onClose: () => void;
   cwdOptions: string[];
   wall: WallState;
   patchWall: (p: Partial<WallState>) => void;
+  live2d: Live2dState;
+  patchLive2d: (p: Partial<Live2dState>) => void;
 }) {
   const [sec, setSec] = useState<SecId>('dispatch');
   const [q, setQ] = useState('');
@@ -501,6 +507,8 @@ export function Settings({
         <SettingsRow hit={hit} label="「已完成」默认展示" desc="同上;归档列通常最长,调大会拉长页面" scope="local">
           <Tabs value={local.stowDone} options={STOW_TABS} onChange={(v) => patchLocal({ stowDone: v })} />
         </SettingsRow>
+        <SettingsGroup show={!searching}>看板娘</SettingsGroup>
+        <Live2dFields state={live2d} patch={patchLive2d} hit={hit} />
       </section>
 
       <section className="stg-sec" hidden={!secShown('keys')}>
