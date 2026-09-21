@@ -1231,6 +1231,10 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   color: var(--ink); border-radius: var(--r-m);
 }
 .ta-wrap .ta-mirror .ph { color: var(--faint); } /* 空输入的占位文案(textarea 自身 placeholder 被透明色吃掉) */
+/* IME 预编辑态:镜像让位给 textarea(见 Dispatch.tsx 的 onCompositionStart)。
+   visibility 而非 display:none —— 不动布局,组合结束原地恢复,不会闪一下高度。 */
+.ta-wrap.composing textarea { color: var(--ink); }
+.ta-wrap.composing .ta-mirror { visibility: hidden; }
 /* 行内代码 `x`:与消息区 .md code 同一层语汇 —— 比所在面亮一档 + 一条细边。
    描边用 inset shadow 而非 border/padding:零布局影响,字形位置不动。 */
 .tk-inline {

@@ -1608,6 +1608,15 @@ export function Dispatch({ active }: { active: boolean }) {
               // 触顶后 textarea 内部滚动,镜像层必须同步跟滚,否则高亮与文字脱节
               if (mirrorRef.current) mirrorRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
             }}
+            /* IME 预编辑期(拼音未上屏)把舞台让给 textarea 自己:预编辑文本的底色与下划线由内核
+               直接画在 textarea 上,而 textarea 的文字是透明的 —— 镜像层要么被预编辑底色整块盖住,
+               要么与内核画的预编辑区对不齐,表现成「光标离行末字符一段空白」。组合期间关掉镜像、
+               把文字染回正常色,上屏后(compositionend)恢复高亮并重绘一次。 */
+            onCompositionStart={(e) => e.currentTarget.parentElement?.classList.add('composing')}
+            onCompositionEnd={(e) => {
+              e.currentTarget.parentElement?.classList.remove('composing');
+              growTa();
+            }}
             onSelect={syncHint}
             onClick={syncHint}
             onPaste={(e) => {
