@@ -3,8 +3,11 @@
  *
  * pixi 约 460KB,全部走动态 import——看板娘默认关闭,关着就一个字节都不该下载。
  * Cubism Core 不在 npm(Live2D 专有许可,但官方 RedistributableFiles.txt 允许随产品
- * 再分发),所以随前端放在 public/live2d/ 下,用时挂 <script> 引入。
+ * 再分发),所以随前端放在 public/vendor/live2d/ 下,用时挂 <script> 引入
+ * (不能放 /live2d/:那整段路径被后端用于读 ~/.xuanji/live2d 下的模型文件)。
  */
+
+import { MIN_THUMB_BYTES } from './live2d.js';
 
 /** pixi-live2d-display 的模型实例。它没有导出可用的公开类型,这里按用到的成员收窄。 */
 export interface Live2dModelLike {
@@ -163,9 +166,6 @@ export function describeCaps(c: ModelCaps): string {
 export function modelUrl(entry: string): string {
   return `/live2d/${entry.split('/').map(encodeURIComponent).join('/')}`;
 }
-
-/** 低于这个字节数几乎肯定是张空白图,当失败处理 */
-const MIN_THUMB_BYTES = 3000;
 
 /** 扫描非透明像素的包围盒。全透明返回 null。 */
 function opaqueBounds(

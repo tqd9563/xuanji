@@ -95,6 +95,13 @@ export function useLive2d(): [Live2dState, (patch: Partial<Live2dState>) => void
  * 缓存键带目录指纹:用户换了模型文件,指纹变、键变,自动重渲染。
  * 只用目录名做键会一直显示旧脸。
  */
+/**
+ * 低于这个字节数几乎肯定是张空白图。渲染侧用它拒绝写入,读取侧用它拒绝命中——
+ * 只防写入是不够的:坏图一旦进了缓存,之后每次都命中,用户只能看到黑框,
+ * 而且 ⌘⇧R 清的是 HTTP 缓存,根本碰不到 IndexedDB,除非手动清站点数据否则永远出不来。
+ */
+export const MIN_THUMB_BYTES = 3000;
+
 export function thumbKey(name: string, fingerprint: string): string {
   return `${name}@${fingerprint}`;
 }
@@ -102,7 +109,13 @@ export function thumbKey(name: string, fingerprint: string): string {
 export async function getThumbUrl(name: string, fingerprint: string): Promise<string | null> {
   try {
     const blob = await idbGet<Blob>(STORE_LIVE2D_THUMBS, thumbKey(name, fingerprint));
-    return blob ? URL.createObjectURL(blob) : null;
+    if (!blob) return null;
+    if (blob.size < MIN_THUMB_BYTES) {
+      // 早先版本可能存进过空白图。当作未命中,让它重渲染并覆盖,不必让用户去清站点数据。
+      await idbDelete(STORE_LIVE2D_THUMBS, thumbKey(name, fingerprint)).catch(() => {});
+      return null;
+    }
+    return URL.createObjectURL(blob);
   } catch {
     return null; // IndexedDB 不可用(隐私模式等):退化成每次现渲染
   }

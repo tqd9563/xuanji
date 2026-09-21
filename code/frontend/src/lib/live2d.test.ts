@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { LIVE2D_DEFAULTS, normalizeLive2d, staleThumbKeys, thumbKey } from './live2d';
+import { LIVE2D_DEFAULTS, MIN_THUMB_BYTES, normalizeLive2d, staleThumbKeys, thumbKey } from './live2d';
 import { describeCaps, modelUrl, readCaps, fitToHeight, type Live2dModelLike } from './live2d-render';
 
 describe('normalizeLive2d', () => {
@@ -115,5 +115,15 @@ describe('fitToHeight', () => {
   it('换一个原始尺寸完全不同的模型,同样的目标高仍然得到同样的高', () => {
     const big = fakeModel({}, 2000, 4000);
     expect(fitToHeight(big, 300).h).toBe(300);
+  });
+});
+
+describe('MIN_THUMB_BYTES', () => {
+  it('挡得住全透明 PNG,又不会误杀正常缩略图', () => {
+    // 实测值:160×160 全透明 PNG 约 1156B;三个官方样例的正常缩略图 12~31KB
+    const blankPng = 1156;
+    const realThumbs = [12787, 29968, 31335];
+    expect(blankPng).toBeLessThan(MIN_THUMB_BYTES);
+    for (const size of realThumbs) expect(size).toBeGreaterThan(MIN_THUMB_BYTES);
   });
 });
