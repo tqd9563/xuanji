@@ -164,52 +164,122 @@ export function modelUrl(entry: string): string {
   return `/live2d/${entry.split('/').map(encodeURIComponent).join('/')}`;
 }
 
+/** 低于这个字节数几乎肯定是张空白图,当失败处理 */
+const MIN_THUMB_BYTES = 3000;
+
+/** 扫描非透明像素的包围盒。全透明返回 null。 */
+function opaqueBounds(
+  data: Uint8ClampedArray,
+  w: number,
+  h: number,
+): { x: number; y: number; w: number; h: number } | null {
+  let minX = w;
+  let minY = h;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if ((data[(y * w + x) * 4 + 3] ?? 0) > 8) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+  if (maxX < 0) return null;
+  return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
 /**
- * 离屏渲染一张头部缩略图。Node 端没有 WebGL,这件事只能在浏览器里做,
- * 所以渲染一次就缓存进 IndexedDB(见 lib/live2d.ts)。
+ * 离屏渲染一张头像缩略图。
  *
- * headTop/headFrac 描述「头部在全身高里的位置与占比」——各家模型构图不同,
- * 兽型/Q 版的头会比立绘型低且大,给了默认值也允许按模型调。
+ * 不按「头部占全身高多少」这类固定参数去裁:各家模型构图差得很远,立绘型、Q 版、
+ * 兽型的头部位置完全不同,猜错就裁到一片空白(Wanko 实测如此)。
+ * 改成先渲全身,扫描非透明像素求包围盒,再从包围盒顶部取一个正方形——
+ * 不管什么造型,头都在最上面,这条对所有模型都成立。
+ *
+ * Node 端没有 WebGL,这件事只能在浏览器里做,所以渲染一次就缓存进 IndexedDB
+ * (见 lib/live2d.ts)。
  */
-export async function renderThumb(
-  entry: string,
-  opts: { size?: number; headTop?: number; headFrac?: number } = {},
-): Promise<Blob> {
+export async function renderThumb(entry: string, opts: { size?: number } = {}): Promise<Blob> {
   const S = opts.size ?? 160;
-  const headTop = opts.headTop ?? 0.02;
-  const headFrac = opts.headFrac ?? 0.32;
+  const R = S * 2; // 先按两倍分辨率渲全身,裁完再缩回去,避免糊
   const { PIXI, Live2DModel } = await loadRuntime();
 
-  const canvas = document.createElement('canvas');
-  canvas.width = S;
-  canvas.height = S;
   /*
-   * autoStart 必须为 true:没有 ticker 驱动时,模型的纹理加载要拖到超时才收尾,
-   * 实测每张缩略图要 60~80 秒(Hiyori@81s → Mao@160s → Wanko@222s),
-   * 开着 ticker 后是十秒级。渲完即 destroy,不会长期占用。
+   * 离屏 canvas 必须真的挂进 DOM。只 createElement 不挂载的话拿不到渲染帧,
+   * 纹理加载永远等不到完成,renderThumb 既不 resolve 也不 reject——串行循环
+   * 就卡死在第一个模型上(实测卡 55s+ 无任何回调)。
+   * 挪到视口外而不是 display:none,后者同样会让它停止渲染。
    */
-  const app = new PIXI.Application({ view: canvas, backgroundAlpha: 0, width: S, height: S, autoStart: true });
+  const canvas = document.createElement('canvas');
+  canvas.width = R;
+  canvas.height = R;
+  canvas.style.cssText = 'position:fixed;left:-99999px;top:0;pointer-events:none;opacity:0';
+  document.body.appendChild(canvas);
+
+  /*
+   * preserveDrawingBuffer 必须开:WebGL 的 drawing buffer 默认在合成后即被清空,
+   * 读出来的是空白(实测产出 1156 字节的全透明 PNG,而正常缩略图 12~31KB),
+   * 而且空白图一旦进了缓存就再也不会重渲染,用户永远看到黑框。
+   * autoStart 同时为 true:关掉的话纹理加载要拖到超时才收尾。
+   */
+  const app = new PIXI.Application({
+    view: canvas,
+    backgroundAlpha: 0,
+    width: R,
+    height: R,
+    autoStart: true,
+    preserveDrawingBuffer: true,
+  });
+
   let model: Live2dModelLike | null = null;
   try {
     model = await Live2DModel.from(modelUrl(entry), { autoInteract: false });
     app.stage.addChild(model as unknown as import('pixi.js').DisplayObject);
     model.anchor.set(0.5, 0.5);
-    model.scale.set(1);
-    const natH = model.height || 1;
-    const s = S / (natH * headFrac);
-    model.scale.set(s);
-    model.x = S / 2;
-    model.y = S / 2 - (headTop + headFrac / 2 - 0.5) * natH * s;
+    const { h } = fitToHeight(model, R * 0.98);
+    model.x = R / 2;
+    model.y = h / 2 + (R - h) / 2;
     app.render();
     // 首帧纹理可能还没全部上传,等一拍再渲一次,避免缩略图糊或缺件
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 300));
     app.render();
-    const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/png'));
+
+    // WebGL canvas 拿不到 2d context,要把它画进另一张 2d canvas 才能读像素
+    const probe = document.createElement('canvas');
+    probe.width = R;
+    probe.height = R;
+    const pctx = probe.getContext('2d');
+    if (!pctx) throw new Error('缩略图裁剪失败:拿不到 2d context');
+    pctx.drawImage(canvas, 0, 0);
+    const px = pctx.getImageData(0, 0, R, R).data;
+    const box = opaqueBounds(px, R, R);
+    if (!box) throw new Error('缩略图疑似空白(无非透明像素)');
+
+    // 从包围盒顶部取正方形:头总在最上面,这对立绘/Q版/兽型都成立
+    const side = Math.min(box.w, box.h);
+    const sx = box.x + (box.w - side) / 2;
+    const sy = box.y;
+
+    const out = document.createElement('canvas');
+    out.width = S;
+    out.height = S;
+    const octx = out.getContext('2d');
+    if (!octx) throw new Error('缩略图导出失败:拿不到 2d context');
+    octx.drawImage(probe, sx, sy, side, side, 0, 0, S, S);
+
+    const blob = await new Promise<Blob | null>((r) => out.toBlob(r, 'image/png'));
     if (!blob) throw new Error('缩略图导出失败');
+    // 全透明 PNG 压出来只有 1KB 出头。宁可这次失败重来,也不要把空白图存进缓存
+    // ——缓存命中后就再也不会重渲染了。
+    if (blob.size < MIN_THUMB_BYTES) throw new Error(`缩略图疑似空白(${blob.size}B)`);
     return blob;
   } finally {
     model?.destroy();
     app.destroy(false, { children: true });
+    canvas.remove();
   }
 }
 

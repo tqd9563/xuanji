@@ -74,6 +74,7 @@ export function Live2dFields({
   const [caps, setCaps] = useState<ModelCaps | null>(null);
   const [loadingCaps, setLoadingCaps] = useState(false);
   const urlsRef = useRef<string[]>([]);
+  const thumbGenRef = useRef(0);
 
   const off = !state.enabled;
   const current = state.model || models[0]?.name || '';
@@ -111,12 +112,15 @@ export function Live2dFields({
    */
   useEffect(() => {
     if (off || !models.length) return;
+    // generation 守卫:StrictMode 下 effect 会跑两遍,两个循环并发渲染同一批模型,
+    // 开头几个都会在缓存里 miss,白白做双倍的重活(渲一张就要好几秒)。
+    const gen = ++thumbGenRef.current;
     let alive = true;
     void (async () => {
       for (const m of models) {
-        if (!alive) return;
+        if (!alive || thumbGenRef.current !== gen) return;
         const cached = await getThumbUrl(m.name, m.fingerprint);
-        if (!alive) return;
+        if (!alive || thumbGenRef.current !== gen) return;
         if (cached) {
           urlsRef.current.push(cached);
           setThumbs((p) => ({ ...p, [m.name]: cached }));
@@ -130,7 +134,7 @@ export function Live2dFields({
           urlsRef.current.push(url);
           setThumbs((p) => ({ ...p, [m.name]: url }));
         } catch {
-          /* 单个模型渲染失败不影响其它,缩略图位留空即可 */
+          /* 单个模型渲染失败不影响其它,缩略图位留空,下次打开设置会再试 */
         }
       }
     })();
