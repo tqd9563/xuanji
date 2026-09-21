@@ -2544,6 +2544,22 @@ body.wall-glass .modal.stg-modal { background: oklch(0.185 0.008 120); }
           <div class="stg-ctl"><div class="filter-tabs" role="group"><button>3</button><button class="active">5</button><button>10</button><button>全部</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-row"><div class="stg-lab"><span>「已完成」默认展示</span><small>同上;归档列通常最长,调大会拉长页面</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group"><button>3</button><button class="active">5</button><button>10</button><button>全部</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+
+        <div class="stg-group">看板娘</div>
+        <div class="stg-row"><div class="stg-lab"><span>显示看板娘</span><small>右下角常驻的 Live2D 角色;关掉后不加载模型,不占显存</small></div>
+          <div class="stg-ctl"><span class="switch on" id="l2d-sw" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row l2d-dep"><div class="stg-lab"><span>模型</span><small id="l2d-caps">载入中…</small></div>
+          <div class="stg-ctl"><div class="l2d-picks" id="l2d-picks">
+            <button class="l2d-pick active" data-m="Hiyori" title="Hiyori" aria-label="模型:Hiyori"></button>
+            <button class="l2d-pick" data-m="Mao" title="Mao" aria-label="模型:Mao"></button>
+            <button class="l2d-pick" data-m="Wanko" title="Wanko" aria-label="模型:Wanko"></button>
+          </div><button class="btn btn-sm" id="l2d-add">本地…</button></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row l2d-dep"><div class="stg-lab"><span>体型</span><small>角色显示高度,不影响气泡</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="l2d-size"><button data-v="200">小</button><button data-v="300" class="active">中</button><button data-v="400">大</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row l2d-dep"><div class="stg-lab"><span>停靠</span><small>贴在哪一侧;气泡会跟着换边</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="l2d-side"><button data-v="left">左下</button><button data-v="right" class="active">右下</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row l2d-dep"><div class="stg-lab"><span>说话</span><small>「仅事件」只在会话完成/待输入/失败时开口;「闲聊」会额外随机搭话</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="l2d-mode"><button data-v="mute">不说话</button><button data-v="event" class="active">仅事件</button><button data-v="chat">事件+闲聊</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
       </section>
 
       <section class="stg-sec" data-sec="keys" hidden>
@@ -2960,6 +2976,19 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
 /* canvas 不吃事件:它是个矩形,吃了就会挡住底下真实 UI(发送按钮/状态栏)。
    命中测试在文档级做,只有真打到模型身上才拦截。 */
 .l2d-stage canvas{display:block;pointer-events:none}
+
+/* 模型选择用自己的类,不能蹭 .stg-thumb ——底稿对 .stg-thumb 有个全局 handler
+   会把点击当成换壁纸(wall.src = undefined),整张壁纸会坏掉。 */
+/* 原型脚手架的说明面板固定在右下,设置一开就压住「模型」「停靠」两行的控件。
+   产品里没有这东西,单纯是原型自遮挡,开设置时让位。 */
+body:has(.modal.stg-modal:not([hidden])) .proto-hint,
+body:has(.modal.stg-modal:not([hidden])) .l2d-rig { opacity:0; pointer-events:none; }
+
+.l2d-picks{display:flex;gap:8px}
+.l2d-pick{width:40px;height:40px;border-radius:6px;border:1px solid var(--line);
+  background-size:cover;background-position:center;background-color:var(--surface-2);cursor:pointer}
+.l2d-pick:hover{border-color:var(--muted)}
+.l2d-pick.active{border-color:var(--jade);outline:1px solid var(--jade)}
 .l2d-stage.l2d-dragging canvas{cursor:grabbing}
 
 /* 载入态:模型 5MB,不能白屏 */
@@ -2983,6 +3012,7 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
   opacity:0;transform:translateY(6px) scale(.97);transform-origin:100% 100%;z-index:2;
   transition:opacity .2s ease, transform .2s ease}
 .l2d-bubble.l2d-on{opacity:1;transform:none}
+.l2d-bubble.l2d-bub-left::after{right:auto;left:30px}
 .l2d-bubble::after{content:'';position:absolute;right:30px;bottom:-5px;width:9px;height:9px;
   background:inherit;border-right:1px solid var(--line);border-bottom:1px solid var(--line);
   transform:rotate(45deg)}
@@ -3014,22 +3044,13 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
 </div>
 
 <div class="l2d-rig">
-  <b>档位</b>
-  <button data-l2d-mode="mute">静默</button>
-  <button data-l2d-mode="event" class="l2d-sel">仅事件</button>
-  <button data-l2d-mode="chat">事件+闲聊</button>
-  <span class="l2d-sep"></span>
-  <b>体型</b>
-  <button data-l2d-size="200">小</button>
-  <button data-l2d-size="300" class="l2d-sel">中</button>
-  <button data-l2d-size="400">大</button>
-  <span class="l2d-sep"></span>
-  <b>模拟事件</b>
+  <b>模拟后端事件</b>
   <button data-l2d-fire="done">会话完成</button>
   <button data-l2d-fire="ask">待输入</button>
   <button data-l2d-fire="fail">失败</button>
   <span class="l2d-sep"></span>
-  <button id="l2d-toggle">隐藏</button>
+  <b>开关与模型在</b>
+  <button id="l2d-goto">设置 › 外观 › 看板娘</button>
 </div>
 
 <script src="./live2d-assets/lib/live2dcubismcore.min.js"></script>
@@ -3042,10 +3063,12 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
   const bub   = document.getElementById('l2d-bubble');
   const bTag  = bub.querySelector('.l2d-tag');
   const bTxt  = bub.querySelector('.l2d-txt');
+  const caps  = document.getElementById('l2d-caps');
 
-  let model = null, app = null, mode = 'event', idleTimer = null, hideTimer = null;
+  let app = null, model = null, groups = [], tapGroup = null;
+  let mode = 'event', size = 300, idleTimer = null, hideTimer = null;
+  let enabled = true, current = 'Hiyori', loading = false;
 
-  /* ---- 语料:事件播报走真实璇玑语汇,闲聊走看板娘语汇 ---- */
   const LINES = {
     done: [['完成', '「派发输入框斜杠命令联想」跑完了，8 个文件、前端 180 passed。'],
            ['完成', 'fix/sdk-bump-fable 那条跑完了，要看看 diff 吗？']],
@@ -3055,14 +3078,13 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
            ['中断', '质量门没过：eslint 3 个 error，MR 没建。']],
     chat: [['', '今天有 3 个分支还没合，要清一清吗？'],
            ['', '你已经盯着这块看板 20 分钟了，歇会儿？'],
-           ['', '摸摸我的头会有惊喜哦。'],
            ['', '夜深了，记得 commit。']],
     poke: [['', '诶——别戳啦。'], ['', '干嘛呀？'], ['', '再戳我就跑了。']]
   };
   const pick = a => a[Math.floor(Math.random() * a.length)];
 
   function say(kind, ms = 5200) {
-    if (mode === 'mute' && kind === 'chat') return;
+    if (!enabled || mode === 'mute') return;
     const [tag, txt] = pick(LINES[kind] || LINES.chat);
     bTag.textContent = tag; bTag.style.display = tag ? '' : 'none';
     bTxt.textContent = txt;
@@ -3071,16 +3093,86 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
     if (kind === 'fail') bub.classList.add('l2d-bad');
     bub.classList.add('l2d-on');
     clearTimeout(hideTimer); hideTimer = setTimeout(() => bub.classList.remove('l2d-on'), ms);
-    if (model) { try { model.motion('TapBody'); } catch (e) {} }
+    if (model && tapGroup) { try { model.motion(tapGroup); } catch (e) {} }
   }
 
   function scheduleIdle() {
     clearTimeout(idleTimer);
-    if (mode !== 'chat') return;
+    if (!enabled || mode !== 'chat') return;
     idleTimer = setTimeout(() => { say('chat'); scheduleIdle(); }, 14000 + Math.random() * 12000);
   }
 
-  /* ---- 渲染链 ---- */
+  /* 目标显示高(px) -> 反推 scale。各家模型原始尺寸差异极大,
+     写死 scale 换个模型就溢出(第一版就是这么把脚切掉的)。 */
+  function setSize(targetH) {
+    size = targetH;
+    if (!model || !app) return;
+    model.scale.set(1);
+    const natH = model.height || 1, natW = model.width || 1;
+    const sc = targetH / natH;
+    model.scale.set(sc);
+    const w = Math.ceil(natW * sc), h = Math.ceil(targetH);
+    app.renderer.resize(w, h);
+    app.view.style.width = w + 'px';
+    app.view.style.height = h + 'px';
+    model.x = w / 2; model.y = h / 2;
+  }
+
+  /* 能力说明从模型自己声明的 HitAreas / Motions 读,绝不写死:
+     官方 8 个模型里没有一个有 TapHead 组,Mark 连 HitAreas 都没有。 */
+  function describe(m) {
+    const st = m.internalModel.settings;
+    const hit = (st.hitAreas || []).map(h => h.Name || h.name || '');
+    const gs  = Object.keys(st.motions || {});
+    const n   = gs.reduce((a, g) => a + (st.motions[g] || []).length, 0);
+    const bits = [];
+    if (hit.some(h => /head/i.test(h))) bits.push('可摸头');
+    if (hit.some(h => /body/i.test(h))) bits.push('可戳身体');
+    if (!hit.length) bits.push('无点击反应');
+    bits.push(n + ' 个动作');
+    if (!gs.some(g => /^tap/i.test(g))) bits.push('仅待机动作');
+    return bits.join(' · ');
+  }
+
+  async function loadModel(name) {
+    if (loading) return;
+    loading = true;
+    caps.textContent = '载入中…';
+    if (model) { app.stage.removeChild(model); model.destroy(); model = null; }
+    boot.classList.remove('l2d-gone', 'l2d-err');
+    boot.textContent = '正在唤醒看板娘…';
+    try {
+      model = await PIXI.live2d.Live2DModel.from(
+        `./live2d-assets/${name}/${name}.model3.json`, { autoInteract: false });
+    } catch (e) {
+      boot.classList.add('l2d-err');
+      boot.textContent = '模型加载失败：' + (e && e.message ? e.message : e);
+      caps.textContent = '加载失败';
+      loading = false; return;
+    }
+    boot.classList.add('l2d-gone');
+    app.stage.addChild(model);
+    model.anchor.set(0.5, 0.5);
+    groups = Object.keys(model.internalModel.settings.motions || {});
+    tapGroup = groups.find(g => /^tap/i.test(g)) || groups.find(g => !/^idle$/i.test(g)) || null;
+    caps.textContent = describe(model);
+    current = name;
+    setSize(size);
+    window.__l2d = { model, app, say, setSize, loadModel };
+    loading = false;
+  }
+
+  function tapAt(cx, cy) {
+    if (!enabled || !model) return false;
+    const r = app.view.getBoundingClientRect();
+    if (cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return false;
+    const areas = model.hitTest(cx - r.left, cy - r.top);   /* 像素级,空=打在透明处 */
+    if (!areas || !areas.length) return false;
+    if (tapGroup) model.motion(tapGroup);
+    say('poke', 2600);
+    return true;
+  }
+
   async function boot2d() {
     if (!window.PIXI || !window.PIXI.live2d || !window.Live2DCubismCore) {
       boot.classList.add('l2d-err');
@@ -3089,104 +3181,87 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
     }
     const canvas = document.createElement('canvas');
     stage.appendChild(canvas);
-
     app = new PIXI.Application({ view: canvas, transparent: true, autoStart: true,
                                  width: 260, height: 340, resolution: window.devicePixelRatio || 1 });
-    try {
-      model = await PIXI.live2d.Live2DModel.from('./live2d-assets/Hiyori/Hiyori.model3.json',
-                                                 { autoInteract: false });
-    } catch (e) {
-      boot.classList.add('l2d-err');
-      boot.textContent = '模型加载失败：' + (e && e.message ? e.message : e);
-      return;
-    }
-    boot.classList.add('l2d-gone');
-    window.__l2d = { model, app, say, setSize };
-    app.stage.addChild(model);
-    model.anchor.set(0.5, 0.5);
-    setSize(300);
 
-    /* 视线跟随:focus() 收的是 canvas 局部坐标,直接喂 clientX 会被 clamp 成
-       「鼠标一离开右下角就死盯最左」。把整个视口线性映射到 canvas 尺寸上,
-       鼠标在页面任意处移动都能得到全幅度跟随。 */
+    /* focus() 收的是 canvas 局部坐标,直接喂 clientX 会被 clamp 成
+       「鼠标一离开右下角就死盯最左」。把视口线性映射到 canvas 尺寸上。 */
     document.addEventListener('pointermove', e => {
-      if (!model || !app) return;
+      if (!model || !app || !enabled) return;
       const w = app.view.clientWidth, h = app.view.clientHeight;
-      model.focus((e.clientX / window.innerWidth) * w,
-                  (e.clientY / window.innerHeight) * h);
+      model.focus((e.clientX / window.innerWidth) * w, (e.clientY / window.innerHeight) * h);
     });
-
-    /* 点击命中区:模型自带什么组就用什么组。Hiyori 只有 Body/TapBody,
-       写死 TapHead 会静默变成空操作(第一版就踩了),所以按 settings 实测取。 */
-    const groups = Object.keys(model.internalModel.settings.motions || {});
-    const tapGroup = groups.find(g => /^tap/i.test(g)) || groups.find(g => !/^idle$/i.test(g));
-
-    function tapAt(clientX, clientY) {
-      const r = app.view.getBoundingClientRect();
-      if (clientX < r.left || clientX > r.right || clientY < r.top || clientY > r.bottom) return false;
-      const lx = clientX - r.left, ly = clientY - r.top;
-      const areas = model.hitTest(lx, ly);          /* 像素级命中,空数组=打在透明处 */
-      if (!areas || !areas.length) return false;
-      const g = (areas.some(a => /head/i.test(a)) && groups.find(x => /taphead/i.test(x))) || tapGroup;
-      if (g) model.motion(g);
-      say('poke', 2600);
-      return true;
-    }
     document.addEventListener('pointerdown', e => {
-      if (stage.classList.contains('l2d-away')) return;
       if (tapAt(e.clientX, e.clientY)) { e.preventDefault(); e.stopPropagation(); }
     }, true);
-    /* 悬在模型身上时给个手型,悬在透明处不抢 */
     document.addEventListener('pointermove', e => {
+      if (!model || !enabled) { stage.style.cursor = ''; return; }
       const r = app.view.getBoundingClientRect();
       const inBox = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      const on = inBox && (model.hitTest(e.clientX - r.left, e.clientY - r.top) || []).length > 0;
-      stage.style.cursor = on ? 'pointer' : '';
+      stage.style.cursor = (inBox && (model.hitTest(e.clientX - r.left, e.clientY - r.top) || []).length) ? 'pointer' : '';
     });
 
-    setTimeout(() => say('done'), 900);
+    await loadModel(current);
+    setTimeout(() => say('done'), 700);
     scheduleIdle();
   }
 
-  /* 目标显示高(px) -> 反推 scale。模型原始尺寸按厂商不同差异极大,
-     写死 scale 换个模型就溢出,所以一律按目标像素反推。 */
-  function setSize(targetH) {
-    if (!model || !app) return;
-    model.scale.set(1);
-    const natH = model.height || 1, natW = model.width || 1;
-    const s = targetH / natH;
-    model.scale.set(s);
-
-    const w = Math.ceil(natW * s), h = Math.ceil(targetH);
-    app.renderer.resize(w, h);
-    app.view.style.width = w + 'px';
-    app.view.style.height = h + 'px';
-    model.x = w / 2;
-    model.y = h / 2;
-    stage.dataset.l2dH = h;
+  /* ---- 设置面板联动 ---- */
+  function applyEnabled() {
+    stage.classList.toggle('l2d-away', !enabled);
+    document.querySelectorAll('.l2d-dep').forEach(r => r.classList.toggle('is-off', !enabled));
+    if (!enabled) { bub.classList.remove('l2d-on'); clearTimeout(idleTimer); }
+    else if (!model && !loading) loadModel(current);
+    else scheduleIdle();
   }
 
-  /* ---- 控制条 ---- */
-  function selGroup(attr, el) {
-    document.querySelectorAll(`[${attr}]`).forEach(b => b.classList.remove('l2d-sel'));
-    el.classList.add('l2d-sel');
-  }
-  document.querySelectorAll('[data-l2d-mode]').forEach(b => b.addEventListener('click', () => {
-    mode = b.dataset.l2dMode; selGroup('data-l2d-mode', b);
-    if (mode === 'mute') bub.classList.remove('l2d-on');
-    scheduleIdle();
-  }));
-  document.querySelectorAll('[data-l2d-size]').forEach(b => b.addEventListener('click', () => {
-    setSize(parseFloat(b.dataset.l2dSize)); selGroup('data-l2d-size', b);
-  }));
-  document.querySelectorAll('[data-l2d-fire]').forEach(b => b.addEventListener('click', () => {
-    if (mode === 'mute') { bTag.textContent = ''; return; }
-    say(b.dataset.l2dFire);
-  }));
-  document.getElementById('l2d-toggle').addEventListener('click', function () {
-    const away = stage.classList.toggle('l2d-away');
-    this.textContent = away ? '显示' : '隐藏';
+  document.querySelectorAll('.l2d-pick').forEach(b => {
+    b.style.backgroundImage = `url("./live2d-assets/thumb-${b.dataset.m.toLowerCase()}.png")`;
   });
+
+  /* 必须挂在 document 上,不能挂 #stg-pane:底稿的通用控件 handler 挂在
+     #stg-shell(pane 的祖先),冒泡比 pane 晚。挂 pane 上读 .switch 的 class
+     会读到 toggle 之前的旧值——开关点了没反应就是这么来的。
+     (「停靠」那种读 dataset.v 的分支不受影响,所以当时只坏了一半,很迷惑。) */
+  document.addEventListener('click', e => {
+    const sw = e.target.closest('#l2d-sw');
+    if (sw) { enabled = sw.classList.contains('on'); applyEnabled(); return; }
+
+    const pk = e.target.closest('.l2d-pick');
+    if (pk) {
+      pk.parentElement.querySelectorAll('.l2d-pick').forEach(x => x.classList.toggle('active', x === pk));
+      loadModel(pk.dataset.m);
+      return;
+    }
+    const tab = e.target.closest('.filter-tabs button');
+    if (tab) {
+      const id = tab.parentElement.id;
+      if (id === 'l2d-size') setSize(parseInt(tab.dataset.v, 10));
+      else if (id === 'l2d-mode') { mode = tab.dataset.v; if (mode === 'mute') bub.classList.remove('l2d-on'); scheduleIdle(); }
+      else if (id === 'l2d-side') {
+        const left = tab.dataset.v === 'left';
+        stage.style.left  = left ? '24px' : '';
+        stage.style.right = left ? '' : '24px';
+        bub.style.left  = left ? '8px' : '';
+        bub.style.right = left ? '' : '8px';
+        bub.classList.toggle('l2d-bub-left', left);
+      }
+      return;
+    }
+    if (e.target.closest('#l2d-add')) {
+      toastMsg('(线上此处开目录选择器,把模型文件夹加进列表)');
+    }
+  });
+
+  document.getElementById('l2d-goto').addEventListener('click', () => {
+    openStg(); document.querySelector('.stg-nav button[data-sec="look"]').click();
+    const row = document.getElementById('l2d-sw').closest('.stg-row');
+    row.scrollIntoView({ block: 'center' });
+  });
+
+  /* 原型脚手架:模拟后端事件 */
+  document.querySelectorAll('[data-l2d-fire]').forEach(b =>
+    b.addEventListener('click', () => say(b.dataset.l2dFire)));
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot2d);
   else boot2d();
