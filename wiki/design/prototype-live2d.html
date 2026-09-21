@@ -1,3 +1,23 @@
+<!--
+  看板娘原型(2026-09-21 获批)。
+
+  模型资源不进版本库(见 .gitignore:用户自己下载/购买的资产,不可重建)。
+  要打开这个原型,先把资源准备好:
+
+    mkdir -p wiki/design/live2d-assets/lib
+    # 模型:官方样例 https://github.com/Live2D/CubismWebSamples 的 Samples/Resources/
+    cp -R <CubismWebSamples>/Samples/Resources/{Hiyori,Mao,Wanko} wiki/design/live2d-assets/
+    # 运行时(Core 仓库里没有,要从官方 CDN 取)
+    curl -o wiki/design/live2d-assets/lib/live2dcubismcore.min.js \
+         https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js
+    curl -o wiki/design/live2d-assets/lib/pixi.min.js \
+         https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js
+    curl -o wiki/design/live2d-assets/lib/cubism4.min.js \
+         https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js
+
+  然后起静态服务打开(file:// 下 WebGL 取纹理会被 CORS 拦):
+    cd wiki/design && python3 -m http.server 38821
+-->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>

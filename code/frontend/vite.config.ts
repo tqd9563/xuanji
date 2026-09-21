@@ -24,6 +24,11 @@ export default defineConfig({
     proxy: {
       '/api': `http://127.0.0.1:${BACKEND_PORT}`,
       '/ws': { target: `ws://127.0.0.1:${BACKEND_PORT}`, ws: true },
+      // 看板娘模型由后端从 ~/.xuanji/live2d 读。漏了这条的话 dev 下会落到
+      // vite 的 SPA 兜底,模型请求拿到 200 + index.html,报错是含糊的
+      // 「Failed to load resource as json (Status 200)」——生产模式由后端
+      // 自己托管所以看不出来,只在开发时坏。
+      '/live2d': `http://127.0.0.1:${BACKEND_PORT}`,
     },
   },
 });

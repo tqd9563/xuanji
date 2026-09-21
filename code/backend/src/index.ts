@@ -12,6 +12,7 @@ import { SchedulerService } from './services/scheduler.js';
 import { setNotifyGate } from './adapters/notify.js';
 import { readPrefs } from './services/prefs.js';
 import { refreshSkillUsage } from './services/skill-usage.js';
+import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
@@ -29,6 +30,19 @@ void refreshSkillUsage(storage).catch((e) => console.error('[xuanji] skill usage
 const app = new Hono();
 
 app.route('/api', createApi(storage, scheduler));
+
+// 看板娘模型文件。必须注册在下面的 SPA 兜底(app.get('*'))之前,否则会被兜底吃掉,
+// 前端拿到 200 + text/html 冒充 moc3,报错含糊难查(同 /assets/* 那条的教训)。
+// 模型体积大且只在本机读,带 immutable 长缓存;文件变了目录指纹会变,前端换 URL 即绕开。
+app.get('/live2d/*', (c) => {
+  const rel = c.req.path.slice('/live2d/'.length);
+  const abs = resolveLive2dFile(config.live2dDir, rel);
+  if (!abs) return c.notFound();
+  const body = fs.readFileSync(abs);
+  c.header('Content-Type', live2dContentType(abs));
+  c.header('Cache-Control', 'private, max-age=86400');
+  return c.body(body);
+});
 
 // 生产模式:若前端已构建,由后端直接托管 SPA。
 // HTML 入口(URL 固定但内容随构建变)必须 no-cache:否则 Pake 壳的 WKWebView 会一直用缓存里的

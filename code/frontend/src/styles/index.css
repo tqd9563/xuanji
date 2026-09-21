@@ -2499,3 +2499,95 @@ html[data-turn-head="false"] .turnhead { display: none; }
 .btw-empty p + p { margin-top: 10px; }
 .btw-empty code { font-family: var(--mono); color: var(--violet); }
 @media (prefers-reduced-motion: reduce) { .btw { animation: none; } .btw-count.live .btw-bq, .btw-wait-dots i { animation: none; } }
+
+/* ===== 看板娘(Live2D) =====
+   类名一律 l2d- 前缀:内联真实样式表等于继承全站类名,短名很容易撞
+   (仓库里已有 classname-collision 守卫测试)。 */
+
+/* 舞台。canvas 本身 pointer-events:none——矩形画布吃了事件就会挡住底下的
+   发送按钮和状态栏,命中判定在文档级做像素测试(见 Live2dStage.tsx)。 */
+.l2d-stage {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 60;
+  pointer-events: none;
+  transform-origin: 100% 100%;
+}
+.l2d-stage.l2d-left {
+  right: auto;
+  left: 24px;
+  transform-origin: 0 100%;
+}
+.l2d-stage canvas { display: block; pointer-events: none; }
+
+/* 气泡。底色写不透明硬值:玻璃档会把 --surface 重定义成半透明,
+   而气泡是叠在正文与角色之上的浮层,透了就串字。 */
+.l2d-bubble {
+  position: absolute;
+  right: 8px;
+  bottom: calc(100% + 10px);
+  width: 232px;
+  z-index: 2;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: oklch(0.205 0.009 120);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  box-shadow: 0 8px 28px -10px oklch(0 0 0 / 0.55);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(6px) scale(0.97);
+  transform-origin: 100% 100%;
+  transition: opacity 200ms var(--ease), transform 200ms var(--ease);
+}
+.l2d-bubble.l2d-on { opacity: 1; transform: none; }
+.l2d-stage.l2d-left .l2d-bubble { right: auto; left: 8px; transform-origin: 0 100%; }
+.l2d-bubble::after {
+  content: "";
+  position: absolute;
+  right: 30px;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  background: inherit;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  transform: rotate(45deg);
+}
+.l2d-stage.l2d-left .l2d-bubble::after { right: auto; left: 30px; }
+.l2d-bubble .l2d-tag {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--jade-dim);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.l2d-bubble.l2d-warn .l2d-tag { color: var(--amber); }
+.l2d-bubble.l2d-bad .l2d-tag { color: var(--red); }
+
+/* 设置里的模型选择。不复用 .stg-thumb:那套是壁纸预设的横向缩略图,
+   尺寸与语义都不同。 */
+.l2d-picks { display: flex; gap: 8px; }
+.l2d-pick {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background-color: var(--surface-2);
+  background-size: cover;
+  background-position: center;
+  color: var(--faint);
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+.l2d-pick:hover { border-color: var(--muted); }
+.l2d-pick.active { border-color: var(--jade); outline: 1px solid var(--jade); }
+
+@media (prefers-reduced-motion: reduce) {
+  .l2d-bubble { transition: none; }
+}

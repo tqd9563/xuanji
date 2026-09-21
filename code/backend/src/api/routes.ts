@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import { config } from '../config.js';
+import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
@@ -78,6 +79,8 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
 
   /** 项目分类色调色板:name → 序号(首次出现顺序,SQLite 固定;色相映射在前端色环) */
   /** 账户级偏好:跨设备共享的设置(派发默认值 / 通知范围)。外观与快捷键跟着设备走,存前端不进这里 */
+  api.get('/live2d/models', (c) => c.json({ models: listLive2dModels(config.live2dDir), dir: config.live2dDir }));
+
   api.get('/prefs', (c) => c.json({ prefs: readPrefs(storage) }));
 
   api.put('/prefs', async (c) => {
