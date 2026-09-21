@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', p), 'utf8');
+const read = (p: string) => fs.readFileSync(path.join(__dirname, '..', 'src', p), 'utf8');
 
 /**
  * 回放按需渲染踩过的坑,用扫源码的方式钉住——这两处没有 jsdom 测不了运行时,
