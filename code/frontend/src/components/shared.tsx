@@ -1,10 +1,11 @@
-import { Fragment, memo, type ReactNode, type RefObject, useEffect, useRef, useState } from 'react';
+import { createContext, Fragment, memo, type ReactNode, type RefObject, useContext, useEffect, useRef, useState } from 'react';
 import Markdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { cn, fullTime, msgClock, prCardText, projBg, projColor } from '@/lib/utils';
 import type { SessionState } from '@/api/types';
 import { fenceBody, parse } from '@/lib/composer-code';
+import { scheduleIdle } from '@/lib/replay-mount';
 
 // ---------- Markdown 渲染(统一出口) ----------
 
@@ -248,6 +249,100 @@ export const UserText = memo(function UserText({ text }: { text: string }) {
       })}
     </>
   );
+});
+
+/**
+ * markdown 流水线预热。
+ *
+ * react-markdown 头一次跑要付一笔与内容多少无关的固定成本(unified/micromark 流水线
+ * 构建 + JIT),实测冷态渲染 10 条短消息 4.2s,而预热之后 200 条只要 84ms(0.4ms/条)。
+ * 「点进会话要等一两秒」的大头就是这笔冷启动落在了用户点击的那一刻。
+ * 这里在应用空闲时先离屏渲染一次(内容覆盖标题/列表/代码/链接/表格等常见分支),
+ * 把这笔钱提前付掉;渲染完即卸载,不留 DOM。
+ */
+const WARMUP_MD = [
+  '# 预热',
+  '',
+  '正文 **加粗** 与 `行内代码`,还有[链接](https://example.com)。',
+  '',
+  '- 列表甲',
+  '- 列表乙',
+  '',
+  '| 列 | 值 |',
+  '| --- | --- |',
+  '| 甲 | 1 |',
+  '',
+  '```ts',
+  'const warm = true;',
+  '```',
+].join('\n');
+
+export function MdWarmup() {
+  const [warm, setWarm] = useState(false);
+  useEffect(() => {
+    if (warm) return;
+    return scheduleIdle(() => setWarm(true));
+  }, [warm]);
+  useEffect(() => {
+    if (!warm) return;
+    // 渲染过一次就够了,留着只会让每次重渲染多走一遍 diff
+    const t = setTimeout(() => setWarm(false), 0);
+    return () => clearTimeout(t);
+  }, [warm]);
+  if (!warm) return null;
+  return (
+    <div aria-hidden="true" style={{ position: 'absolute', width: 0, height: 0, overflow: 'hidden', visibility: 'hidden' }}>
+      <Md>{WARMUP_MD}</Md>
+    </div>
+  );
+}
+
+/** 提前这么多像素开始解析(约一屏),让滚动到之前就已经是渲染好的 markdown */
+const LAZY_MD_ROOT_MARGIN = '200px 0px';
+
+/**
+ * 当前的滚动容器(抽屉滚动体等)。LazyMd 要把它作为 IntersectionObserver 的 root:
+ * 默认 root(视口)下祖先容器的裁剪一样生效,而 rootMargin 只放大 root 矩形,
+ * 于是「提前一屏解析」在内嵌滚动容器里完全失效,变成滚到眼前才解析。
+ */
+export const ScrollRootContext = createContext<RefObject<HTMLElement> | null>(null);
+
+/**
+ * 视口驱动的 markdown:进入(或接近)视口才真正解析,之前按纯文本放着。
+ *
+ * react-markdown 的 remark/hast 流水线是回放页最大的单项开销(536 条事件的会话里
+ * micromark + hast-to-react 实测 ~6.5s),而一屏最多看见几条——按视口付费即可。
+ * 解析过就不回退:滚回去不会重新抖动,也不会反复付解析成本。
+ */
+export const LazyMd = memo(function LazyMd({ children }: { children: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rootRef = useContext(ScrollRootContext);
+  const [parsed, setParsed] = useState(false);
+
+  useEffect(() => {
+    if (parsed) return;
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setParsed(true); // 环境不支持就退回原行为,宁可慢也不能不渲染
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setParsed(true);
+          io.disconnect();
+        }
+      },
+      { root: rootRef?.current ?? null, rootMargin: LAZY_MD_ROOT_MARGIN },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [parsed, rootRef]);
+
+  if (parsed) return <Md>{children}</Md>;
+  // 占位用纯文本(pre-wrap 保留换行),高度与解析后接近,滚动条不会大幅跳
+  return <div className="md-pending" ref={ref}>{children}</div>;
 });
 
 /** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 尾巴修剪 + 外链新窗口打开 */

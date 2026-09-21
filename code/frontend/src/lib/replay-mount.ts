@@ -1,18 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
- * 回放分片挂载:首屏只挂前 FIRST 条,其余在浏览器空闲时逐片追加。
+ * 回放按需挂载:首屏只挂 FIRST_MOUNT 条,之后随滚动逐片追加。
  *
- * 为什么要分片:回放抽屉一次性挂载整条会话(工具卡 + 每条助手消息各走一遍
- * react-markdown 的 remark 全量解析),实测 88 条事件就能把主线程堵住 1~2s
- * (2026-09-20 longtask 实测:首次开 432ms + 1944ms),表现为「点进会话要等
- * 一两秒才刷出历史」。分片后首屏只付前 FIRST 条的代价,剩下的在 idle 里补齐。
+ * 为什么不是「后台空闲里把整条会话挂完」(2026-09-20 的第一版):成本只是被摊开,
+ * 没有消掉。CPU profile 实测热点是 micromark(markdown 解析)+ hast-to-react,
+ * 536 条事件的会话里光这两项就 ~6.5s——摊成一串 1.6s 的长任务,肉眼照样卡。
+ * 改成滚动驱动后,看不到的消息根本不进 React 树,成本随「真的滚到哪」付。
  *
- * 分片从头开始而不是从尾部:抽屉是从顶部开始读的,先挂尾部会让可视区内容后到,
- * 反而更像卡顿。追加不改变已挂载部分的 DOM,不会把用户正在看的位置顶走。
+ * 配套另一半在 LazyMd:已挂载但不在视口内的消息先当纯文本放着,进视口才解析 markdown。
  */
-export const FIRST_MOUNT = 30;
-export const MOUNT_CHUNK = 15;
+export const FIRST_MOUNT = 8;
+export const MOUNT_CHUNK = 8;
+/** 哨兵提前这么多像素进入视野就追加下一片,滚动时不出现空白等待 */
+export const LOAD_MORE_MARGIN = '300px 0px';
 
 /** 首屏挂载条数 */
 export function initialMount(total: number, first = FIRST_MOUNT): number {
@@ -40,16 +41,50 @@ export function scheduleIdle(cb: IdleCb): () => void {
 }
 
 /**
- * 返回当前应挂载的条数。total 或 resetKey 变化(换了一条会话)即回到首屏条数。
+ * 返回当前应挂载的条数与「全部挂出来」的开关。
+ * total 或 resetKey 变化(换了一条会话)即回到首屏条数。
+ *
+ * 追加靠列表末尾的哨兵元素进入视野来驱动,不用 scroll 事件:抽屉这类内嵌滚动体上
+ * 程序化滚动不一定派发 scroll(2026-09-21 实测设了 scrollTop 也收不到事件),
+ * 而 IntersectionObserver 只看几何关系,内容不足一屏时也会立刻触发。
+ * mountAll 给 ⌘F 用——查找靠扫 DOM,搜之前必须把没挂的补齐,否则搜不到还没滚到的部分。
  */
-export function useProgressiveMount(total: number, resetKey: unknown): number {
+export function useProgressiveMount(
+  total: number,
+  resetKey: unknown,
+  sentinelRef?: RefObject<HTMLElement>,
+  rootRef?: RefObject<HTMLElement>,
+): { mounted: number; mountAll: () => void } {
   const [mounted, setMounted] = useState(() => initialMount(total));
+  const totalRef = useRef(total);
+  totalRef.current = total;
+
   useEffect(() => {
     setMounted(initialMount(total));
   }, [total, resetKey]);
+
+  // 首屏之后在空闲里预取一片,第一次轻轻一滚就有内容
   useEffect(() => {
-    if (mounted >= total) return;
-    return scheduleIdle(() => setMounted((m) => nextMount(m, total)));
+    if (mounted !== initialMount(total) || mounted >= total) return;
+    return scheduleIdle(() => setMounted((m) => nextMount(m, totalRef.current)));
   }, [mounted, total]);
-  return mounted;
+
+  // 哨兵进入视野 → 再追一片。mounted 变化后重新观察,让它能连续追到底
+  useEffect(() => {
+    const el = sentinelRef?.current;
+    if (!el || mounted >= total || typeof IntersectionObserver === 'undefined') return;
+    // root 必须是滚动容器本身:默认 root(视口)下祖先的裁剪照样生效,而 rootMargin
+    // 只放大 root 的矩形,救不了被容器裁掉的哨兵——表现为滚到底也不追加(实测)
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) setMounted((m) => nextMount(m, totalRef.current));
+      },
+      { root: rootRef?.current ?? null, rootMargin: LOAD_MORE_MARGIN },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [sentinelRef, rootRef, mounted, total]);
+
+  const mountAll = useCallback(() => setMounted(totalRef.current), []);
+  return { mounted, mountAll };
 }

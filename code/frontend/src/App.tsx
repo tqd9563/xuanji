@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
-import { ConfirmHost, ToastHost, toast } from '@/components/shared';
+import { ConfirmHost, MdWarmup, ToastHost, toast } from '@/components/shared';
 import { Settings } from '@/components/Settings';
 import { useLive2d } from '@/lib/live2d';
 import { Live2dStage } from '@/components/Live2dStage';
@@ -340,6 +340,8 @@ export default function App() {
 
       <ToastHost />
       <ConfirmHost />
+      {/* 空闲时把 markdown 流水线的冷启动成本提前付掉(见 MdWarmup) */}
+      <MdWarmup />
     </div>
   );
 }

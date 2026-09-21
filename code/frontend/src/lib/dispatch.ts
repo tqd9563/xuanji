@@ -184,17 +184,21 @@ export function useDispatch() {
     const text = pendingDeltaRef.current;
     if (!text) return;
     pendingDeltaRef.current = '';
+    // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移;
+    // 回放事件带 at(当初发生的时刻),用它而不是「现在」。
+    // 必须在 setItems 之外先取值:更新函数是延后执行的,接回回放几百条事件连发时 React
+    // 来不及在两条之间渲染,更新函数攒到一起才跑,那时 ref 早被下面那行清空(或被后一批
+    // delta 改写),整条会话的 Claude 消息就全变成渲染那一刻(2026-09-21 实测:98 条只剩 6 个时刻)
+    const at = pendingAtRef.current ?? Date.now();
+    pendingAtRef.current = null;
     setItems((prev0) => {
       const prev = sealThinking(prev0);
       const last = prev[prev.length - 1];
       if (last?.t === 'assistant' && last.streaming) {
         return [...prev.slice(0, -1), { ...last, text: last.text + text }];
       }
-      // 时间取首个 delta 到达时刻(Claude 开始回话),不随后续 delta 推移;
-      // 回放事件带 at(当初发生的时刻),用它而不是「现在」
-      return [...prev, { t: 'assistant', text, streaming: true, ts: pendingAtRef.current ?? Date.now() }];
+      return [...prev, { t: 'assistant', text, streaming: true, ts: at }];
     });
-    pendingAtRef.current = null;
   }, []);
 
   /** 清空未 flush 的 delta 缓冲并取消已排的 rAF:reset/attach 重建 items 前必须调用,
@@ -236,7 +240,10 @@ export function useDispatch() {
         // 它仍属同一轮——SDK 的 durationMs 也把这段等待算在内。
         // 秒表起点:本前端发的那一轮用 send 的时刻(与定格值同源);终端里发起、这边只是接回
         // 观战的轮次没有发送动作,退而用「转入 working」的时刻,近似但总比不显示强。
-        if (st === 'working') setTurn((t) => (t.startedAt == null ? { ...t, startedAt: turnStartRef.current ?? Date.now() } : t));
+        if (st === 'working') {
+          const startedAt = turnStartRef.current ?? Date.now();   // 同上:先取值,不在更新函数里读 ref
+          setTurn((t) => (t.startedAt == null ? { ...t, startedAt } : t));
+        }
         else if (st === 'idle' || st === 'ended' || st === 'none') {
           setTurn((t) => ({ ...t, startedAt: null }));
           // 轮次没收到 result 就结束了(中断 / 报错):起点必须作废,否则会被下一轮当成自己的起点
