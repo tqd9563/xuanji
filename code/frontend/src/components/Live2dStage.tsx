@@ -14,6 +14,7 @@ import {
   focusFromPointer,
   focusReset,
   loadModel,
+  nextExpressionIndex,
   loadRuntime,
   maskHit,
   readCaps,
@@ -89,7 +90,8 @@ function Stage({ state }: { state: Live2dState }) {
   const appRef = useRef<PixiApp | null>(null);
   const genRef = useRef(0);
   const tapGroupRef = useRef<string | null>(null);
-  const hasExprRef = useRef(false);
+  const exprCountRef = useRef(0);
+  const exprIndexRef = useRef(-1);
   const maskRef = useRef<HitMask | null>(null);
   const [bubble, setBubble] = useState<{ tag: string; text: string; kind: Kind } | null>(null);
   const [failed, setFailed] = useState(false);
@@ -114,9 +116,11 @@ function Stage({ state }: { state: Live2dState }) {
       }
     }
     // 没有动作组的模型(VTuber 模型常态)靠表情给反馈;两者都有就一起来
-    if (hasExprRef.current) {
+    const next = nextExpressionIndex(exprCountRef.current, exprIndexRef.current);
+    if (next >= 0) {
+      exprIndexRef.current = next;
       try {
-        void m.expression();
+        void m.expression(next);
       } catch {
         /* 同上 */
       }
@@ -198,7 +202,8 @@ function Stage({ state }: { state: Live2dState }) {
         appRef.current = localApp;
         const caps = readCaps(localModel);
         tapGroupRef.current = caps.tapGroup;
-        hasExprRef.current = caps.expressions > 0;
+        exprCountRef.current = caps.expressions;
+        exprIndexRef.current = -1;
         // 没声明 HitAreas 的模型要靠像素掩码才点得着。等一帧,首帧纹理可能还没上屏。
         maskRef.current = null;
         if (!caps.hasHitAreas) {

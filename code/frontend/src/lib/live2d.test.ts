@@ -4,6 +4,7 @@ import { LIVE2D_DEFAULTS, MIN_THUMB_BYTES, normalizeLive2d, staleThumbKeys, thum
 import {
   axisRatioForTest as axisRatio,
   buildHitMask,
+  nextExpressionIndex,
   capsFromModel3,
   describeCaps,
   fitToHeight,
@@ -221,5 +222,34 @@ describe('视线映射(按距离线性,不是只取方向)', () => {
   it('居中摆放时左右对称', () => {
     const c = W / 2;
     expect(axisRatio(0, c, 0, W)).toBeCloseTo(-axisRatio(W, c, 0, W), 5);
+  });
+});
+
+describe('nextExpressionIndex(不走库的随机——它在表情未加载时会静默失效)', () => {
+  it('没有表情时返回 -1', () => {
+    expect(nextExpressionIndex(0, -1)).toBe(-1);
+  });
+
+  it('只有一个表情时永远是它', () => {
+    expect(nextExpressionIndex(1, -1)).toBe(0);
+    expect(nextExpressionIndex(1, 0)).toBe(0);
+  });
+
+  it('绝不重复上一个——重复了看着就像没反应', () => {
+    for (let cur = 0; cur < 10; cur++) {
+      for (let t = 0; t < 50; t++) expect(nextExpressionIndex(10, cur)).not.toBe(cur);
+    }
+  });
+
+  it('结果始终在合法范围内', () => {
+    for (let t = 0; t < 200; t++) {
+      const i = nextExpressionIndex(10, 3);
+      expect(i).toBeGreaterThanOrEqual(0);
+      expect(i).toBeLessThan(10);
+    }
+  });
+
+  it('首次调用(current=-1)就能给出有效下标,不需要先加载过', () => {
+    expect(nextExpressionIndex(10, -1)).toBeGreaterThanOrEqual(0);
   });
 });

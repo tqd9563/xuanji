@@ -28,7 +28,6 @@ export interface Live2dModelLike {
   };
   focus(x: number, y: number): void;
   motion(group: string): void;
-  /** 不传参 = 随机挑一个,且不会重复当前这个 */
   expression(id?: string | number): Promise<boolean>;
   hitTest(x: number, y: number): string[];
   destroy(): void;
@@ -418,6 +417,22 @@ export function axisRatioForTest(pos: number, center: number, min: number, max: 
 function axisRatio(pos: number, center: number, min: number, max: number): number {
   const span = pos < center ? Math.max(center - min, AXIS_MIN_RANGE) : Math.max(max - center, AXIS_MIN_RANGE);
   return clamp((pos - center) / span, -1, 1);
+}
+
+/**
+ * 挑下一个要切的表情下标。
+ *
+ * 不能用库的 `expression()`(无参 = setRandomExpression):表情是懒加载的,
+ * 未加载时 `expressions[i]` 是 undefined,而初始 `currentExpression` 也是
+ * undefined,它的筛选条件 `expressions[i] !== currentExpression` 于是把所有
+ * 候选全排除,直接返回 false 什么都不做——表现为点了半天偶尔才换一次表情。
+ * 显式传下标走 setExpression,它会主动 await 加载,第一次点击就能生效。
+ */
+export function nextExpressionIndex(count: number, current: number): number {
+  if (count <= 0) return -1;
+  if (count === 1) return 0;
+  const i = Math.floor(Math.random() * count);
+  return i === current ? (i + 1) % count : i; // 不重复上一个,否则看着像没反应
 }
 
 /** 视线回正。鼠标离开窗口时用,免得视线僵在最后那个方向上不动。 */
