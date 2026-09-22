@@ -100,11 +100,14 @@ function Stage({ state }: { state: Live2dState }) {
   talkRef.current = state.talk;
 
   const say = useRef((kind: Kind, ms = 5200) => {
-    if (talkRef.current === 'mute') return;
-    const [tag, text] = pick(LINES[kind]);
-    setBubble({ tag, text, kind });
-    window.clearTimeout(hideRef.current);
-    hideRef.current = window.setTimeout(() => setBubble(null), ms);
+    /* 「不说话」只管气泡。动作和表情是点击的物理反馈,任何档位都要给——
+       早先这个 return 放在最前面,静默档下点击就彻底没反应,像坏了一样。 */
+    if (talkRef.current !== 'mute') {
+      const [tag, text] = pick(LINES[kind]);
+      setBubble({ tag, text, kind });
+      window.clearTimeout(hideRef.current);
+      hideRef.current = window.setTimeout(() => setBubble(null), ms);
+    }
     const m = modelRef.current;
     if (!m) return;
     const g = tapGroupRef.current;
