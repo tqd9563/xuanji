@@ -24,6 +24,8 @@ export interface Live2dModelEntry {
   name: string;
   entry: string;
   fingerprint: string;
+  /** 目录里躺着但 model3.json 没引用的表情,加载时由前端补进去 */
+  unlinkedExpressions?: string[];
 }
 
 const SIZE_LABELS: Record<number, string> = { 200: '小', 300: '中', 400: '大' };
@@ -71,7 +73,8 @@ export function Live2dFields({
   const [models, setModels] = useState<Live2dModelEntry[]>([]);
   const [dir, setDir] = useState('');
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [caps, setCaps] = useState<ModelCaps | null>(null);
+  /** undefined = 还没开始读;null = 读失败。两者不能混,否则新模型刚出现时会误报「读不出」 */
+  const [caps, setCaps] = useState<ModelCaps | null | undefined>(undefined);
   const [loadingCaps, setLoadingCaps] = useState(false);
   const urlsRef = useRef<string[]>([]);
   const thumbGenRef = useRef(0);
@@ -147,10 +150,10 @@ export function Live2dFields({
    * 当前模型的能力说明。写死会骗人:官方样例里没有一个模型有 TapHead 组。
    * 只读 model3.json,不加载模型——否则会把主线程占满,连缓存好的缩略图都显示不出来。
    */
-  const loadCaps = useCallback(async (entry: string) => {
+  const loadCaps = useCallback(async (entry: string, extra: number) => {
     setLoadingCaps(true);
     try {
-      setCaps(await fetchCaps(entry));
+      setCaps(await fetchCaps(entry, extra));
     } catch {
       setCaps(null);
     } finally {
@@ -161,21 +164,19 @@ export function Live2dFields({
   useEffect(() => {
     const m = models.find((x) => x.name === current);
     if (off || !m) {
-      setCaps(null);
+      setCaps(undefined);
       return;
     }
-    void loadCaps(m.entry);
+    void loadCaps(m.entry, m.unlinkedExpressions?.length ?? 0);
   }, [current, models, off, loadCaps]);
 
-  const capsText = off
+  const capsText = off || !models.length
     ? undefined
-    : loadingCaps
+    : loadingCaps || caps === undefined
       ? '读取中…'
       : caps
         ? describeCaps(caps)
-        : models.length
-          ? '读不出模型信息'
-          : undefined;
+        : '读不出模型信息';
 
   return (
     <>

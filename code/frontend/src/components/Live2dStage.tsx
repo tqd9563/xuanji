@@ -9,12 +9,18 @@ import { useEffect, useRef, useState } from 'react';
 
 import { type Live2dState } from '@/lib/live2d';
 import {
+  buildHitMask,
   fitToHeight,
   focusFromPointer,
+  focusReset,
+  loadModel,
+  nextExpressionIndex,
   loadRuntime,
-  modelUrl,
+  maskHit,
   readCaps,
+  type HitMask,
   type Live2dModelLike,
+  type PixelSource,
 } from '@/lib/live2d-render';
 
 /** pixi Application 里本组件用到的那部分 */
@@ -28,6 +34,7 @@ interface PixiApp {
 interface Entry {
   name: string;
   entry: string;
+  unlinkedExpressions?: string[];
 }
 
 type Kind = 'done' | 'ask' | 'fail' | 'chat' | 'poke';
@@ -50,6 +57,26 @@ const LINES: Record<Kind, [string, string][]> = {
 const pick = <T,>(a: T[]): T => a[Math.floor(Math.random() * a.length)] as T;
 
 /**
+ * 点到角色身上了吗。
+ * 优先用模型自己声明的命中区(能分辨头/身体);没声明就查像素掩码——
+ * 绝不退化成「整个 canvas 都算」,那会把底下的 UI 一起挡掉。
+ */
+function hitsModel(
+  model: Live2dModelLike,
+  view: HTMLCanvasElement,
+  rect: DOMRect,
+  clientX: number,
+  clientY: number,
+  mask: HitMask | null,
+): boolean {
+  const lx = clientX - rect.left;
+  const ly = clientY - rect.top;
+  if ((model.hitTest(lx, ly) || []).length > 0) return true;
+  if (!mask) return false;
+  return maskHit(mask, lx, ly, rect.width ? view.width / rect.width : 1);
+}
+
+/**
  * 状态由上层(App)传入而非自己 useLive2d:设置面板与本组件在同一个页面里,
  * 各自读 localStorage 的话改了设置这边不会重渲染(storage 事件只跨标签页触发)。
  */
@@ -63,6 +90,9 @@ function Stage({ state }: { state: Live2dState }) {
   const appRef = useRef<PixiApp | null>(null);
   const genRef = useRef(0);
   const tapGroupRef = useRef<string | null>(null);
+  const exprCountRef = useRef(0);
+  const exprIndexRef = useRef(-1);
+  const maskRef = useRef<HitMask | null>(null);
   const [bubble, setBubble] = useState<{ tag: string; text: string; kind: Kind } | null>(null);
   const [failed, setFailed] = useState(false);
   const hideRef = useRef<number | undefined>(undefined);
@@ -70,17 +100,32 @@ function Stage({ state }: { state: Live2dState }) {
   talkRef.current = state.talk;
 
   const say = useRef((kind: Kind, ms = 5200) => {
-    if (talkRef.current === 'mute') return;
-    const [tag, text] = pick(LINES[kind]);
-    setBubble({ tag, text, kind });
-    window.clearTimeout(hideRef.current);
-    hideRef.current = window.setTimeout(() => setBubble(null), ms);
+    /* 「不说话」只管气泡。动作和表情是点击的物理反馈,任何档位都要给——
+       早先这个 return 放在最前面,静默档下点击就彻底没反应,像坏了一样。 */
+    if (talkRef.current !== 'mute') {
+      const [tag, text] = pick(LINES[kind]);
+      setBubble({ tag, text, kind });
+      window.clearTimeout(hideRef.current);
+      hideRef.current = window.setTimeout(() => setBubble(null), ms);
+    }
+    const m = modelRef.current;
+    if (!m) return;
     const g = tapGroupRef.current;
-    if (g && modelRef.current) {
+    if (g) {
       try {
-        modelRef.current.motion(g);
+        m.motion(g);
       } catch {
         /* 动作播放失败不影响说话 */
+      }
+    }
+    // 没有动作组的模型(VTuber 模型常态)靠表情给反馈;两者都有就一起来
+    const next = nextExpressionIndex(exprCountRef.current, exprIndexRef.current);
+    if (next >= 0) {
+      exprIndexRef.current = next;
+      try {
+        void m.expression(next);
+      } catch {
+        /* 同上 */
       }
     }
   }).current;
@@ -123,7 +168,7 @@ function Stage({ state }: { state: Live2dState }) {
         return;
       }
       try {
-        const { PIXI, Live2DModel } = await loadRuntime();
+        const { PIXI } = await loadRuntime();
         if (genRef.current !== gen || !hostRef.current) return;
 
         localCanvas = document.createElement('canvas');
@@ -138,9 +183,12 @@ function Stage({ state }: { state: Live2dState }) {
           height: 340,
           resolution: window.devicePixelRatio || 1,
           autoDensity: true,
+          // 命中掩码要把画面像素读回来。WebGL 默认合成后就清空 drawing buffer,
+          // 不保留的话读出来整片透明(缩略图那边踩过同一个坑)。
+          preserveDrawingBuffer: true,
         }) as unknown as PixiApp;
 
-        localModel = await Live2DModel.from(modelUrl(target.entry), { autoInteract: false });
+        localModel = await loadModel(target.entry, target.unlinkedExpressions ?? []);
         if (genRef.current !== gen) {
           disposeLocal();
           return;
@@ -155,7 +203,19 @@ function Stage({ state }: { state: Live2dState }) {
 
         modelRef.current = localModel;
         appRef.current = localApp;
-        tapGroupRef.current = readCaps(localModel).tapGroup;
+        const caps = readCaps(localModel);
+        tapGroupRef.current = caps.tapGroup;
+        exprCountRef.current = caps.expressions;
+        exprIndexRef.current = -1;
+        // 没声明 HitAreas 的模型要靠像素掩码才点得着。等一帧,首帧纹理可能还没上屏。
+        maskRef.current = null;
+        if (!caps.hasHitAreas) {
+          window.setTimeout(() => {
+            if (genRef.current !== gen || !localApp) return;
+            const view = localApp.view;
+            maskRef.current = buildHitMask(localApp.renderer as PixelSource, view.width, view.height);
+          }, 400);
+        }
         setFailed(false);
         window.setTimeout(() => {
           if (genRef.current === gen) say('done');
@@ -181,9 +241,9 @@ function Stage({ state }: { state: Live2dState }) {
       const app = appRef.current;
       if (!m || !app) return;
       const r = app.view.getBoundingClientRect();
-      focusFromPointer(m, e.clientX, e.clientY, r.width, r.height);
+      focusFromPointer(m, e.clientX, e.clientY, r);
       const inBox = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
-      const on = inBox && (m.hitTest(e.clientX - r.left, e.clientY - r.top) || []).length > 0;
+      const on = inBox && hitsModel(m, app.view, r, e.clientX, e.clientY, maskRef.current);
       if (hostRef.current) hostRef.current.style.cursor = on ? 'pointer' : '';
     };
     const onDown = (e: PointerEvent): void => {
@@ -192,16 +252,44 @@ function Stage({ state }: { state: Live2dState }) {
       if (!m || !app) return;
       const r = app.view.getBoundingClientRect();
       if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
-      if (!(m.hitTest(e.clientX - r.left, e.clientY - r.top) || []).length) return;
+      if (!hitsModel(m, app.view, r, e.clientX, e.clientY, maskRef.current)) return;
       e.preventDefault();
       e.stopPropagation();
       say('poke', 2600);
     };
+    /*
+     * click 是独立于 pointerdown 的一次派发,在 pointerdown 上 stopPropagation
+     * 拦不住它——只拦 pointerdown 的话,点角色的那一下仍会以 click 的形式落到
+     * 底下的元素上,角色正好盖住某个按钮时就成了误触发。
+     */
+    const onClick = (e: MouseEvent): void => {
+      const m = modelRef.current;
+      const app = appRef.current;
+      if (!m || !app) return;
+      const r = app.view.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      if (!hitsModel(m, app.view, r, e.clientX, e.clientY, maskRef.current)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    /* 鼠标离开窗口(或窗口失焦)就把视线收回正前方。不收的话会僵在最后一个
+       方向上,看着像卡住了——尤其窗口只占半边屏幕时,鼠标一出界就不动了。 */
+    const onLeave = (): void => {
+      const m = modelRef.current;
+      if (m) focusReset(m);
+      if (hostRef.current) hostRef.current.style.cursor = '';
+    };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('pointerleave', onLeave);
+    window.addEventListener('blur', onLeave);
     return () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('pointerleave', onLeave);
+      window.removeEventListener('blur', onLeave);
     };
   }, [say]);
 
