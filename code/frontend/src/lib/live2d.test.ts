@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LIVE2D_DEFAULTS, MIN_THUMB_BYTES, normalizeLive2d, staleThumbKeys, thumbKey } from './live2d';
 import {
+  axisRatioForTest as axisRatio,
   buildHitMask,
   capsFromModel3,
   describeCaps,
@@ -185,5 +186,40 @@ describe('命中掩码(没有 HitAreas 的模型靠它才点得着)', () => {
     const mask = buildHitMask(fakeRenderer(4, 2, [[1, 0]]), 4, 2)!;
     expect(maskHit(mask, 1, 0, 1)).toBe(true);
     expect(maskHit(mask, 1, 0, 2)).toBe(false);
+  });
+});
+
+describe('视线映射(按距离线性,不是只取方向)', () => {
+  // 角色贴在右下角:中心 1181,屏幕宽 1280 —— 右边只剩 99px
+  const CX = 1181;
+  const W = 1280;
+
+  it('角色正下方为 0,不再是「非左即右」的突变', () => {
+    expect(axisRatio(CX, CX, 0, W)).toBe(0);
+  });
+
+  it('左半屏连续过渡,不会一下饱和', () => {
+    const xs = [200, 400, 600, 800, 1000];
+    const vals = xs.map((x) => axisRatio(x, CX, 0, W));
+    // 严格单调递增(越靠近角色越接近 0)
+    for (let i = 1; i < vals.length; i++) expect(vals[i]!).toBeGreaterThan(vals[i - 1]!);
+    // 且都落在中间地带,不是清一色的 -1
+    expect(vals.every((v) => v > -1 && v < 0)).toBe(true);
+  });
+
+  it('屏幕边缘取到满幅度', () => {
+    expect(axisRatio(0, CX, 0, W)).toBe(-1);
+  });
+
+  it('贴边一侧靠下限兜底,不至于只剩零点几也不至于敏感到抖', () => {
+    // 右边仅 99px:按可用空间算会瞬间满幅度,按下限 240 算得到约 0.41
+    const v = axisRatio(W, CX, 0, W);
+    expect(v).toBeGreaterThan(0.3);
+    expect(v).toBeLessThan(0.5);
+  });
+
+  it('居中摆放时左右对称', () => {
+    const c = W / 2;
+    expect(axisRatio(0, c, 0, W)).toBeCloseTo(-axisRatio(W, c, 0, W), 5);
   });
 });

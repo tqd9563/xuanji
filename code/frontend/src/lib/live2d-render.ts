@@ -18,6 +18,8 @@ export interface Live2dModelLike {
   x: number;
   y: number;
   internalModel: {
+    /** 视线目标。x/y 取 -1~1,库每帧把它乘进 ParamAngleX/EyeBallX 等 */
+    focusController?: { focus(x: number, y: number, instant?: boolean): void };
     settings: {
       motions?: Record<string, unknown[]>;
       hitAreas?: { Name?: string; name?: string }[];
@@ -389,7 +391,48 @@ export function maskHit(mask: HitMask, x: number, y: number, ratio: number): boo
   return mask.data[py * mask.w + px] === 1;
 }
 
-/** 视口坐标 -> canvas 局部坐标。focus() 收的是局部坐标,直接喂 clientX 会被 clamp 成死盯一角。 */
-export function focusFromPointer(model: Live2dModelLike, clientX: number, clientY: number, w: number, h: number): void {
-  model.focus((clientX / window.innerWidth) * w, (clientY / window.innerHeight) * h);
+const clamp = (v: number, lo: number, hi: number): number => (v < lo ? lo : v > hi ? hi : v);
+
+/**
+ * 让视线跟着鼠标。
+ *
+ * 不能用 `model.focus(x, y)`:它内部走 `atan2` 把坐标转成**方向角**,只取方向
+ * 不取距离,幅度永远拉满。实测鼠标沿屏幕横扫一圈,targetX 在正中间从 -1 直接
+ * 跳到 +1,中间一个过渡值都没有——脸只有「朝左」「朝右」两个姿态,看起来就像
+ * 反应迟钝、往回滑不跟手。
+ *
+ * 改成按「鼠标离角色多远」线性给值:以角色中心为原点,半个屏幕为满幅度,
+ * 近处小幅度、远处才拉满,中间连续。
+ */
+/**
+ * 单轴归一。两侧各按自己那边的可用空间算,否则角色贴在右下角时,
+ * 左边一下就饱和、右边那几十像素怎么移都只有零点几的幅度——看着就是「往右不转」。
+ * 下限兜底:紧贴边缘时可用空间可能只剩几十像素,不加限制会敏感到抖。
+ */
+const AXIS_MIN_RANGE = 240;
+
+export function axisRatioForTest(pos: number, center: number, min: number, max: number): number {
+  return axisRatio(pos, center, min, max);
+}
+
+function axisRatio(pos: number, center: number, min: number, max: number): number {
+  const span = pos < center ? Math.max(center - min, AXIS_MIN_RANGE) : Math.max(max - center, AXIS_MIN_RANGE);
+  return clamp((pos - center) / span, -1, 1);
+}
+
+/** 视线回正。鼠标离开窗口时用,免得视线僵在最后那个方向上不动。 */
+export function focusReset(model: Live2dModelLike): void {
+  model.internalModel.focusController?.focus(0, 0);
+}
+
+export function focusFromPointer(model: Live2dModelLike, clientX: number, clientY: number, rect: DOMRect): void {
+  const fc = model.internalModel.focusController;
+  if (!fc) return;
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+  fc.focus(
+    axisRatio(clientX, cx, 0, window.innerWidth),
+    // 屏幕 y 向下为正,而 ParamAngleY 正值是抬头,要反过来
+    -axisRatio(clientY, cy, 0, window.innerHeight),
+  );
 }

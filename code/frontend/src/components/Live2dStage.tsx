@@ -12,6 +12,7 @@ import {
   buildHitMask,
   fitToHeight,
   focusFromPointer,
+  focusReset,
   loadModel,
   loadRuntime,
   maskHit,
@@ -232,7 +233,7 @@ function Stage({ state }: { state: Live2dState }) {
       const app = appRef.current;
       if (!m || !app) return;
       const r = app.view.getBoundingClientRect();
-      focusFromPointer(m, e.clientX, e.clientY, r.width, r.height);
+      focusFromPointer(m, e.clientX, e.clientY, r);
       const inBox = e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
       const on = inBox && hitsModel(m, app.view, r, e.clientX, e.clientY, maskRef.current);
       if (hostRef.current) hostRef.current.style.cursor = on ? 'pointer' : '';
@@ -263,13 +264,24 @@ function Stage({ state }: { state: Live2dState }) {
       e.preventDefault();
       e.stopPropagation();
     };
+    /* 鼠标离开窗口(或窗口失焦)就把视线收回正前方。不收的话会僵在最后一个
+       方向上,看着像卡住了——尤其窗口只占半边屏幕时,鼠标一出界就不动了。 */
+    const onLeave = (): void => {
+      const m = modelRef.current;
+      if (m) focusReset(m);
+      if (hostRef.current) hostRef.current.style.cursor = '';
+    };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerdown', onDown, true);
     document.addEventListener('click', onClick, true);
+    document.addEventListener('pointerleave', onLeave);
+    window.addEventListener('blur', onLeave);
     return () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerdown', onDown, true);
       document.removeEventListener('click', onClick, true);
+      document.removeEventListener('pointerleave', onLeave);
+      window.removeEventListener('blur', onLeave);
     };
   }, [say]);
 
