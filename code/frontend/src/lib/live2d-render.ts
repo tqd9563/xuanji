@@ -184,7 +184,8 @@ export function describeCaps(c: ModelCaps): string {
   if (!c.head && !c.body) bits.push('可戳(整体)');
   if (c.motions) bits.push(`${c.motions} 个动作`);
   if (c.expressions) bits.push(`${c.expressions} 个表情`);
-  if (!c.motions && !c.expressions) bits.push('点击无反应');
+  // 模型本身不会动,但点击仍有气泡回应,所以不能说成「无反应」
+  if (!c.motions && !c.expressions) bits.push('点了只出气泡');
   return bits.join(' · ');
 }
 

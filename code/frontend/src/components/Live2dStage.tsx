@@ -248,11 +248,28 @@ function Stage({ state }: { state: Live2dState }) {
       e.stopPropagation();
       say('poke', 2600);
     };
+    /*
+     * click 是独立于 pointerdown 的一次派发,在 pointerdown 上 stopPropagation
+     * 拦不住它——只拦 pointerdown 的话,点角色的那一下仍会以 click 的形式落到
+     * 底下的元素上,角色正好盖住某个按钮时就成了误触发。
+     */
+    const onClick = (e: MouseEvent): void => {
+      const m = modelRef.current;
+      const app = appRef.current;
+      if (!m || !app) return;
+      const r = app.view.getBoundingClientRect();
+      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      if (!hitsModel(m, app.view, r, e.clientX, e.clientY, maskRef.current)) return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('click', onClick, true);
     return () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('click', onClick, true);
     };
   }, [say]);
 

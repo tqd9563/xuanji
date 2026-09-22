@@ -73,7 +73,8 @@ export function Live2dFields({
   const [models, setModels] = useState<Live2dModelEntry[]>([]);
   const [dir, setDir] = useState('');
   const [thumbs, setThumbs] = useState<Record<string, string>>({});
-  const [caps, setCaps] = useState<ModelCaps | null>(null);
+  /** undefined = 还没开始读;null = 读失败。两者不能混,否则新模型刚出现时会误报「读不出」 */
+  const [caps, setCaps] = useState<ModelCaps | null | undefined>(undefined);
   const [loadingCaps, setLoadingCaps] = useState(false);
   const urlsRef = useRef<string[]>([]);
   const thumbGenRef = useRef(0);
@@ -163,21 +164,19 @@ export function Live2dFields({
   useEffect(() => {
     const m = models.find((x) => x.name === current);
     if (off || !m) {
-      setCaps(null);
+      setCaps(undefined);
       return;
     }
     void loadCaps(m.entry, m.unlinkedExpressions?.length ?? 0);
   }, [current, models, off, loadCaps]);
 
-  const capsText = off
+  const capsText = off || !models.length
     ? undefined
-    : loadingCaps
+    : loadingCaps || caps === undefined
       ? '读取中…'
       : caps
         ? describeCaps(caps)
-        : models.length
-          ? '读不出模型信息'
-          : undefined;
+        : '读不出模型信息';
 
   return (
     <>

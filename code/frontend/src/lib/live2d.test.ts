@@ -115,8 +115,8 @@ describe('readCaps / describeCaps', () => {
     expect(describeCaps(c)).toBe('可戳(整体) · 10 个表情');
   });
 
-  it('真的什么都没有才说点击无反应', () => {
-    expect(describeCaps(capsFromModel3({ FileReferences: {} }, 0))).toBe('可戳(整体) · 点击无反应');
+  it('既无动作也无表情时说明只有气泡——模型不动,但点击并非毫无回应', () => {
+    expect(describeCaps(capsFromModel3({ FileReferences: {} }, 0))).toBe('可戳(整体) · 点了只出气泡');
   });
 
   it('model3.json 自带的表情与注入的相加', () => {
