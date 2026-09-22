@@ -82,7 +82,13 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-html { font-size: 16px; }
+/* 整站是暗色主题,必须向浏览器声明——否则 macOS 覆盖式滚动条按浅色方案绘制,
+   悬停时在深色底上冒出一条灰白轨道。所有滚动容器统一细滚动条,不再逐个定义。 */
+html { font-size: 16px; color-scheme: dark; }
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
 body {
   font-family: var(--sans);
   background: var(--bg);
@@ -445,9 +451,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    可视区封顶 60vh——40 条全展开会把仪表盘拉到近三屏,而这是一块「扫一眼」的驾驶舱屏,
    要看更早的活动滚动即可,不该让下面的内容被推出视野。 */
 .dash-grid > .panel { display: flex; flex-direction: column; min-height: 0; }
-.tl-tall { flex: 1; min-height: 0; max-height: 60vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.tl-tall::-webkit-scrollbar { width: 6px; }
-.tl-tall::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.tl-tall { flex: 1; min-height: 0; max-height: 60vh; overflow-y: auto; }
 
 /* ============ 项目 ============ */
 .spark { display: flex; align-items: flex-end; gap: 2px; height: 20px; width: 84px; }
@@ -465,9 +469,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .board > div { display: flex; flex-direction: column; min-height: 0; }
 /* flex:1 —— 列体撑满整列高度。不撑满时它只有内容那么高,空闲列一两张卡就意味着拖拽落点
    只是顶部一条窄带,拖到列中段接不住(2026-08-05 实测:已完成列卡多能接,空闲列接不到)。 */
-.col-body { flex: 1; overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
-.col-body::-webkit-scrollbar { width: 6px; }
-.col-body::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+.col-body { flex: 1; overflow-y: auto; min-height: 0; padding: 2px 2px 8px; margin: -2px; }
 .col-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 0.8125rem; font-weight: 600; flex: none; }
 .col-head .n { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 .scard {
@@ -1171,7 +1173,7 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
   min-height: 56px;
   max-height: min(40vh, calc(0.875rem * 1.5 * 12 + 16px));
   overflow-y: auto;
-  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
+ 
 }
 .composer textarea:focus { outline: none; }
 
@@ -2222,7 +2224,7 @@ body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
 .rb-head .chev { margin-left: auto; color: var(--faint); transition: transform 180ms var(--ease); flex: none; }
 .runbook.open .rb-head .chev { transform: rotate(180deg); }
 .rb-body { display: none; border-top: 1px solid var(--line-soft); }
-.runbook.open .rb-body { display: block; max-height: 46vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.runbook.open .rb-body { display: block; max-height: 46vh; overflow-y: auto; }
 .rb-notes { padding: 9px 16px 8px; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
 .rb-notes b { color: var(--ink); font-weight: 600; }
 
