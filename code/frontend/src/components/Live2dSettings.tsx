@@ -24,6 +24,8 @@ export interface Live2dModelEntry {
   name: string;
   entry: string;
   fingerprint: string;
+  /** 目录里躺着但 model3.json 没引用的表情,加载时由前端补进去 */
+  unlinkedExpressions?: string[];
 }
 
 const SIZE_LABELS: Record<number, string> = { 200: '小', 300: '中', 400: '大' };
@@ -147,10 +149,10 @@ export function Live2dFields({
    * 当前模型的能力说明。写死会骗人:官方样例里没有一个模型有 TapHead 组。
    * 只读 model3.json,不加载模型——否则会把主线程占满,连缓存好的缩略图都显示不出来。
    */
-  const loadCaps = useCallback(async (entry: string) => {
+  const loadCaps = useCallback(async (entry: string, extra: number) => {
     setLoadingCaps(true);
     try {
-      setCaps(await fetchCaps(entry));
+      setCaps(await fetchCaps(entry, extra));
     } catch {
       setCaps(null);
     } finally {
@@ -164,7 +166,7 @@ export function Live2dFields({
       setCaps(null);
       return;
     }
-    void loadCaps(m.entry);
+    void loadCaps(m.entry, m.unlinkedExpressions?.length ?? 0);
   }, [current, models, off, loadCaps]);
 
   const capsText = off

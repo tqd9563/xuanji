@@ -21,6 +21,15 @@ export interface Live2dModelEntry {
    * 用户换了模型就自动重渲染,不会一直显示旧脸。
    */
   fingerprint: string;
+  /**
+   * 目录里躺着、但 model3.json 没引用的表情文件(相对模型目录)。
+   *
+   * VTuber 模型常见这种状态:作者把表情做好放在包里,靠 VTube Studio 的快捷键
+   * 触发,于是 `FileReferences` 里压根没有 `Expressions` 字段,运行时看不见它们。
+   * 由前端在加载时补进 settings(不改用户的文件),让点击有反应可切——
+   * 对完全没有动作组的模型,这往往是唯一能做的反馈。
+   */
+  unlinkedExpressions: string[];
 }
 
 /** 单个模型目录允许的文件数上限,防止误把巨大目录丢进来拖垮扫描 */
@@ -65,6 +74,32 @@ function dirFingerprint(dir: string): string {
   return `${count}-${size}-${Math.round(mtime)}`;
 }
 
+/** model3.json 里与表情有关的那部分结构 */
+interface Model3Expressions {
+  FileReferences?: { Expressions?: { File?: string }[] };
+}
+
+/**
+ * 找出目录里没被 model3.json 引用的 .exp3.json。
+ * 已经引用过的不返回——那些运行时本来就看得见,再注入一遍会出现重复条目。
+ */
+function findUnlinkedExpressions(dir: string, model3: string, files: string[]): string[] {
+  const exps = files.filter((f) => f.toLowerCase().endsWith('.exp3.json'));
+  if (!exps.length) return [];
+  let linked = new Set<string>();
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(dir, model3), 'utf8')) as Model3Expressions;
+    linked = new Set(
+      (raw.FileReferences?.Expressions ?? [])
+        .map((e) => (e.File ?? '').split('/').pop() ?? '')
+        .filter(Boolean),
+    );
+  } catch {
+    // model3.json 读不动或不是合法 JSON:当作没引用任何表情,注入交给前端兜底
+  }
+  return exps.filter((f) => !linked.has(f)).sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'));
+}
+
 /**
  * 列出模型。规则刻意宽松:一层子目录里只要有 *.model3.json 就算一个模型,
  * 用户从 nizima / BOOTH 下载的包解压丢进去即可,不必改名或写配置。
@@ -92,6 +127,7 @@ export function listLive2dModels(baseDir: string): Live2dModelEntry[] {
       name: d.name,
       entry: `${d.name}/${model3}`,
       fingerprint: dirFingerprint(sub),
+      unlinkedExpressions: findUnlinkedExpressions(sub, model3, files),
     });
   }
   return out.sort((a, b) => a.name.localeCompare(b.name, 'zh-Hans-CN'));

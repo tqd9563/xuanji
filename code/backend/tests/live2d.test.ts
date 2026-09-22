@@ -87,3 +87,43 @@ describe('live2dContentType', () => {
     expect(live2dContentType('a/b.unknown')).toBe('application/octet-stream');
   });
 });
+
+describe('unlinkedExpressions', () => {
+  it('挑出目录里没被 model3.json 引用的表情——VTuber 模型常把表情放着不引用', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-exp-'));
+    fs.mkdirSync(path.join(d, 'ariu'));
+    fs.writeFileSync(path.join(d, 'ariu/ariu.model3.json'), JSON.stringify({ FileReferences: { Moc: 'a.moc3' } }));
+    fs.writeFileSync(path.join(d, 'ariu/黑化.exp3.json'), '{}');
+    fs.writeFileSync(path.join(d, 'ariu/爱心眼.exp3.json'), '{}');
+    const m = listLive2dModels(d)[0]!;
+    expect(m.unlinkedExpressions).toEqual(['爱心眼.exp3.json', '黑化.exp3.json']);
+    fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  it('已经被引用的不再报——否则注入后会出现重复条目', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-exp2-'));
+    fs.mkdirSync(path.join(d, 'm'));
+    fs.writeFileSync(
+      path.join(d, 'm/m.model3.json'),
+      JSON.stringify({ FileReferences: { Expressions: [{ Name: 'a', File: 'a.exp3.json' }] } }),
+    );
+    fs.writeFileSync(path.join(d, 'm/a.exp3.json'), '{}');
+    fs.writeFileSync(path.join(d, 'm/b.exp3.json'), '{}');
+    expect(listLive2dModels(d)[0]!.unlinkedExpressions).toEqual(['b.exp3.json']);
+    fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  it('model3.json 不是合法 JSON 时不抛错,全部当未引用', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-exp3-'));
+    fs.mkdirSync(path.join(d, 'm'));
+    fs.writeFileSync(path.join(d, 'm/m.model3.json'), '{ broken');
+    fs.writeFileSync(path.join(d, 'm/a.exp3.json'), '{}');
+    expect(() => listLive2dModels(d)).not.toThrow();
+    expect(listLive2dModels(d)[0]!.unlinkedExpressions).toEqual(['a.exp3.json']);
+    fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  it('没有表情文件时是空数组,不是 undefined', () => {
+    expect(listLive2dModels(base).find((m) => m.name === 'Hiyori')!.unlinkedExpressions).toEqual([]);
+  });
+});

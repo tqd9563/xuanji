@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { LIVE2D_DEFAULTS, MIN_THUMB_BYTES, normalizeLive2d, staleThumbKeys, thumbKey } from './live2d';
-import { describeCaps, modelUrl, readCaps, fitToHeight, type Live2dModelLike } from './live2d-render';
+import {
+  buildHitMask,
+  capsFromModel3,
+  describeCaps,
+  fitToHeight,
+  maskHit,
+  modelUrl,
+  readCaps,
+  type Live2dModelLike,
+} from './live2d-render';
 
 describe('normalizeLive2d', () => {
   it('坏数据全部回落默认值,不让设置把界面搞白屏', () => {
@@ -94,10 +103,25 @@ describe('readCaps / describeCaps', () => {
     expect(describeCaps(c)).toBe('可摸头 · 可戳身体 · 1 个动作');
   });
 
-  it('Mark 那种没有 HitAreas 也没有 Tap 组的,如实说明点了没反应', () => {
+  it('没声明 HitAreas 的模型退化成整体判定,不再说「无点击反应」', () => {
     const c = readCaps(fakeModel({ motions: { Idle: [1, 2] } }));
-    expect(c.tapGroup).toBeNull();
-    expect(describeCaps(c)).toBe('无点击反应 · 2 个动作 · 仅待机动作');
+    expect(c.hasHitAreas).toBe(false);
+    expect(describeCaps(c)).toBe('可戳(整体) · 2 个动作');
+  });
+
+  it('VTuber 模型:没动作但有注入的表情,说明里要体现表情', () => {
+    const c = capsFromModel3({ FileReferences: {} }, 10);
+    expect(c).toMatchObject({ hasHitAreas: false, motions: 0, expressions: 10 });
+    expect(describeCaps(c)).toBe('可戳(整体) · 10 个表情');
+  });
+
+  it('真的什么都没有才说点击无反应', () => {
+    expect(describeCaps(capsFromModel3({ FileReferences: {} }, 0))).toBe('可戳(整体) · 点击无反应');
+  });
+
+  it('model3.json 自带的表情与注入的相加', () => {
+    const c = capsFromModel3({ FileReferences: { Expressions: [{}, {}] } }, 3);
+    expect(c.expressions).toBe(5);
   });
 
   it('settings 缺字段时不炸', () => {
@@ -125,5 +149,41 @@ describe('MIN_THUMB_BYTES', () => {
     const realThumbs = [12787, 29968, 31335];
     expect(blankPng).toBeLessThan(MIN_THUMB_BYTES);
     for (const size of realThumbs) expect(size).toBeGreaterThan(MIN_THUMB_BYTES);
+  });
+});
+
+describe('命中掩码(没有 HitAreas 的模型靠它才点得着)', () => {
+  /** 造一个 4x2 的假像素缓冲,只有 (1,0) 和 (2,1) 不透明 */
+  function fakeRenderer(w: number, h: number, opaque: [number, number][]) {
+    const px = new Uint8Array(w * h * 4);
+    for (const [x, y] of opaque) px[(y * w + x) * 4 + 3] = 255;
+    return { extract: { pixels: () => px } };
+  }
+
+  it('只把非透明像素记成可命中', () => {
+    const mask = buildHitMask(fakeRenderer(4, 2, [[1, 0], [2, 1]]), 4, 2)!;
+    expect(mask).not.toBeNull();
+    expect(maskHit(mask, 1, 0, 1)).toBe(true);
+    expect(maskHit(mask, 2, 1, 1)).toBe(true);
+    expect(maskHit(mask, 0, 0, 1)).toBe(false);
+    expect(maskHit(mask, 3, 1, 1)).toBe(false);
+  });
+
+  it('全透明返回 null——抽早了的话宁可没有掩码,也不能整块 canvas 都算命中', () => {
+    expect(buildHitMask(fakeRenderer(4, 2, []), 4, 2)).toBeNull();
+  });
+
+  it('越界不算命中', () => {
+    const mask = buildHitMask(fakeRenderer(4, 2, [[1, 0]]), 4, 2)!;
+    expect(maskHit(mask, -1, 0, 1)).toBe(false);
+    expect(maskHit(mask, 9, 0, 1)).toBe(false);
+    expect(maskHit(mask, 1, 5, 1)).toBe(false);
+  });
+
+  it('按 devicePixelRatio 缩放坐标:同一个 CSS 坐标在不同 ratio 下落到不同像素', () => {
+    // 物理 4x2,只有 (1,0) 不透明。CSS 的 x=1:ratio=1 落在 1(命中),ratio=2 落在 2(透明)
+    const mask = buildHitMask(fakeRenderer(4, 2, [[1, 0]]), 4, 2)!;
+    expect(maskHit(mask, 1, 0, 1)).toBe(true);
+    expect(maskHit(mask, 1, 0, 2)).toBe(false);
   });
 });
