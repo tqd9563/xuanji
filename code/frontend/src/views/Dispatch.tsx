@@ -3,14 +3,14 @@ import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
-import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
+import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
 import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast, LazyMd, ScrollRootContext } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { TurnHead, TurnOutline } from '@/components/TurnNav';
 import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
@@ -157,6 +157,9 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   useEffect(() => {
     onGrow?.();
   }, [shown, onGrow]);
+  // 历史消息(装载时就不在流式中)按视口懒解析:接回/续接一次塞进来上百条,
+  // 全部立刻走 markdown 解析就是「点进去等好几秒」的主要开销,看不见的先当纯文本放着
+  if (!animRef.current) return <LazyMd>{text}</LazyMd>;
   return <StreamMd text={shown} />;
 }
 
@@ -1376,6 +1379,7 @@ export function Dispatch({ active }: { active: boolean }) {
         <button className="btn" title="⌘N" onClick={() => newSession()}>新会话</button>
       </div>
       <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
+        <ScrollRootContext.Provider value={chatRef}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           <TurnHead
             turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
@@ -1421,7 +1425,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </div>
           )}
           {d.items.map((item, i) => (
-            <Fragment key={i}>
+            <Fragment key={chatKey(i, d.seedOffset)}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
               <ChatRow
                 item={item}
@@ -1435,6 +1439,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </Fragment>
           ))}
         </div>
+        </ScrollRootContext.Provider>
 
         {btwOpen && !isMobile && (
           <BtwPanel

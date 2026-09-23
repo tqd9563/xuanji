@@ -42,6 +42,8 @@ export interface JankRecord {
   /** Chromium: long-animation-frame 的脚本归因(WebKit 没有,为空) */
   scripts: string[];
   ua: string;
+  /** true = 密集小卡顿(3s 内迟到总和 ≥1s),stallMs 是该窗口的总和而非单次 */
+  dense?: boolean;
 }
 
 let lastInteraction: Interaction | null = null;
@@ -162,6 +164,20 @@ export function buildRecord(
   };
 }
 
+/**
+ * 密集小卡顿(纯函数,可测):最近 DENSE_WINDOW_MS 内心跳迟到量之和 ≥ DENSE_SUM_MS。
+ * 单次冻结不到 STALL_MS 的一串任务连起来同样让人觉得「卡」——接回会话时
+ * 几十条消息逐条渲染就是这种形态(实测单个都在 100~400ms,记录器却一条不记)。
+ * 返回本窗口的迟到总和,达标则由调用方记一条 dense 记录并清空窗口。
+ */
+export const DENSE_WINDOW_MS = 3000;
+export const DENSE_SUM_MS = 1000;
+export function denseLateness(samples: { at: number; late: number }[], now: number, windowMs = DENSE_WINDOW_MS): number {
+  let sum = 0;
+  for (const s of samples) if (s.at >= now - windowMs) sum += s.late;
+  return sum;
+}
+
 /** 心跳迟到多少算冻结(纯函数,可测):expected 是定时器应到期的时刻 */
 export function lateBy(now: number, expected: number): number {
   return Math.max(0, now - expected);
@@ -174,11 +190,35 @@ export function startJankRecorder() {
   hookFetch();
   hookLoaf();
   let expected = performance.now() + HEARTBEAT_MS;
+  let lateSamples: { at: number; late: number }[] = [];
   const tick = () => {
     const now = performance.now();
     const late = lateBy(now, expected);
+    const visible = document.visibilityState === 'visible';
+    // 密集小卡顿:一串 100~400ms 的任务连成一片,单次不过门槛也要记
+    if (visible && late > 50) {
+      lateSamples.push({ at: now, late });
+      lateSamples = lateSamples.filter((s) => s.at >= now - DENSE_WINDOW_MS);
+      const sum = denseLateness(lateSamples, now);
+      if (late < STALL_MS && sum >= DENSE_SUM_MS) {
+        lateSamples = [];
+        persist({
+          ...buildRecord(sum, now, {
+            view: location.hash.slice(1) || 'dashboard',
+            visibility: document.visibilityState,
+            interaction: lastInteraction,
+            inflight: inflight.keys(),
+            recent,
+            scripts: loafScripts,
+            ua: navigator.userAgent,
+          }),
+          dense: true,
+        });
+      }
+    }
     // 页面藏在后台时定时器会被节流,迟到不算冻结
-    if (late >= STALL_MS && document.visibilityState === 'visible') {
+    if (late >= STALL_MS && visible) {
+      lateSamples = [];
       persist(
         buildRecord(late, now, {
           view: location.hash.slice(1) || 'dashboard',
