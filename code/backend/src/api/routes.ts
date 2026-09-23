@@ -10,6 +10,7 @@ import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
 import { readPrefs, writePrefs } from '../services/prefs.js';
+import { appendJank, readJank, sanitizeJank } from '../services/client-jank.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
@@ -89,6 +90,15 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
   api.get('/live2d/models', (c) => c.json({ models: listLive2dModels(config.live2dDir), dir: config.live2dDir }));
 
   api.get('/prefs', (c) => c.json({ prefs: readPrefs(storage) }));
+
+  // ---------- 前端卡顿记录(取证用,见 frontend lib/jank.ts) ----------
+  api.post('/client-jank', async (c) => {
+    const rec = sanitizeJank(await c.req.json().catch(() => null));
+    if (!rec) return c.json({ error: 'bad record' }, 400);
+    await appendJank(rec);
+    return c.json({ ok: true });
+  });
+  api.get('/client-jank', async (c) => c.json({ records: await readJank(num(c.req.query('limit')) ?? 50) }));
 
   api.put('/prefs', async (c) => {
     const patch = await c.req.json().catch(() => ({}));
