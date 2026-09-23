@@ -40,5 +40,16 @@ describe('派发页装载历史不再一次挂几百条', () => {
     expect(seed).toBeLessThanOrEqual(60);
     expect(tail).toBeLessThanOrEqual(60);
     expect(src).toContain('i < headHidden ? null :');
+    // 隐藏数必须封顶在总条数以内,否则整屏清空(2026-09-23 回归:显示更早的 1193 条 + 空白)
+    expect(src).toMatch(/headHidden = [^;]*Math\.min\(d\.items\.length/);
+  });
+});
+
+describe('开新回合的 attached 不能当成接回回放结束', () => {
+  it('attached 分支只在接回回放(attachingRef 为真)时记录尾部基准', () => {
+    const src = read('lib/dispatch.ts');
+    const i = src.indexOf("case 'attached'");
+    const blk = src.slice(i, i + 900);
+    expect(blk).toMatch(/const wasReplay = attachingRef\.current;[\s\S]*if \(wasReplay\)[\s\S]*setAttachGen/);
   });
 });

@@ -220,22 +220,26 @@ export function useDispatch() {
 
   const handle = useCallback((e: Record<string, unknown>) => {
     switch (e.ev) {
-      case 'attached':
+      case 'attached': {
+        // 只有「接回回放」结束的那次才记尾部基准:发送首条消息开新回合(start)时后端也会发
+        // attached,那时 items 里可能已有回填的上千条历史——拿它当基准会把隐藏数算得比总数
+        // 还大,整屏清空(2026-09-23 实测「显示更早的 1193 条」下面一片空白)。
+        const wasReplay = attachingRef.current;
         restoringRef.current = false;
         attachingRef.current = false;
-        // 记下回放结束时的条数,派发页据此在**同一次渲染**里只挂尾部(effect 里裁会先全量
-        // 渲染一遍再裁,实测 248 行先上屏再缩到 60,白付一次排版)。更新函数里写 ref 是
-        // 幂等赋值,StrictMode 双调无害;它在本次合批的渲染阶段执行,派发页随后读到的就是它。
-        setItems((prev) => {
-          attachLenRef.current = prev.length;
-          return prev;
-        });
-        setAttachGen((g) => g + 1);
+        if (wasReplay) {
+          setItems((prev) => {
+            attachLenRef.current = prev.length;
+            return prev;
+          });
+          setAttachGen((g) => g + 1);
+        }
         sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
         if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
           setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
         }
         break;
+      }
       case 'commands':
         setCommands(e.cmds as SlashCmdInfo[]);
         if (e.uses) setCommandUses(e.uses as Record<string, number>);

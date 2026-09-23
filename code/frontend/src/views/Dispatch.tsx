@@ -579,11 +579,22 @@ export function Dispatch({ active }: { active: boolean }) {
    * 下标口径不变(map 时跳过 i < headHidden),轮次序号/日期分隔/key 都不用改。
    * 历史前插(seedOffset)也算进头部:live 尾部的起点随之后移。
    */
-  const [expandedGen, setExpandedGen] = useState(-1);
+  /** 折叠锚点:接回回放那一刻「第一条要显示的行」的稳定 key(chatKey 口径)。null = 不折叠。
+   *  用稳定 key 而不是条数:之后无论前插历史还是追加新消息,锚点指的都是同一行,
+   *  隐藏数不会被重复计算,也不可能超过总数。 */
+  const [tailAnchor, setTailAnchor] = useState<number | null>(null);
+  const expandAll = useCallback(() => setTailAnchor(null), []);
+  useEffect(() => {
+    if (d.attachGen === 0) return;
+    setTailAnchor(d.attachLen > CHAT_TAIL ? d.attachLen - CHAT_TAIL : null); // 回放时 seedOffset 必为 0
+  }, [d.attachGen]);
+  useEffect(() => {
+    if (d.items.length === 0) setTailAnchor(null); // 换会话/重置
+  }, [d.items.length]);
   useEffect(() => {
     if (d.attachGen > 0) noteContentShown('attach');
   }, [d.attachGen]);
-  const headHidden = expandedGen === d.attachGen ? 0 : Math.max(0, d.seedOffset + d.attachLen - CHAT_TAIL);
+  const headHidden = tailAnchor === null ? 0 : Math.min(d.items.length, Math.max(0, tailAnchor + d.seedOffset));
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
   // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
@@ -820,12 +831,19 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!ev.length) return;
     earlierRef.current = [];
     setPendingEarlier([]);
+    expandAll(); // 要跳进更早的轮次,折叠的那段也得露出来,否则跳转目标仍在隐藏区
     d.seedHistory(replayToChat(ev));
   };
 
   const scrollToTurn = useCallback((ord: number) => {
     const box = chatRef.current;
     const el = box?.querySelector<HTMLElement>(`[data-turn="${ord}"]`);
+    if (box && !el) {
+      // 目标在折叠区:展开,交给下方「补跳」layout effect 在节点进 DOM 后再滚
+      expandAll();
+      setPendingJump(ord);
+      return;
+    }
     if (!box || !el) return;
     // 跳走 = 用户主动离开底部;不解钉的话流式输出会立刻把视口拽回去
     pinnedRef.current = false;
@@ -837,7 +855,7 @@ export function Dispatch({ active }: { active: boolean }) {
     setFlashOrd(ord);
     clearTimeout(flashTimerRef.current);
     flashTimerRef.current = setTimeout(() => setFlashOrd(null), 1400);
-  }, []);
+  }, [expandAll]);
 
   const jumpToTurn = (ord: number) => {
     setOutline(false);
@@ -859,7 +877,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!chatRef.current?.querySelector(`[data-turn="${pendingJump}"]`)) return;
     scrollToTurn(pendingJump);
     setPendingJump(null);
-  }, [d.items, pendingJump, scrollToTurn]);
+  }, [d.items, pendingJump, scrollToTurn, tailAnchor]);
 
   // 消息增删(新回合、回填、切会话)后重新量一次:此时滚动事件不会触发,但当前轮可能已变
   useEffect(measureTurn, [d.items, measureTurn]);
@@ -1447,7 +1465,7 @@ export function Dispatch({ active }: { active: boolean }) {
               className="chat-more-btn"
               onClick={() => {
                 pinnedRef.current = false; // 展开更早内容是主动上翻,别被自动置底拽回去
-                setExpandedGen(d.attachGen);
+                expandAll();
               }}
             >
               显示更早的 {headHidden} 条
