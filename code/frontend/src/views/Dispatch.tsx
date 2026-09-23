@@ -5,6 +5,7 @@ import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
+import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
@@ -278,14 +279,6 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
   });
 }
 
-const MODELS = [
-  '(默认)',
-  'claude-fable-5-1',
-  'claude-opus-5',
-  'claude-opus-5[1m]',
-  'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
-];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
@@ -295,38 +288,18 @@ const PERM_VALUE: Record<string, string> = {
 };
 /** 权限模式默认免审批(信任本机任务;需要逐项把关时手动切回) */
 const DEFAULT_PERM = PERMS[2]!;
-/** /model 简写 → 完整模型名 */
-const MODEL_SHORT: Record<string, string> = {
-  fable: 'claude-fable-5-1',
-  opus: 'claude-opus-5',
-  'opus-1m': 'claude-opus-5[1m]',
-  sonnet: 'claude-sonnet-5',
-  haiku: 'claude-haiku-4-5-20251001',
-};
-/** 完整模型名 → 简写(弹窗左列短名),未收录的完整名原样显示 */
-const MODEL_ALIAS: Record<string, string> = Object.fromEntries(
-  Object.entries(MODEL_SHORT).map(([short, full]) => [full, short]),
-);
-/** 模型默认沿用最近一次用过的,兜底 opus */
+/** 模型候选来自 lib/models 的目录(CLI /model 面板那份),不再写死。
+ *  默认沿用最近一次用过的(目录到货后再归一化:旧的完整 id 反查到目录行、查不到的当手输值),兜底 CLI 默认 */
 const LAST_MODEL_KEY = 'xuanji-last-model';
-const initialModel = (): string => {
-  const saved = localStorage.getItem(LAST_MODEL_KEY);
-  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
-};
+const initialModel = (): string => localStorage.getItem(LAST_MODEL_KEY) || DEFAULT_MODEL;
 
 /** ⚑ 任务总结的默认触发语(设置里可改,见 lib/prefs 的 wrapupPrompt)。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
  *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
 const WRAPUP_PROMPT =
   '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
 
-/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
+/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 lib/models 的 defaultEffortOf) */
 const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
-/** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
- *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
-const MODEL_DEFAULT_EFFORT: Record<string, string> = {
-  'claude-opus-5': 'low',
-  'claude-opus-5[1m]': 'low',
-};
 const LAST_EFFORT_KEY = 'xuanji-last-effort';
 const initialEffort = (): string => {
   const saved = localStorage.getItem(LAST_EFFORT_KEY);
@@ -350,6 +323,23 @@ export function Dispatch({ active }: { active: boolean }) {
   const { prefs, loaded: prefsLoaded } = useAccountPrefs();
   const localPrefs = useLocalPrefs();
   const [modelSel, setModelSel] = useState(initialModel);
+  const { models, fromServer: modelsFromServer, refresh: refreshModels } = useModelCatalog();
+  /** 目录到货 → 把持久化的旧值(可能是升级前的完整 id)归一成目录行;查不到又不像 id 的回落 CLI 默认 */
+  useEffect(() => {
+    if (!modelsFromServer) return;
+    setModelSel((cur) => normalizeModelValue(models, cur) ?? DEFAULT_MODEL);
+  }, [models, modelsFromServer]);
+  /** 会话 init 后目录可能刚被后端刷新过(CLI 在后端运行期间升级),再拉一次 */
+  useEffect(() => {
+    if (d.sessionId) refreshModels();
+  }, [d.sessionId]);
+  /** 下拉/面板候选:目录行 + 当前选中的手输值(不在目录里也得让它显示出来) */
+  const modelOptions = useMemo(() => {
+    const vals = models.map((m) => m.value);
+    return vals.includes(modelSel) ? vals : [...vals, modelSel];
+  }, [models, modelSel]);
+  /** 会话进行中切模型:`default` 行不能原样发给 setModel,换成它解析到的真实 id */
+  const liveModelOf = (v: string) => (v === DEFAULT_MODEL ? (findModel(models, v)?.resolvedModel ?? v) : v);
   const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
@@ -365,7 +355,10 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     if (!prefsLoaded || prefsAppliedRef.current) return;
     prefsAppliedRef.current = true;
-    if (prefs.model && MODELS.includes(prefs.model)) setModelSel(prefs.model);
+    if (prefs.model) {
+      const v = normalizeModelValue(models, prefs.model);
+      if (v) setModelSel(v);
+    }
     if (prefs.effort && EFFORTS.includes(prefs.effort)) setEffortSel(prefs.effort);
     const permLabel = PERMS.find((x) => PERM_VALUE[x] === prefs.perm);
     if (permLabel) setPermSel(permLabel);
@@ -685,23 +678,23 @@ export function Dispatch({ active }: { active: boolean }) {
    *  未开始 → 设定新会话默认并记忆 */
   const applyModel = (resolved: string) => {
     if (d.started) {
-      d.changeModel(resolved); // 仅当前会话
+      d.changeModel(liveModelOf(resolved)); // 仅当前会话
     } else {
       setModelSel(resolved);
       localStorage.setItem(LAST_MODEL_KEY, resolved);
-      d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
+      d.pushNote(`⇄ 模型已设为 ${modelLabel(models, resolved)}(${modelDetail(models, resolved)}),本会话生效。`);
     }
   };
 
   /** 实际下发给 SDK 的思考深度:显式选过就用选的,否则回落到该模型的默认档(未列出的模型 = 不下发) */
-  const resolvedEffort = effortSel === EFFORTS[0] ? MODEL_DEFAULT_EFFORT[modelSel] : effortSel;
+  const resolvedEffort = effortSel === EFFORTS[0] ? defaultEffortOf(models, modelSel) : effortSel;
 
   /** 设定思考深度(/effort 与下拉共用)。SDK 只支持建会话时定 effort、无运行时切换,
    *  所以已开始的会话不受影响,改动对下一个新会话生效 */
   const applyEffort = (v: string) => {
     setEffortSel(v);
     localStorage.setItem(LAST_EFFORT_KEY, v);
-    const shown = v === EFFORTS[0] ? `自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : v;
+    const shown = v === EFFORTS[0] ? `自动(${defaultEffortOf(models, modelSel) ?? '模型默认'})` : v;
     d.pushNote(
       d.started
         ? `◈ 思考深度已设为 ${shown};当前会话无法中途改,对下一个新会话生效。`
@@ -1227,8 +1220,9 @@ export function Dispatch({ active }: { active: boolean }) {
     // 无参数或没命中 → 弹窗模糊搜索(与 /wd 同款,/model fab 会以 fab 为初始搜索词进弹窗)
     if (/^\/model\b/.test(text)) {
       const arg = text.replace(/^\/model\b/, '').trim().toLowerCase();
-      const resolved = MODELS.find((m) => m.toLowerCase() === arg) ?? MODEL_SHORT[arg];
-      if (resolved && resolved !== MODELS[0]) {
+      // 目录行(别名/真实 id/显示名)或长得像完整 id 的手输值都直接切
+      const resolved = normalizeModelValue(models, arg);
+      if (resolved) {
         applyModel(resolved);
         return;
       }
@@ -1254,7 +1248,7 @@ export function Dispatch({ active }: { active: boolean }) {
       applyEffort(arg);
       return;
     }
-    if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
+    localStorage.setItem(LAST_MODEL_KEY, modelSel);
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
     // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
@@ -1274,7 +1268,7 @@ export function Dispatch({ active }: { active: boolean }) {
       await d.send(text, {
         cwd: effectiveCwd,
         permissionMode: PERM_VALUE[permSel]!,
-        model: modelSel === MODELS[0] ? undefined : modelSel,
+        model: toSdkModel(modelSel),
         effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
         name: resumeInfo?.name ?? autoName,
@@ -1813,15 +1807,16 @@ export function Dispatch({ active }: { active: boolean }) {
           <span className="spacer" />
           <DropUp
             id="model-dd"
-            value={d.started ? (MODELS.find((m) => m === d.model) ?? d.model ?? modelSel) : modelSel}
-            options={MODELS}
+            value={d.started ? (normalizeModelValue(models, d.model) ?? d.model ?? modelSel) : modelSel}
+            options={modelOptions}
+            labelOf={(v) => modelLabel(models, v)}
             onChange={(v) => {
               // 有活跃会话 → 只切当前会话(SDK setModel,不改新会话默认);无会话 → 设新会话默认并记忆
               if (d.started) {
-                if (v !== MODELS[0]) d.changeModel(v);
+                d.changeModel(liveModelOf(v));
               } else {
                 setModelSel(v);
-                if (v !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, v);
+                localStorage.setItem(LAST_MODEL_KEY, v);
               }
             }}
             title={d.started ? '当前会话模型(切换只对本会话生效)' : '新会话默认模型(记忆最近一次)'}
@@ -1833,10 +1828,10 @@ export function Dispatch({ active }: { active: boolean }) {
             options={EFFORTS}
             // 首项标注解析结果(如「思考 自动(low)」),否则它与显式 low 在列表里同名、无法区分
             labelOf={(v) =>
-              v === EFFORTS[0] ? `思考 自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : `思考 ${v}`
+              v === EFFORTS[0] ? `思考 自动(${defaultEffortOf(models, modelSel) ?? '模型默认'})` : `思考 ${v}`
             }
             onChange={applyEffort}
-            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus-5 → low),其余模型不下发、用模型自身默认(通常 high)`}
+            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus → low),其余模型不下发、用模型自身默认(通常 high)`}
           />
           <DropUp
             className="dim"
@@ -1887,11 +1882,12 @@ export function Dispatch({ active }: { active: boolean }) {
         {modelPalette && (
           <WdPalette
             title="切换模型"
-            placeholder="模糊搜索模型…(如 fable)"
+            placeholder="模糊搜索模型…(如 fable),或输入完整 id"
             emptyNoun="模型"
-            value={d.started ? (d.model ?? modelSel) : modelSel}
-            options={MODELS.slice(1)}
-            labelOf={(m) => MODEL_ALIAS[m] ?? m}
+            value={d.started ? (normalizeModelValue(models, d.model) ?? d.model ?? modelSel) : modelSel}
+            options={modelOptions}
+            labelOf={(m) => modelLabel(models, m)}
+            detailOf={(m) => modelDetail(models, m)}
             initialQuery={modelQuery}
             onPick={(m) => {
               applyModel(m);

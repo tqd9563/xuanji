@@ -21,6 +21,7 @@ export function WdPalette({
   value,
   options,
   labelOf,
+  detailOf,
   initialQuery = '',
   title = '切换工作目录',
   placeholder = '模糊搜索目录…(如 skill),或输入完整路径',
@@ -32,6 +33,8 @@ export function WdPalette({
   value: string;
   options: string[];
   labelOf?: (v: string) => string;
+  /** 右列文案(默认为 option 本身;/model 用它显示别名解析到的真实 id) */
+  detailOf?: (v: string) => string;
   initialQuery?: string;
   /** 弹窗标题(兼作 aria-label) */
   title?: string;
@@ -224,7 +227,7 @@ export function WdPalette({
                   {isManual && settled && !settled.isDir && (
                     <span className="rp-meta wd-bad">目录不存在</span>
                   )}
-                  <span className="wd-path mono">{o}</span>
+                  <span className="wd-path mono">{detailOf?.(o) ?? o}</span>
                 </button>
               );
             })}
