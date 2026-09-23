@@ -15,12 +15,17 @@ import { refreshSkillUsage } from './services/skill-usage.js';
 import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
 import { warmModelCatalog } from './services/models.js';
 import { SysmonSampler } from './services/sysmon/sampler.js';
+import { sweepIdleDispatches } from './services/dispatch.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
 // 系统监控:有页面订阅才采;「无人查看时暂停」关掉时常驻
 const sysmon = new SysmonSampler(storage);
 sysmon.start();
+// 空闲自动退出:每分钟巡检一次,阈值每次现读偏好(设置改动下一次巡检即生效;PUT /prefs 时另会立即巡检)
+setInterval(() => {
+  void sweepIdleDispatches(readPrefs(storage).monitor.idleExit).catch(() => {});
+}, 60_000).unref();
 // 通知按「设置 › 通知」过滤:范围与事件取与,两者都开才发
 setNotifyGate((scope, kind) => {
   const { notify } = readPrefs(storage);

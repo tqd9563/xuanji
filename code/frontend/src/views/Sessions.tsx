@@ -205,7 +205,7 @@ function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsusp
             ↩
           </button>
         )}
-        <SessionMetrics sessionId={s.sessionId} />
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -239,7 +239,7 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
         {s.state === 'blocked' && <span className="tag t-unread">等输入</span>}
         <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
         {s.readonly && <Tag>只读</Tag>}
-        <SessionMetrics sessionId={s.sessionId} />
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -329,7 +329,7 @@ function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArc
         {isUnread(s) && <span className="u-dot" />}
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
-        <SessionMetrics sessionId={s.sessionId} />
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">

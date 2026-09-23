@@ -2706,6 +2706,7 @@ button.ram-chip { padding: 1px 4px; margin-right: -4px; border-radius: 4px; }
 button.ram-chip:hover { background: var(--hover); }
 .ram-chip[data-lv="warn"] { color: var(--amber); }
 .ram-chip[data-lv="hot"] { color: var(--red); font-weight: 600; }
+.ram-chip[data-lv="gone"] { color: var(--faint); opacity: 0.8; cursor: default; }
 .cpu-chip + .ram-chip { margin-left: 8px; }
 .scard[data-ram-lv="warn"] { border-left: 2px solid var(--amber); }
 .scard[data-ram-lv="hot"] { border-left: 2px solid var(--red); }

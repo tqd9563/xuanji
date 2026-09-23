@@ -522,12 +522,21 @@ function CpuTab({ snap, tabs, focus, pop }: TabProps) {
 /* ============ 会话卡片数字 ============ */
 
 /** 卡片 .top 行尾的内存/CPU 数字;点击打开弹窗对应 tab 并定位到该会话 */
-export function SessionMetrics({ sessionId }: { sessionId: string }) {
+export function SessionMetrics({ sessionId, idleExited }: { sessionId: string; idleExited?: boolean }) {
   const en = useMonitorEnabled();
   const local = useLocalPrefs();
   const snap = useSysmon(en.mem || en.cpu);
   const u = snap?.sessions[sessionId];
-  if (!u) return null;
+  if (!u) {
+    // 空闲自动退出:进程已结束、卡片保留——只一枚「—」,原因在悬停提示里(不加常驻标记)
+    if (!idleExited || (!en.mem && !en.cpu)) return null;
+    return (
+      <span className="ram-chip" data-lv="gone"
+        title={`空闲超过 ${en.prefs.idleExit || '设定的'} 分钟已自动结束进程 · 下次发消息自动接上(冷启动几秒)`}>
+        —
+      </span>
+    );
+  }
   const memLv = memChipLevel(u.mem);
   const showMem = en.mem && showMetric(local.cardMem, memLv !== 'ok');
   const showCpu = en.cpu && showMetric(local.cardCpu, cpuHigh(u.cpu, snap?.cpu?.ncpu ?? 1, en.prefs.cpuWarn));
