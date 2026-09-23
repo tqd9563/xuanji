@@ -281,6 +281,8 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
 const MODELS = [
   '(默认)',
   'claude-fable-5-1',
+  'claude-opus-5-5',
+  'claude-opus-5-5[1m]',
   'claude-opus-5',
   'claude-opus-5[1m]',
   'claude-sonnet-5',
@@ -298,6 +300,8 @@ const DEFAULT_PERM = PERMS[2]!;
 /** /model 简写 → 完整模型名 */
 const MODEL_SHORT: Record<string, string> = {
   fable: 'claude-fable-5-1',
+  'opus-5.5': 'claude-opus-5-5',
+  'opus-5.5-1m': 'claude-opus-5-5[1m]',
   opus: 'claude-opus-5',
   'opus-1m': 'claude-opus-5[1m]',
   sonnet: 'claude-sonnet-5',
@@ -324,6 +328,8 @@ const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
 /** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
  *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
 const MODEL_DEFAULT_EFFORT: Record<string, string> = {
+  'claude-opus-5-5': 'low',
+  'claude-opus-5-5[1m]': 'low',
   'claude-opus-5': 'low',
   'claude-opus-5[1m]': 'low',
 };
