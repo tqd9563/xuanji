@@ -165,7 +165,11 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
 
 /** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。
  *  超出上限的更早事件不丢弃:留在 earlierRef 里供轮次目录列出与按需回填(见 splitHistory)。 */
-const CHAT_SEED_LIMIT = 200;
+/* 2026-09-23 从 200 降到 40:接回/续接时一次挂 200 条(每条工具卡/助手消息都要排版)
+ * 是「点进去等好几秒」的主要成本之一;更早的轮次本就靠轮次目录按需回填,不会丢。 */
+const CHAT_SEED_LIMIT = 40;
+/** 接回时实时回放列表只先渲染的尾部条数 */
+const CHAT_TAIL = 60;
 /** 吸顶轮次头的带高(与 .turnhead 实际高度同值);判「提问是否已被带子盖住」用它 */
 const TURN_HEAD_H = 36;
 /** 跳转落点在头带下方再留的呼吸位 */
@@ -567,6 +571,22 @@ export function Dispatch({ active }: { active: boolean }) {
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
+  /**
+   * 列表头部暂不渲染的条数。接回一个跑了很久的会话,后端内存回放能一口气给几百条
+   * (实测 455 条),全渲染就是几秒的排版;只挂尾部 CHAT_TAIL 条,顶部按钮按需展开。
+   * 下标口径不变(map 时跳过 i < headHidden),轮次序号/日期分隔/key 都不用改。
+   */
+  const [headHidden, setHeadHidden] = useState(0);
+  const itemCountRef = useRef(0);
+  itemCountRef.current = d.items.length;
+  useEffect(() => {
+    if (d.items.length === 0) setHeadHidden(0);
+  }, [d.items.length]);
+  useEffect(() => {
+    if (!d.attachedHistory) return;
+    // attached 到达 = 回放已合批渲染完毕:此刻 items 就是回放全量,裁到尾部
+    setHeadHidden(Math.max(0, itemCountRef.current - CHAT_TAIL));
+  }, [d.attachedHistory]);
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
   // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
@@ -1424,7 +1444,19 @@ export function Dispatch({ active }: { active: boolean }) {
               </div>
             </div>
           )}
+          {headHidden > 0 && (
+            <button
+              className="chat-more-btn"
+              onClick={() => {
+                pinnedRef.current = false; // 展开更早内容是主动上翻,别被自动置底拽回去
+                setHeadHidden(0);
+              }}
+            >
+              显示更早的 {headHidden} 条
+            </button>
+          )}
           {d.items.map((item, i) => (
+            i < headHidden ? null :
             <Fragment key={chatKey(i, d.seedOffset)}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
               <ChatRow

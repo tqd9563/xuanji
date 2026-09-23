@@ -2608,3 +2608,11 @@ html[data-turn-head="false"] .turnhead { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .l2d-bubble { transition: none; }
 }
+
+/* 接回长会话时列表头部的「显示更早的 N 条」:与工具卡同族的轻按钮,不抢正文 */
+.chat-more-btn {
+  display: block; margin: 4px auto 12px; padding: 5px 12px;
+  font-size: 0.75rem; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--line-soft); border-radius: var(--r-s); cursor: pointer;
+}
+.chat-more-btn:hover { background: var(--hover); color: var(--ink); }
