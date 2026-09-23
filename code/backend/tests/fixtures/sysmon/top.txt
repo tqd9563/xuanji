@@ -1,0 +1,904 @@
+Processes: 439 total, 3 running, 436 sleeping, 4681 threads 
+2026/09/23 14:53:52
+Load Avg: 4.20, 5.50, 5.19 
+CPU usage: 16.25% user, 13.54% sys, 70.19% idle 
+SharedLibs: 483M resident, 153M data, 242M linkedit.
+MemRegions: 1299147 total, 4987M resident, 141M private, 1625M shared.
+PhysMem: 17G used (3020M wired, 7065M compressor), 66M unused.
+VM: 268T vsize, 8138M framework vsize, 62279603(0) swapins, 66787937(0) swapouts.
+Networks: packets: 59476505/37G in, 46407368/22G out.
+Disks: 479878423/8117G read, 65933737/1637G written.
+
+PID    PPID  COMMAND          MEM   CMPRS %CPU
+99291  1423  Lark Helper (Ren 113M  99M   0.0 
+99061  1215  Google Chrome He 121M  118M  0.0 
+99045  1     idleassetsd      11M   7344K 0.0 
+97985  1     com.apple.hiserv 3393K 1232K 0.0 
+97426  1423  Lark Helper (Ren 33M   30M   0.0 
+95988  2140  WeChatAppEx Help 44M   39M   0.0 
+95987  2140  WeChatAppEx Help 21M   16M   0.0 
+95854  1423  Lark Helper (Ren 277M  260M  0.0 
+91149  1215  Google Chrome He 111M  105M  0.0 
+90241  90225 python3.11       10M   10M   0.0 
+90225  90221 python3.11       41M   41M   0.0 
+90221  90204 uv               11M   11M   0.0 
+90204  1     bash             3149K 2812K 0.0 
+90028  1     CoreLocationAgen 8610K 4448K 0.0 
+89981  1     python3.12       164M  156M  0.0 
+89662  1215  Google Chrome He 433M  426M  0.0 
+88517  1215  Google Chrome He 159M  150M  0.0 
+88299  1215  Google Chrome He 275M  264M  0.0 
+88011  88006 top              6689K 0B    0.0 
+88006  84565 zsh              3317K 0B    0.0 
+87969  1     AXVisualSupportA 9362K 0B    0.0 
+87922  1     naturallanguaged 9298K 0B    0.0 
+87671  1     mdworker_shared  2994K 656K  0.0 
+87552  1     mdworker_shared  3073K 864K  0.0 
+87441  1215  Google Chrome He 40M   27M   0.0 
+87440  1215  Google Chrome He 65M   54M   0.0 
+87234  86761 gitstatusd-darwi 17M   17M   0.0 
+87233  1     zsh              1121K 640K  0.0 
+87231  1     zsh              2993K 2768K 0.0 
+86923  1215  Google Chrome He 200M  193M  0.0 
+86786  1215  Google Chrome He 30M   24M   0.0 
+86785  1215  Google Chrome He 32M   25M   0.0 
+86784  1215  Google Chrome He 38M   22M   0.0 
+86782  1     biometrickitd    3281K 2272K 0.0 
+86781  1     coreauthd        2481K 2112K 0.0 
+86780  1     swcd             4306K 1056K 0.0 
+86761  1     zsh              1633K 1392K 0.0 
+86756  3608  zsh              21M   9264K 0.0 
+86731  1215  Google Chrome He 94M   57M   0.0 
+86674  1     logd_helper      2625K 1664K 0.0 
+86544  1     usermanagerd     2113K 1744K 0.0 
+86529  1     syncdefaultsd    4593K 4144K 0.0 
+86393  1     amfid            2961K 2544K 0.0 
+86354  1     remindd          9473K 3968K 0.0 
+86288  1     calaccessd       9729K 5312K 0.0 
+86220  1     contactsd        6993K 5056K 0.0 
+86219  1     com.apple.audio. 3201K 2816K 0.0 
+86218  1     AudioComponentRe 2641K 2208K 0.0 
+86217  1     knowledge-agent  9298K 6368K 0.0 
+86216  1     systemsoundserve 6497K 6064K 0.0 
+86215  1     tccd             5106K 3552K 0.0 
+86209  1     donotdisturbd    7553K 4672K 0.0 
+86073  1     mdworker_shared  3425K 1312K 0.0 
+86049  1     com.apple.audio. 2673K 2272K 0.0 
+85993  1     sysextd          2961K 992K  0.0 
+85989  1     osanalyticshelpe 3185K 2768K 0.0 
+85987  1     triald           4113K 3680K 0.0 
+85985  1     ospredictiond    3361K 2880K 0.0 
+85902  1     audiomxd         5457K 5024K 0.0 
+84587  1     akd              4065K 2176K 0.0 
+84565  73273 claude           232M  42M   0.0 
+84504  1     wifip2pd         3969K 1872K 0.0 
+84493  1     replayd          11M   10M   0.0 
+84453  1     localizationswit 3202K 2720K 0.0 
+84452  1     chronod          19M   18M   0.0 
+84434  1     online-auth-agen 2545K 2176K 0.0 
+84224  1215  Google Chrome He 713M  691M  0.0 
+83743  83719 Code Helper (Plu 36M   34M   0.0 
+83719  3595  Code Helper (Plu 220M  219M  0.0 
+83718  3595  Code Helper (Plu 88M   88M   0.0 
+83645  1     mdworker_shared  4193K 1968K 0.0 
+83397  1215  Google Chrome He 271M  47M   0.0 
+83241  1215  Google Chrome He 95M   88M   0.0 
+83037  1     intelligentrouti 4833K 4384K 0.0 
+83035  1     dmd              4657K 4256K 0.0 
+83006  1     callservicesd    13M   9040K 0.0 
+83004  1     CommCenter       6306K 4368K 0.0 
+83001  1     biomed           4289K 3872K 0.0 
+82795  1     sandboxd         2817K 1824K 0.0 
+82584  1     Python           15M   14M   0.0 
+82271  1     PowerChime       22M   8928K 0.0 
+82174  1     com.apple.audio. 2593K 2240K 0.0 
+80958  73273 claude           223M  32M   0.0 
+79490  1     coreauthd        4018K 2064K 0.0 
+79453  1     pkd              3809K 3360K 0.0 
+79402  1     mobileassetd     9073K 3440K 0.0 
+79250  1     contentlinkingd  4514K 2560K 0.0 
+79128  1     proactived       4529K 2848K 0.0 
+79127  1     com.apple.CodeSi 3473K 2048K 0.0 
+79006  1     ContextStoreAgen 6626K 1648K 0.0 
+78988  1     siriactionsd     7554K 4352K 0.0 
+78142  1     gamecontrollerag 3777K 2736K 0.0 
+78140  1     gamecontrollerd  4225K 2528K 0.0 
+78089  1     containermanager 2737K 2368K 0.0 
+78088  1     containermanager 2753K 2368K 0.0 
+78083  1     containermanager 6241K 5824K 0.0 
+77889  1215  Google Chrome He 579M  558M  0.0 
+77820  1     Activity Monitor 61M   26M   0.0 
+77186  1     WirelessRadioMan 3009K 2608K 0.0 
+76255  2140  WeApp            85M   75M   0.0 
+74419  1215  Google Chrome He 869M  841M  0.0 
+74359  73273 claude           245M  44M   0.0 
+74284  1     AppleSpell       20M   16M   0.0 
+73463  1     containermanager 4561K 4144K 0.0 
+73310  73273 esbuild          7778K 5232K 0.0 
+73273  73259 node             122M  62M   0.0 
+73259  1     node             20M   18M   0.0 
+72608  1     talagent         8466K 5632K 0.0 
+72601  3595  Code Helper (Plu 34M   32M   0.0 
+71101  1     ShipIt           4801K 4416K 0.0 
+70008  3595  Code Helper (Plu 3328M 3131M 0.0 
+68917  68814 gitstatusd-darwi 5233K 4880K 0.0 
+68914  1     zsh              1265K 704K  0.0 
+68913  1     zsh              2929K 2640K 0.0 
+68814  1     zsh              2433K 2176K 0.0 
+68452  68450 zsh              12M   9312K 0.0 
+68450  19196 login            3457K 3072K 0.0 
+65484  1     UserNotification 23M   9024K 0.0 
+62447  1215  Google Chrome He 97M   91M   0.0 
+60564  1215  Google Chrome He 531M  463M  0.0 
+59553  1     nsurlsessiond    8578K 6512K 0.0 
+59057  1215  Google Chrome He 218M  209M  0.0 
+58633  1215  Google Chrome He 171M  164M  0.0 
+58371  1215  Google Chrome He 62M   53M   0.0 
+56587  1     com.apple.WebKit 10M   6960K 0.0 
+56584  1     com.apple.WebKit 86M   64M   0.0 
+56544  2140  WeChatAppEx Help 14M   12M   0.0 
+56385  1215  Google Chrome He 208M  201M  0.0 
+54637  1     Firewall         1585K 1280K 0.0 
+53590  1     mediaremoted     8849K 7840K 0.0 
+53214  3595  Code Helper (Plu 63M   61M   0.0 
+52796  1     assistantd       20M   18M   0.0 
+52593  1215  Google Chrome He 1037M 994M  0.0 
+51972  1     seserviced       3441K 3072K 0.0 
+51604  1215  Google Chrome He 190M  182M  0.0 
+50561  1215  Google Chrome He 148M  137M  0.0 
+50560  1215  Google Chrome He 152M  145M  0.0 
+45939  1215  Google Chrome He 641M  258M  0.0 
+45878  1215  Google Chrome He 85M   80M   0.0 
+43787  1     bird             7393K 7104K 0.0 
+43094  1     sysmond          2705K 800K  0.0 
+40789  1     VTDecoderXPCServ 29M   4336K 0.0 
+40786  40747 Postman Helper   17M   15M   0.0 
+40785  40747 Postman Helper ( 28M   23M   0.0 
+40776  40747 Postman Helper ( 443M  382M  0.0 
+40775  40747 Postman Helper   17M   11M   0.0 
+40774  40747 Postman Helper ( 114M  30M   0.0 
+40773  1     chrome_crashpad_ 2721K 2384K 0.0 
+40747  1     Postman          194M  163M  0.0 
+38031  1     CoreServicesUIAg 9858K 4992K 0.0 
+37652  1     backupd          2753K 2384K 0.0 
+37471  1     mdwrite          2609K 2240K 0.0 
+36297  1224  Code Helper (Ren 53M   52M   0.0 
+36296  1224  Code Helper (Ren 60M   57M   0.0 
+36257  1     com.apple.Driver 1313K 1136K 0.0 
+36256  1     com.apple.Driver 6993K 2752K 0.0 
+36161  1     SiriNCService    7474K 4352K 0.0 
+36135  1     UIKitSystem      9714K 6640K 0.0 
+36084  1     accountsd        18M   12M   0.0 
+35769  1     BiomeAgent       8130K 3664K 0.0 
+35234  1215  Google Chrome He 37M   30M   0.0 
+34999  1224  Code Helper (Ren 56M   53M   0.0 
+34423  1215  Google Chrome He 236M  226M  0.0 
+33813  1215  Google Chrome He 164M  159M  0.0 
+33634  1     Keychain Circle  6914K 4448K 0.0 
+33621  1     Siri             10M   3680K 0.0 
+32384  1     SogouInput       102M  51M   0.0 
+31934  1     audioaccessoryd  6226K 4432K 0.0 
+30868  1215  Google Chrome He 793M  743M  0.0 
+29424  1     PasswordBreachAg 6417K 6128K 0.0 
+29306  1215  Google Chrome He 233M  226M  0.0 
+29062  1215  Google Chrome He 682M  670M  0.0 
+28266  1     passd            9554K 8448K 0.0 
+27979  1215  Google Chrome He 203M  198M  0.0 
+19196  1     ghostty          142M  44M   0.0 
+18010  1     com.apple.audio. 4325K 4016K 0.0 
+17646  1     cloudd           14M   11M   0.0 
+17103  1     PerfPowerService 19M   7840K 0.0 
+16586  1     distnoted        1473K 704K  0.0 
+16574  1     logd_reporter    2081K 1776K 0.0 
+16570  1     IMAutomaticHisto 4833K 4432K 0.0 
+16459  1215  Google Chrome He 31M   26M   0.0 
+16458  1215  Google Chrome He 26M   22M   0.0 
+15147  1     python3.11       164M  156M  0.0 
+14998  1215  Google Chrome He 801M  748M  0.0 
+14273  1     fbahelperd       2529K 2192K 0.0 
+13857  1423  Lark Helper (Ren 34M   30M   0.0 
+13830  1     multica          33M   25M   0.0 
+13593  13152 gitstatusd-darwi 3729K 3344K 0.0 
+13591  1     zsh              1201K 704K  0.0 
+13590  1     zsh              2913K 2704K 0.0 
+13152  1     zsh              1409K 1200K 0.0 
+13147  3608  zsh              18M   8656K 0.0 
+11999  1     mdbulkimport     5617K 5216K 0.0 
+11865  1     DiskUnmountWatch 2145K 1824K 0.0 
+11803  1     tipsd            8129K 5808K 0.0 
+11798  1     searchpartyusera 10M   7696K 0.0 
+10867  1215  Google Chrome He 815M  764M  0.0 
+10218  1     trustd           12M   6656K 0.0 
+10215  1     trustd           13M   6800K 0.0 
+10099  1     distnoted        1505K 736K  0.0 
+9766   1215  Google Chrome He 79M   51M   0.0 
+9734   1215  Google Chrome He 89M   63M   0.0 
+8269   1     com.apple.WebKit 220M  21M   0.0 
+8260   1     com.apple.WebKit 50M   39M   0.0 
+8258   1     com.apple.WebKit 1108M 102M  0.0 
+8256   1     Xuanji           202M  126M  0.0 
+8030   8029  klnagent         57M   49M   0.0 
+8029   380   klcsexec         993K  784K  0.0 
+7780   1215  Google Chrome He 118M  94M   0.0 
+7779   1     storeaccountd    5169K 4768K 0.0 
+7606   1     JapaneseIM-Romaj 24M   13M   0.0 
+6393   1     mbuseragent      2529K 2208K 0.0 
+5296   3595  Code Helper (Plu 91M   88M   0.0 
+5158   1     CrashReporterSup 2065K 1728K 0.0 
+5032   1     storedownloadd   4017K 3600K 0.0 
+4970   2555  node             47M   30M   0.0 
+4940   1     com.apple.WebKit 51M   19M   0.0 
+4855   4757  gitstatusd-darwi 6689K 6304K 0.0 
+4854   1     zsh              1169K 672K  0.0 
+4852   1     zsh              2513K 2288K 0.0 
+4757   1     zsh              1953K 1712K 0.0 
+4047   3591  Code Helper      113M  111M  0.0 
+4032   3608  zsh              11M   6592K 0.0 
+3959   3595  pet              8433K 8080K 0.0 
+3608   1224  Code Helper      48M   41M   0.0 
+3595   1224  Code Helper (Plu 890M  777M  0.0 
+3591   1224  Code Helper      84M   74M   0.0 
+3564   1423  Lark Helper      35M   32M   0.0 
+3559   1     universalAccessA 15M   5312K 0.0 
+3488   2140  WeChatAppEx Help 27M   20M   0.0 
+3214   1423  Lark Helper (Ren 114M  102M  0.0 
+2739   1     com.apple.WebKit 9122K 5280K 0.0 
+2738   1     com.apple.WebKit 86M   80M   0.0 
+2733   2140  WeChatAppEx Help 227M  154M  0.0 
+2732   2140  WeChatAppEx Help 28M   23M   0.0 
+2724   1     mdbulkimport     6433K 6016K 0.0 
+2669   1423  Lark Helper (Ren 906M  738M  0.0 
+2644   1     AgentInfraServic 9586K 8880K 0.0 
+2625   1     BSPrintNotify    49M   42M   0.0 
+2577   1423  Lark Helper      427M  382M  0.0 
+2573   1423  Lark Helper      310M  241M  0.0 
+2570   1423  Lark Helper      48M   44M   0.0 
+2569   1423  Lark Helper      340M  82M   0.0 
+2567   1423  Lark Helper      22M   19M   0.0 
+2562   1     ApifoxAppAgent   15M   8400K 0.0 
+2555   1     Raycast          260M  199M  0.0 
+2553   1     Ice              98M   36M   0.0 
+2549   1     Shottr           81M   58M   0.0 
+2543   1215  Google Chrome He 395M  348M  0.0 
+2541   1     ctkahp           4049K 3600K 0.0 
+2537   1     node             79M   62M   0.0 
+2534   1     TextInputMenuAge 26M   13M   0.0 
+2532   1     diagnostics_agen 7185K 4144K 0.0 
+2529   1     AirPlayUIAgent   15M   7232K 0.0 
+2527   1     kav_agent        33M   21M   0.0 
+2521   1     icdd             3905K 3504K 0.0 
+2519   1     LiuHaiHelper     15M   5264K 0.0 
+2515   1     App Cleaner Help 18M   6128K 0.0 
+2512   1     SogouServices    17M   6848K 0.0 
+2509   1     uwstservice      17M   6800K 0.0 
+2506   1     CorplinkNe       16M   4384K 0.0 
+2503   1     corespeechd      11M   6288K 0.0 
+2275   1     distnoted        1505K 736K  0.0 
+2164   2163  gopls            110M  109M  0.0 
+2163   3595  gopls            2182M 2177M 0.0 
+2140   1214  WeChatAppEx      147M  130M  0.0 
+2115   1     fairplayd        2817K 2448K 0.0 
+2106   1     distnoted        1489K 704K  0.0 
+2035   1224  Code Helper      47M   35M   0.0 
+2034   1224  Code Helper      97M   91M   0.0 
+2023   1215  Google Chrome He 47M   40M   0.0 
+1998   1     distnoted        1457K 704K  0.0 
+1989   1224  Code Helper (Ren 1157M 1067M 0.0 
+1942   1     SubmitDiagInfo   5905K 5120K 0.0 
+1923   1224  Code Helper      12M   6320K 0.0 
+1921   1224  Code Helper      193M  49M   0.0 
+1920   1     chrome_crashpad_ 6658K 5872K 0.0 
+1918   1     taskgated        2913K 1280K 0.0 
+1827   1215  Google Chrome He 65M   37M   0.0 
+1791   1215  Google Chrome He 680M  175M  0.0 
+1546   1     CVMServer        3105K 2688K 0.0 
+1478   1     commerce         9889K 8832K 0.0 
+1474   1     com.apple.dock.e 16M   5824K 0.0 
+1473   1     com.apple.dock.e 31M   18M   0.0 
+1435   1     Spotlight        96M   86M   0.0 
+1434   1     CursorUIViewServ 35M   9760K 0.0 
+1425   1     chrome_crashpad_ 2817K 2416K 0.0 
+1423   1     Feishu           450M  384M  0.0 
+1339   1     avconferenced    16M   11M   0.0 
+1335   1     useractivityd    3889K 1952K 0.0 
+1332   1     mediaremoteagent 2929K 2560K 0.0 
+1320   1     corespotlightd   20M   14M   0.0 
+1297   1     aned             4561K 1808K 0.0 
+1286   1     fontworker       5569K 5200K 0.0 
+1280   1     com.apple.CloudD 4466K 4032K 0.0 
+1268   1     PAH_Extension    15M   6880K 0.0 
+1263   1     gamepolicyd      5025K 1584K 0.0 
+1262   1     WallpaperImageEx 45M   44M   0.0 
+1258   1     AMPDeviceDiscove 4514K 3200K 0.0 
+1256   1     automountd       3473K 1248K 0.0 
+1250   1     imagent          10M   5664K 0.0 
+1249   1     ViewBridgeAuxili 7954K 4704K 0.0 
+1243   1     StatusKitAgent   9314K 9008K 0.0 
+1242   1     imklaunchagent   5714K 4320K 0.0 
+1240   1     WallpaperAgent   20M   12M   0.0 
+1239   1     familycircled    7874K 6560K 0.0 
+1236   1     Finder           163M  99M   0.0 
+1235   1     SystemUIServer   88M   60M   0.0 
+1234   1     sharedfilelistd  5426K 2272K 0.0 
+1232   1     fontd            23M   19M   0.0 
+1231   1     ControlCenter    60M   38M   0.0 
+1230   1     NotificationCent 75M   48M   0.0 
+1229   1     Dock             114M  107M  0.0 
+1226   1     awdd             3121K 2736K 0.0 
+1225   1     nearbyd          5697K 2960K 0.0 
+1224   1     Code             173M  141M  0.0 
+1215   1     Google Chrome    698M  347M  0.0 
+1214   1     WeChat           563M  391M  0.0 
+1207   1     filecoordination 4145K 3728K 0.0 
+1177   1     sharingd         18M   6112K 0.0 
+1145   1     WiFiAgent        16M   7152K 0.0 
+1144   1     fileproviderd    13M   7872K 0.0 
+1140   1     identityservices 16M   5552K 0.0 
+1133   1     distnoted        1473K 704K  0.0 
+1132   1     pboard           5682K 1664K 0.0 
+1131   1     usernotification 9250K 5536K 0.0 
+1128   1     usernoted        13M   3456K 0.0 
+1127   1     rapportd         9074K 4736K 0.0 
+1122   1     secd             12M   5952K 0.0 
+1118   1     lsd              6530K 2656K 0.0 
+1116   1     WindowManager    30M   3696K 0.0 
+1115   1     ContinuityCaptur 14M   14M   0.0 
+1114   1     universalaccessd 22M   11M   0.0 
+1107   1     UserEventAgent   8802K 8064K 0.0 
+1105   1     cfprefsd         4641K 1376K 0.0 
+1102   1     distnoted        5281K 2032K 0.0 
+1101   1     securityd_servic 2657K 2336K 0.0 
+475    1     ctkahp           3729K 3344K 0.0 
+474    378   CorpLinkExtensio 18M   12M   0.0 
+473    378   CorpLinkExtensio 15M   10M   0.0 
+472    378   CorpLinkExtensio 20M   14M   0.0 
+471    378   CorpLinkExtensio 33M   20M   0.0 
+470    378   CorpLinkExtensio 13M   9296K 0.0 
+469    378   CorpLinkExtensio 14M   9504K 0.0 
+468    378   CorpLinkExtensio 14M   9488K 0.0 
+467    378   CorpLinkExtensio 25M   12M   0.0 
+443    1     IOUserBluetoothS 1185K 1008K 0.0 
+440    1     com.apple.Ambien 44M   41M   0.0 
+422    1     audioclocksyncd  5121K 3216K 0.0 
+420    1     netbiosd         3265K 2928K 0.0 
+402    1     oahd             2385K 1200K 0.0 
+390    1     cron             1633K 1264K 0.0 
+389    1     PlugInLibrarySer 1857K 576K  0.0 
+386    1     socketfilterfw   4785K 1296K 0.0 
+384    1     sysextctrld      7266K 6832K 0.0 
+382    1     corplink-service 115M  103M  0.0 
+381    1     com.chiansecurit 4513K 3680K 0.0 
+380    1     klnagent         23M   15M   0.0 
+379    1     ovpnhelper       2929K 2560K 0.0 
+378    1     CorpLinkExtensio 29M   19M   0.0 
+377    1     kavd             545M  532M  0.0 
+376    1     ovpnagent        2913K 2544K 0.0 
+375    1     BSPrintMonitor   3509K 2824K 0.0 
+372    1     distnoted        1473K 704K  0.0 
+370    100   systemstats      8177K 7792K 0.0 
+360    1     wifianalyticsd   4129K 3744K 0.0 
+359    1     suhelperd        22M   22M   0.0 
+358    1     distnoted        1457K 688K  0.0 
+357    1     softwareupdated  43M   42M   0.0 
+353    1     distnoted        1505K 736K  0.0 
+343    1     distnoted        1505K 720K  0.0 
+330    1     mds_stores       73M   37M   0.0 
+328    1     appleeventsd     4289K 2176K 0.0 
+325    1     searchpartyd     7202K 3392K 0.0 
+323    1     com.apple.AppleU 1969K 608K  0.0 
+321    1     com.apple.Driver 1041K 880K  0.0 
+317    1     UVCAssistant     4881K 4480K 0.0 
+316    1     appleh13camerad  10M   3024K 0.0 
+313    1     mDNSResponderHel 2977K 2464K 0.0 
+312    1     distnoted        1457K 688K  0.0 
+304    1     syspolicyd       66M   57M   0.0 
+297    1     storagekitd      6673K 6256K 0.0 
+291    1     mDNSResponder    6353K 3024K 0.0 
+287    1     distnoted        1505K 736K  0.0 
+256    1     distnoted        1489K 736K  0.0 
+254    1     distnoted        1489K 736K  0.0 
+253    1     authd            5218K 4768K 0.0 
+249    1     distnoted        1457K 704K  0.0 
+243    1     systemstatusd    4274K 3856K 0.0 
+239    1     symptomsd        6850K 3424K 0.0 
+232    1     coreaudiod       260M  257M  0.0 
+225    1     airportd         21M   4496K 0.0 
+224    1     apfsd            2753K 2400K 0.0 
+198    1     nsurlsessiond    6642K 13M   0.0 
+195    1     analyticsd       8098K 4848K 0.0 
+193    1     runningboardd    9058K 1952K 0.0 
+190    1     lsd              5377K 3776K 0.0 
+182    1     coreservicesd    9346K 7216K 0.0 
+176    1     loginwindow      86M   72M   0.0 
+172    1     contextstored    7266K 3856K 0.0 
+160    1     tccd             7906K 3120K 0.0 
+159    1     cfprefsd         4193K 1216K 0.0 
+158    1     WindowServer     1137M 491M  0.0 
+157    1     com.apple.cmio.r 4545K 4128K 0.0 
+156    1     AirPlayXPCHelper 10M   5152K 0.0 
+155    1     corebrightnessd  5153K 2848K 0.0 
+153    1     notifyd          4001K 1280K 0.0 
+152    1     bluetoothd       12M   2944K 0.0 
+149    1     KernelEventAgent 1649K 1344K 0.0 
+148    1     revisiond        3777K 3616K 0.0 
+147    1     logind           3009K 2640K 0.0 
+143    1     distnoted        1905K 864K  0.0 
+141    1     dasd             7618K 3360K 0.0 
+140    1     autofsd          1889K 1520K 0.0 
+138    1     locationd        13M   4976K 0.0 
+136    1     securityd        7729K 3248K 0.0 
+135    1     usbmuxd          3937K 3536K 0.0 
+134    1     timed            3249K 2864K 0.0 
+133    1     launchservicesd  13M   3920K 0.0 
+132    1     apsd             7777K 6064K 0.0 
+131    1     opendirectoryd   15M   2784K 0.0 
+130    1     thermalmonitord  2241K 1072K 0.0 
+127    1     syslogd          2481K 1344K 0.0 
+123    1     diskarbitrationd 3793K 1968K 0.0 
+122    1     kernelmanagerd   12M   9616K 0.0 
+120    1     mds              45M   31M   0.0 
+116    1     watchdogd        1969K 1008K 0.0 
+111    1     remoted          2977K 2576K 0.0 
+106    1     IOMFB_bics_daemo 2193K 1856K 0.0 
+105    1     powerd           15M   2288K 0.0 
+103    1     configd          6161K 3376K 0.0 
+100    1     systemstats      4817K 2800K 0.0 
+96     1     fseventsd        12M   4560K 0.0 
+95     1     uninstalld       1905K 864K  0.0 
+93     1     UserEventAgent   6978K 3872K 0.0 
+91     1     logd             31M   26M   0.0 
+1      0     launchd          22M   9376K 0.0 
+0      0     kernel_task      4176K 0B    0.0 
+Processes: 441 total, 4 running, 437 sleeping, 4693 threads 
+2026/09/23 14:53:53
+Load Avg: 3.94, 5.42, 5.16 
+CPU usage: 15.95% user, 9.53% sys, 74.51% idle 
+SharedLibs: 483M resident, 153M data, 242M linkedit.
+MemRegions: 1299253 total, 4989M resident, 141M private, 1626M shared.
+PhysMem: 17G used (3379M wired, 7265M compressor), 69M unused.
+VM: 269T vsize, 8138M framework vsize, 62283514(3911) swapins, 66787937(0) swapouts.
+Networks: packets: 59476548/37G in, 46407411/22G out.
+Disks: 479879748/8117G read, 65933745/1637G written.
+
+PID    PPID  COMMAND          MEM    CMPRS  %CPU
+0      0     kernel_task      3744K- 0B     25.9
+158    1     WindowServer     1139M+ 492M+  25.3
+88299  1215  Google Chrome He 268M-  163M-  24.9
+8258   1     com.apple.WebKit 1109M+ 110M+  23.9
+45939  1215  Google Chrome He 640M-  246M-  17.8
+8269   1     com.apple.WebKit 219M-  29M+   13.2
+1434   1     CursorUIViewServ 35M-   10M+   12.9
+88011  88006 top              7029K+ 0B     8.4 
+32384  1     SogouInput       102M+  51M+   7.7 
+1116   1     WindowManager    29M-   3936K+ 6.0 
+8256   1     Xuanji           202M+  127M+  5.2 
+1791   1215  Google Chrome He 897M+  175M-  4.1 
+40774  40747 Postman Helper ( 114M-  30M-   2.8 
+1423   1     Feishu           450M   389M+  2.3 
+40776  40747 Postman Helper ( 443M   384M+  2.2 
+1      0     launchd          22M    9408K+ 2.2 
+80958  73273 claude           227M+  36M+   1.8 
+1127   1     rapportd         9074K  4736K  1.7 
+1215   1     Google Chrome    698M-  341M-  1.6 
+84565  73273 claude           234M+  45M+   1.3 
+40789  1     VTDecoderXPCServ 29M    4624K+ 1.2 
+330    1     mds_stores       73M+   37M-   1.2 
+74359  73273 claude           246M+  46M+   1.0 
+152    1     bluetoothd       12M+   3056K+ 0.8 
+91     1     logd             31M+   26M+   0.7 
+77820  1     Activity Monitor 61M    26M+   0.7 
+2555   1     Raycast          260M   200M+  0.6 
+1214   1     WeChat           563M   392M+  0.6 
+8260   1     com.apple.WebKit 50M-   39M+   0.5 
+33621  1     Siri             10M    4048K+ 0.5 
+138    1     locationd        13M    4976K  0.5 
+133    1     launchservicesd  13M    3920K  0.5 
+193    1     runningboardd    9058K  1952K  0.5 
+377    1     kavd             545M   532M-  0.4 
+325    1     searchpartyd     7218K+ 3392K  0.4 
+120    1     mds              45M-   31M+   0.4 
+83397  1215  Google Chrome He 272M+  74M+   0.4 
+97985  1     com.apple.hiserv 3393K  1232K  0.3 
+380    1     klnagent         23M    16M+   0.3 
+131    1     opendirectoryd   15M+   2784K  0.3 
+2527   1     kav_agent        33M    21M+   0.2 
+2573   1423  Lark Helper      310M   243M+  0.2 
+8030   8029  klnagent         57M    49M    0.2 
+3608   1224  Code Helper      48M    41M+   0.2 
+96     1     fseventsd        12M    4560K  0.2 
+1249   1     ViewBridgeAuxili 7938K- 4688K- 0.1 
+36256  1     com.apple.Driver 6993K  2752K  0.1 
+1236   1     Finder           163M+  101M+  0.1 
+2577   1423  Lark Helper      427M   381M-  0.1 
+378    1     CorpLinkExtensio 29M    19M+   0.1 
+87671  1     mdworker_shared  3042K+ 1264K+ 0.1 
+382    1     corplink-service 115M   102M-  0.1 
+225    1     airportd         21M+   4576K+ 0.1 
+36161  1     SiriNCService    7442K- 4688K+ 0.1 
+1827   1215  Google Chrome He 65M    37M-   0.1 
+1105   1     cfprefsd         4657K+ 1392K+ 0.1 
+153    1     notifyd          4001K  1296K+ 0.1 
+1263   1     gamepolicyd      5025K  1584K  0.1 
+19196  1     ghostty          142M   45M+   0.1 
+440    1     com.apple.Ambien 44M    41M-   0.1 
+155    1     corebrightnessd  5153K  2848K  0.1 
+105    1     powerd           15M    2288K  0.0 
+3595   1224  Code Helper (Plu 890M-  778M+  0.0 
+73273  73259 node             122M   63M+   0.0 
+402    1     oahd             2385K  1200K  0.0 
+1102   1     distnoted        5281K  2032K  0.0 
+159    1     cfprefsd         4209K+ 1280K+ 0.0 
+422    1     audioclocksyncd  5121K  3216K  0.0 
+40747  1     Postman          194M   164M+  0.0 
+2537   1     node             79M    62M    0.0 
+2140   1214  WeChatAppEx      147M   130M+  0.0 
+471    378   CorpLinkExtensio 33M    20M-   0.0 
+14998  1215  Google Chrome He 801M+  749M+  0.0 
+60564  1215  Google Chrome He 531M   462M-  0.0 
+2506   1     CorplinkNe       16M+   4992K+ 0.0 
+43094  1     sysmond          2705K  800K   0.0 
+473    378   CorpLinkExtensio 15M    10M+   0.0 
+469    378   CorpLinkExtensio 14M    9616K+ 0.0 
+73310  73273 esbuild          7778K  5232K  0.0 
+474    378   CorpLinkExtensio 18M    12M    0.0 
+1232   1     fontd            23M+   18M-   0.0 
+2034   1224  Code Helper      97M    89M-   0.0 
+472    378   CorpLinkExtensio 20M    14M+   0.0 
+2543   1215  Google Chrome He 395M   348M+  0.0 
+1128   1     usernoted        13M    3280K- 0.0 
+375    1     BSPrintMonitor   3509K  2824K  0.0 
+1224   1     Code             173M+  142M+  0.0 
+1225   1     nearbyd          5697K  2976K+ 0.0 
+1177   1     sharingd         18M    6336K+ 0.0 
+468    378   CorpLinkExtensio 14M    9488K  0.0 
+68452  68450 zsh              12M    9152K- 0.0 
+76255  2140  WeApp            85M    75M+   0.0 
+470    378   CorpLinkExtensio 13M    9296K  0.0 
+1118   1     lsd              6530K  2656K  0.0 
+50561  1215  Google Chrome He 148M   138M+  0.0 
+1131   1     usernotification 9250K  5536K  0.0 
+123    1     diskarbitrationd 3793K  1968K  0.0 
+130    1     thermalmonitord  2241K  1072K  0.0 
+3214   1423  Lark Helper (Ren 114M   103M+  0.0 
+2625   1     BSPrintNotify    49M    44M+   0.0 
+2733   2140  WeChatAppEx Help 227M   154M   0.0 
+2569   1423  Lark Helper      340M   86M+   0.0 
+143    1     distnoted        1905K  864K   0.0 
+467    378   CorpLinkExtensio 25M    12M+   0.0 
+3488   2140  WeChatAppEx Help 27M    21M+   0.0 
+304    1     syspolicyd       66M    57M+   0.0 
+95987  2140  WeChatAppEx Help 21M    17M+   0.0 
+17103  1     PerfPowerService 19M    7840K  0.0 
+1107   1     UserEventAgent   8802K  8080K+ 0.0 
+1918   1     taskgated        2913K  1344K+ 0.0 
+1144   1     fileproviderd    13M    7872K  0.0 
+100    1     systemstats      4833K+ 2784K- 0.0 
+1297   1     aned             4545K- 1744K- 0.0 
+1989   1224  Code Helper (Ren 1157M  1078M+ 0.0 
+87922  1     naturallanguaged 9298K+ 0B     0.0 
+2669   1423  Lark Helper (Ren 906M   739M+  0.0 
+56544  2140  WeChatAppEx Help 14M    12M+   0.0 
+34999  1224  Code Helper (Ren 56M    53M    0.0 
+34423  1215  Google Chrome He 236M   226M+  0.0 
+2035   1224  Code Helper      47M    36M+   0.0 
+2515   1     App Cleaner Help 18M    7936K+ 0.0 
+5296   3595  Code Helper (Plu 91M    88M-   0.0 
+70008  3595  Code Helper (Plu 3328M  3304M+ 0.0 
+3591   1224  Code Helper      84M    74M+   0.0 
+2553   1     Ice              98M    37M+   0.0 
+82584  1     Python           15M    14M    0.0 
+79402  1     mobileassetd     8977K- 3472K+ 0.0 
+2023   1215  Google Chrome He 47M    40M+   0.0 
+59057  1215  Google Chrome He 218M   209M+  0.0 
+116    1     watchdogd        1969K  1008K  0.0 
+95988  2140  WeChatAppEx Help 44M    39M+   0.0 
+2732   2140  WeChatAppEx Help 28M    23M+   0.0 
+103    1     configd          6177K+ 3456K+ 0.0 
+3564   1423  Lark Helper      35M    32M+   0.0 
+86784  1215  Google Chrome He 38M    22M+   0.0 
+13857  1423  Lark Helper (Ren 34M    31M+   0.0 
+72601  3595  Code Helper (Plu 34M    32M    0.0 
+35234  1215  Google Chrome He 37M    30M    0.0 
+172    1     contextstored    7250K- 3856K  0.0 
+99291  1423  Lark Helper (Ren 113M   100M+  0.0 
+1239   1     familycircled    7874K  6480K- 0.0 
+83743  83719 Code Helper (Plu 36M    34M    0.0 
+316    1     appleh13camerad  10M    3024K  0.0 
+95854  1423  Lark Helper (Ren 277M   262M+  0.0 
+4047   3591  Code Helper      113M   111M   0.0 
+52796  1     assistantd       20M-   18M+   0.0 
+1923   1224  Code Helper      12M    6336K+ 0.0 
+86354  1     remindd          9473K  4032K+ 0.0 
+13830  1     multica          33M    25M+   0.0 
+97426  1423  Lark Helper (Ren 33M    30M+   0.0 
+182    1     coreservicesd    9330K- 7232K+ 0.0 
+87440  1215  Google Chrome He 65M    54M+   0.0 
+9734   1215  Google Chrome He 89M    63M    0.0 
+198    1     nsurlsessiond    6674K+ 13M    0.0 
+313    1     mDNSResponderHel 2977K  2464K  0.0 
+68914  1     zsh              1265K  704K   0.0 
+86731  1215  Google Chrome He 94M+   57M+   0.0 
+256    1     distnoted        1489K  736K   0.0 
+249    1     distnoted        1457K  704K   0.0 
+9766   1215  Google Chrome He 79M    52M+   0.0 
+287    1     distnoted        1505K  736K   0.0 
+254    1     distnoted        1489K  736K   0.0 
+84504  1     wifip2pd         3969K  1872K  0.0 
+353    1     distnoted        1505K  736K   0.0 
+343    1     distnoted        1505K  720K   0.0 
+1998   1     distnoted        1457K  704K   0.0 
+1133   1     distnoted        1473K  704K   0.0 
+358    1     distnoted        1457K  688K   0.0 
+312    1     distnoted        1457K  688K   0.0 
+195    1     analyticsd       8098K  4912K+ 0.0 
+10099  1     distnoted        1505K  736K   0.0 
+2275   1     distnoted        1505K  736K   0.0 
+372    1     distnoted        1473K  704K   0.0 
+2106   1     distnoted        1489K  704K   0.0 
+381    1     com.chiansecurit 4513K  3680K  0.0 
+16586  1     distnoted        1473K  704K   0.0 
+1920   1     chrome_crashpad_ 6658K  5872K  0.0 
+16459  1215  Google Chrome He 31M    27M+   0.0 
+4855   4757  gitstatusd-darwi 6689K  6304K  0.0 
+50560  1215  Google Chrome He 152M   146M+  0.0 
+68917  68814 gitstatusd-darwi 5233K  4880K  0.0 
+13593  13152 gitstatusd-darwi 3729K  3344K  0.0 
+7780   1215  Google Chrome He 118M   94M+   0.0 
+87234  86761 gitstatusd-darwi 17M    17M    0.0 
+99061  1215  Google Chrome He 121M   118M+  0.0 
+45878  1215  Google Chrome He 85M    80M    0.0 
+99045  1     idleassetsd      11M    7344K  0.0 
+91149  1215  Google Chrome He 111M   105M+  0.0 
+90241  90225 python3.11       10M    10M    0.0 
+90225  90221 python3.11       41M    41M    0.0 
+90221  90204 uv               11M    11M    0.0 
+90204  1     bash             3149K  2812K  0.0 
+90028  1     CoreLocationAgen 8594K- 5520K+ 0.0 
+89981  1     python3.12       164M   156M+  0.0 
+89662  1215  Google Chrome He 433M   427M+  0.0 
+88517  1215  Google Chrome He 159M   150M+  0.0 
+88051  1     mdworker_shared  2977K+ 0B     0.0 
+88050  1     mdworker_shared  2913K+ 0B     0.0 
+88006  84565 zsh              3317K  0B     0.0 
+87969  1     AXVisualSupportA 9362K  0B     0.0 
+87552  1     mdworker_shared  3073K  864K   0.0 
+87441  1215  Google Chrome He 40M    27M+   0.0 
+87233  1     zsh              1121K  640K   0.0 
+87231  1     zsh              2993K  2768K  0.0 
+86923  1215  Google Chrome He 200M   193M   0.0 
+86786  1215  Google Chrome He 30M    24M+   0.0 
+86785  1215  Google Chrome He 32M    25M+   0.0 
+86782  1     biometrickitd    3281K  2272K  0.0 
+86781  1     coreauthd        2481K  2112K  0.0 
+86780  1     swcd             4306K  1264K+ 0.0 
+86761  1     zsh              1633K  1392K  0.0 
+86756  3608  zsh              21M    9296K+ 0.0 
+86674  1     logd_helper      2625K  1664K  0.0 
+86544  1     usermanagerd     2113K  1744K  0.0 
+86529  1     syncdefaultsd    4593K  4144K  0.0 
+86393  1     amfid            2961K  2544K  0.0 
+86288  1     calaccessd       9713K- 5312K  0.0 
+86220  1     contactsd        6993K  5056K  0.0 
+86219  1     com.apple.audio. 3201K  2816K  0.0 
+86218  1     AudioComponentRe 2641K  2208K  0.0 
+86217  1     knowledge-agent  9298K  6496K+ 0.0 
+86216  1     systemsoundserve 6497K  6064K  0.0 
+86215  1     tccd             5106K  3552K  0.0 
+86209  1     donotdisturbd    7553K  4736K+ 0.0 
+86073  1     mdworker_shared  3425K  1312K  0.0 
+86049  1     com.apple.audio. 2673K  2272K  0.0 
+85993  1     sysextd          2961K  992K   0.0 
+85989  1     osanalyticshelpe 3185K  2768K  0.0 
+85987  1     triald           4113K  3680K  0.0 
+85985  1     ospredictiond    3361K  2880K  0.0 
+85902  1     audiomxd         5457K  5024K  0.0 
+84587  1     akd              4065K  2176K  0.0 
+84493  1     replayd          11M    10M    0.0 
+84453  1     localizationswit 3202K  2720K  0.0 
+84452  1     chronod          19M    18M    0.0 
+84434  1     online-auth-agen 2545K  2176K  0.0 
+84224  1215  Google Chrome He 713M   691M+  0.0 
+83719  3595  Code Helper (Plu 220M   219M   0.0 
+83718  3595  Code Helper (Plu 88M    88M    0.0 
+83645  1     mdworker_shared  4193K  1968K  0.0 
+83241  1215  Google Chrome He 95M    88M+   0.0 
+83037  1     intelligentrouti 4833K  4384K  0.0 
+83035  1     dmd              4657K  4256K  0.0 
+83006  1     callservicesd    13M    9040K  0.0 
+83004  1     CommCenter       6290K- 4368K  0.0 
+83001  1     biomed           4289K  3872K  0.0 
+82795  1     sandboxd         2817K  1824K  0.0 
+82271  1     PowerChime       22M    9056K+ 0.0 
+82174  1     com.apple.audio. 2593K  2240K  0.0 
+79490  1     coreauthd        4018K  2064K  0.0 
+79453  1     pkd              3809K  3360K  0.0 
+79250  1     contentlinkingd  4514K  2560K  0.0 
+79128  1     proactived       4529K  2848K  0.0 
+79127  1     com.apple.CodeSi 3473K  2048K  0.0 
+79006  1     ContextStoreAgen 6642K+ 1648K  0.0 
+78988  1     siriactionsd     7554K  4352K  0.0 
+78142  1     gamecontrollerag 3777K  2736K  0.0 
+78140  1     gamecontrollerd  4225K  2544K+ 0.0 
+78089  1     containermanager 2737K  2368K  0.0 
+78088  1     containermanager 2753K  2368K  0.0 
+78083  1     containermanager 6241K  5824K  0.0 
+77889  1215  Google Chrome He 579M   558M+  0.0 
+77186  1     WirelessRadioMan 3009K  2608K  0.0 
+74419  1215  Google Chrome He 869M   841M+  0.0 
+74284  1     AppleSpell       20M-   16M    0.0 
+73463  1     containermanager 4561K  4144K  0.0 
+73259  1     node             20M    18M    0.0 
+72608  1     talagent         8466K  6976K+ 0.0 
+71101  1     ShipIt           4801K  4416K  0.0 
+68913  1     zsh              2929K  2640K  0.0 
+68814  1     zsh              2433K  2176K  0.0 
+68450  19196 login            3457K  3072K  0.0 
+65484  1     UserNotification 23M-   10M+   0.0 
+62447  1215  Google Chrome He 97M    91M+   0.0 
+59553  1     nsurlsessiond    8578K  6512K  0.0 
+58633  1215  Google Chrome He 171M   164M+  0.0 
+58371  1215  Google Chrome He 62M    53M+   0.0 
+56587  1     com.apple.WebKit 10M    6960K  0.0 
+56584  1     com.apple.WebKit 86M-   64M+   0.0 
+56385  1215  Google Chrome He 208M   201M+  0.0 
+54637  1     Firewall         1585K  1280K  0.0 
+53590  1     mediaremoted     8849K  7840K  0.0 
+53214  3595  Code Helper (Plu 63M    61M    0.0 
+52593  1215  Google Chrome He 1037M  994M+  0.0 
+51972  1     seserviced       3441K  3072K  0.0 
+51604  1215  Google Chrome He 190M   182M+  0.0 
+43787  1     bird             7393K  7104K  0.0 
+40786  40747 Postman Helper   17M    15M    0.0 
+40785  40747 Postman Helper ( 28M    23M    0.0 
+40775  40747 Postman Helper   17M    11M+   0.0 
+40773  1     chrome_crashpad_ 2721K  2384K  0.0 
+38031  1     CoreServicesUIAg 9858K  6944K+ 0.0 
+37652  1     backupd          2753K  2384K  0.0 
+37471  1     mdwrite          2609K  2240K  0.0 
+36297  1224  Code Helper (Ren 53M    52M    0.0 
+36296  1224  Code Helper (Ren 60M    57M    0.0 
+36257  1     com.apple.Driver 1313K  1136K  0.0 
+36135  1     UIKitSystem      9714K  6640K  0.0 
+36084  1     accountsd        18M    12M    0.0 
+35769  1     BiomeAgent       8130K  3680K+ 0.0 
+33813  1215  Google Chrome He 164M   159M+  0.0 
+33634  1     Keychain Circle  6882K- 5680K+ 0.0 
+31934  1     audioaccessoryd  6226K  4448K+ 0.0 
+30868  1215  Google Chrome He 793M   743M+  0.0 
+29424  1     PasswordBreachAg 6417K  6128K  0.0 
+29306  1215  Google Chrome He 233M   226M+  0.0 
+29062  1215  Google Chrome He 682M   670M+  0.0 
+28266  1     passd            9554K  8448K  0.0 
+27979  1215  Google Chrome He 203M   198M+  0.0 
+18010  1     com.apple.audio. 4325K  4016K  0.0 
+17646  1     cloudd           14M    11M    0.0 
+16574  1     logd_reporter    2081K  1776K  0.0 
+16570  1     IMAutomaticHisto 4833K  4432K  0.0 
+16458  1215  Google Chrome He 26M    22M    0.0 
+15147  1     python3.11       164M   156M   0.0 
+14273  1     fbahelperd       2529K  2192K  0.0 
+13591  1     zsh              1201K  704K   0.0 
+13590  1     zsh              2913K  2704K  0.0 
+13152  1     zsh              1409K  1200K  0.0 
+13147  3608  zsh              18M    8656K  0.0 
+11999  1     mdbulkimport     5617K  5216K  0.0 
+11865  1     DiskUnmountWatch 2145K  1824K  0.0 
+11803  1     tipsd            8129K  5808K  0.0 
+11798  1     searchpartyusera 10M    7696K  0.0 
+10867  1215  Google Chrome He 815M   764M+  0.0 
+10218  1     trustd           12M    6704K+ 0.0 
+10215  1     trustd           13M+   7024K+ 0.0 
+8029   380   klcsexec         993K   784K   0.0 
+7779   1     storeaccountd    5169K  4768K  0.0 
+7606   1     JapaneseIM-Romaj 24M    15M+   0.0 
+6393   1     mbuseragent      2529K  2208K  0.0 
+5158   1     CrashReporterSup 2065K  1728K  0.0 
+5032   1     storedownloadd   4017K  3600K  0.0 
+4970   2555  node             47M    30M    0.0 
+4940   1     com.apple.WebKit 51M    19M    0.0 
+4854   1     zsh              1169K  672K   0.0 
+4852   1     zsh              2513K  2288K  0.0 
+4757   1     zsh              1953K  1712K  0.0 
+4032   3608  zsh              11M    6592K  0.0 
+3959   3595  pet              8433K  8080K  0.0 
+3559   1     universalAccessA 15M    7248K+ 0.0 
+2739   1     com.apple.WebKit 9122K  5280K  0.0 
+2738   1     com.apple.WebKit 86M    80M    0.0 
+2724   1     mdbulkimport     6433K  6016K  0.0 
+2644   1     AgentInfraServic 9586K  8880K  0.0 
+2570   1423  Lark Helper      48M    45M+   0.0 
+2567   1423  Lark Helper      22M    19M+   0.0 
+2562   1     ApifoxAppAgent   15M    10M+   0.0 
+2549   1     Shottr           81M    60M+   0.0 
+2541   1     ctkahp           4049K  3600K  0.0 
+2534   1     TextInputMenuAge 26M    17M+   0.0 
+2532   1     diagnostics_agen 7185K  4144K  0.0 
+2529   1     AirPlayUIAgent   15M    8560K+ 0.0 
+2521   1     icdd             3905K  3504K  0.0 
+2519   1     LiuHaiHelper     15M    6352K+ 0.0 
+2512   1     SogouServices    17M    7200K+ 0.0 
+2509   1     uwstservice      17M    8512K+ 0.0 
+2503   1     corespeechd      11M    6288K  0.0 
+2164   2163  gopls            110M   109M   0.0 
+2163   3595  gopls            2182M  2177M  0.0 
+2115   1     fairplayd        2817K  2448K  0.0 
+1942   1     SubmitDiagInfo   5905K  5120K  0.0 
+1921   1224  Code Helper      193M-  49M+   0.0 
+1546   1     CVMServer        3105K  2688K  0.0 
+1478   1     commerce         9889K  8832K  0.0 
+1474   1     com.apple.dock.e 16M-   7088K+ 0.0 
+1473   1     com.apple.dock.e 31M    18M+   0.0 
+1435   1     Spotlight        96M    88M+   0.0 
+1425   1     chrome_crashpad_ 2817K  2416K  0.0 
+1339   1     avconferenced    16M    11M    0.0 
+1335   1     useractivityd    3889K  2048K+ 0.0 
+1332   1     mediaremoteagent 2929K  2560K  0.0 
+1320   1     corespotlightd   20M    14M    0.0 
+1286   1     fontworker       5569K  5200K  0.0 
+1280   1     com.apple.CloudD 4466K  4032K  0.0 
+1268   1     PAH_Extension    15M-   7248K+ 0.0 
+1262   1     WallpaperImageEx 45M    44M    0.0 
+1258   1     AMPDeviceDiscove 4514K  3200K  0.0 
+1256   1     automountd       3473K  1280K+ 0.0 
+1250   1     imagent          10M-   5664K  0.0 
+1243   1     StatusKitAgent   9314K  9008K  0.0 
+1242   1     imklaunchagent   5698K- 4320K  0.0 
+1240   1     WallpaperAgent   20M    14M+   0.0 
+1235   1     SystemUIServer   88M    62M+   0.0 
+1234   1     sharedfilelistd  5426K  2304K+ 0.0 
+1231   1     ControlCenter    60M    38M+   0.0 
+1230   1     NotificationCent 75M    48M+   0.0 
+1229   1     Dock             114M   108M+  0.0 
+1226   1     awdd             3121K  2736K  0.0 
+1207   1     filecoordination 4145K  3728K  0.0 
+1145   1     WiFiAgent        16M    7408K+ 0.0 
+1140   1     identityservices 16M    5552K  0.0 
+1132   1     pboard           5586K- 2240K+ 0.0 
+1122   1     secd             12M+   5952K  0.0 
+1115   1     ContinuityCaptur 14M    14M    0.0 
+1114   1     universalaccessd 22M    12M+   0.0 
+1101   1     securityd_servic 2657K  2336K  0.0 
+475    1     ctkahp           3729K  3344K  0.0 
+443    1     IOUserBluetoothS 1185K  1008K  0.0 
+420    1     netbiosd         3265K  2928K  0.0 
+390    1     cron             1633K  1264K  0.0 
+389    1     PlugInLibrarySer 1857K  576K   0.0 
+386    1     socketfilterfw   4785K  1360K+ 0.0 
+384    1     sysextctrld      7266K  6832K  0.0 
+379    1     ovpnhelper       2929K  2560K  0.0 
+376    1     ovpnagent        2913K  2544K  0.0 
+370    100   systemstats      8177K  7792K  0.0 
+360    1     wifianalyticsd   4129K  3744K  0.0 
+359    1     suhelperd        22M    22M    0.0 
+357    1     softwareupdated  43M    42M    0.0 
+328    1     appleeventsd     4289K  2176K  0.0 
+323    1     com.apple.AppleU 1969K  608K   0.0 
+321    1     com.apple.Driver 1041K  880K   0.0 
+317    1     UVCAssistant     4881K  4480K  0.0 
+297    1     storagekitd      6673K  6256K  0.0 
+291    1     mDNSResponder    6353K  3040K+ 0.0 
+253    1     authd            5218K  4768K  0.0 
+243    1     systemstatusd    4274K  3856K  0.0 
+239    1     symptomsd        6850K  3424K  0.0 
+232    1     coreaudiod       260M   257M   0.0 
+224    1     apfsd            2753K  2400K  0.0 
+190    1     lsd              5377K  3776K  0.0 
+176    1     loginwindow      86M    72M+   0.0 
+160    1     tccd             7906K  3808K+ 0.0 
+157    1     com.apple.cmio.r 4545K  4128K  0.0 
+156    1     AirPlayXPCHelper 10M    5376K+ 0.0 
+149    1     KernelEventAgent 1649K  1344K  0.0 
+148    1     revisiond        3777K  3616K  0.0 
+147    1     logind           3009K  2640K  0.0 
+141    1     dasd             7634K+ 5584K+ 0.0 
+140    1     autofsd          1889K  1520K  0.0 
+136    1     securityd        7729K  3248K  0.0 
+135    1     usbmuxd          3937K  3536K  0.0 
+134    1     timed            3249K  2864K  0.0 
+132    1     apsd             7777K  6080K+ 0.0 
+127    1     syslogd          2481K  1344K  0.0 
+122    1     kernelmanagerd   12M-   9616K  0.0 
+111    1     remoted          2977K  2576K  0.0 
+106    1     IOMFB_bics_daemo 2193K  1856K  0.0 
+95     1     uninstalld       1889K- 864K   0.0 
+93     1     UserEventAgent   6978K  3872K  0.0 

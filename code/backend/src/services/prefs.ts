@@ -29,6 +29,24 @@ export interface NotifyPrefs {
   error: boolean;
 }
 
+/**
+ * 系统监控(状态栏内存/CPU 指示):采样行为在后端,故这组设置走账户偏好。
+ * 卡片上显示哪些数字是纯展示偏好,留在前端本机偏好里。
+ */
+export interface MonitorPrefs {
+  mem: boolean;
+  cpu: boolean;
+  /** 采样间隔(秒) */
+  interval: 5 | 10 | 30 | 60;
+  /** 连续 N 次超阈值才变色 */
+  debounce: 1 | 2 | 3;
+  /** 没有任何页面在看时暂停采样 */
+  pauseIdle: boolean;
+  /** CPU 整体占用(用户+系统)黄 / 红阈值,百分比 */
+  cpuWarn: number;
+  cpuCrit: number;
+}
+
 export interface AccountPrefs {
   /** 新会话默认模型;空串 = 沿用上次用过的 */
   model: string;
@@ -49,6 +67,7 @@ export interface AccountPrefs {
   /** /wrapup 的固定触发语 */
   wrapupPrompt: string;
   notify: NotifyPrefs;
+  monitor: MonitorPrefs;
 }
 
 /** 与前端 Dispatch 的既有默认值保持一致:权限免审批、模型与目录沿用上次 */
@@ -69,7 +88,35 @@ export const DEFAULT_PREFS: AccountPrefs = {
     turnEnd: true,
     error: true,
   },
+  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85 },
 };
+
+const INTERVALS = [5, 10, 30, 60] as const;
+const DEBOUNCES = [1, 2, 3] as const;
+
+function pick<T extends number>(v: unknown, allow: readonly T[], fb: T): T {
+  return allow.includes(v as T) ? (v as T) : fb;
+}
+function pct(v: unknown, lo: number, hi: number, fb: number): number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= lo && v <= hi ? v : fb;
+}
+
+/** 黄 < 红 才接受这一对阈值;非法组合整对回退,不留下「黄 90 红 85」这种判不了色的状态 */
+function sanitizeMonitor(input: unknown, base: MonitorPrefs): MonitorPrefs {
+  const m = (input ?? {}) as Partial<MonitorPrefs>;
+  const warn = pct(m.cpuWarn, 30, 95, base.cpuWarn);
+  const crit = pct(m.cpuCrit, 35, 99, base.cpuCrit);
+  const ok = warn < crit;
+  return {
+    mem: bool(m.mem, base.mem),
+    cpu: bool(m.cpu, base.cpu),
+    interval: pick(m.interval, INTERVALS, base.interval),
+    debounce: pick(m.debounce, DEBOUNCES, base.debounce),
+    pauseIdle: bool(m.pauseIdle, base.pauseIdle),
+    cpuWarn: ok ? warn : base.cpuWarn,
+    cpuCrit: ok ? crit : base.cpuCrit,
+  };
+}
 
 const PERMS = new Set(['default', 'acceptEdits', 'bypassPermissions', 'plan']);
 const EFFORTS = new Set(['', 'low', 'medium', 'high', 'xhigh', 'max']);
@@ -112,6 +159,7 @@ export function sanitize(input: unknown, base: AccountPrefs = DEFAULT_PREFS): Ac
       turnEnd: bool(n.turnEnd, base.notify.turnEnd),
       error: bool(n.error, base.notify.error),
     },
+    monitor: sanitizeMonitor(o.monitor, base.monitor),
   };
 }
 
@@ -130,7 +178,12 @@ export function readPrefs(storage: Storage): AccountPrefs {
 export function writePrefs(storage: Storage, patch: unknown): AccountPrefs {
   const cur = readPrefs(storage);
   const p = (patch ?? {}) as Partial<AccountPrefs>;
-  const merged = { ...cur, ...p, notify: { ...cur.notify, ...(p.notify ?? {}) } };
+  const merged = {
+    ...cur,
+    ...p,
+    notify: { ...cur.notify, ...(p.notify ?? {}) },
+    monitor: { ...cur.monitor, ...(p.monitor ?? {}) },
+  };
   const next = sanitize(merged, cur);
   storage.setMeta(META_KEY, JSON.stringify(next));
   return next;

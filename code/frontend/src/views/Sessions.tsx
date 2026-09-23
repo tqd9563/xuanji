@@ -23,8 +23,11 @@ import { canDrag, dropAction, type DropCol } from '@/lib/board-drop';
 import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
-import { CompactionCard, confirmBox, Drawer, Empty, LazyMd, ScrollRootContext, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
+import { CompactionCard, Drawer, Empty, LazyMd, ScrollRootContext, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
+import { SessionMetrics, useCardRamLv } from '@/components/Sysmon';
+import { closeSession } from '@/lib/close-session';
+import { noteSessionNames } from '@/lib/sysmon';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
@@ -81,21 +84,6 @@ const STOWED: SessionState[] = ['idle', 'done'];
 
 export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
-}
-
-/** 关闭会话:自有隐藏列表(~/.claude 不动);存活的 web 派发会话额外终止其进程 */
-async function closeSession(s: AgentSession, refresh: () => void) {
-  const msg = s.dispatchId
-    ? `结束派发会话「${s.name}」?\n其进程将被终止并从看板移除,已生成的记录仍可回放/续接。`
-    : `从看板移除会话「${s.name}」?\n仅在璇玑隐藏,~/.claude 数据与终端不受影响。`;
-  if (!(await confirmBox(msg))) return;
-  try {
-    await api.closeSession(s.sessionId);
-    toast(`已关闭 ${s.name}`);
-    refresh();
-  } catch (e) {
-    toast(e instanceof Error ? e.message : String(e));
-  }
 }
 
 /** 拖拽落点:列 key 即落点 id;各方向的语义见 board-drop.ts,与卡上按钮同一后端入口 */
@@ -173,11 +161,13 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
 /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
 function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsuspend }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard compact ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -215,6 +205,7 @@ function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsusp
             ↩
           </button>
         )}
+        <SessionMetrics sessionId={s.sessionId} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -228,11 +219,13 @@ function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsusp
 /** blk = 左侧琥珀立柱,在合并列里标出「它在等你回话」;与 kb-sel 走不同视觉通道,可叠加显示 */
 function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard ${s.state === 'blocked' ? 'blk' : ''} ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -246,6 +239,7 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
         {s.state === 'blocked' && <span className="tag t-unread">等输入</span>}
         <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
         {s.readonly && <Tag>只读</Tag>}
+        <SessionMetrics sessionId={s.sessionId} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -318,11 +312,13 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
  */
 function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard mid ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -333,6 +329,7 @@ function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArc
         {isUnread(s) && <span className="u-dot" />}
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        <SessionMetrics sessionId={s.sessionId} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -447,6 +444,13 @@ export function Sessions({
   registerHandle?: (h: SessionsHandle) => void;
 }) {
   const { data, refresh } = usePoll(api.sessions, 5_000);
+  // 系统监控弹窗里的会话进程行用看板上的卡片名(与卡片一致),而不是 agents CLI 的原始名
+  useEffect(() => {
+    if (!data) return;
+    const names: Record<string, string> = {};
+    for (const col of Object.values(data.columns)) for (const c of col) names[c.sessionId] = c.name;
+    noteSessionNames(names);
+  }, [data]);
   // 已读表版本:markSeen 后立刻重渲染(角标 + 未读排顶),不等 5s 轮询
   const seenVer = useSeenVersion();
   const prefs = useLocalPrefs();
@@ -827,7 +831,7 @@ export function Sessions({
         const s = pos ? cardsIn(pos.c)[pos.r] : undefined;
         if (s && !s.readonly) {
           e.preventDefault();
-          void closeSession(s, refresh);
+          void closeSession({ sessionId: s.sessionId, name: s.name, dispatch: !!s.dispatchId }, refresh);
         }
         return;
       }
@@ -881,7 +885,7 @@ export function Sessions({
     dim,
     drag,
     onOpen: () => void openReplay(s.sessionId, s),
-    onClose: () => void closeSession(s, refresh),
+    onClose: () => void closeSession({ sessionId: s.sessionId, name: s.name, dispatch: !!s.dispatchId }, refresh),
     onUnarchive: () => void unarchive(s),
     onReply: () => smartOpen(s, (id, sess) => void openReplay(id, sess)),
     onSuspend: () => void suspend(s),

@@ -334,6 +334,37 @@ components:
   composer-btw-mode:
     backgroundColor: "{colors.violet}"
     textColor: "{colors.on-jade}"
+  sysmon-indicator:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
+  sysmon-indicator-warn:
+    textColor: "{colors.amber}"
+  sysmon-indicator-crit:
+    textColor: "{colors.red}"
+  sysmon-popover:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.md}"
+    padding: "14px 16px 12px"
+    width: "460px"
+  sysmon-track:
+    backgroundColor: "color-mix(in oklab, {colors.muted} 12%, transparent)"
+    height: "10px"
+    rounded: "5px"
+  sysmon-row-highlight:
+    backgroundColor: "color-mix(in oklab, {colors.jade} 13%, transparent)"
+    rounded: "{rounded.sm}"
+  sysmon-tip:
+    backgroundColor: "color-mix(in oklab, {colors.amber} 14%, transparent)"
+    textColor: "{colors.ink}"
+    rounded: "{rounded.sm}"
+    padding: "9px 12px"
+  sysmon-card-chip:
+    textColor: "{colors.faint}"
+    typography: "{typography.data}"
+    padding: "1px 4px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -602,6 +633,17 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 **开关必须真的接着消费端。** 通知分区的范围与事件取与(两者都开才发),由后端在发通知前统一判定;后端目前没有向终端会话发通知的路径,故该行照实置灰并写明原因——一个打开后什么也不会发生的开关,比没有这个开关更糟。
 
 **恢复默认** 按分区提供,不做全局一键重置;点下即时生效并 toast 回执,回退到的是代码里的 `*_DEFAULTS` 常量而非上次保存值。
+
+### 系统监控(Signature Component · 状态栏内存/CPU 指示 + `.ram-pop` 弹窗)
+- **定位:** 回答「机器为什么卡、是谁在占」,并把答案落到能在璇玑里直接处置的对象上(派发会话)。它是两枚常驻状态栏 widget(内存在左、CPU 紧随),不是一个视图——与时钟一样属于「任何时刻都想瞥一眼」的环境信息。
+- **指示器:** 标准 `.sb-item`:前置圆点 + 文案。内存读作「Swap 15.9/17.4G · 91%」,CPU 读作「CPU 33%」,数字 mono `tabular-nums`。颜色只来自判定等级:正常 muted + 玉色圆点,警告整体 `{colors.amber}`(圆点复用 2s 脉冲),严重 `{colors.red}`;采样失败圆点变 1px 虚线空心、数字换成「—」,文字写明「采样失败」,**永不 color-alone**。内存等级直接取内核 `kern.memorystatus_vm_pressure_level`(1/2/4,与活动监视器同源),不提供阈值设置;CPU 用「用户 + 系统」对照可调阈值(默认黄 60 / 红 85)。两者都受「连续 N 次才变色」防抖。术语两边统一:压力正常 / 压力警告 / 压力严重。
+- **弹窗(`.ram-pop`):** 挂在指示器下方右对齐,460px,与 `.dd-menu` 同一套浮层语汇(surface 底 + line 边 + md 圆角 + 投影),玻璃档下钉死不透明,理由同自绘下拉。头部是「内存 / CPU」两段 `.seg` tab + 等级胶囊(复用 `pill-done / pill-blk / pill-err`)+ 右侧 mono「N 秒前采样 · 每 Ns」。点哪枚指示器就开哪个 tab;弹窗开着时点另一枚 = 切 tab,不关闭。
+- **条形:** 三条(物理内存、Swap、CPU)一律照抄仪表盘 token 用量「开发 vs multica」对比条 `.cmp-track`:10px 高、5px 圆角、段间无缝、底轨 `--tint-muted`(muted 12%)。**空闲/未用不画段,直接露出底轨**;图例用 `.cmp-legend`,「空闲」那枚方块与底轨同色。物理内存四段:应用占用(active+wired,`chart-1`)| 压缩器(`chart-2`)| 可回收缓存(inactive+purgeable+speculative,`chart-3`)| 真空闲(底轨)。Swap 已用段颜色跟随内存等级(jade / amber / red)——这是全组件唯一一处用状态色填条,因为 swap 满是「要出事」的直接信号;CPU 条用户 `chart-1` / 系统 `chart-2`。
+- **排行:** 进程树按 ppid 聚合到应用(`.app` 包名归一;launchd 直属系统服务单列),可展开到进程。行是 4 列 grid(14px chevron | 名称 | 两列 64px 右对齐 mono 数值);内存 tab 两列为「压缩+换出 / 总占用」,CPU tab 为「%CPU / 占整机」(%CPU 单核 100%、满载 = 核数 × 100,口径放列头 title,不另写说明段)。璇玑派发会话归入一组并打 `t-susp` 小标「璇玑」,终端 claude 会话归入另一组打中性「终端」标。
+- **处置入口:** 派发会话的每个进程行下挂一行小号 `btn-sm`「关闭会话以释放 ≈N」,复用看板 `closeSession` 的确认文案与接口;终端会话行只读,不给按钮(璇玑不结束用户终端里的进程)。
+- **建议框(`.ram-tip`):** 琥珀 tint 底 + 左侧 2px 琥珀竖线的提示块,**纯规则、不调 LLM**:取排行前列应用按进程特征匹配规则表,先命中先用,每条末尾 mono 小字「规则 · id」让用户知道它为什么这么说。CPU 规则 `kernel-swap` 在 kernel_task 高且内存压力 ≥ 警告时指向内存,并给一枚「看内存 →」文字按钮切 tab。压力正常且 swap 低时整块换成一句 muted「无需处理」。不加结论句段落。
+- **会话卡片数字(`.ram-chip`):** 卡片 `.top` 行尾一枚 mono 11px 数字(faint),≥1G 转 amber、≥3G 转 red 加粗;CPU 数字默认只在偏高时出现(占整机 ≥ 黄阈值或单会话 ≥ 50%),以免挤压标题。点数字 = 打开弹窗对应 tab,展开该会话所在应用并高亮(`tint-jade` 底 + 1.2s 玉色描边淡出)滚动到其进程行;**卡片内不再有展开明细面板**——明细只有一处,就是弹窗。卡片高度与无数字时逐像素一致。
+- **设置 › 系统监控:** 启用内存 / 启用 CPU、采样间隔(5/10/30/60s)、变色防抖(1/2/3 次,说明里实时换算「≈ N×间隔 秒」)、无人查看时暂停采样、CPU 黄/红阈值(滑杆,黄 ≥ 红时说明转 amber 并拒绝保存)——均为「账户」;卡片显示内存 / CPU(始终 / 偏高时 / 不显示)为「本机」。关闭某项监控时状态栏对应指示、卡片数字、弹窗对应 tab 一并消失。
 
 ### 旁路提问(Signature Component · `.btw` 右侧停靠面板)
 「顺便问一句」的专属窗口:拿着主对话全部上下文作答,但答案**不进主对话**、不占它的 context、不打断它正在跑的回合。面板停靠在派发页右栏(400px,窄屏 340px),与消息区 / 状态条 / 输入框 / 终端行四行等高贯穿——它是主对话的**旁注**而非另一个对话,所以不做成第二个聊天流,也不做成弹窗盖住主对话。

@@ -2616,3 +2616,101 @@ html[data-turn-head="false"] .turnhead { display: none; }
   border: 1px solid var(--line-soft); border-radius: var(--r-s); cursor: pointer;
 }
 .chat-more-btn:hover { background: var(--hover); color: var(--ink); }
+
+/* ============ 系统监控(DESIGN.md「系统监控」)—— 前缀 ram- / cpu- / mon-(已 grep 源码无撞名,非 Tailwind 工具类)。
+   与获批原型 wiki/design/prototype-memory-monitor.html 逐条对应 ============ */
+/* A. 状态栏指示器:就是标准 .sb-item,只额外定义数字的等级色与采样失败态 */
+.sb-item[data-ram="stale"] { color: var(--faint); }
+.sb-item[data-ram="stale"] .dot { background: transparent; border: 1px dashed var(--faint); }
+.sb-item .n[data-lv="ok"] { color: var(--jade); }
+.sb-item .n[data-lv="warn"] { color: var(--amber); }
+.sb-item .n[data-lv="crit"] { color: var(--red); }
+.ram-anchor { position: relative; display: inline-flex; align-items: center; gap: 4px; }
+/* popover:与 .dd-menu 同一套浮层语汇,右对齐挂在指示器下方 */
+.ram-pop {
+  position: absolute; top: calc(100% + 8px); right: 0; width: 460px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 80px); overflow: auto;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m);
+  box-shadow: 0 12px 32px oklch(0.05 0 0 / 0.5); z-index: var(--z-dropdown);
+  padding: 14px 16px 12px; text-align: left; white-space: normal; font-family: var(--sans);
+  animation: view-in 150ms var(--ease);
+}
+/* 浮层不随玻璃档透明(与 .dd-menu 同理:透出下方卡片会干扰读数) */
+body.wall-glass .ram-pop { background: oklch(0.185 0.008 120); backdrop-filter: none; -webkit-backdrop-filter: none; }
+.ram-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+.ram-head .pill { align-self: center; }
+.ram-head .ram-ts { margin-left: auto; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+.cpu-tabs button { padding: 3px 12px; }
+.ram-bars { display: grid; gap: 10px; margin-bottom: 14px; }
+.ram-bar-lab { display: flex; justify-content: space-between; font-size: 0.6875rem; color: var(--muted); margin-bottom: 4px; }
+.ram-bar-lab .n { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+/* 条形本体用首页 token 消耗对比条 .cmp-track;空闲/未用不画段,露出底轨 */
+.ram-seg { height: 100%; }
+.ram-seg[data-k="used"] { background: var(--chart-1); }
+.ram-seg[data-k="cmp"], .ram-seg[data-k="sys"] { background: var(--chart-2); }
+.ram-seg[data-k="cache"] { background: var(--chart-3); }
+.ram-seg[data-k="swap-ok"] { background: var(--jade); }
+.ram-seg[data-k="swap-warn"] { background: var(--amber); }
+.ram-seg[data-k="swap-crit"] { background: var(--red); }
+.cmp-legend .i-rail { background: var(--tint-muted); }
+.ram-swapn[data-lv="ok"], .ram-swapn[data-lv="ok"] .n { color: var(--jade); }
+.ram-swapn[data-lv="warn"], .ram-swapn[data-lv="warn"] .n { color: var(--amber); }
+.ram-swapn[data-lv="crit"], .ram-swapn[data-lv="crit"] .n { color: var(--red); }
+.cpu-load { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.6875rem; color: var(--muted); margin-top: 8px; }
+.cpu-load .n { font-family: var(--mono); color: var(--ink); font-variant-numeric: tabular-nums; }
+/* 排行:应用一行,可展开到进程;数字列等宽右对齐 */
+.ram-list { border-top: 1px solid var(--line-soft); }
+.ram-app { border-bottom: 1px solid var(--line-soft); }
+.ram-row {
+  display: grid; grid-template-columns: 14px minmax(0, 1fr) 64px 64px; gap: 8px; align-items: center;
+  width: 100%; padding: 7px 4px; font-size: 0.75rem; color: var(--ink); text-align: left; border-radius: var(--r-s);
+}
+button.ram-row:hover { background: var(--hover); }
+.ram-row .chev { color: var(--faint); font-size: 0.625rem; transition: transform 150ms var(--ease); }
+.ram-app.open .ram-row .chev { transform: rotate(90deg); }
+.ram-row .nm { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ram-row .nm span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ram-row .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.ram-row .v.sub { color: var(--muted); }
+.ram-row.ram-colhead { font-size: 0.6875rem; color: var(--faint); padding-top: 0; }
+.ram-procs { display: none; padding: 0 0 6px; }
+.ram-app.open .ram-procs { display: block; }
+.ram-procs .ram-row { padding: 4px 4px; font-size: 0.6875rem; color: var(--muted); }
+.ram-procs .ram-row .nm span:first-child { font-family: var(--mono); }
+.ram-procs .pid { font-family: var(--mono); color: var(--faint); flex: none; }
+.ram-procs .ram-close-row { padding-top: 0; }
+.ram-procs .ram-close { padding: 1px 8px; font-size: 0.625rem; }
+.ram-procs .ram-own-note { color: var(--faint); }
+.ram-own { flex: none; }
+/* 点卡片数字 → 定位到该会话进程行:一次玉色描边淡出后留浅底 */
+.ram-row.ram-hl { background: var(--tint-jade); animation: ram-hl 1.2s var(--ease); }
+@keyframes ram-hl { from { box-shadow: inset 0 0 0 1px var(--jade); } to { box-shadow: inset 0 0 0 1px transparent; } }
+@media (prefers-reduced-motion: reduce) { .ram-row.ram-hl { animation: none; } }
+[data-motion="on"] .ram-row.ram-hl { animation: none; }
+.ram-rest { font-size: 0.6875rem; color: var(--faint); padding: 7px 4px 0; display: flex; }
+.ram-rest .v { margin-left: auto; font-family: var(--mono); }
+/* 建议:琥珀 tint 块,与 .scard.blk 的「需要你处理」同一语汇 */
+.ram-tip { margin-top: 12px; padding: 9px 12px; border-left: 2px solid var(--amber); background: var(--tint-amber); border-radius: 0 var(--r-s) var(--r-s) 0; font-size: 0.75rem; color: var(--ink); line-height: 1.55; }
+.ram-tip code { font-family: var(--mono); font-size: 0.6875rem; color: var(--muted); }
+.ram-tip b { font-weight: 600; }
+.ram-tip-line + .ram-tip-line { margin-top: 6px; padding-top: 6px; border-top: 1px dashed color-mix(in oklab, var(--amber) 30%, transparent); }
+.ram-tip .ram-rule { display: block; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); margin-top: 2px; }
+.cpu-jump { color: var(--jade); text-decoration: underline; text-underline-offset: 2px; font-size: 0.6875rem; margin-left: 6px; }
+.cpu-jump:hover { color: var(--ink); }
+.ram-foot { margin-top: 10px; font-size: 0.6875rem; color: var(--faint); line-height: 1.5; }
+.ram-err { padding: 6px 0 2px; font-size: 0.75rem; color: var(--muted); line-height: 1.6; }
+.ram-err code { font-family: var(--mono); color: var(--ink); }
+/* B. 会话卡片数字:.top 行尾等宽数字;超阈值用状态色,非装饰 */
+.ram-chip {
+  margin-left: auto; flex: none; font-family: var(--mono); font-size: 0.6875rem; color: var(--faint);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+button.ram-chip { padding: 1px 4px; margin-right: -4px; border-radius: 4px; }
+button.ram-chip:hover { background: var(--hover); }
+.ram-chip[data-lv="warn"] { color: var(--amber); }
+.ram-chip[data-lv="hot"] { color: var(--red); font-weight: 600; }
+.cpu-chip + .ram-chip { margin-left: 8px; }
+.scard[data-ram-lv="warn"] { border-left: 2px solid var(--amber); }
+.scard[data-ram-lv="hot"] { border-left: 2px solid var(--red); }
+/* C. 设置 › 系统监控:只补校验失败文案色,其余全用 .stg-* */
+.stg-lab small.mon-invalid { color: var(--amber); }

@@ -6,6 +6,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
+import type { MonitorPrefs } from '@/api/types';
 import { DropUp } from '@/components/DropUp';
 import { confirmBox, toast } from '@/components/shared';
 import { Live2dFields } from '@/components/Live2dSettings';
@@ -14,6 +15,7 @@ import { type Live2dState } from '@/lib/live2d';
 import {
   DEFAULT_ACCOUNT,
   DEFAULT_LOCAL,
+  getAccount,
   patchAccount,
   patchLocal,
   useAccountPrefs,
@@ -35,7 +37,7 @@ import { modelDetail, modelLabel, useModelCatalog } from '@/lib/models';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
 
-type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'adv';
+type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'monitor' | 'adv';
 
 /**
  * 这四个组件必须定义在 Settings 之外。
@@ -149,8 +151,76 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
     title: '通知',
     desc: '范围与事件取与——两者都开才会通知',
   },
+  {
+    id: 'monitor',
+    label: '系统监控',
+    icon: 'M3 4h18v12H3zM7 12l3-3 2 2 5-4M8 20h8M12 16v4',
+    title: '系统监控',
+    desc: '状态栏内存 / CPU 指示与会话卡片上的占用数字;采样在后端跑,只读系统信息',
+  },
   { id: 'adv', label: '高级', icon: 'M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4', title: '高级', desc: '不常动的东西' },
 ];
+
+/** 读单例上的最新值再合并:同一帧里连点两项时,闭包里的 prefs 还是旧的,会把前一项覆盖回去 */
+function setMon(p: Partial<MonitorPrefs>) {
+  void patchAccount({ monitor: { ...getAccount().monitor, ...p } });
+}
+
+const INTERVAL_TABS = ([5, 10, 30, 60] as const).map((v) => ({ v, label: `${v}s` }));
+const DEBOUNCE_TABS = ([1, 2, 3] as const).map((v) => ({ v, label: `${v} 次` }));
+const CARD_TABS = [
+  { v: 'always' as const, label: '始终' },
+  { v: 'high' as const, label: '偏高时' },
+  { v: 'off' as const, label: '不显示' },
+];
+
+/**
+ * CPU 黄/红阈值:滑杆草稿态。黄 ≥ 红时说明转 amber 并不保存(判色继续用上次合法值),
+ * 否则拖动即落账户偏好——后端 sanitize 同样拒绝非法组合,两侧口径一致。
+ */
+function CpuThresholdRows({ hit, off }: { hit: RowProps['hit']; off: boolean }) {
+  const { prefs } = useAccountPrefs();
+  const m = prefs.monitor;
+  const [draft, setDraft] = useState({ warn: m.cpuWarn, crit: m.cpuCrit });
+  useEffect(() => setDraft({ warn: m.cpuWarn, crit: m.cpuCrit }), [m.cpuWarn, m.cpuCrit]);
+  const bad = draft.warn >= draft.crit;
+  const set = (next: { warn: number; crit: number }) => {
+    setDraft(next);
+    if (next.warn < next.crit) setMon({ cpuWarn: next.warn, cpuCrit: next.crit });
+  };
+  return (
+    <>
+      <SettingsRow hit={hit} off={off} scope="acct" label="压力警告(黄)"
+        desc="整体占用 = 用户 + 系统;超过性能核的量(本机约 45%)后开始挤到能效核">
+        <input type="range" min={30} max={95} value={draft.warn} aria-label="CPU 黄色阈值"
+          onChange={(e) => set({ ...draft, warn: Number(e.target.value) })} />
+        <span className="stg-val">{draft.warn}%</span>
+      </SettingsRow>
+      <SettingsRowCustom hit={hit} off={off} label="压力严重(红)"
+        desc={bad ? `必须高于黄色阈值(当前黄 ${draft.warn}% ≥ 红 ${draft.crit}%,未保存,仍按上次有效值判色)` : '必须高于黄色阈值'}
+        invalid={bad}>
+        <input type="range" min={35} max={99} value={draft.crit} aria-label="CPU 红色阈值"
+          onChange={(e) => set({ ...draft, crit: Number(e.target.value) })} />
+        <span className="stg-val">{draft.crit}%</span>
+      </SettingsRowCustom>
+    </>
+  );
+}
+
+/** 与 SettingsRow 同形,只多一个「说明转 amber」的校验态 */
+function SettingsRowCustom({ label, desc, children, off, hit, invalid }: Omit<RowProps, 'scope'> & { invalid: boolean }) {
+  if (!hit(label, desc)) return null;
+  return (
+    <div className={cn('stg-row', off && 'is-off')}>
+      <div className="stg-lab">
+        <span>{label}</span>
+        {desc && <small className={invalid ? 'mon-invalid' : undefined}>{desc}</small>}
+      </div>
+      <div className="stg-ctl">{children}</div>
+      <span className="stg-scope" data-scope="acct">账户</span>
+    </div>
+  );
+}
 
 const STOW_TABS = STOW_OPTS.map((v) => ({ v, label: stowLabel(v) }));
 
@@ -261,6 +331,9 @@ export function Settings({
       patchLocal({ keymap: { ...KEYMAP_DEFAULTS } });
     } else if (id === 'notify') {
       await patchAccount({ notify: DEFAULT_ACCOUNT.notify });
+    } else if (id === 'monitor') {
+      patchLocal({ cardMem: DEFAULT_LOCAL.cardMem, cardCpu: DEFAULT_LOCAL.cardCpu });
+      await patchAccount({ monitor: DEFAULT_ACCOUNT.monitor });
     }
     toast(`「${SECTIONS.find((x) => x.id === id)!.title}」已恢复默认`);
   };
@@ -567,6 +640,41 @@ export function Settings({
             on={prefs.notify.error}
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, error: v } })}
           />
+        </SettingsRow>
+      </section>
+
+      <section className="stg-sec" hidden={!secShown('monitor')}>
+        {!searching && <SecHead id="monitor" />}
+        <SettingsGroup show={!searching}>指示器</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="启用内存监控"
+          desc="内存压力等级直接取内核 memorystatus 信号(与活动监视器同源),故不提供阈值设置">
+          <Switch on={prefs.monitor.mem} onChange={(v) => setMon({ mem: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="启用 CPU 监控" desc="关闭后状态栏不显示 CPU,卡片也不显示 CPU 数字">
+          <Switch on={prefs.monitor.cpu} onChange={(v) => setMon({ cpu: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>采样</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="采样间隔" desc="越短越及时,top 双采样本身约占 1 秒 CPU">
+          <Tabs value={prefs.monitor.interval} options={INTERVAL_TABS}
+            onChange={(v) => setMon({ interval: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="变色防抖"
+          desc={`连续 ${prefs.monitor.debounce} 次超阈值才变色 ≈ ${prefs.monitor.debounce * prefs.monitor.interval} 秒`}>
+          <Tabs value={prefs.monitor.debounce} options={DEBOUNCE_TABS}
+            onChange={(v) => setMon({ debounce: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="无人查看时暂停采样" desc="所有璇玑页面都在后台时停采,回到前台立即补采一次">
+          <Switch on={prefs.monitor.pauseIdle} onChange={(v) => setMon({ pauseIdle: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>CPU 阈值</SettingsGroup>
+        <CpuThresholdRows hit={hit} off={!prefs.monitor.cpu} />
+        <SettingsGroup show={!searching}>会话卡片</SettingsGroup>
+        <SettingsRow hit={hit} scope="local" label="显示内存" desc="偏高 = 进程树 ≥ 1G" off={!prefs.monitor.mem}>
+          <Tabs value={local.cardMem} options={CARD_TABS} onChange={(v) => patchLocal({ cardMem: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="local" label="显示 CPU" off={!prefs.monitor.cpu}
+          desc={`偏高 = 占整机 ≥ 黄色阈值 ${prefs.monitor.cpuWarn}%,或单会话 ≥ 50%(半个核)`}>
+          <Tabs value={local.cardCpu} options={CARD_TABS} onChange={(v) => patchLocal({ cardCpu: v })} />
         </SettingsRow>
       </section>
 

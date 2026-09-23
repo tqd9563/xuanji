@@ -21,6 +21,8 @@ const LOCAL_KEY = 'xuanji.prefs';
 export type SendKey = 'mod' | 'enter';
 export type FontScale = 'sm' | 'md' | 'lg';
 export type MotionPref = 'system' | 'on' | 'off';
+/** 会话卡片上的内存/CPU 数字:始终 / 偏高时 / 不显示 */
+export type CardMetric = 'always' | 'high' | 'off';
 
 export interface LocalPrefs {
   /** `mod` = ⌘⏎ 发送 / Enter 换行(现状);`enter` = Enter 发送 / ⇧⏎ 换行 */
@@ -34,6 +36,10 @@ export interface LocalPrefs {
   stowIdle: StowRecent;
   /** 「已完成」列折叠态展示条数;0 = 全部 */
   stowDone: StowRecent;
+  /** 卡片显示内存数字(默认始终) */
+  cardMem: CardMetric;
+  /** 卡片显示 CPU 数字(默认只在偏高时,避免挤压标题) */
+  cardCpu: CardMetric;
   keymap: Keymap;
 }
 
@@ -44,6 +50,8 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   reduceMotion: 'system',
   stowIdle: 5,
   stowDone: 5,
+  cardMem: 'always',
+  cardCpu: 'high',
   keymap: KEYMAP_DEFAULTS,
 };
 
@@ -62,6 +70,8 @@ function normalizeLocal(raw: unknown): LocalPrefs {
     reduceMotion: oneOf(o.reduceMotion, ['system', 'on', 'off'] as const, DEFAULT_LOCAL.reduceMotion),
     stowIdle: stowOf(o.stowIdle, DEFAULT_LOCAL.stowIdle),
     stowDone: stowOf(o.stowDone, DEFAULT_LOCAL.stowDone),
+    cardMem: oneOf(o.cardMem, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardMem),
+    cardCpu: oneOf(o.cardCpu, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardCpu),
     keymap: normalizeKeymap(o.keymap),
   };
 }
@@ -154,6 +164,7 @@ export const DEFAULT_ACCOUNT: AccountPrefs = {
     turnEnd: true,
     error: true,
   },
+  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85 },
 };
 
 let account: AccountPrefs = DEFAULT_ACCOUNT;
@@ -178,7 +189,12 @@ export async function loadAccount(): Promise<AccountPrefs> {
 
 /** 乐观更新:先落本地再发请求,失败则以服务端返回为准回正 */
 export async function patchAccount(p: Partial<AccountPrefs>) {
-  account = { ...account, ...p, notify: { ...account.notify, ...(p.notify ?? {}) } };
+  account = {
+    ...account,
+    ...p,
+    notify: { ...account.notify, ...(p.notify ?? {}) },
+    monitor: { ...account.monitor, ...(p.monitor ?? {}) },
+  };
   accEmit();
   try {
     const r = await api.putPrefs(p);
