@@ -17,6 +17,7 @@ import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../se
 import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
 import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
+import { cachedModelCatalog } from '../services/models.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
@@ -67,6 +68,12 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     // 缓存里的目录可能是会话「第一段」下发的、还没贴频率的版本,这里补上
     const { cmds, uses } = await withUsage(storage, cached.cmds);
     return c.json({ ...cached, cmds, uses });
+  });
+
+  /** 模型目录(CLI /model 面板那份,见 services/models.ts);空目录时前端用写死的兜底清单 */
+  api.get('/models', (c) => {
+    const cat = cachedModelCatalog(storage);
+    return c.json(cat ? { models: cat.models, cliVersion: cat.cliVersion, at: cat.at } : { models: [], cliVersion: null, at: 0 });
   });
 
   api.get('/resolve-path', (c) => {

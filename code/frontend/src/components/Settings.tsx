@@ -31,6 +31,7 @@ import {
   type ActionId,
 } from '@/lib/keymap';
 import { STOW_OPTS, stowLabel } from '@/lib/stow';
+import { modelDetail, modelLabel, useModelCatalog } from '@/lib/models';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
 
@@ -153,16 +154,6 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
 
 const STOW_TABS = STOW_OPTS.map((v) => ({ v, label: stowLabel(v) }));
 
-const MODEL_OPTS = [
-  '',
-  'claude-fable-5-1',
-  'claude-opus-5-5',
-  'claude-opus-5-5[1m]',
-  'claude-opus-5',
-  'claude-opus-5[1m]',
-  'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
-];
 const EFFORT_OPTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
 const PERM_OPTS = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
 const PERM_LABEL: Record<string, string> = {
@@ -193,6 +184,12 @@ export function Settings({
   const [q, setQ] = useState('');
   const local = useLocalPrefs();
   const { prefs } = useAccountPrefs();
+  /** 模型候选来自后端目录(CLI /model 面板那份);已存的值不在目录里(手输 id)也要显示出来 */
+  const { models } = useModelCatalog();
+  const modelOpts = useMemo(() => {
+    const vals = ['', ...models.map((m) => m.value)];
+    return prefs.model && !vals.includes(prefs.model) ? [...vals, prefs.model] : vals;
+  }, [models, prefs.model]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   /** 正在录入新键位的动作;null = 没有 */
@@ -358,14 +355,14 @@ export function Settings({
             down
             portalTo={bodyRef}
             value={prefs.model}
-            options={MODEL_OPTS}
-            labelOf={(v) => v || '沿用上次用过的'}
+            options={modelOpts}
+            labelOf={(v) => (v ? `${modelLabel(models, v)} · ${modelDetail(models, v)}` : '沿用上次用过的')}
             onChange={(v) => void patchAccount({ model: v })}
           />
         </SettingsRow>
         <SettingsRow hit={hit}
           label="默认思考深度"
-          desc="自动 = 按模型取默认(opus-5 → low,其余交给模型自身)"
+          desc="自动 = 按模型取默认(opus → low,其余交给模型自身)"
           scope="acct"
         >
           <DropUp

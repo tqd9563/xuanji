@@ -14,11 +14,12 @@ import {
   type Query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import { listAgents } from '../adapters/agents-cli.js';
+import { cliVersion, listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
 import { buildSlashCatalog, rememberSlashCatalog, withUsage, type SlashCmdInfo } from './slash-commands.js';
+import { normalizeModelCatalog, rememberModelCatalog } from './models.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -335,6 +336,7 @@ export class DispatchSession {
               this.emit({ ev: 'status', state: 'working' });
               this.refreshChips();
               this.refreshCommands((msg as { terminal_slash_commands?: string[] }).terminal_slash_commands ?? []);
+              this.refreshModels();
             } else if (msg.subtype === 'commands_changed') {
               // 会话中途技能变化(如 agent 走进带 .claude/skills 的子目录)。整份替换,不做合并。
               const base = buildSlashCatalog(
@@ -551,6 +553,19 @@ export class DispatchSession {
     void q
       .supportedCommands()
       .then((raw) => this.publishCatalog(buildSlashCatalog(raw, this.terminalOnlyCommands)))
+      .catch(() => {});
+  }
+
+  /**
+   * 顺手刷新模型目录(services/models.ts):会话已经起了,supportedModels() 零成本,
+   * 拿到就落库 —— CLI 在后端运行期间升级时,下一个会话就把新模型带进面板。
+   * 同 refreshCommands:方法不存在(旧 SDK)直接跳过,绝不能让它打断消息泵。
+   */
+  private refreshModels() {
+    const q = this.q;
+    if (typeof q?.supportedModels !== 'function') return;
+    void Promise.all([q.supportedModels(), cliVersion()])
+      .then(([raw, version]) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), version))
       .catch(() => {});
   }
 

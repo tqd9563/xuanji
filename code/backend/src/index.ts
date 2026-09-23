@@ -13,6 +13,7 @@ import { setNotifyGate } from './adapters/notify.js';
 import { readPrefs } from './services/prefs.js';
 import { refreshSkillUsage } from './services/skill-usage.js';
 import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
+import { warmModelCatalog } from './services/models.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
@@ -26,6 +27,10 @@ scheduler.init(); // 重启不丢任务:重新加载全部 pending/blocked 任�
 // 技能触发索引预热:冷库首扫要读近百万行 jsonl(实测 ~5s),放后台跑,
 // 让第一次打开技能页就有数;失败不影响启动,下次请求会再触发增量扫描。
 void refreshSkillUsage(storage).catch((e) => console.error('[xuanji] skill usage scan failed:', e));
+// 模型目录预热:CLI 版本变了才起空会话拉一次(~8s、0 token),否则直接用缓存;失败前端有兜底清单
+void warmModelCatalog(storage)
+  .then((r) => r !== 'hit' && console.log(`[xuanji] model catalog ${r}`))
+  .catch(() => {});
 
 const app = new Hono();
 
