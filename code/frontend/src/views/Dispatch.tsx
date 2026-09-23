@@ -18,6 +18,7 @@ import { RunbookPanel } from '@/components/RunbookPanel';
 import { BtwPanel } from '@/components/BtwPanel';
 import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
+import { noteContentShown } from '@/lib/jank';
 import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
 import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
 import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
@@ -579,6 +580,9 @@ export function Dispatch({ active }: { active: boolean }) {
    * 历史前插(seedOffset)也算进头部:live 尾部的起点随之后移。
    */
   const [expandedGen, setExpandedGen] = useState(-1);
+  useEffect(() => {
+    if (d.attachGen > 0) noteContentShown('attach');
+  }, [d.attachGen]);
   const headHidden = expandedGen === d.attachGen ? 0 : Math.max(0, d.seedOffset + d.attachLen - CHAT_TAIL);
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
@@ -671,6 +675,7 @@ export function Dispatch({ active }: { active: boolean }) {
         earlierRef.current = earlier;
         setPendingEarlier(userTurnsOf(earlier));
         d.seedHistory(replayToChat(seed));
+        noteContentShown('resume');
       })
       .catch(() => {});
   };

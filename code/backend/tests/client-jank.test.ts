@@ -19,6 +19,13 @@ describe('前端卡顿记录', () => {
     expect(rec.scripts).toEqual(['a', 'b']);
   });
 
+  it('种类标记 dense / wait / where 要能穿过白名单', () => {
+    const rec = sanitizeJank({ stallMs: 3000, wait: true, where: 'resume', dense: 'yes' })!;
+    expect(rec.wait).toBe(true);
+    expect(rec.where).toBe('resume');
+    expect(rec.dense).toBe(false); // 非布尔一律按 false
+  });
+
   it('追加后能按 limit 读回最新几条,坏行跳过', async () => {
     const file = path.join(await fs.promises.mkdtemp(path.join(os.tmpdir(), 'jank-')), 'j.jsonl');
     for (let i = 0; i < 5; i++) await appendJank({ stallMs: i }, file);
