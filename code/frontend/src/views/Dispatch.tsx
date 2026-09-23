@@ -3,14 +3,14 @@ import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
-import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
+import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
 import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast, LazyMd, ScrollRootContext } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { TurnHead, TurnOutline } from '@/components/TurnNav';
 import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
@@ -157,12 +157,19 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   useEffect(() => {
     onGrow?.();
   }, [shown, onGrow]);
+  // 历史消息(装载时就不在流式中)按视口懒解析:接回/续接一次塞进来上百条,
+  // 全部立刻走 markdown 解析就是「点进去等好几秒」的主要开销,看不见的先当纯文本放着
+  if (!animRef.current) return <LazyMd>{text}</LazyMd>;
   return <StreamMd text={shown} />;
 }
 
 /** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。
  *  超出上限的更早事件不丢弃:留在 earlierRef 里供轮次目录列出与按需回填(见 splitHistory)。 */
-const CHAT_SEED_LIMIT = 200;
+/* 2026-09-23 从 200 降到 40:接回/续接时一次挂 200 条(每条工具卡/助手消息都要排版)
+ * 是「点进去等好几秒」的主要成本之一;更早的轮次本就靠轮次目录按需回填,不会丢。 */
+const CHAT_SEED_LIMIT = 40;
+/** 接回时实时回放列表只先渲染的尾部条数 */
+const CHAT_TAIL = 60;
 /** 吸顶轮次头的带高(与 .turnhead 实际高度同值);判「提问是否已被带子盖住」用它 */
 const TURN_HEAD_H = 36;
 /** 跳转落点在头带下方再留的呼吸位 */
@@ -564,6 +571,15 @@ export function Dispatch({ active }: { active: boolean }) {
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
+  /**
+   * 列表头部暂不渲染的条数。接回一个跑了很久的会话,后端内存回放能一口气给几百条
+   * (实测 455 条),全渲染就是几秒的排版;只挂尾部 CHAT_TAIL 条,顶部按钮按需展开。
+   * 在渲染期直接派生(不用 effect):回放合批与 attachGen 在同一次渲染里到达,首帧就只有尾部。
+   * 下标口径不变(map 时跳过 i < headHidden),轮次序号/日期分隔/key 都不用改。
+   * 历史前插(seedOffset)也算进头部:live 尾部的起点随之后移。
+   */
+  const [expandedGen, setExpandedGen] = useState(-1);
+  const headHidden = expandedGen === d.attachGen ? 0 : Math.max(0, d.seedOffset + d.attachLen - CHAT_TAIL);
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
   // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
@@ -1376,6 +1392,7 @@ export function Dispatch({ active }: { active: boolean }) {
         <button className="btn" title="⌘N" onClick={() => newSession()}>新会话</button>
       </div>
       <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
+        <ScrollRootContext.Provider value={chatRef}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           <TurnHead
             turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
@@ -1420,8 +1437,20 @@ export function Dispatch({ active }: { active: boolean }) {
               </div>
             </div>
           )}
+          {headHidden > 0 && (
+            <button
+              className="chat-more-btn"
+              onClick={() => {
+                pinnedRef.current = false; // 展开更早内容是主动上翻,别被自动置底拽回去
+                setExpandedGen(d.attachGen);
+              }}
+            >
+              显示更早的 {headHidden} 条
+            </button>
+          )}
           {d.items.map((item, i) => (
-            <Fragment key={i}>
+            i < headHidden ? null :
+            <Fragment key={chatKey(i, d.seedOffset)}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
               <ChatRow
                 item={item}
@@ -1435,6 +1464,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </Fragment>
           ))}
         </div>
+        </ScrollRootContext.Provider>
 
         {btwOpen && !isMobile && (
           <BtwPanel

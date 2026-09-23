@@ -19,6 +19,11 @@ export interface InlineImage {
   data: string;
 }
 
+/** 聊天行的稳定 key:历史前插不改变已有行的 key(历史行为负数,实时行从 0 起) */
+export function chatKey(index: number, seedOffset: number): number {
+  return index - seedOffset;
+}
+
 export type ChatItem =
   | { t: 'user'; text: string; ts?: number; images?: InlineImage[] }
   /** turnMs:本轮(你发出 → 回合结束)总耗时,回合结束时打在该轮最后一条 assistant 上 */
@@ -217,6 +222,15 @@ export function useDispatch() {
     switch (e.ev) {
       case 'attached':
         restoringRef.current = false;
+        attachingRef.current = false;
+        // 记下回放结束时的条数,派发页据此在**同一次渲染**里只挂尾部(effect 里裁会先全量
+        // 渲染一遍再裁,实测 248 行先上屏再缩到 60,白付一次排版)。更新函数里写 ref 是
+        // 幂等赋值,StrictMode 双调无害;它在本次合批的渲染阶段执行,派发页随后读到的就是它。
+        setItems((prev) => {
+          attachLenRef.current = prev.length;
+          return prev;
+        });
+        setAttachGen((g) => g + 1);
         sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
         if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
           setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
@@ -456,6 +470,17 @@ export function useDispatch() {
   }, [flushDelta]);
 
   const attachRef = useRef<((dispatchId: string) => Promise<void>) | null>(null);
+  /**
+   * 接回期间的回放缓冲。后端 attach 会把内存里的事件流一口气推过来(实测 238 条 53ms 内到齐),
+   * 每条 WebSocket 消息都是独立的宏任务,逐条 handle 就是逐条 setState、逐条渲染越来越长的
+   * 列表——用户看到的是「点进去要等好几秒才出内容」。攒到 attached 再在同一个任务里顺序
+   * 处理,React 18 自动合批成一次渲染。
+   */
+  const attachingRef = useRef(false);
+  const replayBufRef = useRef<Record<string, unknown>[]>([]);
+  /** 回放合批结束时 items 的条数 + 代次:派发页据此只先渲染尾部(见 attached 分支) */
+  const attachLenRef = useRef(0);
+  const [attachGen, setAttachGen] = useState(0);
 
   const ensureWs = useCallback((): Promise<WebSocket> => {
     const cur = wsRef.current;
@@ -468,7 +493,17 @@ export function useDispatch() {
       ws.onerror = () => reject(new Error('派发通道连接失败'));
       ws.onmessage = (m) => {
         try {
-          handle(JSON.parse(m.data));
+          const ev = JSON.parse(m.data) as Record<string, unknown>;
+          if (attachingRef.current && ev.ev !== 'attached') {
+            replayBufRef.current.push(ev);
+            return;
+          }
+          if (ev.ev === 'attached') {
+            const buf = replayBufRef.current;
+            replayBufRef.current = [];
+            for (const b of buf) handle(b); // 同一任务内:所有 setState 合批
+          }
+          handle(ev);
         } catch {
           /* ignore */
         }
@@ -498,6 +533,10 @@ export function useDispatch() {
     async (dispatchId: string) => {
       startedRef.current = true;
       clearPendingDelta();
+      attachingRef.current = true;
+      replayBufRef.current = [];
+      attachLenRef.current = 0;
+      seedOffsetRef.current = 0;
       // 服务端回放全部事件,先清空避免重复
       setItems([]);
       setStatus({ state: 'none' });
@@ -576,6 +615,11 @@ export function useDispatch() {
   }, []);
 
   const reset = useCallback(() => {
+    seedOffsetRef.current = 0;
+    setSeedOffset(0);
+    attachingRef.current = false;
+    replayBufRef.current = [];
+    attachLenRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
     startedRef.current = false;
@@ -657,10 +701,19 @@ export function useDispatch() {
   }, []);
 
   /** 续接前装载历史对话(来自只读回放),插在当前消息之前 */
+  /**
+   * 历史前插过的条数。聊天行的 key 用「下标 − 前插数」(见 chatKey):历史是前插到列表头的,
+   * 若直接用下标当 key,前插后所有已有行的 key 全变,React 会把它们整个卸掉重建,
+   * 每条助手消息的 markdown 重新解析一遍。
+   */
+  const seedOffsetRef = useRef(0);
+  const [seedOffset, setSeedOffset] = useState(0);
   const seedHistory = useCallback((history: ChatItem[]) => {
+    seedOffsetRef.current += history.length;
+    setSeedOffset(seedOffsetRef.current);
     setItems((prev) => [...history, ...prev]);
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, seedOffset, attachLen: attachLenRef.current, attachGen, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }

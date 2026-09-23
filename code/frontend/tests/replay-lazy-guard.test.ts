@@ -31,3 +31,14 @@ describe('按需挂载的两个易回归点', () => {
     expect(src).toContain('mountSentinelRef');
   });
 });
+
+describe('派发页装载历史不再一次挂几百条', () => {
+  it('CHAT_SEED_LIMIT 与 CHAT_TAIL 都封在 60 以内,更早的靠轮次目录/「显示更早」按需挂', () => {
+    const src = read('views/Dispatch.tsx');
+    const seed = Number(/const CHAT_SEED_LIMIT = (\d+);/.exec(src)?.[1]);
+    const tail = Number(/const CHAT_TAIL = (\d+);/.exec(src)?.[1]);
+    expect(seed).toBeLessThanOrEqual(60);
+    expect(tail).toBeLessThanOrEqual(60);
+    expect(src).toContain('i < headHidden ? null :');
+  });
+});

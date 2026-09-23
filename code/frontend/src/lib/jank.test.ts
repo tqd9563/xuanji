@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecord, lateBy } from './jank';
+import { buildRecord, denseLateness, lateBy } from './jank';
 
 describe('卡顿记录器', () => {
   it('心跳迟到量:早到或准时为 0', () => {
@@ -30,5 +30,17 @@ describe('卡顿记录器', () => {
     expect(rec.inflight).toEqual(['/api/sessions/7d802ce3/replay']);
     expect(rec.recent).toEqual([{ url: '/api/sessions', ms: 40 }]);
     expect(rec.scripts).toEqual(['300ms render']);
+  });
+});
+
+describe('密集小卡顿', () => {
+  it('只累计窗口内的迟到量', () => {
+    const samples = [
+      { at: 1000, late: 400 }, // 窗口外(now-3000=2000)
+      { at: 2500, late: 300 },
+      { at: 4900, late: 350 },
+    ];
+    expect(denseLateness(samples, 5000)).toBe(650);
+    expect(denseLateness(samples, 5000, 1000)).toBe(350);
   });
 });
