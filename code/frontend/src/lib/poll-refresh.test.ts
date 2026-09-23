@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { peekPollCache, refreshPoll, subscribePoll } from './hooks';
+import { peekPollCache, refreshPoll, sharedFetch, subscribePoll } from './hooks';
 
 /**
  * /rename 落库后看板卡片要立刻换名,不能等 5s 轮询刻度(2026-09-15 用户反馈改名后卡 1–2s)。
@@ -53,5 +53,16 @@ describe('/rename 成功后必须调用 refreshPoll(api.sessions)', () => {
     expect(i).toBeGreaterThan(-1);
     const after = src.slice(i, i + 400);
     expect(after).toContain('refreshPoll(api.sessions)');
+  });
+});
+
+describe('sharedFetch 同 fetcher 并发合流', () => {
+  it('同刻两次调用只真正请求一次,结果相同;完成后再次调用重新请求', async () => {
+    let n = 0;
+    const fetcher = () => new Promise<number>((r) => setTimeout(() => r(++n), 10));
+    const [a, b] = await Promise.all([sharedFetch(fetcher), sharedFetch(fetcher)]);
+    expect(a).toBe(1);
+    expect(b).toBe(1);
+    expect(await sharedFetch(fetcher)).toBe(2);
   });
 });

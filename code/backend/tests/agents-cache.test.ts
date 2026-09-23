@@ -55,3 +55,19 @@ describe('listAgents 缓存', () => {
     expect(c.sessions[0]!.name).not.toBe('被改过的名字');
   });
 });
+
+describe('listAgents 并发合流', () => {
+  it('缓存未命中时同刻到达的两次调用只拉起一个子进程,且各自拿到副本', async () => {
+    // 独立一份模块:上面的用例已把缓存喂热,这里要的是「冷缓存 + 并发」
+    vi.resetModules();
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const cb = args[args.length - 1] as (e: unknown, o: { stdout: string; stderr: string }) => void;
+      setTimeout(() => cb(null, { stdout: JSON.stringify(RAW), stderr: '' }), 20); // 让两次调用真的重叠
+    });
+    const { listAgents: fresh } = await import('../src/adapters/agents-cli.js');
+    const [a, b] = await Promise.all([fresh(), fresh()]);
+    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(a.sessions).toEqual(b.sessions);
+    expect(a.sessions[0]).not.toBe(b.sessions[0]);
+  });
+});
