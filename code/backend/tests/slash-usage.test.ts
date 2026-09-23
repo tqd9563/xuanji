@@ -16,7 +16,7 @@ const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-usage-'));
 vi.mock('../src/config.js', () => ({ config: { claudeDir: tmpHomeRef.dir } }));
 const tmpHomeRef = { dir: tmpHome };
 
-const { countSlashUsage, applyUsage } = await import('../src/services/slash-usage.js');
+const { countSlashUsage, applyUsage, _resetSlashUsageFileCache } = await import('../src/services/slash-usage.js');
 
 function writeSession(project: string, name: string, lines: object[]) {
   const dir = path.join(tmpHome, 'projects', project);
@@ -34,6 +34,7 @@ const noPrompts = { recentPrompts: () => [] } as never;
 
 afterEach(() => {
   fs.rmSync(path.join(tmpHome, 'projects'), { recursive: true, force: true });
+  _resetSlashUsageFileCache();
 });
 
 describe('countSlashUsage', () => {
@@ -92,5 +93,31 @@ describe('applyUsage', () => {
   it('把次数贴到条目上,没用过的为 0', () => {
     const out = applyUsage([{ name: 'a' }, { name: 'b' }], { a: 7 });
     expect(out).toEqual([{ name: 'a', uses: 7 }, { name: 'b', uses: 0 }]);
+  });
+});
+
+describe('按文件缓存(不再每次全量重扫)', () => {
+  it('mtime 与 size 都没变的文件直接复用上次结果,不重新读', async () => {
+    const now = Date.now();
+    writeSession('-a', 's1', [envelope('model', now)]);
+    const fp = path.join(tmpHome, 'projects', '-a', 's1.jsonl');
+    // mtime 固定成整秒:utimes 回拨会丢亚毫秒精度,用原值拨回反而对不上
+    const T = Math.floor(now / 1000);
+    fs.utimesSync(fp, T, T);
+    expect((await countSlashUsage(noPrompts, new Set())).model).toBe(2);
+    // 同长度改写内容并把 mtime 拨回同一值:若真的重读,model 会变成 mdoel
+    fs.writeFileSync(fp, fs.readFileSync(fp, 'utf8').replace('/model<', '/mdoel<'));
+    fs.utimesSync(fp, T, T);
+    const c = await countSlashUsage(noPrompts, new Set());
+    expect(c.model).toBe(2);
+    expect(c.mdoel).toBeUndefined();
+  });
+
+  it('文件变了(size 变化)就重读', async () => {
+    const now = Date.now();
+    writeSession('-a', 's1', [envelope('model', now)]);
+    await countSlashUsage(noPrompts, new Set());
+    writeSession('-a', 's1', [envelope('model', now), envelope('compact', now)]);
+    expect((await countSlashUsage(noPrompts, new Set())).compact).toBe(2);
   });
 });
