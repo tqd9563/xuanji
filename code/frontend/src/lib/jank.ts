@@ -44,6 +44,9 @@ export interface JankRecord {
   ua: string;
   /** true = 密集小卡顿(3s 内迟到总和 ≥1s),stallMs 是该窗口的总和而非单次 */
   dense?: boolean;
+  /** true = 等待记录:stallMs 是「点开会话 → 内容出现」的时长,where 是内容出现在哪(drawer/resume/attach) */
+  wait?: boolean;
+  where?: string;
 }
 
 let lastInteraction: Interaction | null = null;
@@ -54,6 +57,31 @@ const loafScripts: { at: number; desc: string }[] = [];
 /** 由业务代码在关键交互处调用,给下一条冻结记录提供「你刚才在干什么」 */
 export function noteInteraction(kind: string, detail?: Interaction['detail']) {
   lastInteraction = { kind, detail, at: performance.now() };
+  if (kind === 'open-session') openPending = lastInteraction;
+}
+
+/** 等待口径:点开会话到内容出现超过这么久就记一条(用户说的「内容出不来」正是这段) */
+export const WAIT_MS = 800;
+let openPending: Interaction | null = null;
+
+/** 内容真的出现了(抽屉拿到回放 / 派发页装载完历史或接回完毕)时由业务代码调用 */
+export function noteContentShown(where: string) {
+  const open = openPending;
+  if (!open) return;
+  openPending = null;
+  const now = performance.now();
+  const wait = now - open.at;
+  if (wait < WAIT_MS || document.visibilityState !== 'visible') return;
+  const rec = buildRecord(wait, now, {
+    view: location.hash.slice(1) || 'dashboard',
+    visibility: document.visibilityState,
+    interaction: open,
+    inflight: inflight.keys(),
+    recent,
+    scripts: loafScripts,
+    ua: navigator.userAgent,
+  });
+  persist({ ...rec, wait: true, where });
 }
 
 function shortUrl(u: string) {
@@ -158,7 +186,7 @@ export function buildRecord(
     sinceInteractionMs: ctx.interaction ? Math.round(stallStart - ctx.interaction.at) : null,
     interaction: ctx.interaction,
     inflight: [...ctx.inflight].map((k) => k.split('#')[0] ?? k),
-    recent: ctx.recent.filter((r) => r.doneAt >= stallStart - 5000).map(({ url, ms }) => ({ url, ms })),
+    recent: ctx.recent.filter((r) => r.doneAt >= stallStart - 15000).map(({ url, ms }) => ({ url, ms })),
     scripts: ctx.scripts.filter((s) => s.at >= stallStart - 1000).map((s) => s.desc),
     ua: ctx.ua,
   };

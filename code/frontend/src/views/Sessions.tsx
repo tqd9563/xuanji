@@ -18,7 +18,7 @@ import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
 import { recentOf } from '@/lib/stow';
-import { noteInteraction } from '@/lib/jank';
+import { noteContentShown, noteInteraction } from '@/lib/jank';
 import { canDrag, dropAction, type DropCol } from '@/lib/board-drop';
 import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
@@ -791,6 +791,7 @@ export function Sessions({
       setReplay(null);
       try {
         setReplay(await api.replay(sessionId));
+        noteContentShown('drawer');
       } catch {
         toast(
           session?.needs?.includes('send a prompt')

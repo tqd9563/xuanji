@@ -27,6 +27,10 @@ export function sanitizeJank(body: unknown): Record<string, unknown> | null {
     recent: Array.isArray(b.recent) ? b.recent.slice(0, 30) : [],
     scripts: strs(b.scripts),
     ua: str(b.ua, 200),
+    // 记录种类标记:dense = 密集小卡顿,wait = 「点开会话 → 内容出现」的等待(where 说明内容出现在哪)
+    dense: b.dense === true,
+    wait: b.wait === true,
+    where: str(b.where, 20),
   };
 }
 

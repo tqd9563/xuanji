@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRecord, denseLateness, lateBy } from './jank';
+import { buildRecord, denseLateness, lateBy, WAIT_MS } from './jank';
 
 describe('卡顿记录器', () => {
   it('心跳迟到量:早到或准时为 0', () => {
@@ -8,7 +8,7 @@ describe('卡顿记录器', () => {
     expect(lateBy(1700, 1000)).toBe(700);
   });
 
-  it('记录只带冻结开始前 5s 内完成的请求与 1s 内的脚本归因', () => {
+  it('记录只带冻结开始前 15s 内完成的请求与 1s 内的脚本归因', () => {
     const now = 20000;
     const rec = buildRecord(800, now, {
       view: 'sessions',
@@ -16,7 +16,7 @@ describe('卡顿记录器', () => {
       interaction: { kind: 'open-session', detail: { entry: 'drawer' }, at: 19000 },
       inflight: ['/api/sessions/7d802ce3/replay#ab12'],
       recent: [
-        { url: '/api/prefs', ms: 12, doneAt: 13000 }, // 冻结开始(19200)前 6.2s,丢
+        { url: '/api/prefs', ms: 12, doneAt: 3000 }, // 冻结开始(19200)前 16.2s,丢
         { url: '/api/sessions', ms: 40, doneAt: 15000 },
       ],
       scripts: [
@@ -42,5 +42,20 @@ describe('密集小卡顿', () => {
     ];
     expect(denseLateness(samples, 5000)).toBe(650);
     expect(denseLateness(samples, 5000, 1000)).toBe(350);
+  });
+});
+
+describe('等待口径', () => {
+  it('门槛 800ms:比冻结门槛(500)高,短暂的加载不记', () => {
+    expect(WAIT_MS).toBe(800);
+  });
+  it('等待记录要带得上点开时发出的那次 replay 请求(15s 窗口)', () => {
+    const rec = buildRecord(6000, 20000, {
+      view: 'dispatch', visibility: 'visible',
+      interaction: { kind: 'open-session', detail: { entry: 'resume' }, at: 14000 },
+      inflight: [], recent: [{ url: '/api/sessions/5efcd5b9/replay', ms: 5200, doneAt: 19300 }],
+      scripts: [], ua: 'ua',
+    });
+    expect(rec.recent).toEqual([{ url: '/api/sessions/5efcd5b9/replay', ms: 5200 }]);
   });
 });
