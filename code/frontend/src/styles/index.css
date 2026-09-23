@@ -82,13 +82,20 @@
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-/* 整站是暗色主题,必须向浏览器声明——否则 macOS 覆盖式滚动条按浅色方案绘制,
-   悬停时在深色底上冒出一条灰白轨道。所有滚动容器统一细滚动条,不再逐个定义。 */
+/* 整站是暗色主题,向浏览器声明,让原生控件(日期选择器等)按暗色方案绘制。 */
 html { font-size: 16px; color-scheme: dark; }
-* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+/* 全站统一 6px 细滚动条,不再逐个容器定义。
+   Chromium/WebKit 走 ::-webkit-scrollbar:它会把 macOS 的原生 overlay 滚动条(悬停时展开成一条
+   粗轨道,在暗色底上是灰白的)换成自绘的细条。**不能同时写 scrollbar-width / scrollbar-color**——
+   Chrome 121+ 规定只要设了标准属性就整体忽略 ::-webkit-scrollbar,滚动条会退回原生 overlay,
+   那正是 PR#74 把标准属性推到全局后症状反而铺满全站的原因。标准属性只给不认 ::-webkit-scrollbar
+   的浏览器(Firefox)用。 */
 *::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb { background: var(--line); border-radius: 3px; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+}
 body {
   font-family: var(--sans);
   background: var(--bg);
