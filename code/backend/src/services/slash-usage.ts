@@ -31,12 +31,25 @@ const RECENT_BONUS = 1;
 /** 扫描窗口:只看近半年的会话文件,更早的对「现在常用什么」没有参考价值,也省 IO */
 const SCAN_MS = 180 * 24 * 60 * 60 * 1000;
 
+/**
+ * 按文件缓存的提取结果:mtime + size 没变就直接复用,不再读文件。
+ *
+ * 2026-09-23 实测冷扫描(Promise.all 并发读完近半年全部转录,每个文件同步 split/parse)
+ * 在后端进程里把事件循环堵了累计 4.3~5.8s、单次最长 2.3s;缓存 10 分钟一过期,下一个
+ * 打开会话的请求就撞上这次扫描,页面里 replay/看板/旁路记录全部一起慢 3~4s——用户说的
+ * 「隔一阵再打开会话,内容迟迟不出来」就是它。常态下变化的只有正在写的那几个文件。
+ */
+const fileCache = new Map<string, { mtimeMs: number; size: number; hits: { name: string; at: number }[] }>();
+
+/** 让出事件循环:逐个文件处理时每处理完一个就让其它请求插队 */
+const yieldLoop = () => new Promise<void>((r) => setImmediate(r));
+
 /** ~/.claude/projects 下 mtime 落在窗口内的会话文件。按 mtime 过滤即可:
  *  一个半年没动过的会话文件里不会有新的命令调用。 */
-async function recentSessionFiles(sinceMs: number): Promise<string[]> {
+async function recentSessionFiles(sinceMs: number): Promise<{ fp: string; mtimeMs: number; size: number }[]> {
   const root = path.join(config.claudeDir, 'projects');
   const dirs = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
-  const out: string[] = [];
+  const out: { fp: string; mtimeMs: number; size: number }[] = [];
   for (const d of dirs) {
     if (!d.isDirectory()) continue;
     const full = path.join(root, d.name);
@@ -45,7 +58,7 @@ async function recentSessionFiles(sinceMs: number): Promise<string[]> {
       if (!f.endsWith('.jsonl')) continue;
       const fp = path.join(full, f);
       const st = await fsp.stat(fp).catch(() => null);
-      if (st && st.mtimeMs >= sinceMs) out.push(fp);
+      if (st && st.mtimeMs >= sinceMs) out.push({ fp, mtimeMs: st.mtimeMs, size: st.size });
     }
   }
   return out;
@@ -62,13 +75,21 @@ export async function countSlashUsage(storage: Storage, known: ReadonlySet<strin
   const now = Date.now();
   const counts: UsageCounts = {};
 
-  // ① CLI 转录
-  const perFile = await Promise.all(
-    (await recentSessionFiles(now - SCAN_MS)).map((f) => extractCommandInvocations(f).catch(() => [])),
-  );
-  for (const hits of perFile) {
-    for (const h of hits) bump(counts, h.name, h.at, now);
+  // ① CLI 转录:逐个文件顺序处理(不并发),没变的文件走缓存,变了的读完就让出事件循环
+  const files = await recentSessionFiles(now - SCAN_MS);
+  const alive = new Set<string>();
+  for (const f of files) {
+    alive.add(f.fp);
+    let entry = fileCache.get(f.fp);
+    if (!entry || entry.mtimeMs !== f.mtimeMs || entry.size !== f.size) {
+      const hits = await extractCommandInvocations(f.fp).catch(() => []);
+      entry = { mtimeMs: f.mtimeMs, size: f.size, hits };
+      fileCache.set(f.fp, entry);
+      await yieldLoop();
+    }
+    for (const h of entry.hits) bump(counts, h.name, h.at, now);
   }
+  for (const k of fileCache.keys()) if (!alive.has(k)) fileCache.delete(k); // 滑出窗口/被删的文件
 
   // ② 璇玑自有库(拦截式命令只在这里留痕)
   for (const p of storage.recentPrompts(now - SCAN_MS)) {
@@ -82,4 +103,9 @@ export async function countSlashUsage(storage: Storage, known: ReadonlySet<strin
 /** 把使用次数贴到目录条目上(不改变顺序,排序交给前端) */
 export function applyUsage<T extends { name: string }>(cmds: T[], counts: UsageCounts): (T & { uses: number })[] {
   return cmds.map((c) => ({ ...c, uses: counts[c.name] ?? 0 }));
+}
+
+/** 仅测试用:清空按文件缓存 */
+export function _resetSlashUsageFileCache(): void {
+  fileCache.clear();
 }
