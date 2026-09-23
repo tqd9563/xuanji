@@ -19,6 +19,7 @@ import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
 import { recentOf } from '@/lib/stow';
 import { noteInteraction } from '@/lib/jank';
+import { canDrag, dropAction, type DropCol } from '@/lib/board-drop';
 import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
@@ -97,11 +98,9 @@ async function closeSession(s: AgentSession, refresh: () => void) {
   }
 }
 
-/** 拖拽落点:验收中的卡可拖进「已完成」(归档)或「空闲」(挂起),与卡上两个按钮同义 */
-const DONE_DROP_ID = 'col-done';
-const IDLE_DROP_ID = 'col-idle';
-/** 可拖的源列:验收中(→ 空闲挂起 / 已完成归档)与空闲(→ 已完成归档) */
-const DRAGGABLE_COLS: SessionState[] = ['review', 'idle'];
+/** 拖拽落点:列 key 即落点 id;各方向的语义见 board-drop.ts,与卡上按钮同一后端入口 */
+const DROP_COLS: DropCol[] = ['review', 'idle', 'done'];
+const isDropCol = (k: unknown): k is DropCol => DROP_COLS.includes(k as DropCol);
 
 interface CardProps {
   s: AgentSession;
@@ -378,9 +377,9 @@ function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArc
   );
 }
 
-/** 拖拽落点列体(已完成 = 归档,空闲 = 挂起),悬停时高亮 */
-function ColDropZone({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+/** 拖拽落点列体:只在正拖着的卡能落进来时启用并高亮,不接的列悬停无反应 */
+function ColDropZone({ id, accept, children }: { id: DropCol; accept: boolean; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !accept });
   return (
     <div ref={setNodeRef} className={`col-body ${isOver ? 'drop-over' : ''}`}>
       {children}
@@ -644,6 +643,27 @@ export function Sessions({
     setPendingSuspend((prev) => new Set([...prev].filter((id) => !settled.has(id))));
   }, [data, pendingSuspend]);
 
+  const dropPending = (set: typeof setPendingArchive, id: string) =>
+    set((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+  /** 按 sessionId 找被拖的卡及其所在列(拖拽只在可落点的三列间发生) */
+  const dragSrc = useCallback(
+    (id: string) => {
+      for (const from of DROP_COLS) {
+        const s = columns?.[from]?.find((x) => x.sessionId === id);
+        if (s) return { s, from };
+      }
+      return null;
+    },
+    [columns],
+  );
+  const dragging = dragId ? dragSrc(dragId) : null;
+
   /**
    * 拖到「已完成」= 归档,拖到「空闲」= 挂起:与卡上同名按钮同一后端入口。
    * 乐观就位 → 落库 → 立刻重取;失败回滚并提示。
@@ -652,11 +672,25 @@ export function Sessions({
     (e: DragEndEvent) => {
       setDragId(null);
       const over = e.over?.id;
-      if (over !== DONE_DROP_ID && over !== IDLE_DROP_ID) return;
-      const sessionId = String(e.active.id);
-      const toIdle = over === IDLE_DROP_ID;
-      // 空闲列的卡拖回空闲列 = 没动:不发请求,免得对已挂起的卡重复挂起
-      if (toIdle && (columns?.idle ?? []).some((s) => s.sessionId === sessionId)) return;
+      const src = dragSrc(String(e.active.id));
+      if (!isDropCol(over) || !src) return;
+      const sessionId = src.s.sessionId;
+      const action = dropAction(src.s, src.from, over);
+      if (!action) return;
+      if (action === 'unarchive' || action === 'unsuspend') {
+        // 撤销类不做乐观就位:卡回推导态所在列,前端猜不准,等重取。
+        // 但要先撤掉尚未被后端确认的乐观标记——刚拖进去马上拖回时它还在,
+        // 撤销后后端再也不会报「已归档/已挂起」,标记就永远盖住真实数据
+        dropPending(action === 'unarchive' ? setPendingArchive : setPendingSuspend, sessionId);
+        void (action === 'unarchive' ? api.unarchiveSession(sessionId) : api.unsuspendSession(sessionId))
+          .then(() => {
+            toast(action === 'unarchive' ? `已撤销归档 ${src.s.name}` : `已回到验收中 ${src.s.name}`);
+            refresh();
+          })
+          .catch((err: unknown) => toast(err instanceof Error ? err.message : String(err)));
+        return;
+      }
+      const toIdle = action === 'suspend';
       const setPending = toIdle ? setPendingSuspend : setPendingArchive;
       setPending((prev) => new Set(prev).add(sessionId));
       void (toIdle ? api.suspendSession(sessionId) : api.archiveSession(sessionId))
@@ -670,12 +704,13 @@ export function Sessions({
           toast(err instanceof Error ? err.message : String(err));
         });
     },
-    [refresh, columns],
+    [refresh, dragSrc],
   );
 
   /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
   const unarchive = useCallback(
     async (s: AgentSession) => {
+      dropPending(setPendingArchive, s.sessionId);
       try {
         await api.unarchiveSession(s.sessionId);
         toast(`已撤销归档 ${s.name}`);
@@ -704,6 +739,7 @@ export function Sessions({
   /** 撤销挂起:卡片回验收中 */
   const unsuspend = useCallback(
     async (s: AgentSession) => {
+      dropPending(setPendingSuspend, s.sessionId);
       try {
         await api.unsuspendSession(s.sessionId);
         toast(`已回到验收中 ${s.name}`);
@@ -904,10 +940,10 @@ export function Sessions({
               // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
               const waiting =
                 col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
-              // 运行中/等待输入是真实进行态,不给拖;验收中(→空闲/已完成)与空闲(→已完成)可拖
+              // 运行中/等待输入是真实进行态,不给拖;其余按 board-drop 判定(向左只接被手动归档/挂起的卡)
               const card = (s: AgentSession) => {
                 const hit = matches(s, projFilter);
-                const p = cardProps(s, s.sessionId === selId, DRAGGABLE_COLS.includes(col.key) && hit, !hit);
+                const p = cardProps(s, s.sessionId === selId, canDrag(s, col.key) && hit, !hit);
                 // 点击卡片同步键盘选中位:此后 Space/Enter 从鼠标停留处继续,而非跳回首卡。
                 // 行号在键盘可达列表里取,与 selId 的口径一致。
                 const baseOpen = p.onOpen;
@@ -955,8 +991,13 @@ export function Sessions({
                       </span>
                     )}
                   </div>
-                  {isDone || col.key === 'idle' ? (
-                    <ColDropZone id={isDone ? DONE_DROP_ID : IDLE_DROP_ID}>{body}</ColDropZone>
+                  {isDropCol(col.key) ? (
+                    <ColDropZone
+                      id={col.key}
+                      accept={!!dragging && dropAction(dragging.s, dragging.from, col.key) !== null}
+                    >
+                      {body}
+                    </ColDropZone>
                   ) : (
                     <div className="col-body">{body}</div>
                   )}
@@ -968,12 +1009,10 @@ export function Sessions({
           {/* 跟手的那张:渲染在 body 层,不被列的 overflow 裁掉,也不被右侧列盖住 */}
           <DragOverlay dropAnimation={null} className="drag-ghost">
             {(() => {
-              if (!dragId || !columns) return null;
-              const s = DRAGGABLE_COLS.flatMap((k) => columns[k] ?? []).find((x) => x.sessionId === dragId);
-              if (!s) return null;
-              const p = cardProps(s, false, false);
-              // 卡型跟随源列:验收中是中密度卡,空闲是紧凑卡——浮层与原位形状一致才不跳
-              return s.state === 'idle' ? <CompactCard {...p} /> : <MidCard {...p} />;
+              if (!dragging) return null;
+              const p = cardProps(dragging.s, false, false);
+              // 卡型跟随源列:验收中是中密度卡,空闲/已完成是紧凑卡——浮层与原位形状一致才不跳
+              return dragging.from === 'review' ? <MidCard {...p} /> : <CompactCard {...p} />;
             })()}
           </DragOverlay>
         </DndContext>
