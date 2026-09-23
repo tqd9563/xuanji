@@ -79,11 +79,24 @@ function cloneResult(r: AgentsResult): AgentsResult {
   return { ...r, sessions: r.sessions.map((s) => ({ ...s })) };
 }
 
+/** 正在飞的那次拉取:TTL 只挡「已完成」的重复,挡不住并发——看板与 App 的两个 5s 轮询
+ *  同刻到达时双双未命中,各起一个 claude 子进程(2026-09-23 实测 10s 内 4 个 PID,
+ *  即每轮两个);用户页面里看到 /api/sessions 成对、每次 180~750ms 就是它。 */
+let agentsInflight: Promise<AgentsResult> | null = null;
+
 export async function listAgents(): Promise<AgentsResult> {
   if (agentsCache && Date.now() - agentsCache.at < AGENTS_TTL_MS) return cloneResult(agentsCache.result);
-  const result = await listAgentsUncached();
-  if (result.ok) agentsCache = { at: Date.now(), result };
-  return cloneResult(result);
+  if (!agentsInflight) {
+    agentsInflight = listAgentsUncached()
+      .then((result) => {
+        if (result.ok) agentsCache = { at: Date.now(), result };
+        return result;
+      })
+      .finally(() => {
+        agentsInflight = null;
+      });
+  }
+  return cloneResult(await agentsInflight);
 }
 
 async function listAgentsUncached(): Promise<AgentsResult> {
