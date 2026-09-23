@@ -18,6 +18,7 @@ import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
 import { recentOf } from '@/lib/stow';
+import { noteInteraction } from '@/lib/jank';
 import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
@@ -26,6 +27,12 @@ import { FindBar, useFindInPage } from '@/components/FindBar';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
+  // 卡顿记录器要知道走的是哪条入口:同一张卡三条路,哪条卡住得分开看
+  noteInteraction('open-session', {
+    sessionId: s.sessionId.slice(0, 8),
+    entry: s.dispatchId ? 'attach' : s.readonly ? 'drawer' : 'resume',
+    state: s.state,
+  });
   if (s.dispatchId) {
     setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
     location.hash = 'dispatch';
@@ -741,6 +748,7 @@ export function Sessions({
 
   const openReplay = useCallback(
     async (sessionId: string, session?: AgentSession) => {
+      noteInteraction('open-session', { sessionId: sessionId.slice(0, 8), entry: 'drawer', state: session?.state });
       markSeen(sessionId); // 看过回放 = 已验收,「待验收」标记熄灭
       setDrawerOpen(true);
       setReplayFor(session ?? null);
