@@ -2801,6 +2801,9 @@ button.ram-chip:hover { background: var(--hover); }
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="mon-debounce"><button data-v="1">1 次</button><button data-v="2" class="active">2 次</button><button data-v="3">3 次</button></div></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>无人查看时暂停采样</span><small>所有璇玑页面都在后台时停采,回到前台立即补采一次</small></div>
           <div class="stg-ctl"><span class="switch on" id="mon-pause" role="switch" aria-checked="true" tabindex="0"></span></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-group">派发会话</div>
+        <div class="stg-row"><div class="stg-lab"><span>空闲自动退出</span><small id="mon-idle-hint">验收中 / 空闲的派发会话 30 分钟无新消息即结束进程;仅结束进程,卡片与记录保留,下次发消息自动接上(冷启动几秒)</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="mon-idle"><button data-v="0">关闭</button><button data-v="10">10 分钟</button><button data-v="30" class="active">30 分钟</button><button data-v="60">60 分钟</button><button data-v="120">120 分钟</button></div></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-group">CPU 阈值</div>
         <div class="stg-row mon-cpu-dep"><div class="stg-lab"><span>压力警告(黄)</span><small>整体占用 = 用户 + 系统;超过 5 个性能核的量(≈45%)后开始挤到能效核</small></div>
           <div class="stg-ctl"><input type="range" min="30" max="95" value="60" id="mon-cpu-y"><span class="stg-val" id="mon-cpu-y-v">60%</span></div><span class="stg-scope" data-scope="acct">账户</span></div>
@@ -2872,6 +2875,8 @@ button.ram-chip:hover { background: var(--hover); }
       <tr><td>其它进程 ≥ 50%</td><td>退出 X</td></tr>
     </table>
   </details>
+  <div class="ram-hint-lab">空闲自动退出(设置 › 系统监控 › 派发会话)</div>
+  <div class="sw"><button id="ram-idle-sim">模拟:「看板拖拽回归验证」空闲超时退出</button></div>
   <div class="sw" style="margin-top:6px"><button id="sw-open">打开设置</button><button id="mon-open">设置 › 系统监控</button></div>
 </div>
 <script>
@@ -3212,6 +3217,7 @@ function toastMsg(t) { let el = document.querySelector('.toast'); if (!el) { el 
 /* 原型脚手架 */
 document.getElementById('sw-open').addEventListener('click', () => openStg());
 document.getElementById('mon-open').addEventListener('click', e => { e.stopPropagation(); openStg('monitor'); });
+window.__idleSim = null;
 document.getElementById('sw-off').addEventListener('click', () => setWallMode('off'));
 document.getElementById('sw-wall').addEventListener('click', () => setWallMode('wall'));
 document.getElementById('sw-glass').addEventListener('click', () => setWallMode('glass'));
@@ -3228,7 +3234,7 @@ document.getElementById('sw-glass').addEventListener('click', () => setWallMode(
      终端会话、「其余进程」与绿色样例态为按量级补的示意值
    ============================================================ */
 /* 设置 › 系统监控(默认值) */
-const MON = { mem: true, cpu: true, interval: 10, debounce: 2, pause: true, cpuY: 60, cpuR: 85, cardMem: 'always', cardCpu: 'high' };
+const MON = { mem: true, cpu: true, interval: 10, debounce: 2, pause: true, cpuY: 60, cpuR: 85, cardMem: 'always', cardCpu: 'high', idle: 30 };
 const MON_DEFAULT = { ...MON };
 let lastGood = { y: 60, r: 85 };   // 阈值非法(黄 ≥ 红)时判色沿用最后一组合法值
 const G = m => m < 1000 ? Math.round(m) + 'M' : (m / 1024).toFixed(1) + 'G';
@@ -3538,7 +3544,7 @@ const lvOf = c => !c.mem ? 'gone' : c.mem >= HOT ? 'hot' : c.mem >= WARN ? 'warn
 const colOf = c => c.state === 'blocked' ? 'running' : c.state;
 function chip(c) {
   const lv = lvOf(c);
-  if (lv === 'gone') return MON.mem || MON.cpu ? `<span class="ram-chip" data-lv="gone" title="进程已退出,不占内存">—</span>` : '';
+  if (lv === 'gone') return MON.mem || MON.cpu ? `<span class="ram-chip" data-lv="gone" title="${c.idleExited ? `空闲超过 ${MON.idle} 分钟已自动结束进程 · 下次发消息自动接上` : '进程已退出,不占内存'}">—</span>` : '';
   const cl = c.cpu >= 300 ? 'hot' : c.cpu >= 80 ? 'warn' : 'ok';
   const cpuHigh = c.cpu / FULL * 100 >= MON.cpuY || c.cpu >= 50;
   const showCpu = MON.cpu && (MON.cardCpu === 'always' || (MON.cardCpu === 'high' && cpuHigh));
@@ -3682,6 +3688,8 @@ function applyMon() {
   const bad = MON.cpuY >= MON.cpuR, rh = $('mon-cpu-r-hint');
   rh.textContent = bad ? `必须高于黄色阈值(当前黄 ${MON.cpuY}% ≥ 红 ${MON.cpuR}%,未保存,仍按上次有效值判色)` : '必须高于黄色阈值';
   rh.classList.toggle('mon-invalid', bad);
+  $('mon-idle-hint').textContent = MON.idle ? `验收中 / 空闲的派发会话 ${MON.idle} 分钟无新消息即结束进程;仅结束进程,卡片与记录保留,下次发消息自动接上(冷启动几秒)` : '已关闭:派发会话回合结束后进程常驻,直到在看板上关闭或后端重启';
+  const idleBtn = document.getElementById('ram-idle-sim'); if (idleBtn) idleBtn.disabled = !MON.idle;
   $('mon-debounce-hint').textContent = `连续 ${MON.debounce} 次超阈值才变色 ≈ ${MON.debounce * MON.interval} 秒`;
   $('mon-card-cpu-hint').textContent = `偏高 = 占整机 ≥ 黄色阈值 ${MON.cpuY}%,或单会话 ≥ 50%(半个核)`;
   document.querySelectorAll('.mon-cpu-dep').forEach(r => r.classList.toggle('mon-off', !MON.cpu));
@@ -3692,7 +3700,7 @@ function applyMon() {
 function syncMonCtl() {
   $('mon-mem').classList.toggle('on', MON.mem); $('mon-cpu').classList.toggle('on', MON.cpu); $('mon-pause').classList.toggle('on', MON.pause);
   ['mon-mem', 'mon-cpu', 'mon-pause'].forEach(id => $(id).setAttribute('aria-checked', $(id).classList.contains('on')));
-  [['mon-interval', MON.interval], ['mon-debounce', MON.debounce], ['mon-card-mem', MON.cardMem], ['mon-card-cpu', MON.cardCpu]].forEach(([id, v]) =>
+  [['mon-interval', MON.interval], ['mon-debounce', MON.debounce], ['mon-idle', MON.idle], ['mon-card-mem', MON.cardMem], ['mon-card-cpu', MON.cardCpu]].forEach(([id, v]) =>
     $(id).querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v == v)));
   $('mon-cpu-y').value = MON.cpuY; $('mon-cpu-r').value = MON.cpuR;
   $('mon-cpu-y-v').textContent = MON.cpuY + '%'; $('mon-cpu-r-v').textContent = MON.cpuR + '%';
@@ -3713,13 +3721,22 @@ $('stg-shell').addEventListener('click', e => {   // 生产同款委托先切了
     if (g === 'mon-interval') { MON.interval = +v; t0 = Date.now(); }
     if (g === 'mon-debounce') MON.debounce = +v;
     if (g === 'mon-card-mem') MON.cardMem = v;
-    if (g === 'mon-card-cpu') MON.cardCpu = v; }
+    if (g === 'mon-card-cpu') MON.cardCpu = v;
+    if (g === 'mon-idle') MON.idle = +v; }
   const r = e.target.closest('[data-reset="monitor"]');
   if (r) { Object.assign(MON, MON_DEFAULT); lastGood = { y: 60, r: 85 }; syncMonCtl(); }
   if (sw || b || r) applyMon();
 });
 ['mon-cpu-y', 'mon-cpu-r'].forEach(id => $(id).addEventListener('input', () => { readThresholds(); applyMon(); }));
 syncMonCtl();
+/* 空闲自动退出(模拟):只结束进程——卡片留在原列、记录可续接;其进程从两个 tab 的排行里消失,卡片数字变「—」 */
+document.getElementById('ram-idle-sim').addEventListener('click', e => {
+  e.stopPropagation();
+  const c = CARDS.find(x => x.id === 'd8a6'); if (!c || !c.mem) return;
+  GONE.add('d8a6'); c.mem = 0; c.cmp = 0; c.cpu = 0; c.idleExited = true;
+  e.currentTarget.textContent = '已模拟:进程已退出,卡片保留';
+  renderBoard(); if (!pop.hidden) renderPop();
+});
 renderCpuInd(); renderInd(); renderBoard(); applyMon(); showView('sessions');
 })();
 </script>

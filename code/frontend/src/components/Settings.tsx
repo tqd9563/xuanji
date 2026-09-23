@@ -167,6 +167,7 @@ function setMon(p: Partial<MonitorPrefs>) {
 }
 
 const INTERVAL_TABS = ([5, 10, 30, 60] as const).map((v) => ({ v, label: `${v}s` }));
+const IDLE_EXIT_TABS = ([0, 10, 30, 60, 120] as const).map((v) => ({ v, label: v ? `${v} 分钟` : '关闭' }));
 const DEBOUNCE_TABS = ([1, 2, 3] as const).map((v) => ({ v, label: `${v} 次` }));
 const CARD_TABS = [
   { v: 'always' as const, label: '始终' },
@@ -665,6 +666,13 @@ export function Settings({
         </SettingsRow>
         <SettingsRow hit={hit} scope="acct" label="无人查看时暂停采样" desc="所有璇玑页面都在后台时停采,回到前台立即补采一次">
           <Switch on={prefs.monitor.pauseIdle} onChange={(v) => setMon({ pauseIdle: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>派发会话</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="空闲自动退出"
+          desc={prefs.monitor.idleExit
+            ? `验收中 / 空闲的派发会话 ${prefs.monitor.idleExit} 分钟无新消息即结束进程;仅结束进程,卡片与记录保留,下次发消息自动接上(冷启动几秒)`
+            : '已关闭:派发会话回合结束后进程常驻,直到在看板上关闭或后端重启'}>
+          <Tabs value={prefs.monitor.idleExit} options={IDLE_EXIT_TABS} onChange={(v) => setMon({ idleExit: v })} />
         </SettingsRow>
         <SettingsGroup show={!searching}>CPU 阈值</SettingsGroup>
         <CpuThresholdRows hit={hit} off={!prefs.monitor.cpu} />

@@ -45,6 +45,8 @@ export interface MonitorPrefs {
   /** CPU 整体占用(用户+系统)黄 / 红阈值,百分比 */
   cpuWarn: number;
   cpuCrit: number;
+  /** 空闲自动退出(分钟):验收中/空闲的派发会话超时即结束子进程,卡片与记录保留;0 = 关闭 */
+  idleExit: 0 | 10 | 30 | 60 | 120;
 }
 
 export interface AccountPrefs {
@@ -88,11 +90,12 @@ export const DEFAULT_PREFS: AccountPrefs = {
     turnEnd: true,
     error: true,
   },
-  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85 },
+  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
 };
 
 const INTERVALS = [5, 10, 30, 60] as const;
 const DEBOUNCES = [1, 2, 3] as const;
+const IDLE_EXITS = [0, 10, 30, 60, 120] as const;
 
 function pick<T extends number>(v: unknown, allow: readonly T[], fb: T): T {
   return allow.includes(v as T) ? (v as T) : fb;
@@ -115,6 +118,7 @@ function sanitizeMonitor(input: unknown, base: MonitorPrefs): MonitorPrefs {
     pauseIdle: bool(m.pauseIdle, base.pauseIdle),
     cpuWarn: ok ? warn : base.cpuWarn,
     cpuCrit: ok ? crit : base.cpuCrit,
+    idleExit: pick(m.idleExit, IDLE_EXITS, base.idleExit),
   };
 }
 

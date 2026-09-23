@@ -164,7 +164,7 @@ export const DEFAULT_ACCOUNT: AccountPrefs = {
     turnEnd: true,
     error: true,
   },
-  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85 },
+  monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
 };
 
 let account: AccountPrefs = DEFAULT_ACCOUNT;

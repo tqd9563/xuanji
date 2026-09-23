@@ -43,6 +43,8 @@ export interface AgentSession {
   archived?: boolean;
   /** 在验收中显式「挂起」的卡:落在空闲列,提供回验收入口 */
   suspended?: boolean;
+  /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
+  idleExited?: boolean;
 }
 
 export type ReplayEvent =
@@ -383,6 +385,8 @@ export interface MonitorPrefs {
   pauseIdle: boolean;
   cpuWarn: number;
   cpuCrit: number;
+  /** 空闲自动退出(分钟);0 = 关闭 */
+  idleExit: 0 | 10 | 30 | 60 | 120;
 }
 
 /* ---------- 系统监控快照:与后端 services/sysmon/sampler.ts 对应 ---------- */

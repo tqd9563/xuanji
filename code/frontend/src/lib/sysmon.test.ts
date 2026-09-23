@@ -37,7 +37,7 @@ describe('系统监控 · 卡片数字判定', () => {
   });
   it('默认值:内存始终、CPU 偏高时;监控默认值与后端一致', () => {
     expect([DEFAULT_LOCAL.cardMem, DEFAULT_LOCAL.cardCpu]).toEqual(['always', 'high']);
-    expect(DEFAULT_ACCOUNT.monitor).toEqual({ mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85 });
+    expect(DEFAULT_ACCOUNT.monitor).toEqual({ mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 });
   });
 });
 

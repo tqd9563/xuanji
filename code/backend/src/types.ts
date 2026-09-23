@@ -91,6 +91,8 @@ export interface AgentSession {
   archived?: boolean;
   /** 用户在验收中显式「挂起」的卡:state 已被覆盖为 idle,前端据此给出复位入口 */
   suspended?: boolean;
+  /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
+  idleExited?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */

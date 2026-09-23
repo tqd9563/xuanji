@@ -7,7 +7,7 @@ import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
-import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
+import { canResume, endDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
 import { readPrefs, writePrefs } from '../services/prefs.js';
 import { appendJank, readJank, sanitizeJank } from '../services/client-jank.js';
@@ -105,7 +105,11 @@ export function createApi(storage: Storage, scheduler: SchedulerService, sysmon?
     const patch = await c.req.json().catch(() => ({}));
     const prefs = writePrefs(storage, patch);
     // 监控设置(间隔/开关/阈值)即时生效:丢掉在途定时,按新设置马上采一次
-    if (patch && typeof patch === 'object' && 'monitor' in patch) sysmon?.prefsChanged();
+    if (patch && typeof patch === 'object' && 'monitor' in patch) {
+      sysmon?.prefsChanged();
+      // 调短空闲退出阈值时立即生效,不等下一分钟的巡检
+      void sweepIdleDispatches(prefs.monitor.idleExit).catch(() => {});
+    }
     return c.json({ prefs });
   });
 
