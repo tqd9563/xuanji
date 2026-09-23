@@ -5,7 +5,7 @@
  * 回到前台重连,后端连上即补采一次。两项监控都关时不连。
  */
 import { useEffect, useState } from 'react';
-import type { MonLevel, SysmonSnapshot } from '@/api/types';
+import type { MonGroup, MonLevel, SysmonSnapshot } from '@/api/types';
 import type { CardMetric } from '@/lib/prefs';
 
 /* ---------- 格式化(与原型同口径:<1000M 显示 M,否则一位小数 G) ---------- */
@@ -152,3 +152,15 @@ export const LEVEL_PILL: Record<MonLevel, [string, string]> = {
   warn: ['pill-blk', '压力警告'],
   crit: ['pill-err', '压力严重'],
 };
+
+/* ---------- 排行排序:内存 tab 按总占用(top MEM),CPU tab 按 %CPU;组内进程同口径 ---------- */
+export type RankMetric = 'mem' | 'cpu';
+export const rankValue = (m: RankMetric, x: { mem: number; cpu: number }) => (m === 'mem' ? x.mem : x.cpu);
+export function sortGroups(groups: MonGroup[], m: RankMetric): MonGroup[] {
+  return [...groups]
+    .filter((g) => rankValue(m, g) > 0 || g.kind === 'dispatch' || g.kind === 'terminal')
+    .sort((a, b) => rankValue(m, b) - rankValue(m, a));
+}
+export function sortProcs<T extends { mem: number; cpu: number }>(procs: T[], m: RankMetric): T[] {
+  return [...procs].sort((a, b) => rankValue(m, b) - rankValue(m, a));
+}

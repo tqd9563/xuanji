@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { parsePs, parseSize, parseSysctl, parseTop, parseVmStat } from '../src/services/sysmon/parse.js';
 import { appOf, displayName, DISPATCH_GROUP, groupProcs, sessionUsage, TERMINAL_GROUP } from '../src/services/sysmon/group.js';
 import { cpuLevel, cpuTips, Debouncer, memLevel, memTips } from '../src/services/sysmon/rules.js';
-import { collect } from '../src/services/sysmon/sampler.js';
+import { collect, memUsedPct } from '../src/services/sysmon/sampler.js';
 import { DEFAULT_PREFS, sanitize, writePrefs, readPrefs } from '../src/services/prefs.js';
 import type { MonGroup } from '../src/services/sysmon/group.js';
 
@@ -180,6 +180,9 @@ describe('sysmon · 单次采样(假 runner 喂真实输出)', () => {
       cache: (240065 + 514 + 1681) * pg,
       free: 9103 * pg,
     });
+    // 占用率 = (active + wired + 压缩器) / hw.memsize:(242355+195001+450843)×16384 / 19327352832 = 75.3%
+    expect(s.mem!.usedPct).toBe(75);
+    expect(s.mem!.usedPct).toBe(memUsedPct({ active: 242355, wired: 195001, compressor: 450843, pageSize: pg }, 19327352832));
     expect(s.cpu).toMatchObject({ user: 15.95, sys: 9.53, used: 25, level: 'ok', ncpu: 11, pcores: 5, ecores: 6 });
     expect(s.groups.length).toBeGreaterThan(5);
     expect(s.totals.procs).toBeGreaterThan(400);
@@ -229,5 +232,13 @@ describe('sysmon · agents CLI 的 interactive 条目(无 id 字段)也能认出
       { pid: 99999, cwd: '/x', kind: 'interactive', startedAt: 1, sessionId: 'dead', name: 'gone', status: 'idle' },
     ];
     expect(agentProcessesFrom(raw, (pid) => pid === 74359)).toEqual([{ pid: 74359, sessionId: '31e7', name: 'xuanji-33' }]);
+  });
+});
+
+describe('sysmon · 内存占用率', () => {
+  it('不含可回收缓存与真空闲;memsize 缺失为 0', () => {
+    const GiBp = GiB / 16384;
+    expect(memUsedPct({ active: 6 * GiBp, wired: 3 * GiBp, compressor: 0, pageSize: 16384 }, 18 * GiB)).toBe(50);
+    expect(memUsedPct({ active: 1, wired: 1, compressor: 1, pageSize: 16384 }, 0)).toBe(0);
   });
 });

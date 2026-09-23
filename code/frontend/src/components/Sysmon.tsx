@@ -18,7 +18,10 @@ import {
   LEVEL_PILL,
   memChipLevel,
   openMonitor,
+  rankValue,
   sessionLabel,
+  sortGroups,
+  sortProcs,
   setMonitorTab,
   showMetric,
   toggleMonitor,
@@ -86,20 +89,19 @@ function MemIndicator({ snap, active }: { snap: SysmonSnapshot | null; active: b
       <button className="sb-item" data-ram={failed ? 'stale' : undefined} data-mon-ind="mem" aria-haspopup="dialog" aria-expanded={active}
         title={failed ? '内存采样失败 · 点击看详情' : '正在采样内存…'} onClick={() => toggleMonitor('mem')}>
         <span className="dot" />
-        Swap <span className="n">—</span>
+        内存 <span className="n">—</span>
         {failed && ' · 采样失败'}
       </button>
     );
   }
-  const p = m.swapTotal ? Math.round((m.swapUsed / m.swapTotal) * 100) : 0;
   return (
     <button className={lvCls(m.level)} data-mon-ind="mem" aria-haspopup="dialog" aria-expanded={active}
-      title={`${LEVEL_PILL[m.level][1]}(内核压力等级 ${m.pressure})· swap ${p}% · 点击看是谁在占`}
+      title={`内存${LEVEL_PILL[m.level][1]}(内核压力等级 ${m.pressure})· 占用 ${m.usedPct}% = (应用 + 压缩器)÷ 物理内存 ${Math.round(m.total / 1024 ** 3)}G · 点击看是谁在占`}
       onClick={() => toggleMonitor('mem')}>
       <span className="dot" />
-      Swap{' '}
+      内存{' '}
       <span className="n" data-lv={m.level}>
-        {fmtG(m.swapUsed)}/{fmtG(m.swapTotal)}G · {p}%
+        {m.usedPct}%
       </span>
     </button>
   );
@@ -281,12 +283,12 @@ function RankList({
   }, [hl, pop]);
 
   const vals = (x: { mem: number; cmprs: number; cpu: number }) =>
-    metric === 'mem' ? [fmtMem(x.cmprs), fmtMem(x.mem)] : [fmtCpu(x.cpu), `${((x.cpu / full) * 100).toFixed(1)}%`];
+    metric === 'mem' ? [fmtMem(x.mem), fmtMem(x.cmprs)] : [fmtCpu(x.cpu), `${((x.cpu / full) * 100).toFixed(1)}%`];
 
   // 一个应用可能有几十个进程(Chrome 50+):组内按当前指标排序,只展开前 PROC_LIMIT 个,会话进程恒在
-  const metricOf = (p: { cmprs: number; cpu: number }) => (metric === 'mem' ? p.cmprs : p.cpu);
+  const metricOf = (p: { mem: number; cpu: number }) => rankValue(metric, p);
   const shownProcs = (g: MonGroup) => {
-    const sorted = [...g.procs].sort((x, y) => metricOf(y) - metricOf(x));
+    const sorted = sortProcs(g.procs, metric);
     return sorted.filter((p, i) => i < PROC_LIMIT || !!p.sessionId);
   };
   const restOf = (g: MonGroup) => {
@@ -296,8 +298,8 @@ function RankList({
   };
 
   const listedCount = groups.reduce((s, g) => s + g.procs.length, 0);
-  const listedVal = groups.reduce((s, g) => s + (metric === 'mem' ? g.cmprs : g.cpu), 0);
-  const restVal = Math.max(0, (metric === 'mem' ? snap.totals.cmprs : snap.totals.cpu) - listedVal);
+  const listedVal = groups.reduce((s, g) => s + rankValue(metric, g), 0);
+  const restVal = Math.max(0, (metric === 'mem' ? snap.totals.mem : snap.totals.cpu) - listedVal);
 
   return (
     <div className="ram-list">
@@ -306,8 +308,8 @@ function RankList({
         <span>{metric === 'mem' ? '应用' : '应用(按进程树聚合)'}</span>
         {metric === 'mem' ? (
           <>
+            <span className="v" title="进程占用内存总量(top 的 MEM 列,含压缩部分);排行按此降序">总占用</span>
             <span className="v" title="被压缩 + 换出到 swap 的内存(top 的 CMPRS 列)">压缩+换出</span>
-            <span className="v" title="进程占用内存总量(top 的 MEM 列,含压缩部分)">总占用</span>
           </>
         ) : (
           <>
@@ -426,9 +428,8 @@ function MemTab({ snap, tabs, focus, pop }: TabProps) {
   const m = snap.mem!;
   const [cls, label] = LEVEL_PILL[m.level];
   const sum = m.app + m.compressor + m.cache + m.free;
-  const sp = m.swapTotal ? Math.round((m.swapUsed / m.swapTotal) * 100) : 0;
   const G = (b: number) => (b / 1024 ** 3 < 0.1 ? (b / 1024 ** 3).toFixed(2) : fmtG(b));
-  const groups = [...snap.groups].filter((g) => g.cmprs > 0 || g.kind === 'dispatch' || g.kind === 'terminal').sort((a, b) => b.cmprs - a.cmprs);
+  const groups = sortGroups(snap.groups, 'mem');
   return (
     <>
       <div className="ram-head">
@@ -443,8 +444,8 @@ function MemTab({ snap, tabs, focus, pop }: TabProps) {
         <div>
           <div className="ram-bar-lab">
             <span>物理内存 {Math.round(m.total / 1024 ** 3)}G</span>
-            <span>
-              真空闲 <span className="n">{G(m.free)}G</span>
+            <span title="(active + wired + 压缩器)÷ 物理内存,与状态栏同一个数">
+              占用 <span className="n">{m.usedPct}%</span>
             </span>
           </div>
           <Bar parts={[['used', m.app], ['cmp', m.compressor], ['cache', m.cache]]} total={sum} />
@@ -455,17 +456,12 @@ function MemTab({ snap, tabs, focus, pop }: TabProps) {
             <span title="free"><i className="i-rail" />真空闲 {G(m.free)}G</span>
           </div>
         </div>
-        <div>
-          <div className="ram-bar-lab">
-            <span>Swap(磁盘)</span>
-            <span className="ram-swapn" data-lv={m.level}>
-              <span className="n">
-                {fmtG(m.swapUsed)} / {fmtG(m.swapTotal)}G
-              </span>{' '}
-              · {sp}%
-            </span>
-          </div>
-          <Bar parts={[[`swap-${m.level}`, m.swapUsed]]} total={m.swapTotal} />
+        {/* swap 总量由系统按需扩缩(实测 17.4G → 16.0G),占比没有意义:只给已用绝对值,不画比例条 */}
+        <div className="ram-bar-lab" title="swap 总量由 macOS 按需扩缩,只看已用量">
+          <span>Swap(磁盘)</span>
+          <span className="ram-swapn" data-lv={m.level}>
+            已用 <span className="n">{fmtG(m.swapUsed)}G</span>
+          </span>
         </div>
       </div>
       <RankList snap={snap} groups={groups} metric="mem" focus={focus} pop={pop} />
@@ -477,7 +473,7 @@ function MemTab({ snap, tabs, focus, pop }: TabProps) {
 function CpuTab({ snap, tabs, focus, pop }: TabProps) {
   const c = snap.cpu!;
   const [cls, label] = LEVEL_PILL[c.level];
-  const groups = [...snap.groups].filter((g) => g.cpu > 0 || g.kind === 'dispatch' || g.kind === 'terminal').sort((a, b) => b.cpu - a.cpu);
+  const groups = sortGroups(snap.groups, 'cpu');
   return (
     <>
       <div className="ram-head">

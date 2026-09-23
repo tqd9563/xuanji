@@ -23,6 +23,8 @@ export interface MemSnap {
   /** 防抖后的展示等级 */
   level: Level;
   total: number;
+  /** 实际内存占用率(%)=(active + wired + 压缩器占用页)/ hw.memsize,整数 */
+  usedPct: number;
   /** 应用占用 = active + wired */
   app: number;
   compressor: number;
@@ -94,6 +96,12 @@ export interface CollectInput {
   cpuDeb: Debouncer;
 }
 
+/** 状态栏占用率:可回收缓存与真空闲不算「占用」;swap 总量按需扩缩,不参与 */
+export function memUsedPct(vm: { active: number; wired: number; compressor: number; pageSize: number }, memBytes: number): number {
+  if (!memBytes) return 0;
+  return Math.round((((vm.active + vm.wired + vm.compressor) * vm.pageSize) / memBytes) * 100);
+}
+
 /** 单次采样(与定时/订阅解耦,测试直接喂假 runner) */
 export async function collect({ prefs, run, sessions, memDeb, cpuDeb }: CollectInput): Promise<SysmonSnapshot> {
   const [sysctlOut, vmOut, topOut, psComm, psArgs, roots] = await Promise.all([
@@ -131,6 +139,7 @@ export async function collect({ prefs, run, sessions, memDeb, cpuDeb }: CollectI
       pressure: sc.pressureLevel,
       level,
       total: sc.memBytes,
+      usedPct: memUsedPct(vm, sc.memBytes),
       app: pg(vm.active + vm.wired),
       compressor: pg(vm.compressor),
       cache: pg(vm.inactive + vm.purgeable + vm.speculative),
@@ -171,9 +180,11 @@ export async function collect({ prefs, run, sessions, memDeb, cpuDeb }: CollectI
 
   // 列表只下发前列应用(内存按压缩+换出、CPU 按 %CPU 各取前 N)与全部会话组,其余计入「其余进程」
   const keep = new Set<MonGroup>(groups.filter((g) => g.kind === 'dispatch' || g.kind === 'terminal'));
-  if (mem) [...groups].sort((a, b) => b.cmprs - a.cmprs).slice(0, LIST_LIMIT).forEach((g) => keep.add(g));
+  // 内存 tab 按总占用排序;压缩+换出前列也保留(建议规则按它选对象,弹窗里要能找到)
+  if (mem) [...groups].sort((a, b) => b.mem - a.mem).slice(0, LIST_LIMIT).forEach((g) => keep.add(g));
+  if (mem) [...groups].sort((a, b) => b.cmprs - a.cmprs).slice(0, 3).forEach((g) => keep.add(g));
   if (cpu) [...groups].sort((a, b) => b.cpu - a.cpu).slice(0, LIST_LIMIT).forEach((g) => keep.add(g));
-  const listed = [...keep].map((g) => ({ ...g, procs: [...g.procs].sort((x, y) => y.cmprs - x.cmprs || y.cpu - x.cpu) }));
+  const listed = [...keep].map((g) => ({ ...g, procs: [...g.procs].sort((x, y) => y.mem - x.mem || y.cpu - x.cpu) }));
 
   return {
     ok: true,

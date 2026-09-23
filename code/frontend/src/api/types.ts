@@ -428,6 +428,8 @@ export interface SysmonSnapshot {
     pressure: number;
     level: MonLevel;
     total: number;
+    /** (active + wired + 压缩器)/ hw.memsize,整数百分比 */
+    usedPct: number;
     app: number;
     compressor: number;
     cache: number;

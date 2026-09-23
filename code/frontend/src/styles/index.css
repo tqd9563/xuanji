@@ -2649,9 +2649,6 @@ body.wall-glass .ram-pop { background: oklch(0.185 0.008 120); backdrop-filter: 
 .ram-seg[data-k="used"] { background: var(--chart-1); }
 .ram-seg[data-k="cmp"], .ram-seg[data-k="sys"] { background: var(--chart-2); }
 .ram-seg[data-k="cache"] { background: var(--chart-3); }
-.ram-seg[data-k="swap-ok"] { background: var(--jade); }
-.ram-seg[data-k="swap-warn"] { background: var(--amber); }
-.ram-seg[data-k="swap-crit"] { background: var(--red); }
 .cmp-legend .i-rail { background: var(--tint-muted); }
 .ram-swapn[data-lv="ok"], .ram-swapn[data-lv="ok"] .n { color: var(--jade); }
 .ram-swapn[data-lv="warn"], .ram-swapn[data-lv="warn"] .n { color: var(--amber); }

@@ -2554,7 +2554,7 @@ button.ram-chip:hover { background: var(--hover); }
     <div class="statusbar">
       <span class="ram-anchor">
         <button class="sb-item" id="ram-ind" aria-haspopup="dialog" aria-expanded="false" title="内存压力与 swap · 点击看是谁在占">
-          <span class="dot"></span><span id="ram-ind-text">Swap <span class="n">15.9/17.4G</span></span>
+          <span class="dot"></span><span id="ram-ind-text">内存 <span class="n">72%</span></span>
         </button>
         <span class="sb-sep" id="cpu-sep"></span>
         <button class="sb-item" id="cpu-ind" aria-haspopup="dialog" aria-expanded="false" title="CPU 占用 · 点击看是谁在占">
@@ -3260,7 +3260,8 @@ const GONE = new Set();   // 已关闭的会话 id:其进程从排行里消失
 function appsFor(scale) {
   const apps = BASE_APPS.map(a => ({ ...a, procs: a.procs.filter(p => !GONE.has(p.sid)).map(p => ({ ...p, cmp: Math.round(p.cmp * scale) })) })).filter(a => a.procs.length);
   apps.forEach(a => { a.mem = a.procs.reduce((s, p) => s + p.mem, 0); a.cmp = a.procs.reduce((s, p) => s + p.cmp, 0); });
-  return apps.sort((x, y) => y.cmp - x.cmp);
+  apps.forEach(a => a.procs.sort((x, y) => y.mem - x.mem));
+  return apps.sort((x, y) => y.mem - x.mem);   /* 排行按总占用(top MEM)降序;建议规则仍按压缩+换出选对象 */
 }
 
 /* 压力等级 = 内核 kern.memorystatus_vm_pressure_level,与活动监视器「内存压力」同源 */
@@ -3280,6 +3281,9 @@ const STATES = {
   stale: { stale: true },
 };
 const pct = s => Math.round(s.swap[0] / s.swap[1] * 100);
+/* 状态栏占用率 =(active + wired + 压缩器占用页)/ hw.memsize;实测态按 vm_stat 页数算:
+   (291426 + 215885 + 337510) × 16K / 18G = 72%;绿/红态按四段示意值算 */
+const usedPct = s => s.level === 2 ? 72 : Math.round((s.phys.app + s.phys.cmp) / 18 * 100);
 function swapBand(p) {
   if (p >= 85) return `swap <b>接近上限(${p}%)</b>,再开大进程会先变慢`;
   if (p >= 50) return `swap <b>偏高(${p}%)</b>`;
@@ -3303,7 +3307,8 @@ const RULES = [
   { id: 'fallback', test: () => true, say: a => `退出 ${a.name} 可释放约 ${G(a.cmp)}。` },
 ];
 function tips(apps) {
-  return apps.slice(0, 2).map(a => { const r = RULES.find(r => r.test(a)); return `<div class="ram-tip-line">${r.say(a)}<span class="ram-rule">规则 · ${r.id}</span></div>`; }).join('');
+  /* 建议仍按压缩+换出选对象(与排行的总占用口径分开) */
+  return [...apps].sort((x, y) => y.cmp - x.cmp).slice(0, 2).map(a => { const r = RULES.find(r => r.test(a)); return `<div class="ram-tip-line">${r.say(a)}<span class="ram-rule">规则 · ${r.id}</span></div>`; }).join('');
 }
 
 let cur = 'real';
@@ -3312,13 +3317,12 @@ function renderInd() {
   const s = STATES[cur];
   ind.classList.remove('warn', 'bad'); ind.removeAttribute('data-ram');
   const t = document.getElementById('ram-ind-text');
-  if (s.stale) { ind.dataset.ram = 'stale'; t.innerHTML = 'Swap <span class="n">—</span> · 采样失败'; return; }
+  if (s.stale) { ind.dataset.ram = 'stale'; t.innerHTML = '内存 <span class="n">—</span> · 采样失败'; return; }
   const L = LEVEL[s.level];
   if (L.lv === 'warn') ind.classList.add('warn');
   if (L.lv === 'crit') ind.classList.add('bad');
-  const p = pct(s);
-  t.innerHTML = `Swap <span class="n" data-lv="${L.lv}">${s.swap[0]}/${s.swap[1]}G · ${p}%</span>`;
-  ind.title = `${L.pill[1]}(内核压力等级 ${s.level})· swap ${p}% · 点击看是谁在占`;
+  t.innerHTML = `内存 <span class="n" data-lv="${L.lv}">${usedPct(s)}%</span>`;
+  ind.title = `内存${L.pill[1]}(内核压力等级 ${s.level})· 占用 ${usedPct(s)}% = (应用 + 压缩器)÷ 物理内存 18G · 点击看是谁在占`;
 }
 /* 条形照抄生产首页 token 消耗「开发 vs multica」对比条(Dashboard.tsx .cmp-track):
    填充段按占比铺,「空闲 / 未用」不画段,直接露出 .cmp-track 的 tint-muted 底轨 */
@@ -3345,21 +3349,21 @@ function renderMem() {
     <div class="ram-app${i === 0 ? ' open' : ''}">
       <button class="ram-row" aria-expanded="${i === 0}"><span class="chev">▶</span>
         <span class="nm"><span>${a.name}</span>${a.procs.length > 1 ? `<span class="pid">${a.procs.length} 进程</span>` : ''}${a.term ? '<span class="tag ram-own">终端</span>' : a.own ? '<span class="tag t-susp ram-own">璇玑</span>' : ''}</span>
-        <span class="v">${G(a.cmp)}</span><span class="v sub">${G(a.mem)}</span></button>
-      <div class="ram-procs">${a.procs.map(pr => `<div class="ram-row"${pr.sid ? ` data-sid="${pr.sid}"` : ''}><span></span><span class="nm"><span>${pr.cmd}</span><span class="pid">${pr.pid}</span></span><span class="v">${G(pr.cmp)}</span><span class="v sub">${G(pr.mem)}</span></div>${closeBtn(a, pr, '≈' + G(pr.mem))}`).join('')}
+        <span class="v">${G(a.mem)}</span><span class="v sub">${G(a.cmp)}</span></button>
+      <div class="ram-procs">${a.procs.map(pr => `<div class="ram-row"${pr.sid ? ` data-sid="${pr.sid}"` : ''}><span></span><span class="nm"><span>${pr.cmd}</span><span class="pid">${pr.pid}</span></span><span class="v">${G(pr.mem)}</span><span class="v sub">${G(pr.cmp)}</span></div>${closeBtn(a, pr, '≈' + G(pr.mem))}`).join('')}
       ${a.own ? `<div class="ram-row"><span></span><span class="nm" style="color:var(--faint)">归属:${a.own}</span><span></span><span></span></div>` : ''}</div>
     </div>`).join('');
   pop.innerHTML = `
     <div class="ram-head">${tabsHtml()}<span class="pill ${L.pill[0]}"><span class="dot"></span>${L.pill[1]}</span><span class="ram-ts" data-live-ts></span></div>
     <div class="ram-bars">
-      <div><div class="ram-bar-lab"><span>物理内存 18G</span><span>真空闲 <span class="n">${p.free}G</span></span></div>
+      <div><div class="ram-bar-lab"><span>物理内存 18G</span><span title="(active + wired + 压缩器)÷ 物理内存,与状态栏同一个数">占用 <span class="n">${usedPct(s)}%</span></span></div>
         <div class="cmp-track">${bar([['used', p.app], ['cmp', p.cmp], ['cache', p.cache], ['free', p.free]], p.app + p.cmp + p.cache + p.free)}</div>
         <div class="cmp-legend"><span title="active + wired"><i style="background:var(--chart-1)"></i>应用占用 ${p.app}G</span><span><i style="background:var(--chart-2)"></i>压缩器 ${p.cmp}G</span><span title="inactive + purgeable + speculative,系统需要时可直接收回"><i style="background:var(--chart-3)"></i>可回收缓存 ${p.cache}G</span><span title="free"><i class="i-rail"></i>真空闲 ${p.free}G</span></div></div>
-      <div><div class="ram-bar-lab"><span>Swap(磁盘)</span><span class="ram-swapn" data-lv="${L.lv}"><span class="n">${s.swap[0]} / ${s.swap[1]}G</span> · ${sp}%</span></div>
-        <div class="cmp-track">${bar([['swap-' + L.lv, s.swap[0]], ['free', s.swap[1] - s.swap[0]]], s.swap[1])}</div></div>
+      <!-- swap 总量由 macOS 按需扩缩(实测 17.4G → 16.0G),占比没有意义:只给已用绝对值,不画比例条 -->
+      <div class="ram-bar-lab" title="swap 总量由 macOS 按需扩缩,只看已用量"><span>Swap(磁盘)</span><span class="ram-swapn" data-lv="${L.lv}">已用 <span class="n">${s.swap[0]}G</span></span></div>
     </div>
     <div class="ram-list">
-      <div class="ram-row ram-colhead"><span></span><span>应用</span><span class="v" title="被压缩 + 换出到 swap 的内存(top 的 CMPRS 列)">压缩+换出</span><span class="v" title="进程占用内存总量(top 的 MEM 列,含压缩部分)">总占用</span></div>
+      <div class="ram-row ram-colhead"><span></span><span>应用</span><span class="v" title="进程占用内存总量(top 的 MEM 列,含压缩部分);排行按此降序">总占用</span><span class="v" title="被压缩 + 换出到 swap 的内存(top 的 CMPRS 列)">压缩+换出</span></div>
       ${rows}
       <div class="ram-rest"><span>其余 318 个进程</span><span class="v">${G(s.rest)}</span></div>
     </div>
