@@ -574,19 +574,12 @@ export function Dispatch({ active }: { active: boolean }) {
   /**
    * 列表头部暂不渲染的条数。接回一个跑了很久的会话,后端内存回放能一口气给几百条
    * (实测 455 条),全渲染就是几秒的排版;只挂尾部 CHAT_TAIL 条,顶部按钮按需展开。
+   * 在渲染期直接派生(不用 effect):回放合批与 attachGen 在同一次渲染里到达,首帧就只有尾部。
    * 下标口径不变(map 时跳过 i < headHidden),轮次序号/日期分隔/key 都不用改。
+   * 历史前插(seedOffset)也算进头部:live 尾部的起点随之后移。
    */
-  const [headHidden, setHeadHidden] = useState(0);
-  const itemCountRef = useRef(0);
-  itemCountRef.current = d.items.length;
-  useEffect(() => {
-    if (d.items.length === 0) setHeadHidden(0);
-  }, [d.items.length]);
-  useEffect(() => {
-    if (!d.attachedHistory) return;
-    // attached 到达 = 回放已合批渲染完毕:此刻 items 就是回放全量,裁到尾部
-    setHeadHidden(Math.max(0, itemCountRef.current - CHAT_TAIL));
-  }, [d.attachedHistory]);
+  const [expandedGen, setExpandedGen] = useState(-1);
+  const headHidden = expandedGen === d.attachGen ? 0 : Math.max(0, d.seedOffset + d.attachLen - CHAT_TAIL);
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
   // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
@@ -1449,7 +1442,7 @@ export function Dispatch({ active }: { active: boolean }) {
               className="chat-more-btn"
               onClick={() => {
                 pinnedRef.current = false; // 展开更早内容是主动上翻,别被自动置底拽回去
-                setHeadHidden(0);
+                setExpandedGen(d.attachGen);
               }}
             >
               显示更早的 {headHidden} 条

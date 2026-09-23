@@ -223,6 +223,14 @@ export function useDispatch() {
       case 'attached':
         restoringRef.current = false;
         attachingRef.current = false;
+        // 记下回放结束时的条数,派发页据此在**同一次渲染**里只挂尾部(effect 里裁会先全量
+        // 渲染一遍再裁,实测 248 行先上屏再缩到 60,白付一次排版)。更新函数里写 ref 是
+        // 幂等赋值,StrictMode 双调无害;它在本次合批的渲染阶段执行,派发页随后读到的就是它。
+        setItems((prev) => {
+          attachLenRef.current = prev.length;
+          return prev;
+        });
+        setAttachGen((g) => g + 1);
         sessionStorage.setItem(DISPATCH_KEY, String(e.dispatchId));
         if (typeof e.historySessionId === 'string' && typeof e.historyBefore === 'number') {
           setAttachedHistory({ sessionId: e.historySessionId, before: e.historyBefore });
@@ -470,6 +478,9 @@ export function useDispatch() {
    */
   const attachingRef = useRef(false);
   const replayBufRef = useRef<Record<string, unknown>[]>([]);
+  /** 回放合批结束时 items 的条数 + 代次:派发页据此只先渲染尾部(见 attached 分支) */
+  const attachLenRef = useRef(0);
+  const [attachGen, setAttachGen] = useState(0);
 
   const ensureWs = useCallback((): Promise<WebSocket> => {
     const cur = wsRef.current;
@@ -524,6 +535,7 @@ export function useDispatch() {
       clearPendingDelta();
       attachingRef.current = true;
       replayBufRef.current = [];
+      attachLenRef.current = 0;
       seedOffsetRef.current = 0;
       // 服务端回放全部事件,先清空避免重复
       setItems([]);
@@ -607,6 +619,7 @@ export function useDispatch() {
     setSeedOffset(0);
     attachingRef.current = false;
     replayBufRef.current = [];
+    attachLenRef.current = 0;
     wsRef.current?.close();
     wsRef.current = null;
     startedRef.current = false;
@@ -702,5 +715,5 @@ export function useDispatch() {
   }, []);
 
   const started = startedRef.current;
-  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, seedOffset, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
+  return { items, status, chips, sessionId, model, costUsd, turn, started, attachedHistory, seedOffset, attachLen: attachLenRef.current, attachGen, commands, commandUses, btw, noteSessionId, send, attach, decide, answer, interrupt, changeModel, reset, pushNote, seedHistory, askBtw, cancelBtw, markBtwMemory, clearBtwError };
 }
