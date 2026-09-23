@@ -296,6 +296,8 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
       case 'attachment':
       case 'last-prompt':
       case 'queue-operation':
+      case 'cost-state': // CLI 成本记账快照
+      case 'atis-latch': // CLI 内部状态,无对话内容
         break;
       default:
         // 未知事件类型 → 降级原样透传(adapter 兜底,T1 风险缓解)
