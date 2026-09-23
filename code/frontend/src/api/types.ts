@@ -371,6 +371,92 @@ export interface AccountPrefs {
   bg: boolean;
   wrapupPrompt: string;
   notify: NotifyPrefs;
+  monitor: MonitorPrefs;
+}
+
+/** 系统监控设置(账户):与后端 services/prefs.ts 的 MonitorPrefs 对应 */
+export interface MonitorPrefs {
+  mem: boolean;
+  cpu: boolean;
+  interval: 5 | 10 | 30 | 60;
+  debounce: 1 | 2 | 3;
+  pauseIdle: boolean;
+  cpuWarn: number;
+  cpuCrit: number;
+}
+
+/* ---------- 系统监控快照:与后端 services/sysmon/sampler.ts 对应 ---------- */
+export type MonLevel = 'ok' | 'warn' | 'crit';
+export type TipPart = string | { code: string } | { b: string };
+export interface MonTip {
+  rule: string;
+  parts: TipPart[];
+  jump?: 'mem';
+}
+export interface MonProc {
+  pid: number;
+  ppid: number;
+  cmd: string;
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  sessionId?: string;
+}
+export interface MonGroup {
+  key: string;
+  name: string;
+  kind: 'app' | 'system' | 'dispatch' | 'terminal';
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  procs: MonProc[];
+}
+export interface MonSessionUsage {
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  procs: { pid: number; cmd: string; mem: number; cpu: number }[];
+}
+export interface SysmonSnapshot {
+  ok: boolean;
+  at: number;
+  interval: number;
+  debounce: number;
+  error?: string;
+  lastOkAt?: number;
+  mem: {
+    pressure: number;
+    level: MonLevel;
+    total: number;
+    /** (active + wired + 压缩器)/ hw.memsize,整数百分比 */
+    usedPct: number;
+    app: number;
+    compressor: number;
+    cache: number;
+    free: number;
+    swapUsed: number;
+    swapTotal: number;
+    swapins: number;
+    swapouts: number;
+    pageSize: number;
+    tips: MonTip[];
+  } | null;
+  cpu: {
+    user: number;
+    sys: number;
+    idle: number;
+    used: number;
+    level: MonLevel;
+    load: [number, number, number];
+    ncpu: number;
+    pcores: number | null;
+    ecores: number | null;
+    tips: MonTip[];
+  } | null;
+  groups: MonGroup[];
+  totals: { procs: number; mem: number; cmprs: number; cpu: number };
+  sessions: Record<string, MonSessionUsage>;
+  sessionNames: Record<string, string>;
 }
 
 /** 旁路提问(/btw)记录:后端 side_questions 表的镜像,答案永不进主对话 */

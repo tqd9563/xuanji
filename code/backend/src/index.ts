@@ -14,9 +14,13 @@ import { readPrefs } from './services/prefs.js';
 import { refreshSkillUsage } from './services/skill-usage.js';
 import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
 import { warmModelCatalog } from './services/models.js';
+import { SysmonSampler } from './services/sysmon/sampler.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
+// 系统监控:有页面订阅才采;「无人查看时暂停」关掉时常驻
+const sysmon = new SysmonSampler(storage);
+sysmon.start();
 // 通知按「设置 › 通知」过滤:范围与事件取与,两者都开才发
 setNotifyGate((scope, kind) => {
   const { notify } = readPrefs(storage);
@@ -34,7 +38,7 @@ void warmModelCatalog(storage)
 
 const app = new Hono();
 
-app.route('/api', createApi(storage, scheduler));
+app.route('/api', createApi(storage, scheduler, sysmon));
 
 // 看板娘模型文件。必须注册在下面的 SPA 兜底(app.get('*'))之前,否则会被兜底吃掉,
 // 前端拿到 200 + text/html 冒充 moc3,报错含糊难查(同 /assets/* 那条的教训)。
@@ -72,4 +76,4 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   console.log(`[xuanji] listening on http://${config.host}:${info.port}  (claudeDir: ${config.claudeDir})`);
 });
 
-attachWs(server as Server, storage);
+attachWs(server as Server, storage, sysmon);

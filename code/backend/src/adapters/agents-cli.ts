@@ -107,6 +107,7 @@ async function listAgentsUncached(): Promise<AgentsResult> {
     });
     const arr = JSON.parse(stdout);
     if (!Array.isArray(arr)) return { ok: false, sessions: [], error: 'unexpected output shape' };
+    lastRaw = arr;
     const sessions = arr
       .filter((a: any) => a && typeof a.id === 'string' && typeof a.sessionId === 'string')
       .map((a: RawAgent) => toAgentSession(a));
@@ -114,6 +115,37 @@ async function listAgentsUncached(): Promise<AgentsResult> {
   } catch (e) {
     return { ok: false, sessions: [], error: e instanceof Error ? e.message : String(e) };
   }
+}
+
+/** 最近一次 agents 原始输出(系统监控要用 interactive 条目的 pid,而这些条目没有 id 字段、不进看板卡片) */
+let lastRaw: unknown[] = [];
+
+export interface AgentProcess {
+  pid: number;
+  sessionId: string;
+  name: string;
+}
+
+/**
+ * 存活的 claude 会话进程(系统监控按 pid 认进程树)。
+ *
+ * 与 listAgents 分开:终端 interactive 条目在 CLI 输出里没有 `id`,listAgents 按卡片口径把它们滤掉了
+ * (看板的终端会话另有来源);这里只要 pid ↔ sessionId,不改看板口径。共用同一份 TTL 缓存,不多拉 CLI。
+ */
+export async function agentProcesses(): Promise<AgentProcess[]> {
+  await listAgents();
+  return agentProcessesFrom(lastRaw, isPidAlive);
+}
+
+/** 纯函数部分(可测):带存活 pid 的条目 → 会话进程 */
+export function agentProcessesFrom(raw: unknown[], alive: (pid: number) => boolean): AgentProcess[] {
+  const out: AgentProcess[] = [];
+  for (const a of raw as Partial<RawAgent>[]) {
+    if (!a || typeof a.pid !== 'number' || typeof a.sessionId !== 'string') continue;
+    if (!alive(a.pid)) continue;
+    out.push({ pid: a.pid, sessionId: a.sessionId, name: a.name?.trim() || a.sessionId.slice(0, 8) });
+  }
+  return out;
 }
 
 export async function cliVersion(): Promise<string | null> {

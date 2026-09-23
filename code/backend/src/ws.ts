@@ -18,15 +18,19 @@ import { bgDispatch } from './adapters/agents-cli.js';
 import type { Storage } from './storage/db.js';
 import { parseInlineImages } from './types.js';
 import { replayRunbookLogs, resolveRunbook, runItem, stopItem, subscribeRunbook } from './services/runbook.js';
+import type { SysmonSampler } from './services/sysmon/sampler.js';
 
-export function attachWs(server: Server, storage: Storage) {
+export function attachWs(server: Server, storage: Storage, sysmon?: SysmonSampler) {
   const changesWss = new WebSocketServer({ noServer: true });
   const dispatchWss = new WebSocketServer({ noServer: true });
+  const sysmonWss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? '/', 'http://localhost');
     if (pathname === '/ws') {
       changesWss.handleUpgrade(req, socket, head, (ws) => changesWss.emit('connection', ws, req));
+    } else if (pathname === '/ws/sysmon' && sysmon) {
+      sysmonWss.handleUpgrade(req, socket, head, (ws) => sysmonWss.emit('connection', ws, req));
     } else if (pathname === '/ws/dispatch') {
       dispatchWss.handleUpgrade(req, socket, head, (ws) => dispatchWss.emit('connection', ws, req));
     } else {
@@ -68,6 +72,16 @@ export function attachWs(server: Server, storage: Storage) {
   watch(path.join(config.claudeDir, 'skills'), 'skills', 1);
   watch(path.join(config.claudeDir, 'skills-disabled'), 'skills', 1);
   watch(path.join(config.claudeDir, 'jobs'), 'jobs', 1);
+
+  // ---------- 系统监控 ----------
+  // 每条连接 = 一个「有人在看」的页面(前端在标签页隐藏时主动断开),采样器据此暂停/恢复
+  sysmonWss.on('connection', (ws) => {
+    const off = sysmon!.subscribe((snap) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'sysmon', snap }));
+    });
+    ws.on('close', off);
+    ws.on('error', off);
+  });
 
   // ---------- 派发通道 ----------
 

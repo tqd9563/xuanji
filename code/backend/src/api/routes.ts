@@ -27,6 +27,7 @@ import { liveEnvironments, resolveRunbook, resolveSessionCleanup, runRequest } f
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
 import type { RunbookItem, RunbookTemplate, SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
+import type { SysmonSampler } from '../services/sysmon/sampler.js';
 
 const DAY = 86_400_000;
 const execFileP = promisify(execFile);
@@ -37,7 +38,7 @@ function num(v: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-export function createApi(storage: Storage, scheduler: SchedulerService) {
+export function createApi(storage: Storage, scheduler: SchedulerService, sysmon?: SysmonSampler) {
   const api = new Hono();
 
   api.get('/health', async (c) => {
@@ -102,7 +103,16 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
 
   api.put('/prefs', async (c) => {
     const patch = await c.req.json().catch(() => ({}));
-    return c.json({ prefs: writePrefs(storage, patch) });
+    const prefs = writePrefs(storage, patch);
+    // 监控设置(间隔/开关/阈值)即时生效:丢掉在途定时,按新设置马上采一次
+    if (patch && typeof patch === 'object' && 'monitor' in patch) sysmon?.prefsChanged();
+    return c.json({ prefs });
+  });
+
+  /** 系统监控最新快照(实时推送走 /ws/sysmon;这里给调试与首屏兜底,无缓存时现采一次) */
+  api.get('/sysmon', async (c) => {
+    if (!sysmon) return c.json({ error: 'sysmon disabled' }, 503);
+    return c.json(sysmon.latest() ?? (await sysmon.sampleOnce()));
   });
 
   api.get('/palette', async (c) => {
