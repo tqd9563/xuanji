@@ -365,6 +365,24 @@ components:
     textColor: "{colors.faint}"
     typography: "{typography.data}"
     padding: "1px 4px"
+  terminal-sheet:
+    backgroundColor: "color-mix(in srgb, theme.background var(--t-op), transparent)"
+    textColor: "theme.foreground"
+    rounded: "{rounded.md}"
+    padding: "0"
+    height: "340px"
+  terminal-tab:
+    backgroundColor: "transparent"
+    textColor: "color-mix(in srgb, theme.foreground 62%, transparent)"
+    typography: "{typography.data}"
+    padding: "7px 10px 6px"
+  terminal-tab-active:
+    textColor: "theme.foreground"
+  terminal-indicator:
+    backgroundColor: "transparent"
+    textColor: "{colors.muted}"
+    rounded: "{rounded.sm}"
+    padding: "3px 9px"
 ---
 
 # Design System: 璇玑 xuanji
@@ -464,6 +482,7 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 - **抽屉影** (`box-shadow: -12px 0 32px oklch(0.05 0 0 / 0.45)`):右侧回放抽屉。
 - **悬浮影** (`box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5)`):下拉菜单与 toast。
 - **上滑影** (`box-shadow: 0 -8px 32px oklch(0.05 0 0 / 0.5)`):移动端 bottom sheet——抽屉影的竖屏镜像,同属悬浮层特权。
+- **浮卡影** (`box-shadow: 0 18px 48px oklch(0 0 0 / .45), 0 2px 8px oklch(0 0 0 / .3)`):全局终端浮层——四周留白悬浮的大卡片,一层远影给体积、一层近影给落点。
 
 ### 壁纸玻璃档(可选深度材质)
 玻璃档为面板与悬浮层(sidebar / panel / drawer / composer / chat / toast / scard / dd-menu / notice / wall-pop)叠加 `backdrop-filter: blur(var(--wall-frost)) saturate(1.1)`,让壁纸透过面板并被柔化。这是全站唯一被批准的 backdrop 模糊用途,默认 `--wall-frost: 0`(纯透明、无磨砂),仅用户主动调高(0–24px)才出现。壁纸图层本身(`#wall`)固定于 `z-index: -1`,以 `--wall-opacity`(默认 0.4)透出、`--wall-blur`(默认 0px)柔化,永不参与文档流。
@@ -472,6 +491,8 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 **悬浮才有影规则。** 任何贴在文档流里的元素(卡片、面板、按钮)禁止 box-shadow;看到影子就意味着"这层悬浮着,点外面会收回去"。
 
 **磨砂即选项规则。** backdrop 模糊只属于用户显式开启的壁纸玻璃档,默认值恒为 0;任何非壁纸场景把 backdrop-filter 当装饰使用都被禁止。
+
+**终端镜像例外规则。** 全局终端浮层的底色透明度与 backdrop 模糊**不是璇玑的装饰选择,而是用户外部终端配置的镜像**:值读自本机 Ghostty 的 `background-opacity` / `background-blur-radius`(当前 0.9 / 30)。读不到 Ghostty 配置时默认 100% 不透明、模糊 0,与「磨砂即选项」一致;用户在 设置 › 终端 里改的值同样属于显式选择。例外只对终端表面成立,不得借它给任何别的面板加模糊。
 
 ## 5. Components
 
@@ -645,6 +666,20 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 - **会话卡片数字(`.ram-chip`):** 卡片 `.top` 行尾一枚 mono 11px 数字(faint),≥1G 转 amber、≥3G 转 red 加粗;CPU 数字默认只在偏高时出现(占整机 ≥ 黄阈值或单会话 ≥ 50%),以免挤压标题。点数字 = 打开弹窗对应 tab,展开该会话所在应用并高亮(`tint-jade` 底 + 1.2s 玉色描边淡出)滚动到其进程行;**卡片内不再有展开明细面板**——明细只有一处,就是弹窗。卡片高度与无数字时逐像素一致。
 - **设置 › 系统监控:** 启用内存 / 启用 CPU、采样间隔(5/10/30/60s)、变色防抖(1/2/3 次,说明里实时换算「≈ N×间隔 秒」)、无人查看时暂停采样、CPU 黄/红阈值(滑杆,黄 ≥ 红时说明转 amber 并拒绝保存)——均为「账户」;卡片显示内存 / CPU(始终 / 偏高时 / 不显示)为「本机」。「派发会话」小组的**空闲自动退出**(关闭 / 10 / 30 / 60 / 120 分钟,默认 30,「账户」):验收中 / 空闲、无进行中回合与旁路提问的派发会话超时即结束子进程,**卡片与记录保留、仍在原列**,下条消息以 `--resume` 冷启动接上;其进程随之从弹窗排行消失,卡片数字变成一枚 faint「—」,原因只写在悬停提示里,不加常驻标记。关闭某项监控时状态栏对应指示、卡片数字、弹窗对应 tab 一并消失。
 
+### 全局终端(Signature Component · `.tty-c` 浮层 + 状态栏 `#tty-sb`)
+- **定位:** 在璇玑里随手跑命令,不必切去外部终端。它是**任意视图 ⌘` 呼出/再按收起**的单实例浮层,不是一个视图、不占侧栏导航位;切视图默认保持原位(可设为自动收起,进程不停)。Esc **不**收起——留给 vim 等全屏程序。后端是真 zsh(node-pty),前端 xterm.js;璇玑只提供外壳,shell 行为(别名、插件、p10k 提示符)完全来自用户的 zshrc。
+- **外形:** 悬浮卡片而非贴边抽屉——左贴侧栏右侧 12px、右/下各 12px 留白,`{rounded.md}` 圆角,1px 描边(theme.foreground 14%),浮卡影。默认高 340px,顶部 7px 拖拽条(中央 36×2px 短横)跟手调高,最大化到 `100vh - 56px`。窄屏(≤1100px)左侧也收成 12px。
+- **一整块终端表面:** 标签栏 + 正文共用终端主题的颜色,**不用璇玑玉色 token**——它要看起来和用户本机 Ghostty 是同一个东西。标签:等宽 12px,活动标签 theme.foreground + 2px 下划线(palette 4 蓝),运行中的标签圆点转 palette 2 绿并脉冲。标签栏右侧依次是新终端目录下拉(沿用璇玑 `.dd-menu` 实心外壳,向上弹出)、⚙ 终端设置、⤢ 最大化、✕ 收起。
+- **外观来源:** 默认「跟随 Ghostty」:主题(Catppuccin Frappe)、字体、字号、背景色/不透明度/模糊、光标样式与闪烁全部读本机 Ghostty 配置并解析其主题文件;字体按 **Ghostty 实际渲染的**来,不按配置写的名字(配置写 Maple Mono NF CN 但本机未装,Ghostty 回退到内置 JetBrains Mono,璇玑随之用 JetBrains Mono,并在设置里写明原因)。任一项在设置里被改动即整体转「自定义」,一键可回到跟随。读不到 Ghostty 时回退「璇玑 · 玉」主题 + 100% 不透明 + 模糊 0。
+- **背景:** 背景色(默认取主题 background)→ 可选背景图(cover,独立不透明度,默认 35%,与璇玑壁纸互不影响)→ 文字。整块按不透明度透出后方页面与壁纸。
+- **动效:** 只动 transform:呼出 160ms `{ease}`(自 `translateY(100% + 12px)` 滑入),收起 150ms ease-in 后 `visibility: hidden`;用 transition 而非 keyframes,连按 ⌘` 从当前位置平滑折返。拖高时关闭过渡。xterm 的 fit 在 transitionend 后调用,动画期间不重排。`prefers-reduced-motion` 降级为 80ms 淡入淡出。
+- **新终端目录:** 「跟随会话」(默认):在派发页呼出/新建时取当前会话的 worktree,其它页面用上次目录;可改为上次目录 / 家目录。目录下拉在派发页首行多一项玉色「当前会话 worktree」。
+- **输入法:** 组字期间拼音只画成光标处的下划线预编辑,上屏后才进入命令行;接键的隐藏 textarea 跟随光标,候选框贴光标弹出。
+- **状态栏指示器(`#tty-sb`):** 标准 `.sb-item`,位于系统监控之后、待验收之前。文案「终端 未开 / N 个 / N 在跑」,圆点:未开 faint、已开玉色、有前台命令在跑玉色脉冲。点击等同 ⌘`。
+- **设置 › 终端:** 顶部一条来源说明(绿点 + 「已读取 Ghostty x.y 配置 <路径>」+ 重新读取)。分组「外观」(外观来源 · 配色主题卡片 5 列)、「背景」(背景颜色取色器 + 跟随配色 / 背景不透明度 30–100 / 背景模糊 0–40 / 背景图片 / 图片不透明度)、「文字与光标」(字体只读展示 / 字号 11–20 / 光标竖线·方块·下划线 + 闪烁)——均「本机」;「行为」(呼出快捷键 / 新终端默认目录 / 切换视图时)为「账户」。
+- **快捷键冲突检测:** 「呼出 / 收起」一行实时检测并以 amber 文字标出占用 ⌘` 的上游:Ghostty `global:` 热键、macOS「移动焦点到下一个窗口」(symbolichotkeys 27,默认就是 ⌘`)。Chrome 会自行截走 ⌘` / ⌃`,页面无从检测,只在说明里写明「在 Chrome 中请点状态栏或改键」;Pake 壳(WebKit)不受影响。快捷键表同步出现「呼出 / 收起终端」一行。
+- **安全边界:** 终端 WebSocket 只接受本机直连;经 Tailscale serve 等反向代理进来的请求一律拒绝(手机端暂不提供终端)。
+
 ### 旁路提问(Signature Component · `.btw` 右侧停靠面板)
 「顺便问一句」的专属窗口:拿着主对话全部上下文作答,但答案**不进主对话**、不占它的 context、不打断它正在跑的回合。面板停靠在派发页右栏(400px,窄屏 340px),与消息区 / 状态条 / 输入框 / 终端行四行等高贯穿——它是主对话的**旁注**而非另一个对话,所以不做成第二个聊天流,也不做成弹窗盖住主对话。
 
@@ -666,6 +701,7 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 - **Do** 移动端守四四触控规则:命中区 ≥44×44px、输入控件字号 ≥16px、`viewport-fit=cover` + `env(safe-area-inset-*)` 适配刘海与 Home 条;临时上下文一律 bottom sheet,持续任务空间一律页面。
 - **Do** 渲染外部生成的 markdown 内容(总结卡正文、周报草稿、SKILL.md)一律走全站统一的 `Md` 组件——这些文本里的 `**粗体**` 与反引号是作者的真实表达,当纯文本贴出来就是满屏字面量星号。同理,抽屉 `.kv dd` 里的长 URL / 路径必须 `overflow-wrap: anywhere`,否则顶破右边界。
 - **Do** 语义为「空」的占位文案(总结卡里写「无」的残留段)在渲染前过滤掉——一个写着「无」的琥珀警示块比不显示更糟,它把「不需要你」误报成「需要你」。
+- **Do** 全局快捷键上线前按三层核对冲突:macOS 系统快捷键(symbolichotkeys)、常驻 App 的全局热键(Ghostty / Raycast 等)、宿主浏览器保留键;并在用户真实使用的壳(Pake = WebKit)里用真实按键验证,合成事件不算数。
 
 ### Don't:
 - **Don't** 使用「SaaS 营销风」词汇:渐变文字、玻璃拟态、hero-metric 大数字卡、装饰性动效——这是工作台,不是落地页(PRODUCT.md 反例原文)。
@@ -680,3 +716,4 @@ PR/MR 卡片用代码托管平台自家的品牌色标识来源,是全站唯一�
 - **Don't** 用降透明度的办法制造次要层级——`color-mix(… 75%, transparent)` 之类写法把 12px 耗时文字压到 3.22:1(实测),掉出 AA。次要感一律由字体族、字重、字号承担,颜色只在 token 阶梯(ink → muted → faint)里选,选到 faint 就是底线。
 - **Don't** 给思考块上色、加边框、加底色或让它发光——思考不是数据,不参与争色;凡看到思考块比同屏工具卡更抢眼,即是缺陷。
 - **Don't** 在移动端用 hover 承载任何功能或信息,也不要把桌面多列网格/横滚看板直接缩放到窄屏——移动端形态是重新组织(状态 tab、单列流、sheet),不是等比缩小;凡一屏只能看到「一列半」的布局即是缺陷。
+- **Don't** 让终端表面沿用璇玑的玉色 token 或 surface 阶梯——终端的颜色属于用户的终端主题;反过来也不得把终端主题色(如 Catppuccin)带进终端之外的任何界面。
