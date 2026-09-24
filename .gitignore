@@ -40,3 +40,9 @@ Thumbs.db
 
 # Pake 打包产物
 *.dmg
+
+# 看板娘模型:用户自己下载/购买的资产,不可重建,放 ~/.xuanji/live2d 不进版本库。
+# 原型页 wiki/design/prototype-live2d.html 需要它们才能打开,准备办法见该文件开头注释。
+# (frontend/public/live2d/ 下的 Cubism Core 是例外:产品运行必需,且官方
+#  RedistributableFiles.txt 明确允许随产品再分发。)
+wiki/design/live2d-assets/

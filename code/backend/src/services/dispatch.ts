@@ -14,11 +14,12 @@ import {
   type Query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import { listAgents } from '../adapters/agents-cli.js';
+import { cliVersion, listAgents } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
 import { buildSlashCatalog, rememberSlashCatalog, withUsage, type SlashCmdInfo } from './slash-commands.js';
+import { normalizeModelCatalog, rememberModelCatalog } from './models.js';
 
 // ---------- 输入队列(streaming input) ----------
 
@@ -168,6 +169,17 @@ export class DispatchSession {
   /** 续接来源会话:sessionId 尚未 init 时,attach 垫历史用它定位 jsonl */
   readonly resumeFrom: string | null;
   private fork: boolean;
+  /** 重起子进程要沿用的会话级参数(model 随 changeModel 更新) */
+  private queryOpts: Pick<DispatchOpts, 'model' | 'effort' | 'permissionMode'>;
+  /**
+   * 空闲自动退出:子进程已结束,但会话对象、卡片、回放缓冲都保留。
+   * 下一条 send 以 --resume 冷启动接上;期间看板照旧按「空闲/验收中」展示,不进「已完成」。
+   */
+  hibernated = false;
+  /** 子进程代次:冷启动接回后,旧进程迟到的收尾事件不得覆盖新进程的状态 */
+  private gen = 0;
+  /** 最后一次输入或输出(任何事件)的时刻:空闲计时的起点 */
+  lastEventAt = Date.now();
   readonly startedAt = Date.now();
   /** 最近一次 status 事件,供会话看板注入实时状态 */
   state: 'working' | 'awaiting-permission' | 'idle' | 'ended' = 'working';
@@ -211,6 +223,16 @@ export class DispatchSession {
     this.name = opts.name ?? '新会话';
     this.resumeFrom = opts.resume ?? null;
     this.fork = opts.fork ?? false;
+    this.queryOpts = { model: opts.model, effort: opts.effort, permissionMode: opts.permissionMode };
+    this.startQuery(opts.resume, this.fork);
+  }
+
+  /**
+   * 起(或重起)SDK 子进程。构造时起一次;空闲自动退出后下一条消息再以 `--resume <sessionId>`
+   * 冷启动一次——同一个 DispatchSession 对象、同一个 dispatchId,已连接的页面与回放缓冲都不受影响。
+   */
+  private startQuery(resume: string | undefined, fork: boolean) {
+    const opts = { cwd: this.cwd, resume, fork, ...this.queryOpts };
     this.q = query({
       prompt: this.input,
       options: {
@@ -262,7 +284,7 @@ export class DispatchSession {
         canUseTool: (toolName, input, { suggestions, title }) => this.onPermission(toolName, input, suggestions, title),
       },
     });
-    void this.consume();
+    void this.consume(this.q, ++this.gen);
   }
 
   // ---------- 事件流 ----------
@@ -272,6 +294,7 @@ export class DispatchSession {
   }
 
   private emit(e: DispatchEvent) {
+    this.lastEventAt = Date.now();
     if (e.ev === 'status') {
       this.state = e.state;
       this.stateDetail = e.detail;
@@ -320,9 +343,11 @@ export class DispatchSession {
     return () => this.listeners.delete(l);
   }
 
-  private async consume() {
+  private async consume(q: Query, gen: number) {
+    const stale = () => gen !== this.gen;
     try {
-      for await (const msg of this.q!) {
+      for await (const msg of q) {
+        if (stale()) return;
         switch (msg.type) {
           case 'system':
             if (msg.subtype === 'init') {
@@ -335,6 +360,7 @@ export class DispatchSession {
               this.emit({ ev: 'status', state: 'working' });
               this.refreshChips();
               this.refreshCommands((msg as { terminal_slash_commands?: string[] }).terminal_slash_commands ?? []);
+              this.refreshModels();
             } else if (msg.subtype === 'commands_changed') {
               // 会话中途技能变化(如 agent 走进带 .claude/skills 的子目录)。整份替换,不做合并。
               const base = buildSlashCatalog(
@@ -481,8 +507,15 @@ export class DispatchSession {
             break; // 其余 SDK 消息类型 M2 不消费
         }
       }
-      this.emit({ ev: 'status', state: 'ended' });
+      if (stale()) return;
+      // 空闲自动退出:进程是我们主动收的,会话仍可续接——落「空闲」而不是「已结束」,卡片留在原列
+      this.emit({ ev: 'status', state: this.hibernated ? 'idle' : 'ended' });
     } catch (e) {
+      if (stale()) return;
+      if (this.hibernated) {
+        this.emit({ ev: 'status', state: 'idle' });
+        return;
+      }
       let message = e instanceof Error ? e.message : String(e);
       // 子进程异常退出时 SDK 只给 exit code,把 stderr 尾部一并透出才可诊断
       const tail = this.stderrTail.slice(-6);
@@ -551,6 +584,19 @@ export class DispatchSession {
     void q
       .supportedCommands()
       .then((raw) => this.publishCatalog(buildSlashCatalog(raw, this.terminalOnlyCommands)))
+      .catch(() => {});
+  }
+
+  /**
+   * 顺手刷新模型目录(services/models.ts):会话已经起了,supportedModels() 零成本,
+   * 拿到就落库 —— CLI 在后端运行期间升级时,下一个会话就把新模型带进面板。
+   * 同 refreshCommands:方法不存在(旧 SDK)直接跳过,绝不能让它打断消息泵。
+   */
+  private refreshModels() {
+    const q = this.q;
+    if (typeof q?.supportedModels !== 'function') return;
+    void Promise.all([q.supportedModels(), cliVersion()])
+      .then(([raw, version]) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), version))
       .catch(() => {});
   }
 
@@ -682,6 +728,7 @@ export class DispatchSession {
   // ---------- 输入 / 控制 ----------
 
   send(text: string, images?: InlineImage[]) {
+    if (this.hibernated) this.wake();
     // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
     this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
     this.turnEnded = false; // 新一轮开始:之前 result 后的后台任务压制状态作废,交回正常事件流
@@ -738,6 +785,11 @@ export class DispatchSession {
       this.emit({ ev: 'btw-error', requestId, question, message: '会话尚未就绪,发出第一条消息后再问' });
       return;
     }
+    if (this.hibernated) {
+      // 旁路提问复用主会话的子进程;进程已空闲退出时不为一句旁路提问冷启动整个会话
+      this.emit({ ev: 'btw-error', requestId, question, message: '会话已空闲自动退出,先发一条消息接上再问' });
+      return;
+    }
     const ac = new AbortController();
     this.sideQuestion = { requestId, ac };
     this.emit({ ev: 'btw-start', requestId, question });
@@ -773,6 +825,8 @@ export class DispatchSession {
 
   /** 中途切换模型(SDK setModel,下一回合生效) */
   async changeModel(model: string) {
+    this.queryOpts.model = model;
+    if (this.hibernated) return this.emit({ ev: 'model-changed', model }); // 下次冷启动时生效
     await this.q?.setModel(model);
     this.emit({ ev: 'model-changed', model });
   }
@@ -780,6 +834,37 @@ export class DispatchSession {
   async end() {
     this.input.close();
     await this.q?.interrupt().catch(() => {});
+  }
+
+  /**
+   * 是否可以空闲退出:回合已结束(空闲)、没有审批/提问在等、没有旁路提问与后台任务,
+   * 且距最后一次输入/输出超过 idleMs。running / blocked 一律不退。
+   */
+  canHibernate(now: number, idleMs: number): boolean {
+    return (
+      !this.hibernated &&
+      !!this.sessionId &&
+      this.state === 'idle' &&
+      this.pending.size === 0 &&
+      !this.sideQuestionInFlight &&
+      this.backgroundTasks.length === 0 &&
+      now - this.lastEventAt >= idleMs
+    );
+  }
+
+  /** 空闲自动退出:走 end() 同一条优雅路径结束子进程,但保留会话对象(卡片/记录/回放都在) */
+  async hibernate() {
+    if (this.hibernated) return;
+    this.hibernated = true;
+    await this.end();
+  }
+
+  /** 冷启动接回:新输入队列 + `--resume <sessionId>`(不分叉,沿用同一会话) */
+  private wake() {
+    this.hibernated = false;
+    this.input = new AsyncQueue<SDKUserMessage>();
+    this.turnEnded = false;
+    this.startQuery(this.sessionId ?? this.resumeFrom ?? undefined, false);
   }
 }
 
@@ -809,6 +894,21 @@ export async function endDispatchBySessionId(sessionId: string): Promise<boolean
   return false;
 }
 
+/**
+ * 空闲自动退出的巡检:超过 minutes 分钟无输入/输出的空闲派发会话结束子进程(保留卡片)。
+ * minutes <= 0 = 关闭。返回本次退出的 sessionId。
+ */
+export async function sweepIdleDispatches(minutes: number, now = Date.now()): Promise<string[]> {
+  if (!(minutes > 0)) return [];
+  const out: string[] = [];
+  for (const s of sessions.values()) {
+    if (!s.canHibernate(now, minutes * 60_000)) continue;
+    out.push(s.sessionId!);
+    await s.hibernate();
+  }
+  return out;
+}
+
 export interface LiveDispatch {
   dispatchId: string;
   sessionId: string;
@@ -818,6 +918,8 @@ export interface LiveDispatch {
   detail?: string;
   startedAt: number;
   lastOutputAt?: number;
+  /** 空闲自动退出:进程已结束、会话仍在,下条消息冷启动接上 */
+  idleExited?: boolean;
 }
 
 /** 后端进程内存活的派发会话(已拿到 sessionId 的),供看板注入实时状态与 attach 入口 */
@@ -835,6 +937,7 @@ export function liveDispatches(): LiveDispatch[] {
       detail: s.state === 'awaiting-permission' ? s.stateDetail : s.activity,
       startedAt: s.startedAt,
       lastOutputAt: s.lastOutputAt ?? undefined,
+      ...(s.hibernated ? { idleExited: true } : {}),
     });
   }
   return out;

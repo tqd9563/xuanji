@@ -23,7 +23,9 @@ function src(suffix: string): string {
 describe('旁路记录的会话 id 来源', () => {
   it('拉取用的是「init 的 id ?? 入口登记的已知 id」,不是裸 sessionId', () => {
     const s = src('/dispatch.ts');
-    expect(s).toContain('const btwSessionId = sessionId ?? knownSessionId;');
+    // 2026-09-20 反转优先级:sessionId 在前时,离开会话但未触发 reset 的入口会让旧 id 一直生效
+    expect(s).toContain('const btwSessionId = knownSessionId ?? sessionId;');
+    expect(s).toContain('setKnownSessionId(String(e.sessionId));'); // init 反过来覆盖已知 id(fork 换 id)
     expect(s).toContain('.sideQuestions(btwSessionId)');
     // 修复前这里是 `}, [sessionId]);`,只随 init 变化
     expect(s).toContain('}, [btwSessionId]);');
@@ -37,5 +39,12 @@ describe('旁路记录的会话 id 来源', () => {
     const s = src('views/Dispatch.tsx');
     expect(s).toContain('d.noteSessionId(info.sessionId)'); // applyResume:/resume 弹窗与看板续接意图共用
     expect(s).toContain('d.noteSessionId(intent.attach.sessionId)'); // 看板接回存活会话
+  });
+
+  it('记录带会话归属,拉取是 REPLACE 语义,不把上一个会话的记录 merge 进来', () => {
+    const s = src('/dispatch.ts');
+    // 症状:没问过 /btw 的会话,状态条显示别的会话的 26 条
+    expect(s).toContain('sessionId: btwSessionId, records: [...records, ...local]');
+    expect(s).toContain('b.sessionId === btwSessionId ? b.records.filter');
   });
 });

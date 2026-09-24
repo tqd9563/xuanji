@@ -1,15 +1,17 @@
+import { reportDispatchCwd } from '@/lib/terminal';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
-import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec } from '@/lib/dispatch';
+import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
+import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
 import { WdPalette } from '@/components/WdPalette';
-import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast } from '@/components/shared';
+import { CompactionCard, Md, MsgTime, PrLinkCard, ThinkingCard, ToolCard, UserText, toast, LazyMd, ScrollRootContext } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
 import { TurnHead, TurnOutline } from '@/components/TurnNav';
 import { buildTurns, currentTurn, isRealTurn, stepTurn } from '@/lib/turns';
@@ -17,6 +19,7 @@ import { RunbookPanel } from '@/components/RunbookPanel';
 import { BtwPanel } from '@/components/BtwPanel';
 import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
+import { noteContentShown } from '@/lib/jank';
 import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
 import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
 import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
@@ -156,12 +159,19 @@ function TypewriterMd({ text, streaming, onGrow }: { text: string; streaming: bo
   useEffect(() => {
     onGrow?.();
   }, [shown, onGrow]);
+  // 历史消息(装载时就不在流式中)按视口懒解析:接回/续接一次塞进来上百条,
+  // 全部立刻走 markdown 解析就是「点进去等好几秒」的主要开销,看不见的先当纯文本放着
+  if (!animRef.current) return <LazyMd>{text}</LazyMd>;
   return <StreamMd text={shown} />;
 }
 
 /** 续接时装载的历史条数上限。⌘F 只能搜到已渲染的消息,查找条据此标注作用域。
  *  超出上限的更早事件不丢弃:留在 earlierRef 里供轮次目录列出与按需回填(见 splitHistory)。 */
-const CHAT_SEED_LIMIT = 200;
+/* 2026-09-23 从 200 降到 40:接回/续接时一次挂 200 条(每条工具卡/助手消息都要排版)
+ * 是「点进去等好几秒」的主要成本之一;更早的轮次本就靠轮次目录按需回填,不会丢。 */
+const CHAT_SEED_LIMIT = 40;
+/** 接回时实时回放列表只先渲染的尾部条数 */
+const CHAT_TAIL = 60;
 /** 吸顶轮次头的带高(与 .turnhead 实际高度同值);判「提问是否已被带子盖住」用它 */
 const TURN_HEAD_H = 36;
 /** 跳转落点在头带下方再留的呼吸位 */
@@ -278,14 +288,6 @@ function replayToChat(events: ReplayEvent[]): ChatItem[] {
   });
 }
 
-const MODELS = [
-  '(默认)',
-  'claude-fable-5-1',
-  'claude-opus-5',
-  'claude-opus-5[1m]',
-  'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
-];
 const PERMS = ['default(逐项审批)', 'acceptEdits', 'bypassPermissions(免审批)', 'plan'];
 const PERM_VALUE: Record<string, string> = {
   'default(逐项审批)': 'default',
@@ -295,38 +297,18 @@ const PERM_VALUE: Record<string, string> = {
 };
 /** 权限模式默认免审批(信任本机任务;需要逐项把关时手动切回) */
 const DEFAULT_PERM = PERMS[2]!;
-/** /model 简写 → 完整模型名 */
-const MODEL_SHORT: Record<string, string> = {
-  fable: 'claude-fable-5-1',
-  opus: 'claude-opus-5',
-  'opus-1m': 'claude-opus-5[1m]',
-  sonnet: 'claude-sonnet-5',
-  haiku: 'claude-haiku-4-5-20251001',
-};
-/** 完整模型名 → 简写(弹窗左列短名),未收录的完整名原样显示 */
-const MODEL_ALIAS: Record<string, string> = Object.fromEntries(
-  Object.entries(MODEL_SHORT).map(([short, full]) => [full, short]),
-);
-/** 模型默认沿用最近一次用过的,兜底 opus */
+/** 模型候选来自 lib/models 的目录(CLI /model 面板那份),不再写死。
+ *  默认沿用最近一次用过的(目录到货后再归一化:旧的完整 id 反查到目录行、查不到的当手输值),兜底 CLI 默认 */
 const LAST_MODEL_KEY = 'xuanji-last-model';
-const initialModel = (): string => {
-  const saved = localStorage.getItem(LAST_MODEL_KEY);
-  return saved && MODELS.includes(saved) && saved !== MODELS[0] ? saved : 'claude-opus-5';
-};
+const initialModel = (): string => localStorage.getItem(LAST_MODEL_KEY) || DEFAULT_MODEL;
 
 /** ⚑ 任务总结的默认触发语(设置里可改,见 lib/prefs 的 wrapupPrompt)。wrapup skill 是语义触发(SDK 无原生 slash),措辞固定才有稳定命中率;
  *  明确要求「先识别边界再确认」是因为一个会话常做完多个任务,边界只能由模型判断后跟人对齐。 */
 const WRAPUP_PROMPT =
   '执行 wrapup skill,把本会话刚完成的任务沉淀成一张收口卡;任务边界你先识别再向我确认,不要直接落盘。';
 
-/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 MODEL_DEFAULT_EFFORT) */
+/** 思考深度档位(SDK effort);首项 = 自动,按模型取默认档(见 lib/models 的 defaultEffortOf) */
 const EFFORTS = ['(自动)', 'low', 'medium', 'high', 'xhigh', 'max'];
-/** 按模型的默认思考深度:opus-5 思考本身很深,日常派发用 low 已够且更省时省额度;
- *  未列出的模型不下发 effort,交给模型自身默认(通常 high) */
-const MODEL_DEFAULT_EFFORT: Record<string, string> = {
-  'claude-opus-5': 'low',
-  'claude-opus-5[1m]': 'low',
-};
 const LAST_EFFORT_KEY = 'xuanji-last-effort';
 const initialEffort = (): string => {
   const saved = localStorage.getItem(LAST_EFFORT_KEY);
@@ -350,6 +332,23 @@ export function Dispatch({ active }: { active: boolean }) {
   const { prefs, loaded: prefsLoaded } = useAccountPrefs();
   const localPrefs = useLocalPrefs();
   const [modelSel, setModelSel] = useState(initialModel);
+  const { models, fromServer: modelsFromServer, refresh: refreshModels } = useModelCatalog();
+  /** 目录到货 → 把持久化的旧值(可能是升级前的完整 id)归一成目录行;查不到又不像 id 的回落 CLI 默认 */
+  useEffect(() => {
+    if (!modelsFromServer) return;
+    setModelSel((cur) => normalizeModelValue(models, cur) ?? DEFAULT_MODEL);
+  }, [models, modelsFromServer]);
+  /** 会话 init 后目录可能刚被后端刷新过(CLI 在后端运行期间升级),再拉一次 */
+  useEffect(() => {
+    if (d.sessionId) refreshModels();
+  }, [d.sessionId]);
+  /** 下拉/面板候选:目录行 + 当前选中的手输值(不在目录里也得让它显示出来) */
+  const modelOptions = useMemo(() => {
+    const vals = models.map((m) => m.value);
+    return vals.includes(modelSel) ? vals : [...vals, modelSel];
+  }, [models, modelSel]);
+  /** 会话进行中切模型:`default` 行不能原样发给 setModel,换成它解析到的真实 id */
+  const liveModelOf = (v: string) => (v === DEFAULT_MODEL ? (findModel(models, v)?.resolvedModel ?? v) : v);
   const [effortSel, setEffortSel] = useState(initialEffort);
   const [permSel, setPermSel] = useState(DEFAULT_PERM);
   const [bg, setBg] = useState(false);
@@ -365,7 +364,10 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     if (!prefsLoaded || prefsAppliedRef.current) return;
     prefsAppliedRef.current = true;
-    if (prefs.model && MODELS.includes(prefs.model)) setModelSel(prefs.model);
+    if (prefs.model) {
+      const v = normalizeModelValue(models, prefs.model);
+      if (v) setModelSel(v);
+    }
     if (prefs.effort && EFFORTS.includes(prefs.effort)) setEffortSel(prefs.effort);
     const permLabel = PERMS.find((x) => PERM_VALUE[x] === prefs.perm);
     if (permLabel) setPermSel(permLabel);
@@ -571,6 +573,29 @@ export function Dispatch({ active }: { active: boolean }) {
   const historyIdxRef = useRef<number | null>(null);
   const historyDraftRef = useRef<string>('');
   const chatRef = useRef<HTMLDivElement>(null);
+  /**
+   * 列表头部暂不渲染的条数。接回一个跑了很久的会话,后端内存回放能一口气给几百条
+   * (实测 455 条),全渲染就是几秒的排版;只挂尾部 CHAT_TAIL 条,顶部按钮按需展开。
+   * 在渲染期直接派生(不用 effect):回放合批与 attachGen 在同一次渲染里到达,首帧就只有尾部。
+   * 下标口径不变(map 时跳过 i < headHidden),轮次序号/日期分隔/key 都不用改。
+   * 历史前插(seedOffset)也算进头部:live 尾部的起点随之后移。
+   */
+  /** 折叠锚点:接回回放那一刻「第一条要显示的行」的稳定 key(chatKey 口径)。null = 不折叠。
+   *  用稳定 key 而不是条数:之后无论前插历史还是追加新消息,锚点指的都是同一行,
+   *  隐藏数不会被重复计算,也不可能超过总数。 */
+  const [tailAnchor, setTailAnchor] = useState<number | null>(null);
+  const expandAll = useCallback(() => setTailAnchor(null), []);
+  useEffect(() => {
+    if (d.attachGen === 0) return;
+    setTailAnchor(d.attachLen > CHAT_TAIL ? d.attachLen - CHAT_TAIL : null); // 回放时 seedOffset 必为 0
+  }, [d.attachGen]);
+  useEffect(() => {
+    if (d.items.length === 0) setTailAnchor(null); // 换会话/重置
+  }, [d.items.length]);
+  useEffect(() => {
+    if (d.attachGen > 0) noteContentShown('attach');
+  }, [d.attachGen]);
+  const headHidden = tailAnchor === null ? 0 : Math.min(d.items.length, Math.max(0, tailAnchor + d.seedOffset));
   // 会话内查找(⌘F):只搜聊天区里已渲染的消息(历史 seed 上限见 splitHistory)
   const find = useFindInPage(chatRef);
   // 轮次导航(⌘⇧O 目录 / ⌥↑↓ 逐轮跳):earlierRef 存尚未渲染的更早事件,
@@ -638,6 +663,9 @@ export function Dispatch({ active }: { active: boolean }) {
     [cwd, prefs.cwd, quickAskCwd, projects],
   );
   const curProject = projects.find((p) => p.path === effectiveCwd);
+  // 全局终端「跟随会话」:派发页可见时上报当前会话的工作目录,离开派发页时报 null
+  const termCwd = active ? (sessionCwd ?? effectiveCwd ?? null) : null;
+  useEffect(() => reportDispatchCwd(termCwd), [termCwd]);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
@@ -662,6 +690,7 @@ export function Dispatch({ active }: { active: boolean }) {
         earlierRef.current = earlier;
         setPendingEarlier(userTurnsOf(earlier));
         d.seedHistory(replayToChat(seed));
+        noteContentShown('resume');
       })
       .catch(() => {});
   };
@@ -685,23 +714,23 @@ export function Dispatch({ active }: { active: boolean }) {
    *  未开始 → 设定新会话默认并记忆 */
   const applyModel = (resolved: string) => {
     if (d.started) {
-      d.changeModel(resolved); // 仅当前会话
+      d.changeModel(liveModelOf(resolved)); // 仅当前会话
     } else {
       setModelSel(resolved);
       localStorage.setItem(LAST_MODEL_KEY, resolved);
-      d.pushNote(`⇄ 模型已设为 ${resolved},本会话生效。`);
+      d.pushNote(`⇄ 模型已设为 ${modelLabel(models, resolved)}(${modelDetail(models, resolved)}),本会话生效。`);
     }
   };
 
   /** 实际下发给 SDK 的思考深度:显式选过就用选的,否则回落到该模型的默认档(未列出的模型 = 不下发) */
-  const resolvedEffort = effortSel === EFFORTS[0] ? MODEL_DEFAULT_EFFORT[modelSel] : effortSel;
+  const resolvedEffort = effortSel === EFFORTS[0] ? defaultEffortOf(models, modelSel) : effortSel;
 
   /** 设定思考深度(/effort 与下拉共用)。SDK 只支持建会话时定 effort、无运行时切换,
    *  所以已开始的会话不受影响,改动对下一个新会话生效 */
   const applyEffort = (v: string) => {
     setEffortSel(v);
     localStorage.setItem(LAST_EFFORT_KEY, v);
-    const shown = v === EFFORTS[0] ? `自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : v;
+    const shown = v === EFFORTS[0] ? `自动(${defaultEffortOf(models, modelSel) ?? '模型默认'})` : v;
     d.pushNote(
       d.started
         ? `◈ 思考深度已设为 ${shown};当前会话无法中途改,对下一个新会话生效。`
@@ -806,12 +835,19 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!ev.length) return;
     earlierRef.current = [];
     setPendingEarlier([]);
+    expandAll(); // 要跳进更早的轮次,折叠的那段也得露出来,否则跳转目标仍在隐藏区
     d.seedHistory(replayToChat(ev));
   };
 
   const scrollToTurn = useCallback((ord: number) => {
     const box = chatRef.current;
     const el = box?.querySelector<HTMLElement>(`[data-turn="${ord}"]`);
+    if (box && !el) {
+      // 目标在折叠区:展开,交给下方「补跳」layout effect 在节点进 DOM 后再滚
+      expandAll();
+      setPendingJump(ord);
+      return;
+    }
     if (!box || !el) return;
     // 跳走 = 用户主动离开底部;不解钉的话流式输出会立刻把视口拽回去
     pinnedRef.current = false;
@@ -823,7 +859,7 @@ export function Dispatch({ active }: { active: boolean }) {
     setFlashOrd(ord);
     clearTimeout(flashTimerRef.current);
     flashTimerRef.current = setTimeout(() => setFlashOrd(null), 1400);
-  }, []);
+  }, [expandAll]);
 
   const jumpToTurn = (ord: number) => {
     setOutline(false);
@@ -845,7 +881,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (!chatRef.current?.querySelector(`[data-turn="${pendingJump}"]`)) return;
     scrollToTurn(pendingJump);
     setPendingJump(null);
-  }, [d.items, pendingJump, scrollToTurn]);
+  }, [d.items, pendingJump, scrollToTurn, tailAnchor]);
 
   // 消息增删(新回合、回填、切会话)后重新量一次:此时滚动事件不会触发,但当前轮可能已变
   useEffect(measureTurn, [d.items, measureTurn]);
@@ -1227,8 +1263,9 @@ export function Dispatch({ active }: { active: boolean }) {
     // 无参数或没命中 → 弹窗模糊搜索(与 /wd 同款,/model fab 会以 fab 为初始搜索词进弹窗)
     if (/^\/model\b/.test(text)) {
       const arg = text.replace(/^\/model\b/, '').trim().toLowerCase();
-      const resolved = MODELS.find((m) => m.toLowerCase() === arg) ?? MODEL_SHORT[arg];
-      if (resolved && resolved !== MODELS[0]) {
+      // 目录行(别名/真实 id/显示名)或长得像完整 id 的手输值都直接切
+      const resolved = normalizeModelValue(models, arg);
+      if (resolved) {
         applyModel(resolved);
         return;
       }
@@ -1254,7 +1291,7 @@ export function Dispatch({ active }: { active: boolean }) {
       applyEffort(arg);
       return;
     }
-    if (modelSel !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, modelSel);
+    localStorage.setItem(LAST_MODEL_KEY, modelSel);
     // 续接发送沿用 applyResume 已定好的标识;全新会话在此刻就知道名称(取自首条消息)与项目,不必等 SDK 分配 id。
     // 仅在 sessCtx 尚未建立时(真正的第一条消息)才用 prompt 占位命名 —— 否则 attach/续接已带
     // 正确名称进来后,发第二条及以后的消息会用当次 prompt 把已有会话名覆盖掉(bug: 输入框上方短暂显示成刚发的话)。
@@ -1274,7 +1311,7 @@ export function Dispatch({ active }: { active: boolean }) {
       await d.send(text, {
         cwd: effectiveCwd,
         permissionMode: PERM_VALUE[permSel]!,
-        model: modelSel === MODELS[0] ? undefined : modelSel,
+        model: toSdkModel(modelSel),
         effort: resolvedEffort,
         resume: resumeInfo?.sessionId,
         name: resumeInfo?.name ?? autoName,
@@ -1382,6 +1419,7 @@ export function Dispatch({ active }: { active: boolean }) {
         <button className="btn" title="⌘N" onClick={() => newSession()}>新会话</button>
       </div>
       <div className={cn('dispatch', btwOpen && !isMobile && 'btw-open')}>
+        <ScrollRootContext.Provider value={chatRef}>
         <div className="chat" ref={chatRef} onScroll={onChatScroll}>
           <TurnHead
             turn={curTurn?.gone ? (turns.find((t) => t.ord === curTurn.ord) ?? null) : null}
@@ -1426,8 +1464,20 @@ export function Dispatch({ active }: { active: boolean }) {
               </div>
             </div>
           )}
+          {headHidden > 0 && (
+            <button
+              className="chat-more-btn"
+              onClick={() => {
+                pinnedRef.current = false; // 展开更早内容是主动上翻,别被自动置底拽回去
+                expandAll();
+              }}
+            >
+              显示更早的 {headHidden} 条
+            </button>
+          )}
           {d.items.map((item, i) => (
-            <Fragment key={i}>
+            i < headHidden ? null :
+            <Fragment key={chatKey(i, d.seedOffset)}>
               {daySeps[i] && <div className="day-sep">{daySeps[i]}</div>}
               <ChatRow
                 item={item}
@@ -1441,6 +1491,7 @@ export function Dispatch({ active }: { active: boolean }) {
             </Fragment>
           ))}
         </div>
+        </ScrollRootContext.Provider>
 
         {btwOpen && !isMobile && (
           <BtwPanel
@@ -1607,6 +1658,15 @@ export function Dispatch({ active }: { active: boolean }) {
             onScroll={(e) => {
               // 触顶后 textarea 内部滚动,镜像层必须同步跟滚,否则高亮与文字脱节
               if (mirrorRef.current) mirrorRef.current.scrollTop = (e.target as HTMLTextAreaElement).scrollTop;
+            }}
+            /* IME 预编辑期(拼音未上屏)把舞台让给 textarea 自己:预编辑文本的底色与下划线由内核
+               直接画在 textarea 上,而 textarea 的文字是透明的 —— 镜像层要么被预编辑底色整块盖住,
+               要么与内核画的预编辑区对不齐,表现成「光标离行末字符一段空白」。组合期间关掉镜像、
+               把文字染回正常色,上屏后(compositionend)恢复高亮并重绘一次。 */
+            onCompositionStart={(e) => e.currentTarget.parentElement?.classList.add('composing')}
+            onCompositionEnd={(e) => {
+              e.currentTarget.parentElement?.classList.remove('composing');
+              growTa();
             }}
             onSelect={syncHint}
             onClick={syncHint}
@@ -1804,15 +1864,16 @@ export function Dispatch({ active }: { active: boolean }) {
           <span className="spacer" />
           <DropUp
             id="model-dd"
-            value={d.started ? (MODELS.find((m) => m === d.model) ?? d.model ?? modelSel) : modelSel}
-            options={MODELS}
+            value={d.started ? (normalizeModelValue(models, d.model) ?? d.model ?? modelSel) : modelSel}
+            options={modelOptions}
+            labelOf={(v) => modelLabel(models, v)}
             onChange={(v) => {
               // 有活跃会话 → 只切当前会话(SDK setModel,不改新会话默认);无会话 → 设新会话默认并记忆
               if (d.started) {
-                if (v !== MODELS[0]) d.changeModel(v);
+                d.changeModel(liveModelOf(v));
               } else {
                 setModelSel(v);
-                if (v !== MODELS[0]) localStorage.setItem(LAST_MODEL_KEY, v);
+                localStorage.setItem(LAST_MODEL_KEY, v);
               }
             }}
             title={d.started ? '当前会话模型(切换只对本会话生效)' : '新会话默认模型(记忆最近一次)'}
@@ -1824,10 +1885,10 @@ export function Dispatch({ active }: { active: boolean }) {
             options={EFFORTS}
             // 首项标注解析结果(如「思考 自动(low)」),否则它与显式 low 在列表里同名、无法区分
             labelOf={(v) =>
-              v === EFFORTS[0] ? `思考 自动(${MODEL_DEFAULT_EFFORT[modelSel] ?? '模型默认'})` : `思考 ${v}`
+              v === EFFORTS[0] ? `思考 自动(${defaultEffortOf(models, modelSel) ?? '模型默认'})` : `思考 ${v}`
             }
             onChange={applyEffort}
-            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus-5 → low),其余模型不下发、用模型自身默认(通常 high)`}
+            title={`思考深度(SDK effort),对下一个新会话生效——SDK 不支持会话中途切换。\n自动 = 按当前模型的默认档(opus → low),其余模型不下发、用模型自身默认(通常 high)`}
           />
           <DropUp
             className="dim"
@@ -1878,11 +1939,12 @@ export function Dispatch({ active }: { active: boolean }) {
         {modelPalette && (
           <WdPalette
             title="切换模型"
-            placeholder="模糊搜索模型…(如 fable)"
+            placeholder="模糊搜索模型…(如 fable),或输入完整 id"
             emptyNoun="模型"
-            value={d.started ? (d.model ?? modelSel) : modelSel}
-            options={MODELS.slice(1)}
-            labelOf={(m) => MODEL_ALIAS[m] ?? m}
+            value={d.started ? (normalizeModelValue(models, d.model) ?? d.model ?? modelSel) : modelSel}
+            options={modelOptions}
+            labelOf={(m) => modelLabel(models, m)}
+            detailOf={(m) => modelDetail(models, m)}
             initialQuery={modelQuery}
             onPick={(m) => {
               applyModel(m);

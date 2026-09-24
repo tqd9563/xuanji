@@ -6,6 +6,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 
+import { idbOpen, STORE_WALLPAPER } from './idb.js';
+
 export type WallMode = 'off' | 'wall' | 'glass';
 
 export interface WallState {
@@ -40,25 +42,11 @@ export const WALL_DEFAULTS: WallState = {
 
 const STORAGE_KEY = 'xuanji.wall';
 
-/* ---------- IndexedDB:本地壁纸原图(Blob)持久化 ---------- */
-const IDB_NAME = 'xuanji';
-const IDB_STORE = 'wallpaper';
+/* ---------- IndexedDB:本地壁纸原图(Blob)持久化 ----------
+   版本号与建表统一走 lib/idb.ts:看板娘的缩略图缓存要在同一个库里加一张表,
+   两边各写各的 onupgradeneeded 会导致谁先打开谁少建表。 */
+const IDB_STORE = STORE_WALLPAPER;
 const IDB_IMG_KEY = 'custom-image';
-
-function idbOpen(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    if (typeof indexedDB === 'undefined') {
-      reject(new Error('indexedDB unavailable'));
-      return;
-    }
-    const req = indexedDB.open(IDB_NAME, 1);
-    req.onupgradeneeded = () => {
-      if (!req.result.objectStoreNames.contains(IDB_STORE)) req.result.createObjectStore(IDB_STORE);
-    };
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
 
 async function idbPutImage(blob: Blob): Promise<void> {
   const db = await idbOpen();

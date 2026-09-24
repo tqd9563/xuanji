@@ -71,6 +71,8 @@ export function buildSlashCatalog(raw: readonly RawCommand[], terminalOnly: read
  */
 let usageCache: { at: number; counts: UsageCounts } | null = null;
 const USAGE_TTL_MS = 10 * 60 * 1000;
+/** 正在跑的那次刷新:并发调用共享,绝不同时起两次全机扫描 */
+let usageRefreshing: Promise<void> | null = null;
 
 /**
  * 璇玑自己拦截的命令名(前端 Dispatch.tsx 的 BUILTIN_CMDS)。这里只用于两件事:
@@ -87,12 +89,23 @@ export async function withUsage(
   cmds: SlashCmdInfo[],
 ): Promise<{ cmds: SlashCmdInfo[]; uses: UsageCounts }> {
   const now = Date.now();
-  if (!usageCache || now - usageCache.at >= USAGE_TTL_MS) {
+  const stale = !usageCache || now - usageCache.at >= USAGE_TTL_MS;
+  if (stale && !usageRefreshing) {
     const known = new Set([...cmds.map((c) => c.name), ...XUANJI_BUILTIN]);
-    const counts = await countSlashUsage(storage, known).catch(() => ({}) as UsageCounts);
-    usageCache = { at: now, counts };
+    usageRefreshing = countSlashUsage(storage, known)
+      .catch(() => ({}) as UsageCounts)
+      .then((counts) => {
+        usageCache = { at: Date.now(), counts };
+      })
+      .finally(() => {
+        usageRefreshing = null;
+      });
   }
-  return { cmds: applyUsage(cmds, usageCache.counts), uses: usageCache.counts };
+  // 有旧值就先用旧值、后台刷新(stale-while-revalidate):频率只影响联想排序,晚 10 分钟无所谓,
+  // 但让打开会话的请求去等一次全机扫描不行。只有进程里还从没算过时才等这一次。
+  if (!usageCache && usageRefreshing) await usageRefreshing;
+  const counts = usageCache?.counts ?? {};
+  return { cmds: applyUsage(cmds, counts), uses: counts };
 }
 
 /**

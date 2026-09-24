@@ -82,6 +82,7 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       source: 'web',
       dispatchId: d.dispatchId,
       lastOutputAt: d.lastOutputAt,
+      ...(d.idleExited ? { idleExited: true } : {}),
     });
   }
   // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回。

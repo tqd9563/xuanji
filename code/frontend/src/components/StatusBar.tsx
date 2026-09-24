@@ -1,4 +1,9 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { SysmonWidgets } from '@/components/Sysmon';
+import { TerminalIndicator } from '@/components/Terminal';
+import { useTerm } from '@/lib/terminal';
+import { useKey } from '@/lib/prefs';
+import { formatCombo } from '@/lib/keymap';
 
 /**
  * 全局状态栏(见 DESIGN.md §5「全局状态栏」)。
@@ -50,9 +55,15 @@ export function StatusBar({
   onGoReview: () => void;
 }) {
   const daemonOk = !!health?.cli;
+  // 终端只对本机直连开放;手机 / Tailscale 访问时整枚不渲染(不留分隔线)
+  const termLocal = !!useTerm().info?.local;
+  const termKey = formatCombo(useKey('global.terminal'));
 
   // 从左到右排列;每项 null 表示此刻无话可说,整枚不渲染
   const widgets: (ReactNode | null)[] = [
+    // 系统监控(内存 + CPU 两枚指示共用一个弹窗锚点);两项都关时整枚消失
+    <SysmonWidgets key="sysmon" />,
+    termLocal ? <TerminalIndicator key="term" shortcut={termKey} /> : null,
     reviewCount > 0 ? (
       <button
         key="review"

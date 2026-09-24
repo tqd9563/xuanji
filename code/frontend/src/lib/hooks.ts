@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { getSeenVersion, subscribeSeen } from '@/lib/utils';
 
 /** 跨挂载 stale-while-revalidate 缓存(键 = fetcher 引用,调用点均为稳定的 api.*):
  *  视图卸载重挂时先立刻展示上次数据、后台静默刷新——切换视图不再白屏等待。 */
@@ -6,6 +7,20 @@ const pollCache = new Map<() => Promise<unknown>, unknown>();
 
 /** 已挂载的 usePoll 消费方,按 fetcher 分组;refreshPoll() 靠它把「数据变了」推给所有在看的视图 */
 const pollSubscribers = new Map<() => Promise<unknown>, Set<() => void>>();
+
+/** 正在飞的请求,按 fetcher 合流:App(徽章)与 Sessions(看板)都以 5s 轮询 api.sessions,
+ *  定时器同刻触发就是两条并发请求打到后端(用户 Pake 记录里 /api/sessions 永远成对出现);
+ *  合流后同一刻只发一次,结果分发给所有调用方。 */
+const pollInflight = new Map<() => Promise<unknown>, Promise<unknown>>();
+
+/** 同一 fetcher 的并发调用共享一次请求(纯逻辑,可测) */
+export function sharedFetch<T>(fetcher: () => Promise<T>): Promise<T> {
+  const cur = pollInflight.get(fetcher as () => Promise<unknown>);
+  if (cur) return cur as Promise<T>;
+  const p = fetcher().finally(() => pollInflight.delete(fetcher as () => Promise<unknown>));
+  pollInflight.set(fetcher as () => Promise<unknown>, p);
+  return p;
+}
 
 /** 供测试与 refreshPoll 使用:登记一个消费方的 refresh,返回注销函数 */
 export function subscribePoll(fetcher: () => Promise<unknown>, onRefresh: () => void): () => void {
@@ -49,7 +64,8 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
   fetcherRef.current = fetcher;
 
   const refresh = useCallback(() => {
-    fetcherRef.current().then(
+    // 用稳定的 keyRef 合流:各调用点传的都是稳定的 api.* 引用
+    sharedFetch(keyRef.current as () => Promise<T>).then(
       (d) => {
         pollCache.set(keyRef.current, d);
         setData(d);
@@ -72,6 +88,12 @@ export function usePoll<T>(fetcher: () => Promise<T>, intervalMs: number, deps: 
   }, [intervalMs, refresh, ...deps]);
 
   return { data, error, refresh };
+}
+
+/** 订阅已读表(「待验收」判定的数据源之一):凡渲染里调用 isUnread 的视图都要用它,
+ *  否则 markSeen 之后这一帧不重渲染,角标与排序要等轮询刻度才跟上。 */
+export function useSeenVersion(): number {
+  return useSyncExternalStore(subscribeSeen, getSeenVersion, getSeenVersion);
 }
 
 export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review' | 'worklog' | 'todo';

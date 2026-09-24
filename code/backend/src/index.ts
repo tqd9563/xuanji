@@ -12,9 +12,24 @@ import { SchedulerService } from './services/scheduler.js';
 import { setNotifyGate } from './adapters/notify.js';
 import { readPrefs } from './services/prefs.js';
 import { refreshSkillUsage } from './services/skill-usage.js';
+import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
+import { warmModelCatalog } from './services/models.js';
+import { SysmonSampler } from './services/sysmon/sampler.js';
+import { sweepIdleDispatches } from './services/dispatch.js';
+import { TerminalManager } from './services/terminal.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
+// 系统监控:有页面订阅才采;「无人查看时暂停」关掉时常驻
+const sysmon = new SysmonSampler(storage);
+sysmon.start();
+// 全局终端:shell 会话跟后端进程走,页面刷新/切视图不杀。后端退出时 pty 主端随之关闭,
+// shell 收到 SIGHUP 自行退出——不另挂信号处理:exit(0) 会改变 launchd「非正常退出才重启」的语义
+const terminals = new TerminalManager();
+// 空闲自动退出:每分钟巡检一次,阈值每次现读偏好(设置改动下一次巡检即生效;PUT /prefs 时另会立即巡检)
+setInterval(() => {
+  void sweepIdleDispatches(readPrefs(storage).monitor.idleExit).catch(() => {});
+}, 60_000).unref();
 // 通知按「设置 › 通知」过滤:范围与事件取与,两者都开才发
 setNotifyGate((scope, kind) => {
   const { notify } = readPrefs(storage);
@@ -25,10 +40,27 @@ scheduler.init(); // 重启不丢任务:重新加载全部 pending/blocked 任�
 // 技能触发索引预热:冷库首扫要读近百万行 jsonl(实测 ~5s),放后台跑,
 // 让第一次打开技能页就有数;失败不影响启动,下次请求会再触发增量扫描。
 void refreshSkillUsage(storage).catch((e) => console.error('[xuanji] skill usage scan failed:', e));
+// 模型目录预热:CLI 版本变了才起空会话拉一次(~8s、0 token),否则直接用缓存;失败前端有兜底清单
+void warmModelCatalog(storage)
+  .then((r) => r !== 'hit' && console.log(`[xuanji] model catalog ${r}`))
+  .catch(() => {});
 
 const app = new Hono();
 
-app.route('/api', createApi(storage, scheduler));
+app.route('/api', createApi(storage, scheduler, sysmon, terminals));
+
+// 看板娘模型文件。必须注册在下面的 SPA 兜底(app.get('*'))之前,否则会被兜底吃掉,
+// 前端拿到 200 + text/html 冒充 moc3,报错含糊难查(同 /assets/* 那条的教训)。
+// 模型体积大且只在本机读,带 immutable 长缓存;文件变了目录指纹会变,前端换 URL 即绕开。
+app.get('/live2d/*', (c) => {
+  const rel = c.req.path.slice('/live2d/'.length);
+  const abs = resolveLive2dFile(config.live2dDir, rel);
+  if (!abs) return c.notFound();
+  const body = fs.readFileSync(abs);
+  c.header('Content-Type', live2dContentType(abs));
+  c.header('Cache-Control', 'private, max-age=86400');
+  return c.body(body);
+});
 
 // 生产模式:若前端已构建,由后端直接托管 SPA。
 // HTML 入口(URL 固定但内容随构建变)必须 no-cache:否则 Pake 壳的 WKWebView 会一直用缓存里的
@@ -53,4 +85,4 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   console.log(`[xuanji] listening on http://${config.host}:${info.port}  (claudeDir: ${config.claudeDir})`);
 });
 
-attachWs(server as Server, storage);
+attachWs(server as Server, storage, sysmon, terminals);

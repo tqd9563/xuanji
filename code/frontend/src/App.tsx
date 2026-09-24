@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
 import { setPalette, cn } from '@/lib/utils';
-import { ConfirmHost, ToastHost, toast } from '@/components/shared';
+import { ConfirmHost, MdWarmup, ToastHost, toast } from '@/components/shared';
 import { Settings } from '@/components/Settings';
+import { useLive2d } from '@/lib/live2d';
+import { Live2dStage } from '@/components/Live2dStage';
 import { useWallpaper, wallSrcUrl, wallStateLabel } from '@/lib/wallpaper';
 import { applyLocalToDom, loadAccount, useLocalPrefs } from '@/lib/prefs';
 import { formatCombo, matchKey } from '@/lib/keymap';
@@ -21,6 +23,8 @@ import { Review } from '@/views/Review';
 import { Worklog } from '@/views/Worklog';
 import { Todos, startTodo, notifyTodosChanged } from '@/views/Todos';
 import { TodoPalette } from '@/components/TodoPalette';
+import { TerminalSheet, toggleTerminal } from '@/components/Terminal';
+import { matchToggleKey } from '@/lib/terminal';
 
 const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
@@ -48,8 +52,11 @@ export default function App() {
   const [, setPaletteReady] = useState(false);
   const sessionsHandle = useRef<SessionsHandle | null>(null);
   const [wall, patchWall] = useWallpaper();
+  const [live2d, patchLive2d] = useLive2d();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 打开设置时直接落到的分区(终端浮层的 ⚙ 用);null = 停在上次的分区 */
+  const [settingsSec, setSettingsSec] = useState<'term' | null>(null);
   const localPrefs = useLocalPrefs();
   const wallUrl = wallSrcUrl(wall);
 
@@ -127,6 +134,12 @@ export default function App() {
       // 设置面板自己处理面板内按键(含改键录入),开着时全局键位一律让位
       if (settingsOpen) return;
       const km = localPrefs.keymap;
+      // ⌘` 全局终端:任何焦点下都是开关(含焦点在终端里——xterm 把 ⌘ 组合交还给页面)
+      if (matchToggleKey(e, km['global.terminal'])) {
+        e.preventDefault();
+        toggleTerminal();
+        return;
+      }
       if (matchKey(e, km['global.settings'])) {
         e.preventDefault();
         setSettingsOpen(true);
@@ -201,6 +214,7 @@ export default function App() {
   return (
     <div className="app">
       <div id="wall" aria-hidden="true" style={wallUrl ? { backgroundImage: `url("${wallUrl}")` } : undefined} />
+      <Live2dStage state={live2d} />
       <aside className="sidebar">
         <div className="brand">
           {/* 璇玑玉璧剪影,1:1 还原获批原型 wiki/design/prototype.html(feat(design) 48d1935);
@@ -324,16 +338,33 @@ export default function App() {
         />
       )}
 
+      <TerminalSheet
+        viewKey={view}
+        cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
+        onOpenSettings={() => {
+          setSettingsSec('term');
+          setSettingsOpen(true);
+        }}
+      />
+
       <Settings
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        initialSec={settingsSec}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsSec(null);
+        }}
         cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
         wall={wall}
         patchWall={patchWall}
+        live2d={live2d}
+        patchLive2d={patchLive2d}
       />
 
       <ToastHost />
       <ConfirmHost />
+      {/* 空闲时把 markdown 流水线的冷启动成本提前付掉(见 MdWarmup) */}
+      <MdWarmup />
     </div>
   );
 }

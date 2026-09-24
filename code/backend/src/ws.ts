@@ -18,15 +18,33 @@ import { bgDispatch } from './adapters/agents-cli.js';
 import type { Storage } from './storage/db.js';
 import { parseInlineImages } from './types.js';
 import { replayRunbookLogs, resolveRunbook, runItem, stopItem, subscribeRunbook } from './services/runbook.js';
+import type { SysmonSampler } from './services/sysmon/sampler.js';
+import { isLocalRequest, type TerminalManager, type TermServerMsg } from './services/terminal.js';
 
-export function attachWs(server: Server, storage: Storage) {
+export function attachWs(server: Server, storage: Storage, sysmon?: SysmonSampler, terminals?: TerminalManager) {
   const changesWss = new WebSocketServer({ noServer: true });
   const dispatchWss = new WebSocketServer({ noServer: true });
+  const sysmonWss = new WebSocketServer({ noServer: true });
+  const termWss = new WebSocketServer({ noServer: true });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
     const { pathname } = new URL(req.url ?? '/', 'http://localhost');
     if (pathname === '/ws') {
       changesWss.handleUpgrade(req, socket, head, (ws) => changesWss.emit('connection', ws, req));
+    } else if (pathname === '/ws/sysmon' && sysmon) {
+      sysmonWss.handleUpgrade(req, socket, head, (ws) => sysmonWss.emit('connection', ws, req));
+    } else if (pathname === '/ws/terminal' && terminals) {
+      // 本机直连才放行;浏览器发起的 WS 必带 Origin,不带或非回环一律拒(见 isLocalRequest)
+      const h = (n: string) => {
+        const v = req.headers[n];
+        return Array.isArray(v) ? v[0] : v;
+      };
+      if (!isLocalRequest(req.socket.remoteAddress, h, true)) {
+        socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+      termWss.handleUpgrade(req, socket, head, (ws) => termWss.emit('connection', ws, req));
     } else if (pathname === '/ws/dispatch') {
       dispatchWss.handleUpgrade(req, socket, head, (ws) => dispatchWss.emit('connection', ws, req));
     } else {
@@ -68,6 +86,41 @@ export function attachWs(server: Server, storage: Storage) {
   watch(path.join(config.claudeDir, 'skills'), 'skills', 1);
   watch(path.join(config.claudeDir, 'skills-disabled'), 'skills', 1);
   watch(path.join(config.claudeDir, 'jobs'), 'jobs', 1);
+
+  // ---------- 系统监控 ----------
+  // 每条连接 = 一个「有人在看」的页面(前端在标签页隐藏时主动断开),采样器据此暂停/恢复
+  // ---------- 全局终端:一条连接对应一个 shell 会话 ----------
+  termWss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const id = new URL(req.url ?? '/', 'http://localhost').searchParams.get('id') ?? '';
+    const send = (m: TermServerMsg) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m));
+    };
+    const detach = terminals!.attach(id, { send });
+    if (!detach) {
+      send({ t: 'exit', code: -1 });
+      ws.close();
+      return;
+    }
+    ws.on('message', (raw) => {
+      let m: { t?: string; d?: unknown; cols?: unknown; rows?: unknown };
+      try {
+        m = JSON.parse(String(raw));
+      } catch {
+        return;
+      }
+      if (m.t === 'in' && typeof m.d === 'string') terminals!.write(id, m.d);
+      else if (m.t === 'resize') terminals!.resize(id, m.cols, m.rows);
+    });
+    ws.on('close', detach);
+  });
+
+  sysmonWss.on('connection', (ws) => {
+    const off = sysmon!.subscribe((snap) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'sysmon', snap }));
+    });
+    ws.on('close', off);
+    ws.on('error', off);
+  });
 
   // ---------- 派发通道 ----------
 

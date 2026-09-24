@@ -18,8 +18,11 @@ import type {
   WeeklyReview,
   WorklogCard,
   SideQuestion,
+  TermInfo,
+  TermSessionInfo,
 } from './types';
 import type { SlashCmdInfo } from '@/lib/slash';
+import type { ModelOption } from '@/lib/models';
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path);
@@ -43,9 +46,15 @@ export const api = {
   /** 斜杠命令兜底目录:会话建立前先拿这份,本会话的权威列表随后由 ws commands 事件整份替换 */
   slashCommands: () => get<{ cmds: SlashCmdInfo[]; fresh: boolean; uses?: Record<string, number> }>('/api/slash-commands'),
   /** 账户级偏好(跨设备):派发默认值与通知范围。外观/快捷键在前端 localStorage,不走这里 */
+  /** 模型目录(CLI /model 面板那份,后端缓存);models 为空 = 还没拉到,前端走兜底 */
+  models: () => get<{ models: ModelOption[]; cliVersion: string | null; at: number }>('/api/models'),
   prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
   putPrefs: (patch: Partial<AccountPrefs>) =>
     mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
+  termInfo: () => get<TermInfo>('/api/terminal/info'),
+  termCreate: (body: { cwd?: string; cols?: number; rows?: number }) =>
+    mutate<{ session: TermSessionInfo }>('/api/terminal/sessions', 'POST', body),
+  termKill: (id: string) => mutate<{ ok: boolean }>(`/api/terminal/sessions/${encodeURIComponent(id)}`, 'DELETE', {}),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
   /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */

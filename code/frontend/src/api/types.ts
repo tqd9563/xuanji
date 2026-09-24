@@ -43,6 +43,8 @@ export interface AgentSession {
   archived?: boolean;
   /** 在验收中显式「挂起」的卡:落在空闲列,提供回验收入口 */
   suspended?: boolean;
+  /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
+  idleExited?: boolean;
 }
 
 export type ReplayEvent =
@@ -371,6 +373,146 @@ export interface AccountPrefs {
   bg: boolean;
   wrapupPrompt: string;
   notify: NotifyPrefs;
+  monitor: MonitorPrefs;
+  terminal: TerminalPrefs;
+}
+
+/** 全局终端行为(账户):与后端 services/prefs.ts 的 TerminalPrefs 对应;外观属本机,见 lib/terminal.ts */
+export interface TerminalPrefs {
+  cwdMode: 'session' | 'last' | 'home';
+  navMode: 'keep' | 'hide';
+}
+
+/* ---------- 全局终端:与后端 adapters/ghostty.ts、services/terminal.ts 对应 ---------- */
+export interface TermTheme {
+  name: string;
+  background: string;
+  foreground: string;
+  cursor: string;
+  selection: string;
+  palette: string[];
+}
+export interface GhosttyInfo {
+  version: string | null;
+  configPath: string;
+  theme: TermTheme | null;
+  fontConfigured: string | null;
+  fontActual: string | null;
+  fontSize: number;
+  opacity: number;
+  blur: number;
+  cursorStyle: 'bar' | 'block' | 'underline';
+  cursorBlink: boolean;
+  globalKeys: string[];
+  command: string | null;
+}
+export interface SysHotkey {
+  id: number;
+  name: string;
+  combo: string;
+  enabled: boolean;
+}
+export interface TermSessionInfo {
+  id: string;
+  cwd: string;
+  createdAt: number;
+  proc: string;
+  busy: boolean;
+  exited: boolean;
+}
+export interface TermInfo {
+  /** 本请求是否来自本机直连;false 时终端整体不可用(手机 / Tailscale) */
+  local: boolean;
+  ghostty: GhosttyInfo | null;
+  systemHotkeys: SysHotkey[];
+  sessions: TermSessionInfo[];
+}
+
+/** 系统监控设置(账户):与后端 services/prefs.ts 的 MonitorPrefs 对应 */
+export interface MonitorPrefs {
+  mem: boolean;
+  cpu: boolean;
+  interval: 5 | 10 | 30 | 60;
+  debounce: 1 | 2 | 3;
+  pauseIdle: boolean;
+  cpuWarn: number;
+  cpuCrit: number;
+  /** 空闲自动退出(分钟);0 = 关闭 */
+  idleExit: 0 | 10 | 30 | 60 | 120;
+}
+
+/* ---------- 系统监控快照:与后端 services/sysmon/sampler.ts 对应 ---------- */
+export type MonLevel = 'ok' | 'warn' | 'crit';
+export type TipPart = string | { code: string } | { b: string };
+export interface MonTip {
+  rule: string;
+  parts: TipPart[];
+  jump?: 'mem';
+}
+export interface MonProc {
+  pid: number;
+  ppid: number;
+  cmd: string;
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  sessionId?: string;
+}
+export interface MonGroup {
+  key: string;
+  name: string;
+  kind: 'app' | 'system' | 'dispatch' | 'terminal';
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  procs: MonProc[];
+}
+export interface MonSessionUsage {
+  mem: number;
+  cmprs: number;
+  cpu: number;
+  procs: { pid: number; cmd: string; mem: number; cpu: number }[];
+}
+export interface SysmonSnapshot {
+  ok: boolean;
+  at: number;
+  interval: number;
+  debounce: number;
+  error?: string;
+  lastOkAt?: number;
+  mem: {
+    pressure: number;
+    level: MonLevel;
+    total: number;
+    /** (active + wired + 压缩器)/ hw.memsize,整数百分比 */
+    usedPct: number;
+    app: number;
+    compressor: number;
+    cache: number;
+    free: number;
+    swapUsed: number;
+    swapTotal: number;
+    swapins: number;
+    swapouts: number;
+    pageSize: number;
+    tips: MonTip[];
+  } | null;
+  cpu: {
+    user: number;
+    sys: number;
+    idle: number;
+    used: number;
+    level: MonLevel;
+    load: [number, number, number];
+    ncpu: number;
+    pcores: number | null;
+    ecores: number | null;
+    tips: MonTip[];
+  } | null;
+  groups: MonGroup[];
+  totals: { procs: number; mem: number; cmprs: number; cpu: number };
+  sessions: Record<string, MonSessionUsage>;
+  sessionNames: Record<string, string>;
 }
 
 /** 旁路提问(/btw)记录:后端 side_questions 表的镜像,答案永不进主对话 */

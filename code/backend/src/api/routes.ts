@@ -3,12 +3,14 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import { promisify } from 'node:util';
 import { config } from '../config.js';
+import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
-import { canResume, endDispatchBySessionId } from '../services/dispatch.js';
+import { canResume, endDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
 import { readPrefs, writePrefs } from '../services/prefs.js';
+import { appendJank, readJank, sanitizeJank } from '../services/client-jank.js';
 import { listProjects } from '../services/projects.js';
 import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from '../services/sessions.js';
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
@@ -16,6 +18,7 @@ import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../se
 import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
 import { queryWorklog } from '../services/worklog.js';
 import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
+import { cachedModelCatalog } from '../services/models.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
@@ -24,6 +27,9 @@ import { liveEnvironments, resolveRunbook, resolveSessionCleanup, runRequest } f
 import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js';
 import type { RunbookItem, RunbookTemplate, SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
+import type { SysmonSampler } from '../services/sysmon/sampler.js';
+import { isLocalRequest, type TerminalManager } from '../services/terminal.js';
+import { readGhostty, readSystemHotkeys } from '../adapters/ghostty.js';
 
 const DAY = 86_400_000;
 const execFileP = promisify(execFile);
@@ -34,8 +40,41 @@ function num(v: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-export function createApi(storage: Storage, scheduler: SchedulerService) {
+export function createApi(
+  storage: Storage,
+  scheduler: SchedulerService,
+  sysmon?: SysmonSampler,
+  terminals?: TerminalManager,
+) {
   const api = new Hono();
+
+  /* ---------- 全局终端(本机直连才放行,见 services/terminal.ts isLocalRequest) ---------- */
+  const localOnly = (c: Context) => {
+    const incoming = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming;
+    return isLocalRequest(incoming?.socket?.remoteAddress, (n) => c.req.header(n));
+  };
+
+  api.get('/terminal/info', async (c) => {
+    const local = !!terminals && localOnly(c);
+    if (!local) return c.json({ local: false, ghostty: null, systemHotkeys: [], sessions: [] });
+    const [ghostty, systemHotkeys] = await Promise.all([readGhostty(), readSystemHotkeys()]);
+    return c.json({ local, ghostty, systemHotkeys, sessions: terminals!.list() });
+  });
+
+  api.post('/terminal/sessions', async (c) => {
+    if (!terminals || !localOnly(c)) return c.json({ error: '终端只对本机开放' }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: unknown; cols?: unknown; rows?: unknown };
+    try {
+      return c.json({ session: terminals.create(body) });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  });
+
+  api.delete('/terminal/sessions/:id', (c) => {
+    if (!terminals || !localOnly(c)) return c.json({ error: '终端只对本机开放' }, 403);
+    return c.json({ ok: terminals.kill(c.req.param('id')) });
+  });
 
   api.get('/health', async (c) => {
     const cli = await cliVersion();
@@ -68,6 +107,12 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
     return c.json({ ...cached, cmds, uses });
   });
 
+  /** 模型目录(CLI /model 面板那份,见 services/models.ts);空目录时前端用写死的兜底清单 */
+  api.get('/models', (c) => {
+    const cat = cachedModelCatalog(storage);
+    return c.json(cat ? { models: cat.models, cliVersion: cat.cliVersion, at: cat.at } : { models: [], cliVersion: null, at: 0 });
+  });
+
   api.get('/resolve-path', (c) => {
     const raw = c.req.query('path');
     if (!raw?.trim()) return c.json({ error: 'path required' }, 400);
@@ -78,11 +123,35 @@ export function createApi(storage: Storage, scheduler: SchedulerService) {
 
   /** 项目分类色调色板:name → 序号(首次出现顺序,SQLite 固定;色相映射在前端色环) */
   /** 账户级偏好:跨设备共享的设置(派发默认值 / 通知范围)。外观与快捷键跟着设备走,存前端不进这里 */
+  api.get('/live2d/models', (c) => c.json({ models: listLive2dModels(config.live2dDir), dir: config.live2dDir }));
+
   api.get('/prefs', (c) => c.json({ prefs: readPrefs(storage) }));
+
+  // ---------- 前端卡顿记录(取证用,见 frontend lib/jank.ts) ----------
+  api.post('/client-jank', async (c) => {
+    const rec = sanitizeJank(await c.req.json().catch(() => null));
+    if (!rec) return c.json({ error: 'bad record' }, 400);
+    await appendJank(rec);
+    return c.json({ ok: true });
+  });
+  api.get('/client-jank', async (c) => c.json({ records: await readJank(num(c.req.query('limit')) ?? 50) }));
 
   api.put('/prefs', async (c) => {
     const patch = await c.req.json().catch(() => ({}));
-    return c.json({ prefs: writePrefs(storage, patch) });
+    const prefs = writePrefs(storage, patch);
+    // 监控设置(间隔/开关/阈值)即时生效:丢掉在途定时,按新设置马上采一次
+    if (patch && typeof patch === 'object' && 'monitor' in patch) {
+      sysmon?.prefsChanged();
+      // 调短空闲退出阈值时立即生效,不等下一分钟的巡检
+      void sweepIdleDispatches(prefs.monitor.idleExit).catch(() => {});
+    }
+    return c.json({ prefs });
+  });
+
+  /** 系统监控最新快照(实时推送走 /ws/sysmon;这里给调试与首屏兜底,无缓存时现采一次) */
+  api.get('/sysmon', async (c) => {
+    if (!sysmon) return c.json({ error: 'sysmon disabled' }, 503);
+    return c.json(sysmon.latest() ?? (await sysmon.sampleOnce()));
   });
 
   api.get('/palette', async (c) => {

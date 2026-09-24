@@ -15,6 +15,7 @@ export type ActionId =
   | 'global.settings'
   | 'global.prevView'
   | 'global.nextView'
+  | 'global.terminal'
   | 'dispatch.model'
   | 'dispatch.workdir'
   | 'dispatch.turnOutline'
@@ -41,6 +42,7 @@ export const KEY_ACTIONS: KeyAction[] = [
   { id: 'global.settings', group: '全局', label: '打开设置' },
   { id: 'global.prevView', group: '全局', label: '上一个视图' },
   { id: 'global.nextView', group: '全局', label: '下一个视图' },
+  { id: 'global.terminal', group: '全局', label: '呼出 / 收起终端', hint: '上游占用检测见 设置 › 终端' },
   { id: 'dispatch.model', group: '派发', label: '切换模型' },
   { id: 'dispatch.workdir', group: '派发', label: '工作目录' },
   { id: 'dispatch.turnOutline', group: '派发', label: '轮次目录' },
@@ -59,6 +61,7 @@ export const KEYMAP_DEFAULTS: Record<ActionId, string> = {
   'global.settings': 'mod+,',
   'global.prevView': 'mod+alt+arrowleft',
   'global.nextView': 'mod+alt+arrowright',
+  'global.terminal': 'mod+`',
   'dispatch.model': 'mod+m',
   'dispatch.workdir': 'mod+d',
   'dispatch.turnOutline': 'mod+shift+o',

@@ -6,12 +6,16 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
+import type { MonitorPrefs } from '@/api/types';
 import { DropUp } from '@/components/DropUp';
 import { confirmBox, toast } from '@/components/shared';
+import { Live2dFields } from '@/components/Live2dSettings';
 import { WallpaperFields } from '@/components/WallpaperSettings';
+import { type Live2dState } from '@/lib/live2d';
 import {
   DEFAULT_ACCOUNT,
   DEFAULT_LOCAL,
+  getAccount,
   patchAccount,
   patchLocal,
   useAccountPrefs,
@@ -29,10 +33,27 @@ import {
   type ActionId,
 } from '@/lib/keymap';
 import { STOW_OPTS, stowLabel } from '@/lib/stow';
+import { modelDetail, modelLabel, useModelCatalog } from '@/lib/models';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
+import { api as termApi } from '@/api/client';
+import type { GhosttyInfo, TermTheme } from '@/api/types';
+import {
+  BUILTIN_THEMES,
+  clearTermImage,
+  editLook,
+  getTerm,
+  keyConflicts,
+  LOOK_DEFAULTS,
+  resolveLook,
+  saveTermImage,
+  setLook,
+  setTerm,
+  useTerm,
+  type CursorStyle,
+} from '@/lib/terminal';
 
-type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'adv';
+type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'monitor' | 'term' | 'adv';
 
 /**
  * 这四个组件必须定义在 Settings 之外。
@@ -146,19 +167,275 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
     title: '通知',
     desc: '范围与事件取与——两者都开才会通知',
   },
+  {
+    id: 'monitor',
+    label: '系统监控',
+    icon: 'M3 4h18v12H3zM7 12l3-3 2 2 5-4M8 20h8M12 16v4',
+    title: '系统监控',
+    desc: '状态栏内存 / CPU 指示与会话卡片上的占用数字;采样在后端跑,只读系统信息',
+  },
+  {
+    id: 'term',
+    label: '终端',
+    icon: 'M3 5h18v14H3zM7 9l3 3-3 3M12 15h5',
+    title: '终端',
+    desc: '⌘` 呼出的全局终端;外观默认读本机 Ghostty 配置,只读,不改 Ghostty',
+  },
   { id: 'adv', label: '高级', icon: 'M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4', title: '高级', desc: '不常动的东西' },
 ];
 
+/** 读单例上的最新值再合并:同一帧里连点两项时,闭包里的 prefs 还是旧的,会把前一项覆盖回去 */
+function setMon(p: Partial<MonitorPrefs>) {
+  void patchAccount({ monitor: { ...getAccount().monitor, ...p } });
+}
+
+const INTERVAL_TABS = ([5, 10, 30, 60] as const).map((v) => ({ v, label: `${v}s` }));
+const IDLE_EXIT_TABS = ([0, 10, 30, 60, 120] as const).map((v) => ({ v, label: v ? `${v} 分钟` : '关闭' }));
+const DEBOUNCE_TABS = ([1, 2, 3] as const).map((v) => ({ v, label: `${v} 次` }));
+const CARD_TABS = [
+  { v: 'always' as const, label: '始终' },
+  { v: 'high' as const, label: '偏高时' },
+  { v: 'off' as const, label: '不显示' },
+];
+
+/**
+ * CPU 黄/红阈值:滑杆草稿态。黄 ≥ 红时说明转 amber 并不保存(判色继续用上次合法值),
+ * 否则拖动即落账户偏好——后端 sanitize 同样拒绝非法组合,两侧口径一致。
+ */
+function CpuThresholdRows({ hit, off }: { hit: RowProps['hit']; off: boolean }) {
+  const { prefs } = useAccountPrefs();
+  const m = prefs.monitor;
+  const [draft, setDraft] = useState({ warn: m.cpuWarn, crit: m.cpuCrit });
+  useEffect(() => setDraft({ warn: m.cpuWarn, crit: m.cpuCrit }), [m.cpuWarn, m.cpuCrit]);
+  const bad = draft.warn >= draft.crit;
+  const set = (next: { warn: number; crit: number }) => {
+    setDraft(next);
+    if (next.warn < next.crit) setMon({ cpuWarn: next.warn, cpuCrit: next.crit });
+  };
+  return (
+    <>
+      <SettingsRow hit={hit} off={off} scope="acct" label="压力警告(黄)"
+        desc="整体占用 = 用户 + 系统;超过性能核的量(本机约 45%)后开始挤到能效核">
+        <input type="range" min={30} max={95} value={draft.warn} aria-label="CPU 黄色阈值"
+          onChange={(e) => set({ ...draft, warn: Number(e.target.value) })} />
+        <span className="stg-val">{draft.warn}%</span>
+      </SettingsRow>
+      <SettingsRowCustom hit={hit} off={off} label="压力严重(红)"
+        desc={bad ? `必须高于黄色阈值(当前黄 ${draft.warn}% ≥ 红 ${draft.crit}%,未保存,仍按上次有效值判色)` : '必须高于黄色阈值'}
+        invalid={bad}>
+        <input type="range" min={35} max={99} value={draft.crit} aria-label="CPU 红色阈值"
+          onChange={(e) => set({ ...draft, crit: Number(e.target.value) })} />
+        <span className="stg-val">{draft.crit}%</span>
+      </SettingsRowCustom>
+    </>
+  );
+}
+
+/** 与 SettingsRow 同形,只多一个「说明转 amber」的校验态 */
+function SettingsRowCustom({ label, desc, children, off, hit, invalid }: Omit<RowProps, 'scope'> & { invalid: boolean }) {
+  if (!hit(label, desc)) return null;
+  return (
+    <div className={cn('stg-row', off && 'is-off')}>
+      <div className="stg-lab">
+        <span>{label}</span>
+        {desc && <small className={invalid ? 'mon-invalid' : undefined}>{desc}</small>}
+      </div>
+      <div className="stg-ctl">{children}</div>
+      <span className="stg-scope" data-scope="acct">账户</span>
+    </div>
+  );
+}
+
+const CURSOR_TABS: { v: CursorStyle; label: string }[] = [
+  { v: 'bar', label: '竖线' },
+  { v: 'block', label: '方块' },
+  { v: 'underline', label: '下划线' },
+];
+const CWD_MODE_TABS = [
+  { v: 'session' as const, label: '跟随会话' },
+  { v: 'last' as const, label: '上次目录' },
+  { v: 'home' as const, label: '家目录' },
+];
+const NAV_MODE_TABS = [
+  { v: 'keep' as const, label: '保持' },
+  { v: 'hide' as const, label: '收起' },
+];
+
+function ThemeCard({ th, on, tag, onPick }: { th: TermTheme; on: boolean; tag?: string; onPick: () => void }) {
+  return (
+    <button className="tty-theme" role="radio" aria-checked={on} onClick={onPick}>
+      <span className="tty-theme-sw" style={{ background: th.background, color: th.foreground }}>
+        ❯
+        {th.palette.slice(1, 7).map((c, i) => (
+          <i key={i} style={{ background: c }} />
+        ))}
+      </span>
+      <span className="tty-theme-name">
+        {th.name}
+        {tag && <span> · {tag}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** 设置 › 终端。外观(本机)改任一项即转「自定义」;行为(账户)走 AccountPrefs.terminal */
+function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; searching: boolean; onGoKeys: () => void }) {
+  const t = useTerm();
+  const local = useLocalPrefs();
+  const { prefs } = useAccountPrefs();
+  const g: GhosttyInfo | null = t.info?.ghostty ?? null;
+  const look = t.look;
+  const r = resolveLook(look, g);
+  const edit = (p: Parameters<typeof editLook>[2]) => setLook(editLook(look, g, p));
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rereading, setRereading] = useState(false);
+  const combo = local.keymap['global.terminal'];
+  const conflicts = keyConflicts(combo, g, t.info?.systemHotkeys ?? []);
+  const themes = g?.theme && !BUILTIN_THEMES.some((x) => x.name === g.theme!.name) ? [g.theme, ...BUILTIN_THEMES] : BUILTIN_THEMES;
+
+  const reread = async () => {
+    setRereading(true);
+    try {
+      const info = await termApi.termInfo();
+      setTerm({ info });
+      toast(info.ghostty ? '已重新读取 Ghostty 配置' : '没找到 Ghostty 配置');
+    } catch {
+      toast('读取失败:后端不可达');
+    } finally {
+      setRereading(false);
+    }
+  };
+
+  if (t.info && !t.info.local)
+    return <p className="stg-storage">终端只对本机直连开放;当前是经远程(手机 / Tailscale)访问,这一节不可用。</p>;
+
+  return (
+    <>
+      {!searching && (
+        <div className="tty-src">
+          <span className={cn('tty-src-dot', !g && 'off')} />
+          <span>
+            {g ? (
+              <>
+                已读取 Ghostty {g.version ?? ''} 配置 <code>{g.configPath.replace(/^\/Users\/[^/]+/, '~')}</code>
+              </>
+            ) : (
+              '没找到 Ghostty 配置,外观跟随时用璇玑默认(玉色主题、不透明、无模糊)'
+            )}
+          </span>
+          <button className="btn btn-quiet" disabled={rereading} onClick={() => void reread()}>
+            {rereading ? '读取中…' : '重新读取'}
+          </button>
+        </div>
+      )}
+      <SettingsGroup show={!searching}>外观</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="外观来源">
+        <Tabs value={look.mode} options={[{ v: 'ghostty', label: '跟随 Ghostty' }, { v: 'custom', label: '自定义' }]}
+          onChange={(v) => setLook(v === 'ghostty' ? { ...look, mode: 'ghostty' } : editLook(look, g, {}))} />
+      </SettingsRow>
+      {hit('主题', '配色') && (
+        <div className="stg-row tty-wide">
+          <div className="stg-lab">
+            <span>主题</span>
+          </div>
+          <span className="stg-scope" data-scope="local">本机</span>
+          <div className="stg-ctl tty-themes" role="radiogroup" aria-label="终端主题">
+            {themes.map((th) => (
+              <ThemeCard key={th.name} th={th} on={r.theme.name === th.name} tag={g?.theme?.name === th.name ? 'Ghostty' : undefined}
+                onPick={() => edit({ theme: th.name, bg: null })} />
+            ))}
+          </div>
+        </div>
+      )}
+      <SettingsGroup show={!searching}>背景</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="背景颜色">
+        <label className="tty-color">
+          <input type="color" value={r.background} aria-label="终端背景颜色" onChange={(e) => edit({ bg: e.target.value })} />
+          <span>{r.background}</span>
+        </label>
+        {look.mode === 'custom' && look.bg && (
+          <button className="btn btn-sm" onClick={() => edit({ bg: null })}>跟随配色</button>
+        )}
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景不透明度">
+        <input type="range" min={30} max={100} value={r.opacity} aria-label="终端背景不透明度" onChange={(e) => edit({ opacity: Number(e.target.value) })} />
+        <span className="stg-val">{r.opacity}%</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景模糊">
+        <input type="range" min={0} max={40} value={r.blur} aria-label="终端背景模糊" onChange={(e) => edit({ blur: Number(e.target.value) })} />
+        <span className="stg-val">{r.blur}px</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景图片">
+        <Tabs value={r.hasImg && t.imgUrl ? 'file' : 'none'} options={[{ v: 'none', label: '无' }, { v: 'file', label: '本地图片…' }]}
+          onChange={(v) => {
+            if (v === 'file') fileRef.current?.click();
+            else {
+              void clearTermImage();
+              edit({ hasImg: false });
+            }
+          }} />
+        <input ref={fileRef} type="file" accept="image/*" hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            void saveTermImage(f).then(() => edit({ hasImg: true }));
+          }} />
+      </SettingsRow>
+      {r.hasImg && t.imgUrl && (
+        <SettingsRow hit={hit} scope="local" label="图片不透明度">
+          <span className="tty-img-thumb" style={{ backgroundImage: `url("${t.imgUrl}")` }} />
+          <input type="range" min={5} max={100} value={r.imgOpacity} aria-label="终端背景图不透明度" onChange={(e) => edit({ imgOpacity: Number(e.target.value) })} />
+          <span className="stg-val">{r.imgOpacity}%</span>
+        </SettingsRow>
+      )}
+      <SettingsGroup show={!searching}>文字与光标</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="字体">
+        <span className="tty-font-val">{r.fontName}</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="字号">
+        <input type="range" min={11} max={20} value={r.fontSize} aria-label="终端字号" onChange={(e) => edit({ fontSize: Number(e.target.value) })} />
+        <span className="stg-val">{r.fontSize}px</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="光标">
+        <Tabs value={r.cursorStyle} options={CURSOR_TABS} onChange={(v) => edit({ cursorStyle: v })} />
+        <span title="闪烁">
+          <Switch on={r.cursorBlink} onChange={(v) => edit({ cursorBlink: v })} />
+        </span>
+      </SettingsRow>
+      <SettingsGroup show={!searching}>行为</SettingsGroup>
+      {hit('呼出 / 收起', '快捷键 冲突') && (
+        <div className="stg-row">
+          <div className="stg-lab">
+            <span>呼出 / 收起</span>
+            {/* 只在真有上游占用时出一行琥珀提示;没有冲突不写说明 */}
+            {conflicts.map((c) => (
+              <small key={c.who} className="tty-warn">
+                {c.who} 也占用了 {formatCombo(combo)},系统层优先,璇玑收不到。{c.fix}
+              </small>
+            ))}
+          </div>
+          <div className="stg-ctl">
+            <kbd className={cn(conflicts.length > 0 && 'tty-kbd-warn')}>{formatCombo(combo)}</kbd>
+            <button className="btn btn-sm" onClick={onGoKeys}>改键</button>
+          </div>
+          <span className="stg-scope" data-scope="local">本机</span>
+        </div>
+      )}
+      <SettingsRow hit={hit} scope="acct" label="新终端默认目录">
+        <Tabs value={prefs.terminal.cwdMode} options={CWD_MODE_TABS}
+          onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, cwdMode: v } })} />
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="acct" label="切换视图时">
+        <Tabs value={prefs.terminal.navMode} options={NAV_MODE_TABS}
+          onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, navMode: v } })} />
+      </SettingsRow>
+    </>
+  );
+}
+
 const STOW_TABS = STOW_OPTS.map((v) => ({ v, label: stowLabel(v) }));
 
-const MODEL_OPTS = [
-  '',
-  'claude-fable-5-1',
-  'claude-opus-5',
-  'claude-opus-5[1m]',
-  'claude-sonnet-5',
-  'claude-haiku-4-5-20251001',
-];
 const EFFORT_OPTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
 const PERM_OPTS = ['default', 'acceptEdits', 'bypassPermissions', 'plan'];
 const PERM_LABEL: Record<string, string> = {
@@ -170,21 +447,34 @@ const PERM_LABEL: Record<string, string> = {
 
 export function Settings({
   open,
+  initialSec,
   onClose,
   cwdOptions,
   wall,
   patchWall,
+  live2d,
+  patchLive2d,
 }: {
   open: boolean;
+  /** 打开时直接落到的分区(终端浮层的 ⚙);null/缺省 = 停在上次的分区 */
+  initialSec?: SecId | null;
   onClose: () => void;
   cwdOptions: string[];
   wall: WallState;
   patchWall: (p: Partial<WallState>) => void;
+  live2d: Live2dState;
+  patchLive2d: (p: Partial<Live2dState>) => void;
 }) {
   const [sec, setSec] = useState<SecId>('dispatch');
   const [q, setQ] = useState('');
   const local = useLocalPrefs();
   const { prefs } = useAccountPrefs();
+  /** 模型候选来自后端目录(CLI /model 面板那份);已存的值不在目录里(手输 id)也要显示出来 */
+  const { models } = useModelCatalog();
+  const modelOpts = useMemo(() => {
+    const vals = ['', ...models.map((m) => m.value)];
+    return prefs.model && !vals.includes(prefs.model) ? [...vals, prefs.model] : vals;
+  }, [models, prefs.model]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   /** 正在录入新键位的动作;null = 没有 */
@@ -194,9 +484,10 @@ export function Settings({
     if (!open) return;
     setQ('');
     setRecording(null);
+    if (initialSec) setSec(initialSec);
     const t = setTimeout(() => searchRef.current?.focus(), 60);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, initialSec]);
 
   /** 面板内键盘:录入态优先吃掉一切按键,其次 Esc 关闭、⌘F 聚焦搜索 */
   useEffect(() => {
@@ -256,6 +547,13 @@ export function Settings({
       patchLocal({ keymap: { ...KEYMAP_DEFAULTS } });
     } else if (id === 'notify') {
       await patchAccount({ notify: DEFAULT_ACCOUNT.notify });
+    } else if (id === 'term') {
+      setLook({ ...LOOK_DEFAULTS, height: getTerm().look.height });
+      void clearTermImage();
+      await patchAccount({ terminal: DEFAULT_ACCOUNT.terminal });
+    } else if (id === 'monitor') {
+      patchLocal({ cardMem: DEFAULT_LOCAL.cardMem, cardCpu: DEFAULT_LOCAL.cardCpu });
+      await patchAccount({ monitor: DEFAULT_ACCOUNT.monitor });
     }
     toast(`「${SECTIONS.find((x) => x.id === id)!.title}」已恢复默认`);
   };
@@ -350,14 +648,14 @@ export function Settings({
             down
             portalTo={bodyRef}
             value={prefs.model}
-            options={MODEL_OPTS}
-            labelOf={(v) => v || '沿用上次用过的'}
+            options={modelOpts}
+            labelOf={(v) => (v ? `${modelLabel(models, v)} · ${modelDetail(models, v)}` : '沿用上次用过的')}
             onChange={(v) => void patchAccount({ model: v })}
           />
         </SettingsRow>
         <SettingsRow hit={hit}
           label="默认思考深度"
-          desc="自动 = 按模型取默认(opus-5 → low,其余交给模型自身)"
+          desc="自动 = 按模型取默认(opus → low,其余交给模型自身)"
           scope="acct"
         >
           <DropUp
@@ -501,6 +799,8 @@ export function Settings({
         <SettingsRow hit={hit} label="「已完成」默认展示" desc="同上;归档列通常最长,调大会拉长页面" scope="local">
           <Tabs value={local.stowDone} options={STOW_TABS} onChange={(v) => patchLocal({ stowDone: v })} />
         </SettingsRow>
+        <SettingsGroup show={!searching}>看板娘</SettingsGroup>
+        <Live2dFields state={live2d} patch={patchLive2d} hit={hit} />
       </section>
 
       <section className="stg-sec" hidden={!secShown('keys')}>
@@ -561,6 +861,53 @@ export function Settings({
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, error: v } })}
           />
         </SettingsRow>
+      </section>
+
+      <section className="stg-sec" hidden={!secShown('monitor')}>
+        {!searching && <SecHead id="monitor" />}
+        <SettingsGroup show={!searching}>指示器</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="启用内存监控"
+          desc="内存压力等级直接取内核 memorystatus 信号(与活动监视器同源),故不提供阈值设置">
+          <Switch on={prefs.monitor.mem} onChange={(v) => setMon({ mem: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="启用 CPU 监控" desc="关闭后状态栏不显示 CPU,卡片也不显示 CPU 数字">
+          <Switch on={prefs.monitor.cpu} onChange={(v) => setMon({ cpu: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>采样</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="采样间隔" desc="越短越及时,top 双采样本身约占 1 秒 CPU">
+          <Tabs value={prefs.monitor.interval} options={INTERVAL_TABS}
+            onChange={(v) => setMon({ interval: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="变色防抖"
+          desc={`连续 ${prefs.monitor.debounce} 次超阈值才变色 ≈ ${prefs.monitor.debounce * prefs.monitor.interval} 秒`}>
+          <Tabs value={prefs.monitor.debounce} options={DEBOUNCE_TABS}
+            onChange={(v) => setMon({ debounce: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="acct" label="无人查看时暂停采样" desc="所有璇玑页面都在后台时停采,回到前台立即补采一次">
+          <Switch on={prefs.monitor.pauseIdle} onChange={(v) => setMon({ pauseIdle: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>派发会话</SettingsGroup>
+        <SettingsRow hit={hit} scope="acct" label="空闲自动退出"
+          desc={prefs.monitor.idleExit
+            ? `验收中 / 空闲的派发会话 ${prefs.monitor.idleExit} 分钟无新消息即结束进程;仅结束进程,卡片与记录保留,下次发消息自动接上(冷启动几秒)`
+            : '已关闭:派发会话回合结束后进程常驻,直到在看板上关闭或后端重启'}>
+          <Tabs value={prefs.monitor.idleExit} options={IDLE_EXIT_TABS} onChange={(v) => setMon({ idleExit: v })} />
+        </SettingsRow>
+        <SettingsGroup show={!searching}>CPU 阈值</SettingsGroup>
+        <CpuThresholdRows hit={hit} off={!prefs.monitor.cpu} />
+        <SettingsGroup show={!searching}>会话卡片</SettingsGroup>
+        <SettingsRow hit={hit} scope="local" label="显示内存" desc="偏高 = 进程树 ≥ 1G" off={!prefs.monitor.mem}>
+          <Tabs value={local.cardMem} options={CARD_TABS} onChange={(v) => patchLocal({ cardMem: v })} />
+        </SettingsRow>
+        <SettingsRow hit={hit} scope="local" label="显示 CPU" off={!prefs.monitor.cpu}
+          desc={`偏高 = 占整机 ≥ 黄色阈值 ${prefs.monitor.cpuWarn}%,或单会话 ≥ 50%(半个核)`}>
+          <Tabs value={local.cardCpu} options={CARD_TABS} onChange={(v) => patchLocal({ cardCpu: v })} />
+        </SettingsRow>
+      </section>
+
+      <section className="stg-sec" hidden={!secShown('term')}>
+        {!searching && <SecHead id="term" />}
+        <TerminalFields hit={hit} searching={searching} onGoKeys={() => setSec('keys')} />
       </section>
 
       <section className="stg-sec" hidden={!secShown('adv')}>

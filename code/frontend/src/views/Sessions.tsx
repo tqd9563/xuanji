@@ -13,18 +13,30 @@ import {
 } from '@dnd-kit/core';
 import { api } from '@/api/client';
 import type { AgentSession, Replay, SessionState } from '@/api/types';
-import { usePoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
+import { usePoll, isTypingTarget, useIsMobile, useSeenVersion } from '@/lib/hooks';
 import { setDispatchIntent } from '@/lib/dispatch';
 import { matchKey } from '@/lib/keymap';
 import { useLocalPrefs } from '@/lib/prefs';
 import { recentOf } from '@/lib/stow';
+import { noteContentShown, noteInteraction } from '@/lib/jank';
+import { canDrag, dropAction, type DropCol } from '@/lib/board-drop';
+import { useProgressiveMount } from '@/lib/replay-mount';
 import { clock, daySeparator, isUnread, markSeen, projColor, timeAgo } from '@/lib/utils';
 import { matches, narrow, projectFacets, recalibrate, toggle } from '@/lib/proj-filter';
-import { CompactionCard, confirmBox, Drawer, Empty, Md, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
+import { CompactionCard, Drawer, Empty, LazyMd, ScrollRootContext, MsgTime, Pill, PrLinkCard, ProjChip, Tag, toast, ToolCard, UserText } from '@/components/shared';
 import { FindBar, useFindInPage } from '@/components/FindBar';
+import { SessionMetrics, useCardRamLv } from '@/components/Sysmon';
+import { closeSession } from '@/lib/close-session';
+import { noteSessionNames } from '@/lib/sysmon';
 
 /** 智能进入:后端存活的派发会话 → attach 接回;可续接 → 派发页续接;终端只读 → 回放(所有权规则) */
 function smartOpen(s: AgentSession, openReplay: (id: string, s: AgentSession) => void) {
+  // 卡顿记录器要知道走的是哪条入口:同一张卡三条路,哪条卡住得分开看
+  noteInteraction('open-session', {
+    sessionId: s.sessionId.slice(0, 8),
+    entry: s.dispatchId ? 'attach' : s.readonly ? 'drawer' : 'resume',
+    state: s.state,
+  });
   if (s.dispatchId) {
     setDispatchIntent({ attach: { dispatchId: s.dispatchId, sessionId: s.sessionId, cwd: s.cwd, name: s.name, project: s.project } });
     location.hash = 'dispatch';
@@ -74,26 +86,9 @@ export interface SessionsHandle {
   openReplay: (sessionId: string) => void;
 }
 
-/** 关闭会话:自有隐藏列表(~/.claude 不动);存活的 web 派发会话额外终止其进程 */
-async function closeSession(s: AgentSession, refresh: () => void) {
-  const msg = s.dispatchId
-    ? `结束派发会话「${s.name}」?\n其进程将被终止并从看板移除,已生成的记录仍可回放/续接。`
-    : `从看板移除会话「${s.name}」?\n仅在璇玑隐藏,~/.claude 数据与终端不受影响。`;
-  if (!(await confirmBox(msg))) return;
-  try {
-    await api.closeSession(s.sessionId);
-    toast(`已关闭 ${s.name}`);
-    refresh();
-  } catch (e) {
-    toast(e instanceof Error ? e.message : String(e));
-  }
-}
-
-/** 拖拽落点:验收中的卡可拖进「已完成」(归档)或「空闲」(挂起),与卡上两个按钮同义 */
-const DONE_DROP_ID = 'col-done';
-const IDLE_DROP_ID = 'col-idle';
-/** 可拖的源列:验收中(→ 空闲挂起 / 已完成归档)与空闲(→ 已完成归档) */
-const DRAGGABLE_COLS: SessionState[] = ['review', 'idle'];
+/** 拖拽落点:列 key 即落点 id;各方向的语义见 board-drop.ts,与卡上按钮同一后端入口 */
+const DROP_COLS: DropCol[] = ['review', 'idle', 'done'];
+const isDropCol = (k: unknown): k is DropCol => DROP_COLS.includes(k as DropCol);
 
 interface CardProps {
   s: AgentSession;
@@ -166,11 +161,13 @@ function useCardDrag(s: AgentSession, enabled: boolean) {
 /** 已完成 = 归档:两行紧凑卡(标题 / 项目+时间),概要在悬停提示与回放页 */
 function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsuspend }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard compact ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -208,6 +205,7 @@ function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsusp
             ↩
           </button>
         )}
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -221,11 +219,13 @@ function CompactCard({ s, sel, dim, drag, onOpen, onClose, onUnarchive, onUnsusp
 /** blk = 左侧琥珀立柱,在合并列里标出「它在等你回话」;与 kb-sel 走不同视觉通道,可叠加显示 */
 function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard ${s.state === 'blocked' ? 'blk' : ''} ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -239,6 +239,7 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
         {s.state === 'blocked' && <span className="tag t-unread">等输入</span>}
         <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
         {s.readonly && <Tag>只读</Tag>}
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -311,11 +312,13 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
  */
 function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArchive }: CardProps) {
   const d = useCardDrag(s, drag);
+  const ramLv = useCardRamLv(s.sessionId);
   return (
     <div
       ref={d.ref}
       style={d.style}
       {...d.dragProps}
+      {...ramLv}
       className={`scard mid ${sel ? 'kb-sel' : ''} ${dim ? 'pf-dim' : ''} ${d.isDragging ? 'dragging' : ''}`}
       role="button"
       tabIndex={0}
@@ -326,6 +329,7 @@ function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArc
         {isUnread(s) && <span className="u-dot" />}
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
+        <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />
         <XClose s={s} onClose={onClose} />
       </div>
       <div className="cwd">
@@ -370,9 +374,9 @@ function MidCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onArc
   );
 }
 
-/** 拖拽落点列体(已完成 = 归档,空闲 = 挂起),悬停时高亮 */
-function ColDropZone({ id, children }: { id: string; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+/** 拖拽落点列体:只在正拖着的卡能落进来时启用并高亮,不接的列悬停无反应 */
+function ColDropZone({ id, accept, children }: { id: DropCol; accept: boolean; children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id, disabled: !accept });
   return (
     <div ref={setNodeRef} className={`col-body ${isOver ? 'drop-over' : ''}`}>
       {children}
@@ -440,6 +444,15 @@ export function Sessions({
   registerHandle?: (h: SessionsHandle) => void;
 }) {
   const { data, refresh } = usePoll(api.sessions, 5_000);
+  // 系统监控弹窗里的会话进程行用看板上的卡片名(与卡片一致),而不是 agents CLI 的原始名
+  useEffect(() => {
+    if (!data) return;
+    const names: Record<string, string> = {};
+    for (const col of Object.values(data.columns)) for (const c of col) names[c.sessionId] = c.name;
+    noteSessionNames(names);
+  }, [data]);
+  // 已读表版本:markSeen 后立刻重渲染(角标 + 未读排顶),不等 5s 轮询
+  const seenVer = useSeenVersion();
   const prefs = useLocalPrefs();
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayFor, setReplayFor] = useState<AgentSession | null>(null);
@@ -461,6 +474,59 @@ export function Sessions({
       return sep;
     });
   }, [replay]);
+  /**
+   * 回放事件的元素列表:整体 useMemo,让 5s 轮询引起的 Sessions 重渲染不再重建它们
+   * (实测抽屉开着时每次轮询要多花 ~370ms 主线程——每条助手消息都被 react-markdown
+   * 重新解析一遍)。配合 shared.tsx 里各卡片的 memo,轮询期间这块开销降到零。
+   * mountCount 由 useProgressiveMount 按滚动放开,首屏只付前 12 条的代价。
+   */
+  const mountSentinelRef = useRef<HTMLDivElement>(null);
+  const { mounted: mountCount, mountAll } = useProgressiveMount(
+    replay?.events.length ?? 0,
+    replay,
+    mountSentinelRef,
+    drawerBodyRef,
+  );
+  // ⌘F 靠扫 DOM 查找:开查找条的那一刻把没挂的事件补齐,否则搜不到还没滚到的部分
+  useEffect(() => {
+    if (find.open) mountAll();
+  }, [find.open, mountAll]);
+
+  const replayRows = useMemo(
+    () =>
+      (replay?.events ?? []).slice(0, mountCount).map((ev, i) => {
+          if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
+          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
+          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
+          if (ev.kind === 'raw')
+            return (
+              <div className="raw-event" key={i}>
+                <div className="note">⚠ 未知事件类型「{ev.type}」,已按原始文本降级展示(adapter 兜底)</div>
+                {ev.json}
+              </div>
+            );
+          return (
+            <Fragment key={i}>
+              {replayDaySeps[i] && <div className="day-sep">{replayDaySeps[i]}</div>}
+              <div className="replay-msg">
+                <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>
+                  {ev.kind === 'user' ? '你' : 'Claude'}
+                  <MsgTime ts={ev.ts} />
+                </div>
+                {ev.kind === 'assistant' ? (
+                  <div className="body md">
+                    <LazyMd>{ev.text}</LazyMd>
+                  </div>
+                ) : (
+                  <div className="body md"><UserText text={ev.text} /></div>
+                )}
+              </div>
+            </Fragment>
+          );
+        }),
+    [replay, mountCount, replayDaySeps],
+  );
+
   const [kbPos, setKbPos] = useState<{ c: number; r: number } | null>(null);
   /** 收纳列(空闲/已完成)的展开状态:两列各自独立折叠 */
   const [openCols, setOpenCols] = useState<Set<SessionState>>(() => new Set());
@@ -509,7 +575,8 @@ export function Sessions({
       out[key] = [...out[key]].sort((a, b) => Number(isUnread(b)) - Number(isUnread(a)));
     }
     return out;
-  }, [data, pendingArchive]);
+    // seenVer:排序用了 isUnread,已读表一变就要重排
+  }, [data, pendingArchive, pendingSuspend, seenVer]);
 
   /**
    * 桌面列 → 卡片列表。合并列把多个状态拼起来,等你回话的(blocked)排最前——
@@ -580,6 +647,27 @@ export function Sessions({
     setPendingSuspend((prev) => new Set([...prev].filter((id) => !settled.has(id))));
   }, [data, pendingSuspend]);
 
+  const dropPending = (set: typeof setPendingArchive, id: string) =>
+    set((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+
+  /** 按 sessionId 找被拖的卡及其所在列(拖拽只在可落点的三列间发生) */
+  const dragSrc = useCallback(
+    (id: string) => {
+      for (const from of DROP_COLS) {
+        const s = columns?.[from]?.find((x) => x.sessionId === id);
+        if (s) return { s, from };
+      }
+      return null;
+    },
+    [columns],
+  );
+  const dragging = dragId ? dragSrc(dragId) : null;
+
   /**
    * 拖到「已完成」= 归档,拖到「空闲」= 挂起:与卡上同名按钮同一后端入口。
    * 乐观就位 → 落库 → 立刻重取;失败回滚并提示。
@@ -588,11 +676,25 @@ export function Sessions({
     (e: DragEndEvent) => {
       setDragId(null);
       const over = e.over?.id;
-      if (over !== DONE_DROP_ID && over !== IDLE_DROP_ID) return;
-      const sessionId = String(e.active.id);
-      const toIdle = over === IDLE_DROP_ID;
-      // 空闲列的卡拖回空闲列 = 没动:不发请求,免得对已挂起的卡重复挂起
-      if (toIdle && (columns?.idle ?? []).some((s) => s.sessionId === sessionId)) return;
+      const src = dragSrc(String(e.active.id));
+      if (!isDropCol(over) || !src) return;
+      const sessionId = src.s.sessionId;
+      const action = dropAction(src.s, src.from, over);
+      if (!action) return;
+      if (action === 'unarchive' || action === 'unsuspend') {
+        // 撤销类不做乐观就位:卡回推导态所在列,前端猜不准,等重取。
+        // 但要先撤掉尚未被后端确认的乐观标记——刚拖进去马上拖回时它还在,
+        // 撤销后后端再也不会报「已归档/已挂起」,标记就永远盖住真实数据
+        dropPending(action === 'unarchive' ? setPendingArchive : setPendingSuspend, sessionId);
+        void (action === 'unarchive' ? api.unarchiveSession(sessionId) : api.unsuspendSession(sessionId))
+          .then(() => {
+            toast(action === 'unarchive' ? `已撤销归档 ${src.s.name}` : `已回到验收中 ${src.s.name}`);
+            refresh();
+          })
+          .catch((err: unknown) => toast(err instanceof Error ? err.message : String(err)));
+        return;
+      }
+      const toIdle = action === 'suspend';
       const setPending = toIdle ? setPendingSuspend : setPendingArchive;
       setPending((prev) => new Set(prev).add(sessionId));
       void (toIdle ? api.suspendSession(sessionId) : api.archiveSession(sessionId))
@@ -606,12 +708,13 @@ export function Sessions({
           toast(err instanceof Error ? err.message : String(err));
         });
     },
-    [refresh, columns],
+    [refresh, dragSrc],
   );
 
   /** 撤销归档:卡片回归推导态(会话重新活跃时后端也会自动撤销) */
   const unarchive = useCallback(
     async (s: AgentSession) => {
+      dropPending(setPendingArchive, s.sessionId);
       try {
         await api.unarchiveSession(s.sessionId);
         toast(`已撤销归档 ${s.name}`);
@@ -640,6 +743,7 @@ export function Sessions({
   /** 撤销挂起:卡片回验收中 */
   const unsuspend = useCallback(
     async (s: AgentSession) => {
+      dropPending(setPendingSuspend, s.sessionId);
       try {
         await api.unsuspendSession(s.sessionId);
         toast(`已回到验收中 ${s.name}`);
@@ -684,12 +788,14 @@ export function Sessions({
 
   const openReplay = useCallback(
     async (sessionId: string, session?: AgentSession) => {
+      noteInteraction('open-session', { sessionId: sessionId.slice(0, 8), entry: 'drawer', state: session?.state });
       markSeen(sessionId); // 看过回放 = 已验收,「待验收」标记熄灭
       setDrawerOpen(true);
       setReplayFor(session ?? null);
       setReplay(null);
       try {
         setReplay(await api.replay(sessionId));
+        noteContentShown('drawer');
       } catch {
         toast(
           session?.needs?.includes('send a prompt')
@@ -725,7 +831,7 @@ export function Sessions({
         const s = pos ? cardsIn(pos.c)[pos.r] : undefined;
         if (s && !s.readonly) {
           e.preventDefault();
-          void closeSession(s, refresh);
+          void closeSession({ sessionId: s.sessionId, name: s.name, dispatch: !!s.dispatchId }, refresh);
         }
         return;
       }
@@ -779,7 +885,7 @@ export function Sessions({
     dim,
     drag,
     onOpen: () => void openReplay(s.sessionId, s),
-    onClose: () => void closeSession(s, refresh),
+    onClose: () => void closeSession({ sessionId: s.sessionId, name: s.name, dispatch: !!s.dispatchId }, refresh),
     onUnarchive: () => void unarchive(s),
     onReply: () => smartOpen(s, (id, sess) => void openReplay(id, sess)),
     onSuspend: () => void suspend(s),
@@ -839,10 +945,10 @@ export function Sessions({
               // 合并列里等你回话的张数:列头单独标,不必逐张扫也知道有几件事卡着
               const waiting =
                 col.key === 'running' ? items.filter((s) => s.state === 'blocked').length : 0;
-              // 运行中/等待输入是真实进行态,不给拖;验收中(→空闲/已完成)与空闲(→已完成)可拖
+              // 运行中/等待输入是真实进行态,不给拖;其余按 board-drop 判定(向左只接被手动归档/挂起的卡)
               const card = (s: AgentSession) => {
                 const hit = matches(s, projFilter);
-                const p = cardProps(s, s.sessionId === selId, DRAGGABLE_COLS.includes(col.key) && hit, !hit);
+                const p = cardProps(s, s.sessionId === selId, canDrag(s, col.key) && hit, !hit);
                 // 点击卡片同步键盘选中位:此后 Space/Enter 从鼠标停留处继续,而非跳回首卡。
                 // 行号在键盘可达列表里取,与 selId 的口径一致。
                 const baseOpen = p.onOpen;
@@ -890,8 +996,13 @@ export function Sessions({
                       </span>
                     )}
                   </div>
-                  {isDone || col.key === 'idle' ? (
-                    <ColDropZone id={isDone ? DONE_DROP_ID : IDLE_DROP_ID}>{body}</ColDropZone>
+                  {isDropCol(col.key) ? (
+                    <ColDropZone
+                      id={col.key}
+                      accept={!!dragging && dropAction(dragging.s, dragging.from, col.key) !== null}
+                    >
+                      {body}
+                    </ColDropZone>
                   ) : (
                     <div className="col-body">{body}</div>
                   )}
@@ -903,12 +1014,10 @@ export function Sessions({
           {/* 跟手的那张:渲染在 body 层,不被列的 overflow 裁掉,也不被右侧列盖住 */}
           <DragOverlay dropAnimation={null} className="drag-ghost">
             {(() => {
-              if (!dragId || !columns) return null;
-              const s = DRAGGABLE_COLS.flatMap((k) => columns[k] ?? []).find((x) => x.sessionId === dragId);
-              if (!s) return null;
-              const p = cardProps(s, false, false);
-              // 卡型跟随源列:验收中是中密度卡,空闲是紧凑卡——浮层与原位形状一致才不跳
-              return s.state === 'idle' ? <CompactCard {...p} /> : <MidCard {...p} />;
+              if (!dragging) return null;
+              const p = cardProps(dragging.s, false, false);
+              // 卡型跟随源列:验收中是中密度卡,空闲/已完成是紧凑卡——浮层与原位形状一致才不跳
+              return dragging.from === 'review' ? <MidCard {...p} /> : <CompactCard {...p} />;
             })()}
           </DragOverlay>
         </DndContext>
@@ -1018,39 +1127,16 @@ export function Sessions({
           </>
         }
       >
+        <ScrollRootContext.Provider value={drawerBodyRef}>
         <FindBar scopeRef={drawerBodyRef} state={find} placeholder="在本次回放中查找" />
         {!replay && <Empty><p>回放加载中…</p></Empty>}
-        {replay?.events.map((ev, i) => {
-          if (ev.kind === 'tool') return <ToolCard key={i} {...ev} />;
-          if (ev.kind === 'compact') return <CompactionCard key={i} {...ev} />;
-          if (ev.kind === 'pr') return <PrLinkCard key={i} {...ev} />;
-          if (ev.kind === 'raw')
-            return (
-              <div className="raw-event" key={i}>
-                <div className="note">⚠ 未知事件类型「{ev.type}」,已按原始文本降级展示(adapter 兜底)</div>
-                {ev.json}
-              </div>
-            );
-          return (
-            <Fragment key={i}>
-              {replayDaySeps[i] && <div className="day-sep">{replayDaySeps[i]}</div>}
-              <div className="replay-msg">
-                <div className={`who ${ev.kind === 'user' ? 'u' : ''}`}>
-                  {ev.kind === 'user' ? '你' : 'Claude'}
-                  <MsgTime ts={ev.ts} />
-                </div>
-                {ev.kind === 'assistant' ? (
-                  <div className="body md">
-                    <Md>{ev.text}</Md>
-                  </div>
-                ) : (
-                  <div className="body md"><UserText text={ev.text} /></div>
-                )}
-              </div>
-            </Fragment>
-          );
-        })}
+        {replayRows}
+        {/* 挂载哨兵:进入视野就追加下一片(见 useProgressiveMount) */}
+        {replay && mountCount < replay.events.length && (
+          <div ref={mountSentinelRef} aria-hidden="true" style={{ height: 1 }} />
+        )}
         {replay && replay.events.length === 0 && <Empty><p>此会话没有可回放的事件。</p></Empty>}
+        </ScrollRootContext.Provider>
       </Drawer>
     </>
   );
