@@ -2646,6 +2646,11 @@ button.ram-chip:hover { background: var(--hover); }
 .tty-proto button:hover { color: var(--ink); background: oklch(0.3 0.03 300); }
 .tty-proto button.active { background: oklch(0.78 0.1 300); color: oklch(0.18 0.03 300); font-weight: 600; }
 .tty-proto .tty-proto-wide { border: 1px solid oklch(0.4 0.05 300); padding: 5px; }
+.tty-probe { list-style: none; margin: 0; padding: 6px 8px; min-height: 92px; max-height: 120px; overflow: hidden; background: oklch(0.16 0.01 300); border-radius: var(--r-s); font: 0.6875rem/1.55 var(--mono); color: var(--ink); }
+.tty-probe li.hit { color: var(--green); }
+.tty-probe li.warn { color: var(--amber); }
+.tty-probe li.dim { color: var(--faint); }
+.tty-proto code { font-family: var(--mono); color: var(--ink); }
 .ram-hint { display: none; }   /* 底稿的内存监控演示面板与本原型无关 */
 
 </style>
@@ -2813,6 +2818,9 @@ button.ram-chip:hover { background: var(--hover); }
   <div class="tty-proto-row"><span>去</span><button data-go="sessions" class="active">会话看板</button><button data-go="dispatch">派发页</button></div>
   <p class="tty-proto-d">在派发页新开终端,目录默认是该会话的 worktree。</p>
   <button class="tty-proto-wide" id="tty-proto-set">打开 设置 › 终端</button>
+  <span class="tty-proto-l" style="margin-top:4px">按键探针</span>
+  <p class="tty-proto-d">页面实际收到的最近按键(新的在上)。按 ⌘` 若这里没有 <code>⌘+Backquote</code>,说明被页面之外的程序截走了。</p>
+  <ol class="tty-probe" id="tty-probe"><li class="dim">还没有按键</li></ol>
 </div>
 
 <!-- ============ 轮次目录弹窗(⌘⇧O) ============ -->
@@ -4138,6 +4146,18 @@ grip.addEventListener('pointerdown', e => {
 const _show = window.showView;
 window.showView = name => { _show(name); if (st.navMode === 'hide') toggle(false); renderTabs(); };
 document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => { if (st.navMode === 'hide') toggle(false); setTimeout(renderTabs); }));
+
+/* 原型专用按键探针:在最外层 window 捕获阶段记录,早于一切业务处理 */
+const probe = document.getElementById('tty-probe');
+function plog(txt, cls) { if (probe.firstElementChild?.classList.contains('dim') && probe.children.length === 1) probe.innerHTML = ''; const li = document.createElement('li'); li.textContent = new Date().toTimeString().slice(3, 8) + '  ' + txt; if (cls) li.className = cls; probe.prepend(li); while (probe.children.length > 6) probe.lastChild.remove(); }
+const MODS = ['MetaLeft', 'MetaRight', 'ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight'];
+window.addEventListener('keydown', e => {
+  const m = (e.metaKey ? '⌘+' : '') + (e.ctrlKey ? '⌃+' : '') + (e.altKey ? '⌥+' : '') + (e.shiftKey ? '⇧+' : '');
+  const hit = e.metaKey && e.code === 'Backquote';
+  plog(`${MODS.includes(e.code) ? '(' + e.code + ')' : m + e.code}  key=${JSON.stringify(e.key)}${e.isComposing ? ' 输入法组字中' : ''}`, hit ? 'hit' : MODS.includes(e.code) ? 'dim' : '');
+}, true);
+window.addEventListener('blur', () => plog('窗口失去焦点(被别的窗口/程序抢走)', 'warn'));
+window.addEventListener('focus', () => plog('窗口重新获得焦点', 'dim'));
 
 /* 快捷键:⌘` 在任何焦点下都是开关(包括焦点在终端里);Esc 不收起,留给 vim */
 document.addEventListener('keydown', e => {
