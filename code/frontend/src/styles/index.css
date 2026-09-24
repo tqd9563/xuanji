@@ -1234,6 +1234,8 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
    textarea 滚到底时镜像还差 6px 没滚到,文字整体低于 caret/IME 下划线(2026-09-15 用户实测:
    剪切再粘贴长文本,caret 与文字错位、拼音下划线画成删除线)。 */
 .ta-wrap textarea { display: block; position: relative; z-index: 1; color: transparent; caret-color: var(--ink); }
+/* 全局 ::placeholder 给了显式色,不随 color:transparent 隐去 —— 不压掉就与镜像层 .ph 叠成重影 */
+.ta-wrap textarea::placeholder { color: transparent; }
 .ta-wrap textarea::selection { background: color-mix(in oklab, var(--jade) 26%, transparent); }
 .ta-wrap .ta-mirror {
   position: absolute; inset: 0; overflow: hidden; pointer-events: none;
