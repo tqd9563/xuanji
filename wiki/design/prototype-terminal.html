@@ -1,8 +1,10 @@
 <!--
-  内嵌终端原型(2026-09-24,待审批)。以 prototype-memory-monitor.html(已上线 PR#83)为底复制:
-  内联 CSS / DOM / class 名原样保留,新增样式全部前缀 tty-,集中在 </style> 前一段。
-  三套方案并列,底部「原型方案」切换器不是产品 UI。终端是假 xterm:可以真的敲命令(ls / pwd / git status /
-  git log / pnpm test / claude --version / cd / clear / ⌃C / ⌃L),未知命令返回 zsh 的 command not found。
+  内嵌终端原型 v2(2026-09-24,待审批)。方案 C「全局浮层」已选定。
+  以 prototype-memory-monitor.html(已上线 PR#83)为底复制:内联 CSS / DOM / class 名原样保留,
+  新增样式全部前缀 tty-,集中在 </style> 前一段。
+  v2 变化:配色/字体/透明度跟随本机 Ghostty 配置(Catppuccin Frappe · 90% · blur 30);设置新增「终端」分区;
+  ⌘` 开关;呼出 160ms / 收起 120ms,只动 transform,连按可中途反向。
+  终端是假 xterm:可以真的敲命令(ls / pwd / cd / git status / git log / pnpm test / clear / ⌃C / Tab 补全)。
   直接用浏览器打开即可(file:// 可用)。
 -->
 <!DOCTYPE html>
@@ -11,6 +13,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>璇玑 · 原型 · 内嵌终端</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap">
 <style>
 @import "tailwindcss";
 
@@ -2514,121 +2517,136 @@ button.ram-chip:hover { background: var(--hover); }
 
 .proto-hint .sw { flex-wrap: wrap; }
 /* ============================================================
-   内嵌终端(tty-):三套方案共用一个假 xterm(.tty-term)
-   终端正文永远不透明(壁纸/玻璃档下也不透):等宽字对比度是硬需求,外壳可以玻璃,字底不能。
+   内嵌终端(tty-)· 全局浮层
+   整块浮层(标签条 + 正文)是一个「终端表面」,颜色全部来自终端主题(--t-*),不用璇玑的玉色 token:
+   它要看起来和本机 Ghostty 是同一个东西。底色按 --t-op 透明 + --t-blur 模糊,壁纸与页面从后面透出来。
    ============================================================ */
-.tty-term {
-  font-family: var(--mono); font-size: var(--tty-fs, 13px); line-height: 1.45;
-  background: oklch(0.125 0.006 120); color: var(--ink);
-  padding: 10px 14px; height: 100%; overflow-y: auto; white-space: pre-wrap; word-break: break-all;
-  outline: none; cursor: text; tab-size: 4;
+.tty-c {
+  --t-bg: #303446; --t-fg: #c6d0f5; --t-cursor: #f2d5cf; --t-sel: #626880;
+  --t-0: #51576d; --t-1: #e78284; --t-2: #a6d189; --t-3: #e5c890; --t-4: #8caaee; --t-5: #f4b8e4; --t-6: #81c8be; --t-7: #a5adce; --t-8: #626880;
+  --t-op: 90%; --t-blur: 30px; --t-fs: 14px;
+  position: fixed; left: 226px; right: 0; bottom: 0; z-index: var(--z-drawer);
+  height: var(--tty-h, 340px); min-height: 140px; max-height: calc(100vh - 44px);
+  display: flex; flex-direction: column;
+  color: var(--t-fg);
+  background: color-mix(in srgb, var(--t-bg) var(--t-op), transparent);
+  backdrop-filter: blur(var(--t-blur)) saturate(1.2); -webkit-backdrop-filter: blur(var(--t-blur)) saturate(1.2);
+  border-top: 1px solid color-mix(in srgb, var(--t-fg) 14%, transparent);
+  box-shadow: 0 -18px 48px oklch(0 0 0 / .42);
+  /* 动效:只动 transform(合成层,不触发排版)。收起用 ease-in 120ms,visibility 延迟到位移结束再隐藏 */
+  transform: translate3d(0, 100%, 0); visibility: hidden;
+  transition: transform 120ms cubic-bezier(.55, .055, .675, .19), visibility 0s linear 120ms;
+  will-change: transform;
 }
-.tty-term:focus-within { box-shadow: inset 0 0 0 1.5px var(--jade-dim); }
-.tty-ta { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
-.tty-term { position: relative; }
-.tty-term .p { color: var(--jade); }
-.tty-term .p .br { color: var(--violet); }
-.tty-term .dim { color: var(--faint); }
-.tty-term .err { color: var(--red); }
-.tty-term .ok { color: var(--green); }
-.tty-term .wn { color: var(--amber); }
-.tty-term .b { font-weight: 600; }
-.tty-term .cur { display: inline-block; width: 0.6em; height: 1.15em; vertical-align: -0.2em; background: var(--ink); animation: tty-blink 1.05s steps(1) infinite; }
-.tty-term:not(:focus-within) .cur { background: transparent; box-shadow: inset 0 0 0 1px var(--muted); animation: none; }
-@keyframes tty-blink { 50% { opacity: 0; } }
-.tty-term .busy { color: var(--muted); }
-.tty-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.tty-host .tty-term { display: none; }
-.tty-host .tty-term.active { display: block; }
-.tty-empty { flex: 1; display: grid; place-items: center; color: var(--faint); font-size: 0.8125rem; }
+/* 呼出:ease-out cubic 160ms,对齐 Ghostty quick-terminal-animation-duration = 0.15。
+   用 transition 而非 keyframes:动画中途再按 ⌘` 会从当前位置平滑反向,不会跳帧 */
+.tty-c.open { transform: none; visibility: visible; transition: transform 160ms cubic-bezier(.215, .61, .355, 1), visibility 0s; }
+.tty-c.dragging { transition: none; }
+.tty-c.max { height: calc(100vh - 44px); }
+@media (prefers-reduced-motion: reduce) {
+  .tty-c { transform: none; opacity: 0; transition: opacity 80ms linear, visibility 0s linear 80ms; }
+  .tty-c.open { opacity: 1; transition: opacity 80ms linear, visibility 0s; }
+}
+@media (max-width: 1100px) { .tty-c { left: 0; } }
 
-/* 标签条:与派发页 turnhead 同一档字号,活动标签玉色下划线 */
-.tty-tabs { display: flex; align-items: flex-end; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--line-soft); overflow-x: auto; }
+.tty-grip { height: 7px; cursor: row-resize; flex: none; position: relative; }
+.tty-grip::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 2px; margin-left: -18px; border-radius: 1px; background: color-mix(in srgb, var(--t-fg) 22%, transparent); }
+.tty-grip:hover::after { background: var(--t-4); }
+.tty-c-head { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 6px; font-size: 0.75rem; border-bottom: 1px solid color-mix(in srgb, var(--t-fg) 9%, transparent); }
+.tty-c-head .spacer { flex: 1; }
+.tty-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; min-width: 0; }
 .tty-tab {
-  display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px 6px; font-size: 0.75rem; color: var(--muted);
-  border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; cursor: pointer; font-family: var(--mono);
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px 6px; font: 0.75rem/1.2 var(--tty-font); color: color-mix(in srgb, var(--t-fg) 62%, transparent);
+  border: none; background: none; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; cursor: pointer;
 }
-.tty-tab:hover { color: var(--ink); background: var(--hover); border-radius: var(--r-s) var(--r-s) 0 0; }
-.tty-tab.active { color: var(--ink); border-bottom-color: var(--jade); }
-.tty-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); flex: none; }
-.tty-tab.run .dot { background: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
-.tty-tab .x { color: var(--faint); padding: 0 2px; border-radius: 3px; line-height: 1; font-size: 0.8125rem; }
-.tty-tab .x:hover { background: var(--line); color: var(--ink); }
-.tty-tab .n { color: var(--faint); }
-.tty-tab-add { color: var(--muted); padding: 6px 9px; font-size: 0.875rem; border: none; background: none; border-radius: var(--r-s); }
-.tty-tab-add:hover { background: var(--hover); color: var(--ink); }
-.tty-tabs-inline { border-bottom: none; padding: 0; }
-
-.tty-dd { min-width: 260px; }
+.tty-tab:hover { color: var(--t-fg); }
+.tty-tab.active { color: var(--t-fg); border-bottom-color: var(--t-4); }
+.tty-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-8); flex: none; }
+.tty-tab.run .dot { background: var(--t-2); animation: pulse 1.6s var(--ease) infinite; }
+.tty-tab .n { color: var(--t-8); }
+.tty-tab .x { color: var(--t-8); padding: 0 2px; border-radius: 3px; line-height: 1; font-size: 0.8125rem; }
+.tty-tab .x:hover { background: color-mix(in srgb, var(--t-fg) 12%, transparent); color: var(--t-fg); }
+.tty-tab-add { color: color-mix(in srgb, var(--t-fg) 62%, transparent); padding: 5px 9px; font-size: 0.9375rem; border: none; background: none; border-radius: var(--r-s); }
+.tty-tab-add:hover, .tty-ib:hover, .tty-cwd-btn:hover { background: color-mix(in srgb, var(--t-fg) 10%, transparent); color: var(--t-fg); }
+.tty-ib { border: none; background: none; color: color-mix(in srgb, var(--t-fg) 62%, transparent); padding: 4px 7px; border-radius: var(--r-s); font-size: 0.8125rem; line-height: 1; }
+.tty-cwd-btn { display: inline-flex; align-items: center; gap: 5px; border: none; background: none; color: color-mix(in srgb, var(--t-fg) 62%, transparent); font: 0.75rem var(--tty-font); padding: 4px 8px; border-radius: var(--r-s); }
+.tty-cwd-btn .caret { font-size: 0.5625rem; }
+/* 下拉菜单属于璇玑外壳,不属于终端表面:沿用 .dd-menu 的实心底 */
+.tty-dd { min-width: 280px; right: 0; left: auto; bottom: calc(100% + 6px); top: auto; }
 .tty-dd .tty-dd-title { font-size: 0.6875rem; color: var(--faint); padding: 6px 10px 4px; }
 .tty-dd .tty-dd-sep { height: 1px; background: var(--line-soft); margin: 4px 0; }
 .tty-dd > button { display: flex; justify-content: space-between; gap: 12px; width: 100%; text-align: left; font-family: var(--mono); font-size: 0.75rem; padding: 6px 10px; border: none; background: none; color: var(--ink); border-radius: var(--r-s); }
 .tty-dd > button span { color: var(--faint); }
 .tty-dd > button:hover { background: var(--hover); }
-.tty-fs { display: inline-flex; align-items: center; gap: 8px; font-size: 0.75rem; color: var(--muted); }
-.tty-ib { border: none; background: none; color: var(--muted); padding: 3px 7px; border-radius: var(--r-s); font-size: 0.8125rem; line-height: 1; }
-.tty-ib:hover { background: var(--hover); color: var(--ink); }
-.tty-ib[aria-pressed="true"] { color: var(--jade); background: color-mix(in oklab, var(--jade) 14%, transparent); }
+.tty-dd > button.ctx { color: var(--jade); }
 
-/* ---- 方案 A:独立视图 —— 与 .dispatch 同一高度算法,看起来就是「另一个工作面」 ---- */
-.tty-shell { display: flex; flex-direction: column; height: calc(100vh - 128px); min-height: 480px; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); overflow: hidden; }
-.tty-a .tty-term { border-radius: 0; }
-.tty-foot { display: flex; align-items: center; gap: 12px; padding: 6px 12px; font-size: 0.6875rem; color: var(--muted); border-top: 1px solid var(--line-soft); background: var(--surface); }
-.tty-foot .branch { color: var(--jade); }
-.tty-foot .spacer { flex: 1; }
-.tty-foot-hint { color: var(--faint); }
-.tty-nav-run { background: var(--jade); color: var(--on-jade); }
-
-/* ---- 方案 B:派发页底部面板 —— 抢的是 .chat 的高度,composer 不动 ---- */
-.tty-b { display: flex; flex-direction: column; height: var(--tty-h, 240px); min-height: 120px; max-height: 70vh; margin-top: 8px; border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); overflow: hidden; flex: none; position: relative; }
-.tty-b.max { height: auto; flex: 1; max-height: none; }
-.tty-b-grip { height: 6px; cursor: row-resize; flex: none; position: relative; }
-.tty-b-grip::after { content: ""; position: absolute; left: 50%; top: 2px; width: 36px; height: 2px; margin-left: -18px; border-radius: 1px; background: var(--line); }
-.tty-b-grip:hover::after { background: var(--jade-dim); }
-.tty-b-head { display: flex; align-items: center; gap: 10px; padding: 0 8px 4px 10px; font-size: 0.75rem; color: var(--muted); border-bottom: 1px solid var(--line-soft); }
-.tty-b-head .spacer { flex: 1; }
-.tty-b-head .branch { color: var(--jade); }
-.tty-b-tab { display: inline-flex; align-items: center; gap: 6px; color: var(--ink); font-family: var(--mono); }
-.tty-b-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
-.tty-b-tab.run .dot { background: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
-.tty-b-cwd { color: var(--muted); }
-.tty-tog { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--line-soft); background: none; color: var(--muted); font-size: 0.75rem; padding: 2px 8px; border-radius: var(--r-s); }
-.tty-tog svg { width: 13px; height: 13px; }
-.tty-tog:hover, .tty-tog.on { color: var(--jade); border-color: var(--jade-dim); }
-body.tty-s-b .dispatch .chat { transition: flex 160ms var(--ease); }
-
-/* ---- 方案 C:全局浮层 —— 贴 main 底部的 sheet,不遮侧栏,z 与 drawer 同层 ---- */
-.tty-c {
-  position: fixed; left: 226px; right: 0; bottom: 0; z-index: var(--z-drawer);
-  height: var(--tty-h, 300px); min-height: 140px; max-height: 80vh;
-  display: flex; flex-direction: column;
-  background: var(--surface); border-top: 1px solid var(--line); box-shadow: 0 -12px 40px oklch(0 0 0 / .45);
-  animation: tty-up 180ms var(--ease);
+:root { --tty-font: "JetBrains Mono", "Hack Nerd Font", ui-monospace, "SF Mono", Menlo, monospace; }
+.tty-host { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.tty-term {
+  position: relative; display: none; flex: 1; min-height: 0;
+  font-family: var(--tty-font); font-size: var(--t-fs); line-height: calc(var(--t-fs) * 1.2 + 2px);  /* adjust-cell-height = 2 */
+  padding: 8px 10px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; cursor: text; tab-size: 4;
 }
-.tty-c.max { height: calc(100vh - 44px); }
-@keyframes tty-up { from { transform: translateY(16px); opacity: 0; } }
-.tty-c-head { display: flex; align-items: center; gap: 8px; padding: 0 8px 4px 6px; border-bottom: 1px solid var(--line-soft); font-size: 0.75rem; }
-.tty-c-head .spacer { flex: 1; }
-body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
-  backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
-  -webkit-backdrop-filter: blur(var(--wall-frost, 0px)) saturate(1.1);
-}
-@media (max-width: 1100px) { .tty-c { left: 0; } }
+.tty-term.active { display: block; }
+.tty-term ::selection { background: var(--t-sel); }
+.tty-ta { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+.tty-term .pp { color: var(--t-4); }
+.tty-term .pb { color: var(--t-5); }
+.tty-term .pa { color: var(--t-2); }
+.tty-term .dim { color: var(--t-8); }
+.tty-term .err { color: var(--t-1); }
+.tty-term .ok { color: var(--t-2); }
+.tty-term .wn { color: var(--t-3); }
+.tty-term .dir { color: var(--t-4); font-weight: 700; }
+.tty-term .b { font-weight: 700; }
+.tty-term .cur { display: inline-block; vertical-align: -0.2em; height: 1.15em; width: 2px; background: var(--t-cursor); opacity: .8; }
+.tty-c[data-cur="block"] .tty-term .cur { width: 0.6em; }
+.tty-c[data-cur="underline"] .tty-term .cur { width: 0.6em; height: 2px; vertical-align: -0.15em; }
+.tty-c[data-blink="1"] .tty-term:focus-within .cur { animation: tty-blink 1.1s steps(1) infinite; }
+.tty-term:not(:focus-within) .cur { background: transparent; box-shadow: inset 0 0 0 1px var(--t-cursor); width: 0.6em; }
+@keyframes tty-blink { 50% { opacity: 0; } }
+.tty-empty { flex: 1; display: grid; place-items: center; color: var(--t-8); font-size: 0.8125rem; }
 
-.tty-c[hidden], .tty-b[hidden], .tty-c-only[hidden], .tty-b-only[hidden], #nav-terminal[hidden] { display: none; }
-.ram-hint { display: none; }   /* 底稿的内存监控演示面板与本原型无关 */
+/* 状态栏指示器 */
+#tty-sb .tty-sb-dot { background: var(--faint); }
+#tty-sb.on .tty-sb-dot { background: var(--jade); }
+#tty-sb.run .tty-sb-dot { background: var(--jade); animation: pulse 1.6s var(--ease) infinite; }
 
-/* ---- 原型专用切换器(非产品 UI) ---- */
-.tty-proto {
-  position: fixed; left: 12px; bottom: 96px; width: 200px; z-index: calc(var(--z-toast) + 1);
-  display: flex; flex-direction: column; align-items: stretch; gap: 3px; padding: 10px 10px 8px; border-radius: var(--r-m);
-  background: oklch(0.22 0.02 300); border: 1px solid oklch(0.4 0.05 300); color: var(--ink); font-size: 0.75rem; box-shadow: 0 8px 28px oklch(0 0 0 / .5);
-}
-.tty-proto-l { color: oklch(0.8 0.08 300); font-weight: 600; margin-bottom: 4px; }
-.tty-proto button { border: none; background: none; color: var(--muted); padding: 5px 10px; border-radius: var(--r-s); font-size: 0.75rem; text-align: left; }
+/* 设置 › 终端 */
+.tty-src { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px; font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); }
+.tty-src code { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+.tty-src .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; }
+.tty-src-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
+.tty-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; width: 100%; }
+.tty-theme { display: flex; flex-direction: column; gap: 5px; padding: 6px; border-radius: var(--r-s); border: 1px solid var(--line-soft); background: none; text-align: left; font-size: 0.6875rem; color: var(--muted); }
+.tty-theme:hover { border-color: var(--line); color: var(--ink); }
+.tty-theme[aria-checked="true"] { border-color: var(--jade-dim); color: var(--ink); box-shadow: inset 0 0 0 1px var(--jade-dim); }
+.tty-theme .sw { display: flex; height: 22px; border-radius: 3px; overflow: hidden; align-items: center; padding: 0 5px; gap: 3px; font: 0.6875rem var(--tty-font); }
+.tty-theme .sw i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.stg-row.tty-wide { flex-wrap: wrap; row-gap: 10px; }
+.stg-row.tty-wide .stg-lab { flex: 1 1 0; }
+.stg-row.tty-wide .stg-ctl { order: 3; flex: 1 1 100%; }
+.tty-themes { grid-template-columns: repeat(5, 1fr) !important; }
+/* 跟随 Ghostty 时:标签照常可读(看得到 Ghostty 的值),只把控件压暗、禁点 */
+.stg-row.tty-cus.is-off .stg-ctl { opacity: .6; pointer-events: none; }
+.tty-font-val { font: 0.8125rem var(--tty-font); color: var(--ink); }
+.tty-warn { color: var(--amber) !important; }
+.tty-warn code, .stg-lab small code { font-family: var(--mono); }
+.tty-kbd-warn { border-color: var(--amber) !important; color: var(--amber) !important; }
+.tty-hl { animation: tty-hl 1.4s var(--ease); }
+@keyframes tty-hl { 0%, 40% { background: color-mix(in oklab, var(--jade) 16%, transparent); } }
+
+/* 原型专用演示面板(非产品 UI):停在侧栏下半部空位 */
+.tty-proto { position: fixed; left: 12px; bottom: 96px; width: 202px; z-index: calc(var(--z-drawer) + 1); display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: var(--r-m); background: oklch(0.22 0.02 300); border: 1px solid oklch(0.4 0.05 300); color: var(--ink); font-size: 0.75rem; box-shadow: 0 8px 28px oklch(0 0 0 / .5); }
+.tty-proto-l { color: oklch(0.8 0.08 300); font-weight: 600; }
+.tty-proto-d { color: var(--muted); font-size: 0.6875rem; line-height: 1.5; }
+.tty-proto-row { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; }
+.tty-proto-row > span { color: var(--faint); width: 26px; }
+.tty-proto button { border: none; background: none; color: var(--muted); padding: 3px 7px; border-radius: var(--r-s); font-size: 0.6875rem; }
 .tty-proto button:hover { color: var(--ink); background: oklch(0.3 0.03 300); }
 .tty-proto button.active { background: oklch(0.78 0.1 300); color: oklch(0.18 0.03 300); font-weight: 600; }
-.tty-proto-d { color: var(--muted); margin-top: 6px; font-size: 0.6875rem; line-height: 1.5; white-space: normal; }
+.tty-proto .tty-proto-wide { border: 1px solid oklch(0.4 0.05 300); padding: 5px; }
+.ram-hint { display: none; }   /* 底稿的内存监控演示面板与本原型无关 */
 
 </style>
 <body>
@@ -2652,7 +2670,6 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
       <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 7l3-4h5l2 3h8v13H3z"/></svg>项目</button>
       <button id="nav-sessions" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M4 5h16v11H8l-4 4z"/></svg>会话<span class="count">12</span></button>
       <button id="nav-dispatch"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
-      <button id="nav-terminal" data-view="terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 5h18v14H3zM7 9l3 3-3 3M12 15h5"/></svg>终端<span class="count tty-nav-run" id="tty-nav-run" hidden>1</span></button>
       <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z"/></svg>技能</button>
       <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4"/></svg>经验</button>
       <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2"/></svg>定时</button>
@@ -2682,9 +2699,9 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
         </button>
         <div class="ram-pop" id="ram-pop" role="dialog" aria-label="内存与 CPU" hidden></div>
       </span>
-      <span class="sb-sep tty-c-only" hidden></span>
-      <button class="sb-item tty-c-only" id="tty-sb" hidden title="全局终端 · ⌘` 呼出/收起">
-        <span class="dot"></span>终端 <span class="n" id="tty-sb-n">空闲</span>
+      <span class="sb-sep"></span>
+      <button class="sb-item" id="tty-sb" title="终端 · ⌘` 呼出/收起" aria-controls="tty-c" aria-expanded="false">
+        <span class="dot tty-sb-dot"></span>终端 <span class="n" id="tty-sb-n">未开</span>
       </button>
       <span class="sb-sep"></span>
       <button class="sb-item warn" title="1 个会话等待验收,点击去仪表盘处置">
@@ -2714,38 +2731,6 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
       <div class="board" id="ram-board"></div>
     </section>
 
-
-    <!-- ============ 方案 A:独立「终端」视图(侧栏入口) ============ -->
-    <section class="view" id="view-terminal">
-      <div class="view-head">
-        <h1>终端</h1>
-        <span class="sub" id="tty-a-sub">2 个终端 · 都空闲</span>
-        <span class="spacer"></span>
-        <span class="tty-fs">字号<span class="seg" id="tty-a-fs"><button data-v="12">小</button><button class="active" data-v="13">中</button><button data-v="15">大</button></span></span>
-        <span class="dd"><button class="btn" id="tty-a-new"><span>新终端</span><span class="caret">▾</span></button>
-          <div class="dd-menu tty-dd" id="tty-a-new-menu" hidden>
-            <div class="tty-dd-title">在哪个目录打开</div>
-            <button data-cwd="~/xuanji" data-br="dev">~/xuanji <span>dev</span></button>
-            <button data-cwd="~/xuanji-terminal" data-br="feature/embedded-terminal">~/xuanji-terminal <span>feature/embedded-terminal</span></button>
-            <button data-cwd="~/xuanji-remote-access" data-br="feature/remote-access">~/xuanji-remote-access <span>feature/remote-access</span></button>
-            <button data-cwd="~/antifraud_skills" data-br="main">~/antifraud_skills <span>main</span></button>
-            <div class="tty-dd-sep"></div>
-            <button data-cwd="~" data-br="">~ <span>家目录</span></button>
-          </div>
-        </span>
-      </div>
-      <div class="tty-shell tty-a">
-        <div class="tty-tabs" id="tty-a-tabs" role="tablist"></div>
-        <div class="tty-host" id="tty-a-host"></div>
-        <div class="tty-foot">
-          <span class="mono" id="tty-a-cwd">~/xuanji-terminal</span>
-          <span class="branch mono" id="tty-a-br">⎇ feature/embedded-terminal</span>
-          <span class="spacer"></span>
-          <span class="mono" id="tty-a-size">zsh · 118×32</span>
-          <span class="tty-foot-hint">⌘T 新终端 · ⌘W 关闭 · ⌘⇧[ ] 切换 · ⌘K 清屏</span>
-        </div>
-      </div>
-    </section>
     <section class="view" id="view-dispatch">
       <div class="view-head">
         <h1>派发</h1>
@@ -2771,21 +2756,6 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
           <div id="chat-body"></div>
         </div>
 
-
-        <!-- ============ 方案 B:派发页底部终端面板(与会话同 worktree) ============ -->
-        <div class="tty-b" id="tty-b" hidden>
-          <div class="tty-b-grip" id="tty-b-grip" title="拖动调整高度"></div>
-          <div class="tty-b-head">
-            <span class="tty-b-tab active"><span class="dot"></span>zsh</span>
-            <span class="mono tty-b-cwd" title="随会话 worktree,不可改;要别的目录去侧栏「终端」">~/xuanji-session-project-filter</span>
-            <span class="branch mono">⎇ feature/session-project-filter</span>
-            <span class="spacer"></span>
-            <button class="tty-ib" id="tty-b-clear" title="清屏 ⌘K">⌫</button>
-            <button class="tty-ib" id="tty-b-max" title="最大化">⤢</button>
-            <button class="tty-ib" id="tty-b-close" title="收起 ⌘`">✕</button>
-          </div>
-          <div class="tty-host" id="tty-b-host"></div>
-        </div>
         <div class="chat-status">
           <span class="sess-ctx"><span class="sc-title sc-named" style="--ph:115">会话看板按项目过滤</span><span class="sc-id">7c2e91</span></span>
           <span class="u-chips">
@@ -2813,44 +2783,36 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
           <span class="dd dim"><button class="dd-btn"><span class="dd-val">effort: high</span><span class="caret">▾</span></button></span>
           <span class="dd dim"><button class="dd-btn"><span class="dd-val">acceptEdits</span><span class="caret">▾</span></button></span>
           <span class="tag">settingSources: user</span>
-          <button class="tty-tog tty-b-only" id="tty-b-tog" hidden title="在这个会话的 worktree 里开终端 ⌘`"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h12v10H2zM4.5 6l2 2-2 2M8 10h3.5"/></svg>终端</button>
         </div>
       </div>
     </section>
   </main>
 </div>
 
-<!-- ============ 方案 C:全局终端浮层(⌘` 任意视图呼出,单实例常驻) ============ -->
-<div class="tty-c" id="tty-c" hidden role="dialog" aria-label="终端">
-  <div class="tty-b-grip" id="tty-c-grip" title="拖动调整高度"></div>
+<!-- ============ 全局终端浮层(⌘` 任意视图呼出/收起,单实例常驻,切视图不丢) ============ -->
+<div class="tty-c" id="tty-c" role="dialog" aria-label="终端" aria-hidden="true">
+  <div class="tty-grip" id="tty-c-grip" title="拖动调整高度"></div>
   <div class="tty-c-head">
-    <div class="tty-tabs tty-tabs-inline" id="tty-c-tabs" role="tablist"></div>
+    <div class="tty-tabs" id="tty-c-tabs" role="tablist"></div>
     <span class="spacer"></span>
-    <span class="dd"><button class="dd-btn" id="tty-c-cwd-btn"><span class="dd-val" id="tty-c-cwd">~/xuanji-terminal</span><span class="caret">▾</span></button>
-      <div class="dd-menu tty-dd" id="tty-c-cwd-menu" hidden>
-        <div class="tty-dd-title">新终端目录</div>
-        <button data-cwd="~/xuanji" data-br="dev">~/xuanji <span>dev</span></button>
-        <button data-cwd="~/xuanji-terminal" data-br="feature/embedded-terminal">~/xuanji-terminal <span>feature/embedded-terminal</span></button>
-        <button data-cwd="~/xuanji-remote-access" data-br="feature/remote-access">~/xuanji-remote-access <span>feature/remote-access</span></button>
-        <button data-cwd="~/antifraud_skills" data-br="main">~/antifraud_skills <span>main</span></button>
-        <div class="tty-dd-sep"></div>
-        <button data-cwd="~" data-br="">~ <span>家目录</span></button>
-      </div>
+    <span class="dd"><button class="tty-cwd-btn" id="tty-c-cwd-btn" title="在其它目录开新终端"><span id="tty-c-cwd">~/xuanji</span><span class="caret">▾</span></button>
+      <div class="dd-menu tty-dd" id="tty-c-cwd-menu" hidden></div>
     </span>
-    <button class="tty-ib" id="tty-c-pin" aria-pressed="false" title="固定:切视图不收起">📌</button>
+    <button class="tty-ib" id="tty-c-set" title="终端设置">⚙</button>
     <button class="tty-ib" id="tty-c-max" title="最大化">⤢</button>
     <button class="tty-ib" id="tty-c-close" title="收起 ⌘`">✕</button>
   </div>
   <div class="tty-host" id="tty-c-host"></div>
 </div>
 
-<!-- ============ 原型专用:方案切换器(非产品 UI) ============ -->
+<!-- ============ 原型专用:演示面板(非产品 UI) ============ -->
 <div class="tty-proto" id="tty-proto">
-  <span class="tty-proto-l">原型方案</span>
-  <button data-s="a" class="active">A 独立视图</button>
-  <button data-s="b">B 派发页面板</button>
-  <button data-s="c">C 全局浮层</button>
-  <span class="tty-proto-d" id="tty-proto-d"></span>
+  <span class="tty-proto-l">原型演示</span>
+  <p class="tty-proto-d">按 <kbd>⌘`</kbd> 呼出 / 再按收起;连按可看中途反向。</p>
+  <div class="tty-proto-row"><span>壁纸</span><button data-w="off">关</button><button data-w="glass" class="active">玻璃</button><button data-w="file">本地图片</button></div>
+  <div class="tty-proto-row"><span>去</span><button data-go="sessions" class="active">会话看板</button><button data-go="dispatch">派发页</button></div>
+  <p class="tty-proto-d">在派发页新开终端,目录默认是该会话的 worktree。</p>
+  <button class="tty-proto-wide" id="tty-proto-set">打开 设置 › 终端</button>
 </div>
 
 <!-- ============ 轮次目录弹窗(⌘⇧O) ============ -->
@@ -2882,6 +2844,7 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
       <button data-sec="keys"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h1M10 10h1M14 10h1M18 10h1M7 14h10"/></svg>快捷键</button>
       <button data-sec="notify"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg>通知</button>
       <button data-sec="monitor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M7 12l3-3 2 2 5-4M8 20h8M12 16v4"/></svg>系统监控</button>
+      <button data-sec="term"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"><path d="M3 5h18v14H3zM7 9l3 3-3 3M12 15h5"/></svg>终端</button>
       <button data-sec="adv"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4"/></svg>高级</button>
       <div class="stg-nav-foot"><span class="stg-legend"><span class="stg-scope" data-scope="local">本机</span>仅此浏览器</span><span class="stg-legend"><span class="stg-scope" data-scope="acct">账户</span>跨设备同步</span></div>
     </nav>
@@ -2957,6 +2920,7 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
         <table class="stg-keys">
           <tr><td>新会话</td><td class="k"><kbd>⌘N</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>速记待办</td><td class="k"><kbd>⌘J</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>呼出 / 收起终端<small>与 Ghostty 全局热键冲突,见 设置 › 终端</small></td><td class="k"><kbd class="tty-kbd-warn">⌘`</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>打开设置</td><td class="k"><kbd>⌘,</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>切换视图<small>非输入状态也可直接按数字</small></td><td class="k"><kbd>⌘1</kbd>…<kbd>⌘9</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>侧栏前后切页</td><td class="k"><kbd>⌥⌘←</kbd><kbd>⌥⌘→</kbd></td><td class="a"><button>改键</button></td></tr>
@@ -3019,6 +2983,37 @@ body.wall-glass .tty-c, body.wall-glass .tty-shell, body.wall-glass .tty-b {
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="mon-card-mem"><button data-v="always" class="active">始终</button><button data-v="high">偏高时</button><button data-v="off">不显示</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-row mon-cpu-dep"><div class="stg-lab"><span>显示 CPU</span><small id="mon-card-cpu-hint">偏高 = 占整机 ≥ 黄色阈值 60%,或单会话 ≥ 50%(半个核)</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="mon-card-cpu"><button data-v="always">始终</button><button data-v="high" class="active">偏高时</button><button data-v="off">不显示</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+      </section>
+
+      <section class="stg-sec" data-sec="term" hidden>
+        <div class="stg-sec-head"><h3>终端</h3><p>⌘` 呼出的全局终端;外观默认读本机 Ghostty 配置,只读,不改 Ghostty</p><button class="btn btn-quiet" data-reset="term">恢复默认</button></div>
+        <div class="tty-src">
+          <span class="tty-src-dot"></span>
+          <span>已读取 Ghostty 1.3.1 配置 <code>~/Library/Application Support/com.mitchellh.ghostty/config.ghostty</code></span>
+          <button class="btn btn-quiet" id="tty-reread">重新读取</button>
+        </div>
+        <div class="stg-group">外观</div>
+        <div class="stg-row"><div class="stg-lab"><span>外观来源</span><small>跟随:主题、字体、字号、透明度、模糊、光标都取 Ghostty 的值,Ghostty 里改完点「重新读取」即生效。自定义:在下面逐项改</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-src-mode"><button data-v="ghostty" class="active">跟随 Ghostty</button><button data-v="custom">自定义</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus tty-wide"><div class="stg-lab"><span>配色</span><small id="tty-theme-hint">Ghostty: theme = Catppuccin Frappe</small></div>
+          <div class="stg-ctl"><div class="tty-themes" id="tty-themes" role="radiogroup"></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>字体</span><small id="tty-font-hint">Ghostty 配置写的 Maple Mono NF CN 本机未安装,Ghostty 实际回退到内置 JetBrains Mono;这里照实际渲染的来</small></div>
+          <div class="stg-ctl"><span class="tty-font-val" id="tty-font-val">JetBrains Mono · 14</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>字号</span><small>Ghostty: font-size = 14</small></div>
+          <div class="stg-ctl"><input type="range" min="11" max="20" value="14" id="tty-fs"><span class="stg-val" id="tty-fs-v">14px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>底色不透明度</span><small>低于 100% 时透出后面的页面与壁纸;Ghostty: background-opacity = 0.9</small></div>
+          <div class="stg-ctl"><input type="range" min="50" max="100" value="90" id="tty-op"><span class="stg-val" id="tty-op-v">90%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景模糊</span><small>透出部分的毛玻璃程度;Ghostty: background-blur-radius = 30</small></div>
+          <div class="stg-ctl"><input type="range" min="0" max="40" value="30" id="tty-blur"><span class="stg-val" id="tty-blur-v">30px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>光标</span><small>Ghostty: cursor-style = bar,blink = true</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-cur"><button data-v="bar" class="active">竖线</button><button data-v="block">方块</button><button data-v="underline">下划线</button></div><span class="switch on" id="tty-blink" role="switch" aria-checked="true" tabindex="0" title="闪烁"></span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-group">行为</div>
+        <div class="stg-row"><div class="stg-lab"><span>呼出 / 收起</span><small class="tty-warn" id="tty-key-warn">Ghostty 配置里 <code>global:cmd+grave_accent</code> 也占用 ⌘`,全局热键优先,璇玑收不到。去掉 Ghostty 那行的 <code>global:</code> 前缀或改键后点「重新读取」</small></div>
+          <div class="stg-ctl"><kbd>⌘`</kbd><button class="btn btn-sm">改键</button></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>新终端默认目录</span><small>「跟随会话」:在派发页呼出时取该会话的 worktree,其它页面用上次的目录</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-cwd-mode"><button data-v="session" class="active">跟随会话</button><button data-v="last">上次目录</button><button data-v="home">家目录</button></div></div><span class="stg-scope" data-scope="acct">账户</span></div>
+        <div class="stg-row"><div class="stg-lab"><span>切换视图时</span><small>保持:终端留在原地,像 VS Code 的面板;收起:离开当前视图自动收起,进程不停</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-nav-mode"><button data-v="keep" class="active">保持</button><button data-v="hide">收起</button></div></div><span class="stg-scope" data-scope="acct">账户</span></div>
       </section>
 
       <section class="stg-sec" data-sec="adv" hidden>
@@ -3842,7 +3837,7 @@ function showView(name) {
 window.showView = showView;
 navBtns.forEach(b => {
   const label = b.textContent.replace(/\d+$/, '').trim();
-  const name = b.id === 'nav-sessions' ? 'sessions' : b.id === 'nav-dispatch' ? 'dispatch' : b.id === 'nav-terminal' ? 'terminal' : label;
+  const name = b.id === 'nav-sessions' ? 'sessions' : b.id === 'nav-dispatch' ? 'dispatch' : label;
   b.dataset.view = name;
   b.addEventListener('click', () => showView(name));
 });
@@ -3949,236 +3944,242 @@ renderCpuInd(); renderInd(); renderBoard(); applyMon(); showView('sessions');
 
 <script>
 /* ============================================================
-   内嵌终端原型脚本:假 xterm + 三套方案切换
+   内嵌终端原型脚本 v2:假 xterm + 全局浮层 + 设置 › 终端
    ============================================================ */
 (function () {
 const esc = s => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
-/* 假文件系统/命令表:输出照抄真实机器上跑出来的样子(worktree 列表、git 状态、版本号) */
-const FS = {
-  '~/xuanji': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','Xuanji.dmg','assets','build-app.sh','changelog.d','code','preview.sh','restart.sh','wiki'],
-  '~/xuanji-terminal': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','assets','build-app.sh','changelog.d','code','preview.sh','restart.sh','wiki'],
-  '~/xuanji-session-project-filter': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','assets','changelog.d','code','preview.sh','restart.sh','wiki'],
-  '~/xuanji-remote-access': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','README.md','android','code','preview.sh','wiki'],
-  '~/antifraud_skills': ['README.md','antifraud-tag-organize','ip-risk','jueming','skills.json'],
-  '~': ['Applications','Desktop','Documents','Downloads','antifraud_skills','xuanji','xuanji-terminal','xuanji-remote-access','yuiko-skills'],
+/* 主题:16 色里原型只用到 0-8;值逐字照抄 Ghostty.app 自带 themes 目录 */
+const THEMES = {
+  'Catppuccin Frappe':    { bg:'#303446', fg:'#c6d0f5', cursor:'#f2d5cf', sel:'#626880', p:['#51576d','#e78284','#a6d189','#e5c890','#8caaee','#f4b8e4','#81c8be','#a5adce','#626880'] },
+  'Catppuccin Macchiato': { bg:'#24273a', fg:'#cad3f5', cursor:'#f4dbd6', sel:'#5b6078', p:['#494d64','#ed8796','#a6da95','#eed49f','#8aadf4','#f5bde6','#8bd5ca','#b8c0e0','#5b6078'] },
+  'Catppuccin Mocha':     { bg:'#1e1e2e', fg:'#cdd6f4', cursor:'#f5e0dc', sel:'#585b70', p:['#45475a','#f38ba8','#a6e3a1','#f9e2af','#89b4fa','#f5c2e7','#94e2d5','#bac2de','#585b70'] },
+  'Catppuccin Latte':     { bg:'#eff1f5', fg:'#4c4f69', cursor:'#dc8a78', sel:'#acb0be', p:['#5c5f77','#d20f39','#40a02b','#df8e1d','#1e66f5','#ea76cb','#179299','#acb0be','#6c6f85'] },
+  '璇玑 · 玉':            { bg:'#10130e', fg:'#e6e9dc', cursor:'#c9da7a', sel:'#3a4133', p:['#2a2f25','#e36d68','#8fcf94','#e3b65a','#86b2e6','#bb9de0','#6fcac0','#b9bfae','#6d7466'] },
 };
+const GHOSTTY = { theme: 'Catppuccin Frappe', fs: 14, op: 90, blur: 30, cur: 'bar', blink: true };
+const st = { mode: 'ghostty', theme: GHOSTTY.theme, fs: GHOSTTY.fs, op: GHOSTTY.op, blur: GHOSTTY.blur, cur: GHOSTTY.cur, blink: GHOSTTY.blink, cwdMode: 'session', navMode: 'keep' };
+
+const cEl = document.getElementById('tty-c');
+function applyTheme() {
+  const s = st.mode === 'ghostty' ? { ...st, ...GHOSTTY } : st;
+  const t = THEMES[s.theme];
+  cEl.style.setProperty('--t-bg', t.bg); cEl.style.setProperty('--t-fg', t.fg); cEl.style.setProperty('--t-cursor', t.cursor); cEl.style.setProperty('--t-sel', t.sel);
+  t.p.forEach((c, i) => cEl.style.setProperty('--t-' + i, c));
+  cEl.style.setProperty('--t-op', s.op + '%'); cEl.style.setProperty('--t-blur', s.blur + 'px'); cEl.style.setProperty('--t-fs', s.fs + 'px');
+  cEl.dataset.cur = s.cur; cEl.dataset.blink = s.blink ? '1' : '0';
+  /* 同步设置面板显示 */
+  document.querySelectorAll('.tty-theme').forEach(b => b.setAttribute('aria-checked', b.dataset.t === s.theme));
+  const set = (id, v, u) => { const el = document.getElementById(id); el.value = v; document.getElementById(id + '-v').textContent = v + u; };
+  set('tty-fs', s.fs, 'px'); set('tty-op', s.op, '%'); set('tty-blur', s.blur, 'px');
+  document.querySelectorAll('#tty-cur button').forEach(b => b.classList.toggle('active', b.dataset.v === s.cur));
+  const bl = document.getElementById('tty-blink'); bl.classList.toggle('on', s.blink); bl.setAttribute('aria-checked', s.blink);
+  document.getElementById('tty-font-val').textContent = 'JetBrains Mono · ' + s.fs;
+  document.querySelectorAll('.stg-row.tty-cus').forEach(r => r.classList.toggle('is-off', st.mode === 'ghostty'));
+  document.querySelectorAll('#tty-src-mode button').forEach(b => b.classList.toggle('active', b.dataset.v === st.mode));
+}
+
+/* ---------- 假文件系统 / 命令(输出照抄本机真实结果) ---------- */
+const FS = {
+  '~/xuanji': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','Xuanji.dmg','assets/','build-app.sh','changelog.d/','code/','preview.sh','restart.sh','wiki/'],
+  '~/xuanji-terminal': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','assets/','build-app.sh','changelog.d/','code/','preview.sh','restart.sh','wiki/'],
+  '~/xuanji-session-project-filter': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','PRODUCT.md','README.md','assets/','changelog.d/','code/','preview.sh','restart.sh','wiki/'],
+  '~/xuanji-remote-access': ['CHANGELOG.md','CLAUDE.md','DESIGN.md','README.md','android/','code/','preview.sh','wiki/'],
+  '~/antifraud_skills': ['README.md','antifraud-tag-organize/','ip-risk/','jueming/','skills.json'],
+  '~': ['Applications/','Desktop/','Documents/','Downloads/','antifraud_skills/','xuanji/','xuanji-terminal/','xuanji-remote-access/','yuiko-skills/'],
+};
+const LOG = ['965934a feat(dispatch): 派发会话空闲自动退出,保留卡片与记录,下条消息冷启动接上 (#87)','63dcc07 fix(replay): 跳过 cost-state/atis-latch,不再显示为未知事件 (#86)','ffbc35e fix: 修复baseURL语法,改用paths相对路径'];
 const GIT = {
-  '~/xuanji': { br: 'dev', st: 'nothing to commit, working tree clean', log: ['965934a feat(dispatch): 派发会话空闲自动退出,保留卡片与记录,下条消息冷启动接上 (#87)','63dcc07 fix(replay): 跳过 cost-state/atis-latch,不再显示为未知事件 (#86)','ffbc35e fix: 修复baseURL语法,改用paths相对路径'] },
-  '~/xuanji-terminal': { br: 'feature/embedded-terminal', st: 'Untracked files:\n  (use "git add <file>..." to include in what will be committed)\n\t<span class="err">wiki/design/prototype-terminal.html</span>\n\nnothing added to commit but untracked files present (use "git add" to track)', log: ['965934a feat(dispatch): 派发会话空闲自动退出,保留卡片与记录,下条消息冷启动接上 (#87)','63dcc07 fix(replay): 跳过 cost-state/atis-latch,不再显示为未知事件 (#86)','ffbc35e fix: 修复baseURL语法,改用paths相对路径'] },
-  '~/xuanji-session-project-filter': { br: 'feature/session-project-filter', st: 'Changes not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n\t<span class="err">modified:   code/frontend/src/views/Sessions.tsx</span>\n\t<span class="err">modified:   code/frontend/src/lib/filters.ts</span>\n\t<span class="err">modified:   code/backend/src/api/routes.ts</span>\n\nno changes added to commit (use "git add" and/or "git commit -a")', log: ['1c0a7e2 feat(sessions): 看板按项目过滤(WIP)','965934a feat(dispatch): 派发会话空闲自动退出,保留卡片与记录,下条消息冷启动接上 (#87)','63dcc07 fix(replay): 跳过 cost-state/atis-latch,不再显示为未知事件 (#86)'] },
-  '~/xuanji-remote-access': { br: 'feature/remote-access', st: 'nothing to commit, working tree clean', log: ['b5f7a5e feat(remote): Tailscale serve 私网访问','965934a feat(dispatch): 派发会话空闲自动退出 (#87)'] },
+  '~/xuanji': { br: 'dev', st: 'nothing to commit, working tree clean', log: LOG },
+  '~/xuanji-terminal': { br: 'feature/embedded-terminal', st: 'nothing to commit, working tree clean', log: ['0370ea7 docs(design): 内嵌终端原型,三套方案(独立视图/派发页面板/全局浮层)待审批', ...LOG.slice(0, 2)] },
+  '~/xuanji-session-project-filter': { br: 'feature/session-project-filter', st: 'Changes not staged for commit:\n  (use "git add <file>..." to update what will be committed)\n\t<span class="err">modified:   code/frontend/src/views/Sessions.tsx</span>\n\t<span class="err">modified:   code/frontend/src/lib/filters.ts</span>\n\t<span class="err">modified:   code/backend/src/api/routes.ts</span>\n\nno changes added to commit (use "git add" and/or "git commit -a")', log: ['1c0a7e2 feat(sessions): 看板按项目过滤(WIP)', ...LOG.slice(0, 2)] },
+  '~/xuanji-remote-access': { br: 'feature/remote-access', st: 'nothing to commit, working tree clean', log: ['b5f7a5e feat(remote): Tailscale serve 私网访问', LOG[0]] },
   '~/antifraud_skills': { br: 'main', st: 'nothing to commit, working tree clean', log: ['e91f3a0 feat(ip-risk): 三家情报源加权'] },
 };
+const DIRS = [['~/xuanji','dev'],['~/xuanji-terminal','feature/embedded-terminal'],['~/xuanji-remote-access','feature/remote-access'],['~/antifraud_skills','main']];
+const SESSION_WT = ['~/xuanji-session-project-filter', 'feature/session-project-filter'];
 
-let seq = 0;
 class Tty {
-  constructor(cwd, br, opts = {}) {
-    this.id = ++seq; this.cwd = cwd; this.br = br; this.busy = false; this.onchange = opts.onchange || (() => {});
+  constructor(cwd, br, onchange) {
+    this.cwd = cwd; this.br = br; this.busy = false; this.onchange = onchange;
     this.el = document.createElement('div'); this.el.className = 'tty-term'; this.el.setAttribute('role', 'application'); this.el.setAttribute('aria-label', '终端 ' + cwd);
-    /* 与 xterm.js 同一套做法:视觉层不可编辑,真正接键的是一个隐藏 textarea —— 中文 IME / 粘贴 / 自动化 type 都走 input 事件 */
-    this.ta = document.createElement('textarea'); this.ta.className = 'tty-ta'; this.ta.setAttribute('aria-label', '终端输入'); this.ta.autocapitalize = 'off'; this.ta.spellcheck = false;
+    /* 与 xterm.js 同一套做法:视觉层不可编辑,接键的是隐藏 textarea(中文 IME / 粘贴都走 input 事件) */
+    this.ta = document.createElement('textarea'); this.ta.className = 'tty-ta'; this.ta.setAttribute('aria-label', '终端输入'); this.ta.spellcheck = false;
     this.el.appendChild(this.ta);
     this.buf = ''; this.hist = []; this.hi = 0;
     this.ta.addEventListener('keydown', e => this.key(e));
-    this.ta.addEventListener('input', () => { if (this.busy) { this.ta.value = ''; return; } this.buf += this.ta.value; this.ta.value = ''; this.draw(); });
-    this.el.addEventListener('mousedown', e => { if (e.target !== this.ta) { e.preventDefault(); this.ta.focus(); } });
-    this.el.focus = () => this.ta.focus();
-    if (opts.scrollback !== false) this.scrollback();
+    this.ta.addEventListener('input', () => { if (!this.busy) { this.buf += this.ta.value; this.draw(); } this.ta.value = ''; });
+    this.el.addEventListener('mouseup', () => { if (!getSelection().toString()) this.ta.focus({ preventScroll: true }); });
+    this.print(`<span class="dim">Last login: Thu Sep 24 09:12:41 on ttys004</span>\n`);
     this.newPrompt();
   }
-  promptHtml() { return `<span class="p">${esc(this.cwd)}${this.br ? ` <span class="br">⎇ ${esc(this.br)}</span>` : ''} ›</span> `; }
-  scrollback() { this.print(`<span class="dim">Last login: Wed Sep 24 09:12:41 on ttys004</span>\n`); this.print(this.promptHtml() + 'git status\n' + this.gitStatus() + '\n'); }
+  focus() { this.ta.focus({ preventScroll: true }); }
+  promptHtml() { return `<span class="pp">${esc(this.cwd)}</span>${this.br ? ` <span class="pb">${esc(this.br)}</span>` : ''} <span class="pa">❯</span> `; }
   print(h) { this.el.insertAdjacentHTML('beforeend', h); this.el.scrollTop = this.el.scrollHeight; }
   newPrompt() { this.line = document.createElement('span'); this.el.appendChild(this.line); this.draw(); }
   draw() { this.line.innerHTML = this.promptHtml() + esc(this.buf) + '<span class="cur"></span>'; this.el.scrollTop = this.el.scrollHeight; }
-  gitStatus() { const g = GIT[this.cwd]; return g ? `On branch ${g.br}\n${g.st}` : `<span class="err">fatal: not a git repository (or any of the parent directories): .git</span>`; }
-  setBusy(b) { this.busy = b; this.onchange(this); }
+  setBusy(b) { this.busy = b; this.onchange(); }
   async key(e) {
-    if (e.metaKey) return;                              /* ⌘ 组合留给应用层快捷键 */
-    if (e.ctrlKey && e.key === 'c') { e.preventDefault(); if (this.busy) { this.abort = true; } else { this.line.innerHTML = this.promptHtml() + esc(this.buf) + '^C'; this.print('\n'); this.buf = ''; this.newPrompt(); } return; }
+    if (e.metaKey) return;
+    if (e.ctrlKey && e.key === 'c') { e.preventDefault(); if (this.busy) this.abort = true; else { this.line.innerHTML = this.promptHtml() + esc(this.buf) + '^C'; this.print('\n'); this.buf = ''; this.newPrompt(); } return; }
     if (e.ctrlKey && e.key === 'l') { e.preventDefault(); this.clear(); return; }
     if (this.busy) return;
+    if (e.isComposing) return;
     if (e.key === 'Enter') { e.preventDefault(); await this.run(); return; }
     if (e.key === 'Backspace') { e.preventDefault(); this.buf = this.buf.slice(0, -1); this.draw(); return; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); if (this.hi > 0) { this.hi--; this.buf = this.hist[this.hi]; this.draw(); } return; }
-    if (e.key === 'ArrowDown') { e.preventDefault(); if (this.hi < this.hist.length) { this.hi++; this.buf = this.hist[this.hi] || ''; this.draw(); } return; }
-    if (e.key === 'Tab') { e.preventDefault(); const files = FS[this.cwd] || []; const last = this.buf.split(' ').pop(); const hit = files.filter(f => f.startsWith(last)); if (last && hit.length === 1) { this.buf = this.buf.slice(0, -last.length) + hit[0]; this.draw(); } else if (hit.length > 1) { this.print(this.promptHtml() + esc(this.buf) + '\n' + hit.join('  ') + '\n'); this.line.remove(); this.newPrompt(); } return; }
-    /* 可打印字符交给 input 事件 */
+    if (e.key === 'ArrowUp') { e.preventDefault(); if (this.hi > 0) { this.buf = this.hist[--this.hi]; this.draw(); } return; }
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (this.hi < this.hist.length) { this.buf = this.hist[++this.hi] || ''; this.draw(); } return; }
+    if (e.key === 'Tab') { e.preventDefault(); const last = this.buf.split(' ').pop(); const hit = (FS[this.cwd] || []).filter(f => f.startsWith(last)); if (last && hit.length === 1) { this.buf = this.buf.slice(0, -last.length) + hit[0]; this.draw(); } else if (hit.length > 1) { this.line.innerHTML = this.promptHtml() + esc(this.buf); this.print('\n' + hit.join('  ') + '\n'); this.newPrompt(); } }
   }
-  clear() { this.el.innerHTML = ''; this.newPrompt(); }
+  clear() { this.el.querySelectorAll(':scope > :not(textarea)').forEach(n => n.remove()); [...this.el.childNodes].forEach(n => { if (n.nodeType === 3) n.remove(); }); this.newPrompt(); }
   async run() {
     const cmd = this.buf.trim(); this.line.innerHTML = this.promptHtml() + esc(this.buf); this.print('\n'); this.buf = '';
-    if (cmd) { this.hist.push(cmd); } this.hi = this.hist.length;
-    if (cmd) await this.exec(cmd);
+    if (cmd) { this.hist.push(cmd); this.hi = this.hist.length; if (cmd === 'clear') { this.clear(); return; } await this.exec(cmd); }
     this.newPrompt();
   }
   async exec(cmd) {
-    const [c, ...a] = cmd.split(/\s+/);
-    const out = s => this.print(s + '\n');
-    if (c === 'clear') { this.clear(); this.line.remove(); return; }
+    const [c, ...a] = cmd.split(/\s+/); const out = s => this.print(s + '\n');
     if (c === 'pwd') return out(this.cwd.replace('~', '/Users/lilithgames'));
     if (c === 'echo') return out(esc(a.join(' ')));
     if (c === 'whoami') return out('lilithgames');
-    if (c === 'date') return out(new Date().toString());
-    if (c === 'ls') { const f = FS[this.cwd]; return out(f ? f.map(x => /\./.test(x) && !x.startsWith('.') ? esc(x) : `<span class="b" style="color:var(--blue)">${esc(x)}</span>`).join('  ') : ''); }
-    if (c === 'cd') { const t = a[0] || '~'; let n = t.startsWith('~') || t.startsWith('/') ? t : (this.cwd === '~' ? '~/' + t : t === '..' ? this.cwd.split('/').slice(0, -1).join('/') || '~' : this.cwd + '/' + t); n = n.replace(/\/$/, ''); if (!FS[n]) return out(`<span class="err">cd: no such file or directory: ${esc(t)}</span>`); this.cwd = n; this.br = GIT[n]?.br || ''; this.onchange(this); return; }
+    if (c === 'ls') return out((FS[this.cwd] || []).map(x => x.endsWith('/') ? `<span class="dir">${esc(x.slice(0, -1))}</span>` : esc(x)).join('  '));
+    if (c === 'cd') { const t = (a[0] || '~').replace(/\/$/, ''); const n = t === '..' ? (this.cwd.split('/').slice(0, -1).join('/') || '~') : (t.startsWith('~') ? t : (this.cwd === '~' ? '~/' + t : this.cwd + '/' + t)); if (!FS[n]) return out(`<span class="err">cd: no such file or directory: ${esc(t)}</span>`); this.cwd = n; this.br = GIT[n]?.br || ''; lastCwd = [n, this.br]; this.onchange(); return; }
     if (c === 'git') {
-      if (a[0] === 'status') return out(this.gitStatus());
-      if (a[0] === 'log') { const g = GIT[this.cwd]; return out(g ? g.log.map(l => `<span class="wn">${l.slice(0, 7)}</span>${esc(l.slice(7))}`).join('\n') : `<span class="err">fatal: not a git repository</span>`); }
-      if (a[0] === 'branch') return out(`* <span class="ok">${GIT[this.cwd]?.br || ''}</span>`);
+      const g = GIT[this.cwd]; if (!g) return out(`<span class="err">fatal: not a git repository (or any of the parent directories): .git</span>`);
+      if (a[0] === 'status') return out(`On branch ${g.br}\n${g.st}`);
+      if (a[0] === 'log') return out(g.log.map(l => `<span class="wn">${l.slice(0, 7)}</span>${esc(l.slice(7))}`).join('\n'));
+      if (a[0] === 'branch') return out(`* <span class="ok">${g.br}</span>`);
       return out(`git: '${esc(a[0] || '')}' is not a git command. See 'git --help'.`);
     }
     if (c === 'claude' && a[0] === '--version') return out('2.0.14 (Claude Code)');
     if (c === 'node' && a[0] === '-v') return out('v22.11.0');
     if (c === 'pnpm' && a[0] === 'test') {
-      this.setBusy(true); this.abort = false;
-      out(`\n> xuanji-backend@0.1.0 test ${this.cwd.replace('~', '/Users/lilithgames')}/code/backend\n> vitest run\n`);
-      out(`<span class="b">RUN</span> v2.1.8 ${this.cwd.replace('~', '/Users/lilithgames')}/code/backend\n`);
-      const files = ['tests/dispatch.test.ts','tests/sessions.test.ts','tests/replay.test.ts','tests/sysmon.test.ts','tests/skills.test.ts','tests/terminal.test.ts','tests/routes.test.ts'];
-      const n = [41,58,37,22,49,18,84];
-      for (let i = 0; i < files.length; i++) { await sleep(180 + Math.random() * 260); if (this.abort) { out(`\n<span class="err">^C</span>`); this.setBusy(false); return; } out(` <span class="ok">✓</span> ${files[i]} <span class="dim">(${n[i]} tests) ${(60 + Math.random() * 400) | 0}ms</span>`); }
+      this.setBusy(true); this.abort = false; const root = this.cwd.replace('~', '/Users/lilithgames') + '/code/backend';
+      out(`\n> xuanji-backend@0.1.0 test ${root}\n> vitest run\n\n <span class="b">RUN</span>  v2.1.8 ${root}\n`);
+      const files = [['dispatch',41],['sessions',58],['replay',37],['sysmon',22],['skills',49],['terminal',18],['routes',84]];
+      for (const [f, n] of files) { await sleep(180 + Math.random() * 260); if (this.abort) { out(`<span class="err">^C</span>`); this.setBusy(false); return; } out(` <span class="ok">✓</span> tests/${f}.test.ts <span class="dim">(${n} tests) ${(60 + Math.random() * 400) | 0}ms</span>`); }
       await sleep(200);
-      out(`\n <span class="dim">Test Files</span>  <span class="ok b">7 passed</span> <span class="dim">(7)</span>\n      <span class="dim">Tests</span>  <span class="ok b">309 passed</span> <span class="dim">(309)</span>\n   <span class="dim">Start at</span>  ${new Date().toTimeString().slice(0, 8)}\n   <span class="dim">Duration</span>  2.41s\n`);
+      out(`\n <span class="dim">Test Files</span>  <span class="ok b">7 passed</span> <span class="dim">(7)</span>\n      <span class="dim">Tests</span>  <span class="ok b">309 passed</span> <span class="dim">(309)</span>\n   <span class="dim">Duration</span>  2.41s\n`);
       this.setBusy(false); return;
     }
-    if (c === 'top' || c === 'vim' || c === 'htop') { return out(`<span class="wn">(原型)</span> 全屏交互程序在真实实现里由 node-pty 直接接管,这里不模拟。`); }
+    if (['top', 'htop', 'vim', 'less'].includes(c)) return out(`<span class="wn">(原型)</span> 全屏程序在真实实现里由 node-pty + xterm.js 原样接管,这里不模拟。`);
     out(`zsh: command not found: ${esc(c)}`);
   }
 }
 
-/* ---- 通用:多标签宿主 ---- */
-function makeHost(hostEl, tabsEl, opts = {}) {
-  const ttys = []; let cur = null;
-  const empty = document.createElement('div'); empty.className = 'tty-empty'; empty.textContent = '没有打开的终端 · 点 + 或 ⌘T 新建';
-  function renderTabs() {
-    if (!tabsEl) return;
-    tabsEl.innerHTML = '';
-    ttys.forEach(t => {
-      const b = document.createElement('button'); b.className = 'tty-tab' + (t === cur ? ' active' : '') + (t.busy ? ' run' : ''); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', t === cur);
-      b.innerHTML = `<span class="dot"></span><span>${esc(t.cwd.split('/').pop() || '~')}</span>${t.busy ? '<span class="n">pnpm test</span>' : ''}<span class="x" title="关闭 ⌘W">×</span>`;
-      b.addEventListener('click', e => { if (e.target.classList.contains('x')) close(t); else focus(t); });
-      tabsEl.appendChild(b);
-    });
-    const add = document.createElement('button'); add.className = 'tty-tab-add'; add.title = '新终端 ⌘T'; add.textContent = '+'; add.addEventListener('click', () => (opts.onAdd ? opts.onAdd() : open(cur?.cwd || '~/xuanji', cur?.br || 'dev')));
-    tabsEl.appendChild(add);
-    opts.onChange && opts.onChange(ttys, cur);
-  }
-  function open(cwd, br, o) { const t = new Tty(cwd, br, { ...o, onchange: () => { renderTabs(); } }); ttys.push(t); hostEl.appendChild(t.el); focus(t); return t; }
-  function focus(t) { cur = t; ttys.forEach(x => x.el.classList.toggle('active', x === t)); empty.remove(); if (!ttys.length) hostEl.appendChild(empty); renderTabs(); t && t.el.focus(); }
-  function close(t) { const i = ttys.indexOf(t); if (i < 0) return; t.el.remove(); ttys.splice(i, 1); focus(ttys[Math.min(i, ttys.length - 1)] || null); }
-  function next(d) { if (ttys.length < 2) return; focus(ttys[(ttys.indexOf(cur) + d + ttys.length) % ttys.length]); }
-  return { open, focus, close, next, get cur() { return cur; }, ttys, renderTabs };
+/* ---------- 浮层:多标签宿主 ---------- */
+const hostEl = document.getElementById('tty-c-host'), tabsEl = document.getElementById('tty-c-tabs');
+const ttys = []; let cur = null; let lastCwd = ['~/xuanji', 'dev']; let lastFocus = null;
+const onDispatch = () => document.getElementById('view-dispatch').classList.contains('active');
+function ctxCwd() {
+  if (st.cwdMode === 'home') return ['~', ''];
+  if (st.cwdMode === 'session' && onDispatch()) return SESSION_WT;
+  return lastCwd;
 }
-
-/* ---- 方案 A:独立视图 ---- */
-const A = makeHost(document.getElementById('tty-a-host'), document.getElementById('tty-a-tabs'), {
-  onAdd: () => document.getElementById('tty-a-new').click(),
-  onChange: (ts, cur) => {
-    const run = ts.filter(t => t.busy).length;
-    document.getElementById('tty-a-sub').textContent = ts.length ? `${ts.length} 个终端 · ${run ? run + ' 个在跑' : '都空闲'}` : '没有打开的终端';
-    const nb = document.getElementById('tty-nav-run'); nb.hidden = !run; nb.textContent = run;
-    if (cur) { document.getElementById('tty-a-cwd').textContent = cur.cwd; document.getElementById('tty-a-br').textContent = cur.br ? '⎇ ' + cur.br : ''; }
-  },
-});
-A.open('~/xuanji', 'dev', { scrollback: false });
-A.open('~/xuanji-terminal', 'feature/embedded-terminal');
-document.getElementById('tty-a-fs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; document.querySelectorAll('#tty-a-fs button').forEach(x => x.classList.toggle('active', x === b)); document.documentElement.style.setProperty('--tty-fs', b.dataset.v + 'px'); });
-function bindDd(btnId, menuId, onPick) {
-  const btn = document.getElementById(btnId), menu = document.getElementById(menuId);
-  btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
-  menu.addEventListener('click', e => { const b = e.target.closest('button[data-cwd]'); if (!b) return; menu.hidden = true; onPick(b.dataset.cwd, b.dataset.br); });
-  document.addEventListener('click', () => { menu.hidden = true; });
-}
-bindDd('tty-a-new', 'tty-a-new-menu', (cwd, br) => A.open(cwd, br, { scrollback: false }));
-
-/* ---- 方案 B:派发页底部面板(单实例,cwd 锁定为会话 worktree) ---- */
-const bEl = document.getElementById('tty-b');
-const B = makeHost(document.getElementById('tty-b-host'), null, {});
-let bT = null;
-function bToggle(show) {
-  const on = show ?? bEl.hidden; bEl.hidden = !on; document.getElementById('tty-b-tog').classList.toggle('on', on);
-  if (on) { if (!bT) { bT = B.open('~/xuanji-session-project-filter', 'feature/session-project-filter'); bT.onchange = t => document.querySelector('.tty-b-tab').classList.toggle('run', t.busy); } bT.el.focus(); }
-}
-document.getElementById('tty-b-tog').addEventListener('click', () => bToggle());
-document.getElementById('tty-b-close').addEventListener('click', () => bToggle(false));
-document.getElementById('tty-b-clear').addEventListener('click', () => { bT?.clear(); bT?.el.focus(); });
-document.getElementById('tty-b-max').addEventListener('click', () => bEl.classList.toggle('max'));
-
-/* ---- 方案 C:全局浮层 ---- */
-const cEl = document.getElementById('tty-c');
-const C = makeHost(document.getElementById('tty-c-host'), document.getElementById('tty-c-tabs'), {
-  onAdd: () => document.getElementById('tty-c-cwd-btn').click(),
-  onChange: (ts, cur) => {
-    const run = ts.filter(t => t.busy).length;
-    const sb = document.getElementById('tty-sb'); sb.classList.toggle('warn', false);
-    document.getElementById('tty-sb-n').textContent = run ? `${run} 在跑` : (ts.length ? ts.length + ' 个' : '空闲');
-    sb.querySelector('.dot').style.animation = run ? 'pulse 1.6s var(--ease) infinite' : '';
-    if (cur) document.getElementById('tty-c-cwd').textContent = cur.cwd;
-  },
-});
-let cPinned = false;
-function cToggle(show) { const on = show ?? cEl.hidden; cEl.hidden = !on; if (on) { if (!C.ttys.length) C.open('~/xuanji-terminal', 'feature/embedded-terminal'); C.cur?.el.focus(); } }
-bindDd('tty-c-cwd-btn', 'tty-c-cwd-menu', (cwd, br) => C.open(cwd, br, { scrollback: false }));
-document.getElementById('tty-c-close').addEventListener('click', () => cToggle(false));
-document.getElementById('tty-c-max').addEventListener('click', () => cEl.classList.toggle('max'));
-document.getElementById('tty-c-pin').addEventListener('click', e => { cPinned = !cPinned; e.currentTarget.setAttribute('aria-pressed', cPinned); });
-document.getElementById('tty-sb').addEventListener('click', () => cToggle());
-
-/* 拖高:B / C 共用 */
-function grip(g, target, dir) {
-  g.addEventListener('pointerdown', e => {
-    const h0 = target.getBoundingClientRect().height, y0 = e.clientY; g.setPointerCapture(e.pointerId); target.classList.remove('max');
-    const mv = ev => target.style.setProperty('--tty-h', Math.max(120, h0 + dir * (ev.clientY - y0)) + 'px');
-    g.addEventListener('pointermove', mv); g.addEventListener('pointerup', () => g.removeEventListener('pointermove', mv), { once: true });
+function renderTabs() {
+  tabsEl.innerHTML = '';
+  ttys.forEach(t => {
+    const b = document.createElement('button'); b.className = 'tty-tab' + (t === cur ? ' active' : '') + (t.busy ? ' run' : ''); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', t === cur); b.title = t.cwd;
+    b.innerHTML = `<span class="dot"></span><span>${esc(t.cwd.split('/').pop() || '~')}</span>${t.busy ? '<span class="n">pnpm test</span>' : ''}<span class="x" title="关闭 ⌘W">×</span>`;
+    b.addEventListener('click', e => { if (e.target.classList.contains('x')) close(t); else focus(t); });
+    tabsEl.appendChild(b);
   });
+  const add = document.createElement('button'); add.className = 'tty-tab-add'; add.title = '新终端 ⌘T(目录见右侧)'; add.textContent = '+';
+  add.addEventListener('click', () => open(...ctxCwd())); tabsEl.appendChild(add);
+  const run = ttys.filter(t => t.busy).length, sb = document.getElementById('tty-sb');
+  sb.classList.toggle('on', ttys.length > 0); sb.classList.toggle('run', run > 0);
+  document.getElementById('tty-sb-n').textContent = run ? `${run} 在跑` : ttys.length ? `${ttys.length} 个` : '未开';
+  document.getElementById('tty-c-cwd').textContent = ctxCwd()[0];
 }
-grip(document.getElementById('tty-b-grip'), bEl, -1);
-grip(document.getElementById('tty-c-grip'), cEl, -1);
+function open(cwd, br) { const t = new Tty(cwd, br, renderTabs); ttys.push(t); hostEl.appendChild(t.el); lastCwd = [cwd, br]; focus(t); return t; }
+function focus(t) { cur = t; ttys.forEach(x => x.el.classList.toggle('active', x === t)); renderTabs(); if (t) t.focus(); }
+function close(t) { const i = ttys.indexOf(t); t.el.remove(); ttys.splice(i, 1); focus(ttys[Math.min(i, ttys.length - 1)] || null); if (!ttys.length) toggle(false); }
+function next(d) { if (ttys.length > 1) focus(ttys[(ttys.indexOf(cur) + d + ttys.length) % ttys.length]); }
 
-/* ---- 方案切换器 ---- */
-const DESC = {
-  a: '侧栏多一个「终端」入口,多标签、每个标签自选目录;⌘T/⌘W/⌘⇧[ ] 同浏览器肌肉记忆。跑长命令时侧栏角标提示。',
-  b: '派发页底部拉起一个面板,目录锁死为该会话的 worktree(不可改)——「边看会话边跑验收」。单实例,随会话切换。',
-  c: '任意视图 ⌘` 呼出的底部 sheet,单实例常驻、切视图不丢;状态栏有指示器。不占导航位,像 VS Code 的面板。',
-};
-let scheme = 'a';
-function setScheme(s) {
-  scheme = s; document.body.className = document.body.className.replace(/\btty-s-\w\b/g, '').trim() + ' tty-s-' + s;
-  document.querySelectorAll('.tty-proto button').forEach(b => b.classList.toggle('active', b.dataset.s === s));
-  document.getElementById('tty-proto-d').textContent = DESC[s];
-  document.getElementById('nav-terminal').hidden = s !== 'a';
-  document.querySelectorAll('.tty-b-only').forEach(x => x.hidden = s !== 'b');
-  document.querySelectorAll('.tty-c-only').forEach(x => x.hidden = s !== 'c');
-  if (s !== 'b') bToggle(false);
-  if (s !== 'c') cToggle(false);
-  if (s === 'a') showView('terminal');
-  if (s === 'b') { showView('dispatch'); bToggle(true); }
-  if (s === 'c') { showView('sessions'); cToggle(true); }
+function isOpen() { return cEl.classList.contains('open'); }
+function toggle(show) {
+  const on = show ?? !isOpen();
+  if (on === isOpen()) return;
+  if (on) { lastFocus = document.activeElement; if (!ttys.length) open(...ctxCwd()); }
+  cEl.classList.toggle('open', on); cEl.setAttribute('aria-hidden', !on);
+  document.getElementById('tty-sb').setAttribute('aria-expanded', on);
+  if (on) { renderTabs(); cur?.focus(); }   /* 立即聚焦:visibility 在呼出第一帧就是 visible */
+  else if (lastFocus && lastFocus.isConnected && !cEl.contains(lastFocus)) lastFocus.focus({ preventScroll: true });
 }
-document.getElementById('tty-proto').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setScheme(b.dataset.s); });
+/* 真实实现:transitionend 后才调 xterm fit(),动画期间不重排 */
+cEl.addEventListener('transitionend', e => { if (e.propertyName === 'transform') cEl.dataset.settled = isOpen() ? 'open' : 'closed'; });
 
-/* 侧栏「终端」按钮接入既有 showView;方案 C 未固定时切视图即收起 */
-document.getElementById('nav-terminal').addEventListener('click', () => showView('terminal'));
-const _showView = showView;
-window.showView = function (name) { _showView(name); if (scheme === 'c' && !cPinned && !cEl.hidden && name !== 'sessions') { /* 演示「未固定则随视图收起」 */ cToggle(false); } };
-document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => { if (scheme === 'c' && !cPinned) cToggle(false); }));
+document.getElementById('tty-sb').addEventListener('click', () => toggle());
+document.getElementById('tty-c-close').addEventListener('click', () => toggle(false));
+document.getElementById('tty-c-max').addEventListener('click', () => { cEl.classList.toggle('max'); cur?.focus(); });
 
-/* ---- 快捷键 ---- */
-document.addEventListener('keydown', e => {
-  const inTerm = document.activeElement?.classList.contains('tty-ta');
-  if (e.metaKey && e.key === '`') { e.preventDefault(); if (scheme === 'b') { if (document.getElementById('view-dispatch').classList.contains('active')) bToggle(); } else if (scheme === 'c') cToggle(); else { showView('terminal'); A.cur?.el.focus(); } return; }
-  const H = scheme === 'a' ? A : scheme === 'c' ? C : null;
-  if (!H || !inTerm) return;
-  if (e.metaKey && e.key === 't') { e.preventDefault(); H.open(H.cur?.cwd || '~/xuanji', H.cur?.br || 'dev', { scrollback: false }); }
-  else if (e.metaKey && e.key === 'w') { e.preventDefault(); H.cur && H.close(H.cur); }
-  else if (e.metaKey && e.key === 'k') { e.preventDefault(); H.cur?.clear(); }
-  else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{')) { e.preventDefault(); H.next(-1); }
-  else if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '}')) { e.preventDefault(); H.next(1); }
+/* 目录菜单:第一项随上下文 */
+const menu = document.getElementById('tty-c-cwd-menu');
+document.getElementById('tty-c-cwd-btn').addEventListener('click', e => {
+  e.stopPropagation();
+  const ctx = onDispatch() ? `<button class="ctx" data-cwd="${SESSION_WT[0]}" data-br="${SESSION_WT[1]}">当前会话 worktree <span>${SESSION_WT[0]}</span></button><div class="tty-dd-sep"></div>` : '';
+  menu.innerHTML = `<div class="tty-dd-title">在哪个目录开新终端</div>${ctx}` + DIRS.map(([d, b]) => `<button data-cwd="${d}" data-br="${b}">${d} <span>${b}</span></button>`).join('') + `<div class="tty-dd-sep"></div><button data-cwd="~" data-br="">~ <span>家目录</span></button>`;
+  menu.hidden = !menu.hidden;
+});
+menu.addEventListener('click', e => { const b = e.target.closest('button[data-cwd]'); if (!b) return; menu.hidden = true; open(b.dataset.cwd, b.dataset.br); });
+document.addEventListener('click', () => { menu.hidden = true; });
+
+/* 拖高:拖动期间关掉过渡,跟手 */
+const grip = document.getElementById('tty-c-grip');
+grip.addEventListener('pointerdown', e => {
+  const h0 = cEl.getBoundingClientRect().height, y0 = e.clientY; grip.setPointerCapture(e.pointerId); cEl.classList.remove('max'); cEl.classList.add('dragging');
+  const mv = ev => cEl.style.setProperty('--tty-h', Math.max(140, h0 - (ev.clientY - y0)) + 'px');
+  grip.addEventListener('pointermove', mv);
+  grip.addEventListener('pointerup', () => { grip.removeEventListener('pointermove', mv); cEl.classList.remove('dragging'); cur?.focus(); }, { once: true });
 });
 
-setScheme('a');
+/* 切视图:按设置保持或收起;标签栏目录提示随上下文刷新 */
+const _show = window.showView;
+window.showView = name => { _show(name); if (st.navMode === 'hide') toggle(false); renderTabs(); };
+document.querySelectorAll('.nav button').forEach(b => b.addEventListener('click', () => { if (st.navMode === 'hide') toggle(false); setTimeout(renderTabs); }));
+
+/* 快捷键:⌘` 在任何焦点下都是开关(包括焦点在终端里);Esc 不收起,留给 vim */
+document.addEventListener('keydown', e => {
+  if (e.metaKey && (e.key === '`' || e.code === 'Backquote')) { e.preventDefault(); toggle(); return; }
+  if (!document.activeElement?.classList.contains('tty-ta')) return;
+  if (e.metaKey && e.key === 't') { e.preventDefault(); open(...ctxCwd()); }
+  else if (e.metaKey && e.key === 'w') { e.preventDefault(); cur && close(cur); }
+  else if (e.metaKey && e.key === 'k') { e.preventDefault(); cur?.clear(); }
+  else if (e.metaKey && e.shiftKey && (e.key === '[' || e.key === '{')) { e.preventDefault(); next(-1); }
+  else if (e.metaKey && e.shiftKey && (e.key === ']' || e.key === '}')) { e.preventDefault(); next(1); }
+}, true);
+
+/* ---------- 设置 › 终端 ---------- */
+const themesEl = document.getElementById('tty-themes');
+themesEl.innerHTML = Object.entries(THEMES).map(([n, t]) => `<button class="tty-theme" role="radio" data-t="${n}"><span class="sw" style="background:${t.bg};color:${t.fg}">❯ ${t.p.slice(1, 7).map(c => `<i style="background:${c}"></i>`).join('')}</span>${n}${n === GHOSTTY.theme ? ' · Ghostty' : ''}</button>`).join('');
+themesEl.addEventListener('click', e => { const b = e.target.closest('.tty-theme'); if (b) { st.theme = b.dataset.t; applyTheme(); } });
+document.getElementById('tty-src-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { st.mode = b.dataset.v; applyTheme(); } });
+for (const [id, k] of [['tty-fs', 'fs'], ['tty-op', 'op'], ['tty-blur', 'blur']]) document.getElementById(id).addEventListener('input', e => { st[k] = +e.target.value; applyTheme(); });
+document.getElementById('tty-cur').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { st.cur = b.dataset.v; applyTheme(); } });
+document.getElementById('tty-blink').addEventListener('click', () => { st.blink = !st.blink; applyTheme(); });
+const seg = (id, k) => document.getElementById(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st[k] = b.dataset.v; document.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b)); renderTabs(); });
+seg('tty-cwd-mode', 'cwdMode'); seg('tty-nav-mode', 'navMode');
+document.getElementById('tty-reread').addEventListener('click', e => { const s = e.currentTarget.closest('.tty-src'); s.classList.remove('tty-hl'); void s.offsetWidth; s.classList.add('tty-hl'); applyTheme(); });
+document.querySelector('[data-reset="term"]').addEventListener('click', () => { Object.assign(st, { mode: 'ghostty', ...GHOSTTY }); applyTheme(); });
+function openTermSettings() { document.getElementById('stg-entry').click(); setTimeout(() => document.querySelector('.stg-nav button[data-sec="term"]').click()); }
+document.getElementById('tty-c-set').addEventListener('click', openTermSettings);
+
+/* ---------- 演示面板 ---------- */
+const proto = document.getElementById('tty-proto');
+proto.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.w) {
+    if (b.dataset.w === 'file') { document.getElementById('ram-wall-file').click(); return; }
+    document.getElementById('sw-' + b.dataset.w).click();
+    proto.querySelectorAll('[data-w]').forEach(x => x.classList.toggle('active', x === b));
+  }
+  if (b.dataset.go) { window.showView(b.dataset.go); proto.querySelectorAll('[data-go]').forEach(x => x.classList.toggle('active', x === b)); }
+  if (b.id === 'tty-proto-set') openTermSettings();
+});
+
+applyTheme();
+renderTabs();
 })();
 </script>
 
