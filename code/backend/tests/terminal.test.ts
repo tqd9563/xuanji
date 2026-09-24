@@ -13,7 +13,7 @@ import {
   splitCommand,
   symbolicToKeymap,
 } from '../src/adapters/ghostty.js';
-import { defaultSpawnSpec, hasArm64Slice, isLocalRequest, resolveCwd, shellEnv, TerminalManager, type TermServerMsg } from '../src/services/terminal.js';
+import { defaultSpawnSpec, hasArm64Slice, isLocalRequest, parseLsofCwd, resolveCwd, shellEnv, TerminalManager, type TermServerMsg } from '../src/services/terminal.js';
 import { sanitize } from '../src/services/prefs.js';
 
 describe('Ghostty 配置解析', () => {
@@ -192,6 +192,17 @@ describe('TerminalManager(真 pty)', () => {
     await waitFor(() => mgr!.get(s.id)?.busy === false, 5000);
   }, 10_000);
 
+  it('cd 之后状态推送带上新目录(标签名跟着变)', async () => {
+    mgr = new TerminalManager(() => ({ file: '/bin/bash', args: ['--norc', '--noprofile'], shell: '/bin/bash' }));
+    const s = mgr.create({ cwd: os.homedir() });
+    const a = collect();
+    mgr.attach(s.id, a.client);
+    const target = fs.realpathSync(os.tmpdir());
+    mgr.write(s.id, `cd ${target}\n`);
+    await waitFor(() => a.msgs.some((m) => m.t === 'status' && m.cwd === target), 6000);
+    expect(mgr.get(s.id)?.cwd).toBe(target);
+  }, 10_000);
+
   it('shell 退出时推 exit 并移除会话', async () => {
     mgr = new TerminalManager(() => ({ file: '/bin/bash', args: ['--norc', '--noprofile'], shell: '/bin/bash' }));
     const s = mgr.create({});
@@ -232,5 +243,14 @@ describe('起 shell 的命令', () => {
   it.runIf(process.platform === 'darwin')('只有 x86_64 切片的二进制不判为含 arm64(不会被强制 arch -arm64)', () => {
     expect(hasArm64Slice('/bin/zsh')).toBe(process.arch === 'arm64' || hasArm64Slice('/bin/zsh'));
     expect(hasArm64Slice('/no/such/bin')).toBe(false);
+  });
+});
+
+describe('lsof cwd 解析', () => {
+  it('p/n 成对解析多个进程,丢掉没有路径的', () => {
+    expect([...parseLsofCwd('p101\nfcwd\nn/Users/u/xuanji\np202\nfcwd\nn/tmp\np303\n')]).toEqual([
+      [101, '/Users/u/xuanji'],
+      [202, '/tmp'],
+    ]);
   });
 });

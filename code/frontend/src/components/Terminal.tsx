@@ -159,7 +159,7 @@ export function TerminalSheet({
     ws.onmessage = (ev) => {
       const m = JSON.parse(String(ev.data)) as
         | { t: 'replay' | 'out'; d: string }
-        | { t: 'status'; proc: string; busy: boolean }
+        | { t: 'status'; proc: string; busy: boolean; cwd?: string }
         | { t: 'exit'; code: number };
       if (m.t === 'replay') {
         // 重连回放前清屏,免得同一段输出出现两遍
@@ -168,7 +168,11 @@ export function TerminalSheet({
         l.term.write(m.d);
       } else if (m.t === 'out') l.term.write(m.d);
       else if (m.t === 'status')
-        setTerm((st) => ({ tabs: st.tabs.map((t) => (t.id === id ? { ...t, proc: m.proc, busy: m.busy } : t)) }));
+        setTerm((st) => ({
+          tabs: st.tabs.map((t) => (t.id === id ? { ...t, proc: m.proc, busy: m.busy, cwd: m.cwd ?? t.cwd } : t)),
+          // 活动标签 cd 走了,「上次目录」跟着走:新开终端落在你正待着的地方
+          lastCwd: st.activeId === id && m.cwd ? m.cwd : st.lastCwd,
+        }));
       else if (m.t === 'exit') removeTab(id, false);
     };
     ws.onopen = () => {
@@ -333,6 +337,45 @@ export function TerminalSheet({
     }
     if (prefs.terminal.navMode === 'hide') toggleTerminal(false);
   }, [viewKey]);
+
+  /*
+   * ---- 选区丢 mouseup 兜底 ----
+   * xterm 的拖选靠 document 上的 mouseup 收尾,mousemove 里不看按键状态;WKWebView(Pake 壳)偶发
+   * 不派发这次 mouseup,选区就一直粘在鼠标上(松手后移动鼠标仍在选)。Chrome 不复现,本机也跑不了
+   * WebKit 取证,故不猜原因,两处兜底:移动时发现左键其实已松开、或只来了 pointerup 没跟 mouseup,
+   * 都替 xterm 补发一次 mouseup。
+   */
+  useEffect(() => {
+    let dragging = false;
+    const finish = (x: number, y: number) => {
+      dragging = false;
+      document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, buttons: 0 }));
+    };
+    const down = (e: MouseEvent) => {
+      dragging = e.button === 0 && !!(e.target as Element | null)?.closest?.('.tty-pane');
+    };
+    const up = () => {
+      dragging = false;
+    };
+    const move = (e: MouseEvent) => {
+      if (dragging && (e.buttons & 1) === 0) finish(e.clientX, e.clientY);
+    };
+    const pointerUp = (e: PointerEvent) => {
+      if (!dragging || e.pointerType !== 'mouse') return;
+      // 正常情况下 mouseup 紧随其后,会先把 dragging 清掉;下一轮任务里还在拖 = 它没来
+      setTimeout(() => dragging && finish(e.clientX, e.clientY), 0);
+    };
+    document.addEventListener('mousedown', down, true);
+    document.addEventListener('mouseup', up, true);
+    document.addEventListener('mousemove', move, true);
+    document.addEventListener('pointerup', pointerUp, true);
+    return () => {
+      document.removeEventListener('mousedown', down, true);
+      document.removeEventListener('mouseup', up, true);
+      document.removeEventListener('mousemove', move, true);
+      document.removeEventListener('pointerup', pointerUp, true);
+    };
+  }, []);
 
   /* ---- 浮层内快捷键(仅焦点在浮层里时) ---- */
   useEffect(() => {

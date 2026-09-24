@@ -40,7 +40,7 @@ export interface TermClient {
 export type TermServerMsg =
   | { t: 'replay'; d: string }
   | { t: 'out'; d: string }
-  | { t: 'status'; proc: string; busy: boolean }
+  | { t: 'status'; proc: string; busy: boolean; cwd: string }
   | { t: 'exit'; code: number };
 
 interface Session {
@@ -245,7 +245,7 @@ export class TerminalManager {
     if (!s) return null;
     s.clients.add(client);
     if (s.bufLen) client.send({ t: 'replay', d: s.buf.join('') });
-    client.send({ t: 'status', proc: s.info.proc, busy: s.info.busy });
+    client.send({ t: 'status', proc: s.info.proc, busy: s.info.busy, cwd: s.info.cwd });
     return () => void s.clients.delete(client);
   }
 
@@ -280,18 +280,27 @@ export class TerminalManager {
   }
 
   /**
-   * 前台进程轮询:node-pty 在 macOS 上能直接给出 pty 前台进程名。
-   * 名字不是 shell 自己 = 有命令在跑,标签与状态栏据此亮「在跑」。
+   * 状态轮询(每秒):
+   * - 前台进程名:node-pty 在 macOS 上能直接给出;不是 shell 自己 = 有命令在跑,标签与状态栏亮「在跑」。
+   * - 当前目录:shell 的 cwd 只有进程自己知道(zsh 默认不发 OSC 7),用 lsof 一次查全部 shell;
+   *   标签名与「新终端用上次目录」都靠它,否则 cd 之后标签永远停在创建时的目录。
    */
   private ensureStatusLoop() {
     if (this.statusTimer) return;
+    let tick = 0;
     this.statusTimer = setInterval(() => {
       if (!this.sessions.size) {
         clearInterval(this.statusTimer!);
         this.statusTimer = null;
         return;
       }
+      const cwds = tick++ % 2 === 0 ? readCwds([...this.sessions.values()].map((x) => x.pty.pid)) : null;
       for (const s of this.sessions.values()) {
+        const cwd = cwds?.get(s.pty.pid);
+        if (cwd && cwd !== s.info.cwd) {
+          s.info.cwd = cwd;
+          for (const c of s.clients) c.send({ t: 'status', proc: s.info.proc, busy: s.info.busy, cwd });
+        }
         let proc = s.shellName;
         try {
           proc = s.pty.process || s.shellName;
@@ -302,10 +311,36 @@ export class TerminalManager {
         if (proc === s.info.proc && busy === s.info.busy) continue;
         s.info.proc = proc;
         s.info.busy = busy;
-        for (const c of s.clients) c.send({ t: 'status', proc, busy });
+        for (const c of s.clients) c.send({ t: 'status', proc, busy, cwd: s.info.cwd });
       }
     }, 1000);
     this.statusTimer.unref();
+  }
+}
+
+/** 一次 lsof 查多个进程的 cwd:`-Fpn` 输出按 p<pid> / n<path> 成对出现 */
+export function parseLsofCwd(out: string): Map<number, string> {
+  const m = new Map<number, string>();
+  let pid = 0;
+  for (const line of out.split('\n')) {
+    if (line.startsWith('p')) pid = Number(line.slice(1));
+    else if (line.startsWith('n') && pid) m.set(pid, line.slice(1));
+  }
+  return m;
+}
+
+function readCwds(pids: number[]): Map<number, string> {
+  if (!pids.length || process.platform === 'win32') return new Map();
+  try {
+    const out = execFileSync('/usr/sbin/lsof', ['-a', '-d', 'cwd', '-Fpn', '-p', pids.join(',')], {
+      encoding: 'utf8',
+      timeout: 1500,
+    });
+    return parseLsofCwd(out);
+  } catch (e) {
+    // lsof 在部分 pid 已退出时会非零退出但 stdout 仍有效
+    const out = (e as { stdout?: string }).stdout;
+    return typeof out === 'string' ? parseLsofCwd(out) : new Map();
   }
 }
 

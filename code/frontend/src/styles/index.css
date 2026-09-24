@@ -2760,7 +2760,10 @@ html[data-motion="off"] .tty-c.open { opacity: 1; transition: opacity 80ms linea
 
 .tty-head { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 6px; font-size: 0.75rem; border-bottom: 1px solid color-mix(in srgb, var(--t-fg) 9%, transparent); flex: none; }
 .tty-spacer { flex: 1; }
-.tty-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+.tty-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; overflow-y: hidden; min-width: 0; scrollbar-width: none; }
+/* 标签的 -1px 下边距让内容比容器高 1px:纵向设 hidden 免得冒出纵向滚动条;Safari 17(Pake 壳)不认
+   scrollbar-width,靠 ::-webkit-scrollbar 隐藏(Chrome 121+ 见到 scrollbar-width 会忽略这条,互不干扰) */
+.tty-tabs::-webkit-scrollbar { display: none; }
 .tty-tab {
   display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px 6px; margin-bottom: -1px;
   font: 0.75rem/1.2 var(--mono); white-space: nowrap; cursor: pointer;
