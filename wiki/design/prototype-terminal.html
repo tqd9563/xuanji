@@ -2629,7 +2629,14 @@ button.ram-chip:hover { background: var(--hover); }
 .stg-row.tty-wide .stg-ctl { order: 3; flex: 1 1 100%; }
 .tty-themes { grid-template-columns: repeat(5, 1fr) !important; }
 /* 跟随 Ghostty 时:标签照常可读(看得到 Ghostty 的值),只把控件压暗、禁点 */
-.stg-row.tty-cus.is-off .stg-ctl { opacity: .6; pointer-events: none; }
+.tty-bgimg { position: absolute; inset: 0; pointer-events: none; background: center / cover no-repeat; opacity: var(--t-imgop, .35); display: none; }
+.tty-c.has-img .tty-bgimg { display: block; }
+.tty-c > :not(.tty-bgimg) { position: relative; }
+.tty-color { display: inline-flex; align-items: center; gap: 8px; font: 0.75rem var(--mono); color: var(--muted); cursor: pointer; }
+.tty-color input { width: 28px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
+.tty-color input::-webkit-color-swatch-wrapper { padding: 2px; }
+.tty-color input::-webkit-color-swatch { border: none; border-radius: 2px; }
+.tty-img-thumb { width: 36px; height: 22px; border-radius: 3px; background: center / cover no-repeat var(--surface-2); border: 1px solid var(--line-soft); }
 .tty-font-val { font: 0.8125rem var(--tty-font); color: var(--ink); }
 .tty-warn { color: var(--amber) !important; }
 .tty-warn code, .stg-lab small code { font-family: var(--mono); }
@@ -2797,6 +2804,7 @@ button.ram-chip:hover { background: var(--hover); }
 
 <!-- ============ 全局终端浮层(⌘` 任意视图呼出/收起,单实例常驻,切视图不丢) ============ -->
 <div class="tty-c" id="tty-c" role="dialog" aria-label="终端" aria-hidden="true">
+  <div class="tty-bgimg" id="tty-bgimg" aria-hidden="true"></div>
   <div class="tty-grip" id="tty-c-grip" title="拖动调整高度"></div>
   <div class="tty-c-head">
     <div class="tty-tabs" id="tty-c-tabs" role="tablist"></div>
@@ -3002,18 +3010,26 @@ button.ram-chip:hover { background: var(--hover); }
           <button class="btn btn-quiet" id="tty-reread">重新读取</button>
         </div>
         <div class="stg-group">外观</div>
-        <div class="stg-row"><div class="stg-lab"><span>外观来源</span><small>跟随:主题、字体、字号、透明度、模糊、光标都取 Ghostty 的值,Ghostty 里改完点「重新读取」即生效。自定义:在下面逐项改</small></div>
+        <div class="stg-row"><div class="stg-lab"><span>外观来源</span><small id="tty-src-hint">下面每一项都可以直接改;改了任意一项即转为「自定义」,点「跟随 Ghostty」一键恢复。跟随时 Ghostty 里改完点「重新读取」即生效</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-src-mode"><button data-v="ghostty" class="active">跟随 Ghostty</button><button data-v="custom">自定义</button></div></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-row tty-cus tty-wide"><div class="stg-lab"><span>配色</span><small id="tty-theme-hint">Ghostty: theme = Catppuccin Frappe</small></div>
           <div class="stg-ctl"><div class="tty-themes" id="tty-themes" role="radiogroup"></div></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-group">背景</div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景颜色</span><small id="tty-bgc-hint">默认取配色自带的背景色;Ghostty: background = #303446</small></div>
+          <div class="stg-ctl"><label class="tty-color"><input type="color" id="tty-bgc" value="#303446"><span id="tty-bgc-v">#303446</span></label><button class="btn btn-sm" id="tty-bgc-reset" hidden>跟随配色</button></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景不透明度</span><small>低于 100% 时透出后面的页面与璇玑壁纸;Ghostty: background-opacity = 0.9</small></div>
+          <div class="stg-ctl"><input type="range" min="30" max="100" value="90" id="tty-op"><span class="stg-val" id="tty-op-v">90%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景模糊</span><small>透出部分的毛玻璃程度;Ghostty: background-blur-radius = 30</small></div>
+          <div class="stg-ctl"><input type="range" min="0" max="40" value="30" id="tty-blur"><span class="stg-val" id="tty-blur-v">30px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景图片</span><small>终端自己的背景图,铺在背景色之上、文字之下;与璇玑壁纸互不影响。Ghostty: 未设置 background-image</small></div>
+          <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-img-mode"><button data-v="none" class="active">无</button><button data-v="file">本地图片…</button></div><input type="file" accept="image/*" id="tty-img-file" hidden></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-row tty-cus" id="tty-img-op-row" hidden><div class="stg-lab"><span>图片不透明度</span><small>调低让文字更清楚</small></div>
+          <div class="stg-ctl"><span class="tty-img-thumb" id="tty-img-thumb"></span><input type="range" min="5" max="100" value="35" id="tty-imgop"><span class="stg-val" id="tty-imgop-v">35%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
+        <div class="stg-group">文字与光标</div>
         <div class="stg-row tty-cus"><div class="stg-lab"><span>字体</span><small id="tty-font-hint">Ghostty 配置写的 Maple Mono NF CN 本机未安装,Ghostty 实际回退到内置 JetBrains Mono;这里照实际渲染的来</small></div>
           <div class="stg-ctl"><span class="tty-font-val" id="tty-font-val">JetBrains Mono · 14</span></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-row tty-cus"><div class="stg-lab"><span>字号</span><small>Ghostty: font-size = 14</small></div>
           <div class="stg-ctl"><input type="range" min="11" max="20" value="14" id="tty-fs"><span class="stg-val" id="tty-fs-v">14px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
-        <div class="stg-row tty-cus"><div class="stg-lab"><span>底色不透明度</span><small>低于 100% 时透出后面的页面与壁纸;Ghostty: background-opacity = 0.9</small></div>
-          <div class="stg-ctl"><input type="range" min="50" max="100" value="90" id="tty-op"><span class="stg-val" id="tty-op-v">90%</span></div><span class="stg-scope" data-scope="local">本机</span></div>
-        <div class="stg-row tty-cus"><div class="stg-lab"><span>背景模糊</span><small>透出部分的毛玻璃程度;Ghostty: background-blur-radius = 30</small></div>
-          <div class="stg-ctl"><input type="range" min="0" max="40" value="30" id="tty-blur"><span class="stg-val" id="tty-blur-v">30px</span></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-row tty-cus"><div class="stg-lab"><span>光标</span><small>Ghostty: cursor-style = bar,blink = true</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-cur"><button data-v="bar" class="active">竖线</button><button data-v="block">方块</button><button data-v="underline">下划线</button></div><span class="switch on" id="tty-blink" role="switch" aria-checked="true" tabindex="0" title="闪烁"></span></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-group">行为</div>
@@ -3968,24 +3984,38 @@ const THEMES = {
   '璇玑 · 玉':            { bg:'#10130e', fg:'#e6e9dc', cursor:'#c9da7a', sel:'#3a4133', p:['#2a2f25','#e36d68','#8fcf94','#e3b65a','#86b2e6','#bb9de0','#6fcac0','#b9bfae','#6d7466'] },
 };
 const GHOSTTY = { theme: 'Catppuccin Frappe', fs: 14, op: 90, blur: 30, cur: 'bar', blink: true };
-const st = { mode: 'ghostty', theme: GHOSTTY.theme, fs: GHOSTTY.fs, op: GHOSTTY.op, blur: GHOSTTY.blur, cur: GHOSTTY.cur, blink: GHOSTTY.blink, cwdMode: 'session', navMode: 'keep' };
+const st = { mode: 'ghostty', theme: GHOSTTY.theme, fs: GHOSTTY.fs, op: GHOSTTY.op, blur: GHOSTTY.blur, cur: GHOSTTY.cur, blink: GHOSTTY.blink, bg: null, img: null, imgop: 35, cwdMode: 'session', navMode: 'keep' };
+const APPEAR = ['theme', 'fs', 'op', 'blur', 'cur', 'blink'];
+/* 改任意外观项:若当前在跟随,先把 Ghostty 的值落成自定义起点,再改这一项 */
+function edit(fn) { if (st.mode === 'ghostty') { APPEAR.forEach(k => st[k] = GHOSTTY[k]); st.mode = 'custom'; } fn(); applyTheme(); }
 
 const cEl = document.getElementById('tty-c');
+function set0(id, v, u) { const el = document.getElementById(id); el.value = v; document.getElementById(id + '-v').textContent = v + u; }
 function applyTheme() {
   const s = st.mode === 'ghostty' ? { ...st, ...GHOSTTY } : st;
   const t = THEMES[s.theme];
-  cEl.style.setProperty('--t-bg', t.bg); cEl.style.setProperty('--t-fg', t.fg); cEl.style.setProperty('--t-cursor', t.cursor); cEl.style.setProperty('--t-sel', t.sel);
+  const bg = (st.mode === 'custom' && st.bg) || t.bg;
+  cEl.style.setProperty('--t-bg', bg);
+  cEl.classList.toggle('has-img', !!(st.mode === 'custom' && st.img));
+  document.getElementById('tty-bgimg').style.backgroundImage = st.img ? `url("${st.img}")` : '';
+  cEl.style.setProperty('--t-imgop', st.imgop / 100);
+  document.getElementById('tty-bgc').value = bg; document.getElementById('tty-bgc-v').textContent = bg;
+  document.getElementById('tty-bgc-reset').hidden = !(st.mode === 'custom' && st.bg);
+  const im = st.mode === 'custom' && st.img;
+  document.querySelectorAll('#tty-img-mode button').forEach(b => b.classList.toggle('active', (b.dataset.v === 'file') === !!im));
+  document.getElementById('tty-img-op-row').hidden = !im;
+  document.getElementById('tty-img-thumb').style.backgroundImage = im ? `url("${st.img}")` : '';
+  set0('tty-imgop', st.imgop, '%'); cEl.style.setProperty('--t-fg', t.fg); cEl.style.setProperty('--t-cursor', t.cursor); cEl.style.setProperty('--t-sel', t.sel);
   t.p.forEach((c, i) => cEl.style.setProperty('--t-' + i, c));
   cEl.style.setProperty('--t-op', s.op + '%'); cEl.style.setProperty('--t-blur', s.blur + 'px'); cEl.style.setProperty('--t-fs', s.fs + 'px');
   cEl.dataset.cur = s.cur; cEl.dataset.blink = s.blink ? '1' : '0';
   /* 同步设置面板显示 */
   document.querySelectorAll('.tty-theme').forEach(b => b.setAttribute('aria-checked', b.dataset.t === s.theme));
-  const set = (id, v, u) => { const el = document.getElementById(id); el.value = v; document.getElementById(id + '-v').textContent = v + u; };
+  const set = set0; /* */ const _unused = (id, v, u) => { const el = document.getElementById(id); el.value = v; document.getElementById(id + '-v').textContent = v + u; };
   set('tty-fs', s.fs, 'px'); set('tty-op', s.op, '%'); set('tty-blur', s.blur, 'px');
   document.querySelectorAll('#tty-cur button').forEach(b => b.classList.toggle('active', b.dataset.v === s.cur));
   const bl = document.getElementById('tty-blink'); bl.classList.toggle('on', s.blink); bl.setAttribute('aria-checked', s.blink);
   document.getElementById('tty-font-val').textContent = 'JetBrains Mono · ' + s.fs;
-  document.querySelectorAll('.stg-row.tty-cus').forEach(r => r.classList.toggle('is-off', st.mode === 'ghostty'));
   document.querySelectorAll('#tty-src-mode button').forEach(b => b.classList.toggle('active', b.dataset.v === st.mode));
 }
 
@@ -4187,15 +4217,20 @@ document.addEventListener('keydown', e => {
 /* ---------- 设置 › 终端 ---------- */
 const themesEl = document.getElementById('tty-themes');
 themesEl.innerHTML = Object.entries(THEMES).map(([n, t]) => `<button class="tty-theme" role="radio" data-t="${n}"><span class="sw" style="background:${t.bg};color:${t.fg}">❯ ${t.p.slice(1, 7).map(c => `<i style="background:${c}"></i>`).join('')}</span>${n}${n === GHOSTTY.theme ? ' · Ghostty' : ''}</button>`).join('');
-themesEl.addEventListener('click', e => { const b = e.target.closest('.tty-theme'); if (b) { st.theme = b.dataset.t; applyTheme(); } });
-document.getElementById('tty-src-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { st.mode = b.dataset.v; applyTheme(); } });
-for (const [id, k] of [['tty-fs', 'fs'], ['tty-op', 'op'], ['tty-blur', 'blur']]) document.getElementById(id).addEventListener('input', e => { st[k] = +e.target.value; applyTheme(); });
-document.getElementById('tty-cur').addEventListener('click', e => { const b = e.target.closest('button'); if (b) { st.cur = b.dataset.v; applyTheme(); } });
-document.getElementById('tty-blink').addEventListener('click', () => { st.blink = !st.blink; applyTheme(); });
+themesEl.addEventListener('click', e => { const b = e.target.closest('.tty-theme'); if (b) edit(() => { st.theme = b.dataset.t; st.bg = null; }); });
+document.getElementById('tty-src-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'custom') edit(() => {}); else { st.mode = 'ghostty'; applyTheme(); } });
+for (const [id, k] of [['tty-fs', 'fs'], ['tty-op', 'op'], ['tty-blur', 'blur']]) document.getElementById(id).addEventListener('input', e => edit(() => { st[k] = +e.target.value; }));
+document.getElementById('tty-imgop').addEventListener('input', e => edit(() => { st.imgop = +e.target.value; }));
+document.getElementById('tty-bgc').addEventListener('input', e => edit(() => { st.bg = e.target.value; }));
+document.getElementById('tty-bgc-reset').addEventListener('click', () => edit(() => { st.bg = null; }));
+document.getElementById('tty-img-mode').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; if (b.dataset.v === 'file') document.getElementById('tty-img-file').click(); else edit(() => { st.img = null; }); });
+document.getElementById('tty-img-file').addEventListener('change', e => { const f = e.target.files[0]; if (f) edit(() => { st.img = URL.createObjectURL(f); }); e.target.value = ''; });
+document.getElementById('tty-cur').addEventListener('click', e => { const b = e.target.closest('button'); if (b) edit(() => { st.cur = b.dataset.v; }); });
+document.getElementById('tty-blink').addEventListener('click', () => edit(() => { st.blink = !st.blink; }));
 const seg = (id, k) => document.getElementById(id).addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; st[k] = b.dataset.v; document.querySelectorAll('#' + id + ' button').forEach(x => x.classList.toggle('active', x === b)); renderTabs(); });
 seg('tty-cwd-mode', 'cwdMode'); seg('tty-nav-mode', 'navMode');
 document.getElementById('tty-reread').addEventListener('click', e => { const s = e.currentTarget.closest('.tty-src'); s.classList.remove('tty-hl'); void s.offsetWidth; s.classList.add('tty-hl'); applyTheme(); });
-document.querySelector('[data-reset="term"]').addEventListener('click', () => { Object.assign(st, { mode: 'ghostty', ...GHOSTTY }); applyTheme(); });
+document.querySelector('[data-reset="term"]').addEventListener('click', () => { Object.assign(st, { mode: 'ghostty', ...GHOSTTY, bg: null, img: null, imgop: 35 }); applyTheme(); });
 function openTermSettings() { document.getElementById('stg-entry').click(); setTimeout(() => document.querySelector('.stg-nav button[data-sec="term"]').click()); }
 document.getElementById('tty-c-set').addEventListener('click', openTermSettings);
 
