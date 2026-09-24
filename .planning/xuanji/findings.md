@@ -41,6 +41,7 @@
 | 读 jsonl/history 等内部格式必须隔离在 adapter 层 | 非公开格式,版本漂移风险 |
 | project-init 部分遵守:结构不变量全保留,Python 细节换 Node 等价物 | skill 写死 "Backend is always Python + uv",与 xuanji 的 Node/TS 栈冲突;骨架(code/ + wiki 四目录 + README + 原型关卡 + checklist)与栈无关照办;uv→pnpm、FastAPI→Hono、pytest→vitest、ruff/mypy→eslint+tsc、gitignore 换 Node 版,lock 文件同样提交 |
 | 项目 agent 规则文件用 CLAUDE.md 而非 skill 要求的 AGENTS.md | 全局 R3 优先 + 与既有项目一致;内容沿用 skill 的两段式模板(项目规则 + 经验教训) |
+| 全局终端用 node-pty + xterm.js 起**用户自己的 zsh**(2026-09-24 原型获批) | 与 product-plan §技术选型「不做 PTY 包装 claude TUI」不冲突:这里是通用 shell,不 attach、不接管任何 claude 会话;启动方式照抄用户 Ghostty(`arch -arm64 /bin/zsh --login`),显式补 TERM/COLORTERM/LANG(launchd 环境只有 PATH/HOME);WebSocket 只接受本机直连,拒绝经 Tailscale serve 反代的请求;Ghostty 配置解析属非公开格式,隔离在 adapter 层 |
 
 ## 遇到的问题
 | 问题 | 解决方案 |

@@ -374,6 +374,58 @@ export interface AccountPrefs {
   wrapupPrompt: string;
   notify: NotifyPrefs;
   monitor: MonitorPrefs;
+  terminal: TerminalPrefs;
+}
+
+/** 全局终端行为(账户):与后端 services/prefs.ts 的 TerminalPrefs 对应;外观属本机,见 lib/terminal.ts */
+export interface TerminalPrefs {
+  cwdMode: 'session' | 'last' | 'home';
+  navMode: 'keep' | 'hide';
+}
+
+/* ---------- 全局终端:与后端 adapters/ghostty.ts、services/terminal.ts 对应 ---------- */
+export interface TermTheme {
+  name: string;
+  background: string;
+  foreground: string;
+  cursor: string;
+  selection: string;
+  palette: string[];
+}
+export interface GhosttyInfo {
+  version: string | null;
+  configPath: string;
+  theme: TermTheme | null;
+  fontConfigured: string | null;
+  fontActual: string | null;
+  fontSize: number;
+  opacity: number;
+  blur: number;
+  cursorStyle: 'bar' | 'block' | 'underline';
+  cursorBlink: boolean;
+  globalKeys: string[];
+  command: string | null;
+}
+export interface SysHotkey {
+  id: number;
+  name: string;
+  combo: string;
+  enabled: boolean;
+}
+export interface TermSessionInfo {
+  id: string;
+  cwd: string;
+  createdAt: number;
+  proc: string;
+  busy: boolean;
+  exited: boolean;
+}
+export interface TermInfo {
+  /** 本请求是否来自本机直连;false 时终端整体不可用(手机 / Tailscale) */
+  local: boolean;
+  ghostty: GhosttyInfo | null;
+  systemHotkeys: SysHotkey[];
+  sessions: TermSessionInfo[];
 }
 
 /** 系统监控设置(账户):与后端 services/prefs.ts 的 MonitorPrefs 对应 */

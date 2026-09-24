@@ -49,6 +49,14 @@ export interface MonitorPrefs {
   idleExit: 0 | 10 | 30 | 60 | 120;
 }
 
+/** 全局终端的行为设置(外观属「本机」,在前端) */
+export interface TerminalPrefs {
+  /** 新终端默认目录:跟随会话(派发页取当前会话 worktree)/ 上次目录 / 家目录 */
+  cwdMode: 'session' | 'last' | 'home';
+  /** 切换视图时:保持浮层 / 自动收起 */
+  navMode: 'keep' | 'hide';
+}
+
 export interface AccountPrefs {
   /** 新会话默认模型;空串 = 沿用上次用过的 */
   model: string;
@@ -70,6 +78,7 @@ export interface AccountPrefs {
   wrapupPrompt: string;
   notify: NotifyPrefs;
   monitor: MonitorPrefs;
+  terminal: TerminalPrefs;
 }
 
 /** 与前端 Dispatch 的既有默认值保持一致:权限免审批、模型与目录沿用上次 */
@@ -91,6 +100,7 @@ export const DEFAULT_PREFS: AccountPrefs = {
     error: true,
   },
   monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
+  terminal: { cwdMode: 'session', navMode: 'keep' },
 };
 
 const INTERVALS = [5, 10, 30, 60] as const;
@@ -119,6 +129,14 @@ function sanitizeMonitor(input: unknown, base: MonitorPrefs): MonitorPrefs {
     cpuWarn: ok ? warn : base.cpuWarn,
     cpuCrit: ok ? crit : base.cpuCrit,
     idleExit: pick(m.idleExit, IDLE_EXITS, base.idleExit),
+  };
+}
+
+function sanitizeTerminal(input: unknown, base: TerminalPrefs): TerminalPrefs {
+  const t = (input ?? {}) as Partial<TerminalPrefs>;
+  return {
+    cwdMode: t.cwdMode === 'session' || t.cwdMode === 'last' || t.cwdMode === 'home' ? t.cwdMode : base.cwdMode,
+    navMode: t.navMode === 'keep' || t.navMode === 'hide' ? t.navMode : base.navMode,
   };
 }
 
@@ -164,6 +182,7 @@ export function sanitize(input: unknown, base: AccountPrefs = DEFAULT_PREFS): Ac
       error: bool(n.error, base.notify.error),
     },
     monitor: sanitizeMonitor(o.monitor, base.monitor),
+    terminal: sanitizeTerminal(o.terminal, base.terminal),
   };
 }
 
@@ -187,6 +206,7 @@ export function writePrefs(storage: Storage, patch: unknown): AccountPrefs {
     ...p,
     notify: { ...cur.notify, ...(p.notify ?? {}) },
     monitor: { ...cur.monitor, ...(p.monitor ?? {}) },
+    terminal: { ...cur.terminal, ...(p.terminal ?? {}) },
   };
   const next = sanitize(merged, cur);
   storage.setMeta(META_KEY, JSON.stringify(next));

@@ -23,6 +23,8 @@ import { Review } from '@/views/Review';
 import { Worklog } from '@/views/Worklog';
 import { Todos, startTodo, notifyTodosChanged } from '@/views/Todos';
 import { TodoPalette } from '@/components/TodoPalette';
+import { TerminalSheet, toggleTerminal } from '@/components/Terminal';
+import { matchToggleKey } from '@/lib/terminal';
 
 const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
@@ -53,6 +55,8 @@ export default function App() {
   const [live2d, patchLive2d] = useLive2d();
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  /** 打开设置时直接落到的分区(终端浮层的 ⚙ 用);null = 停在上次的分区 */
+  const [settingsSec, setSettingsSec] = useState<'term' | null>(null);
   const localPrefs = useLocalPrefs();
   const wallUrl = wallSrcUrl(wall);
 
@@ -130,6 +134,12 @@ export default function App() {
       // 设置面板自己处理面板内按键(含改键录入),开着时全局键位一律让位
       if (settingsOpen) return;
       const km = localPrefs.keymap;
+      // ⌘` 全局终端:任何焦点下都是开关(含焦点在终端里——xterm 把 ⌘ 组合交还给页面)
+      if (matchToggleKey(e, km['global.terminal'])) {
+        e.preventDefault();
+        toggleTerminal();
+        return;
+      }
       if (matchKey(e, km['global.settings'])) {
         e.preventDefault();
         setSettingsOpen(true);
@@ -328,9 +338,22 @@ export default function App() {
         />
       )}
 
+      <TerminalSheet
+        viewKey={view}
+        cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
+        onOpenSettings={() => {
+          setSettingsSec('term');
+          setSettingsOpen(true);
+        }}
+      />
+
       <Settings
         open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
+        initialSec={settingsSec}
+        onClose={() => {
+          setSettingsOpen(false);
+          setSettingsSec(null);
+        }}
         cwdOptions={projectsData?.projects.map((p) => p.path) ?? []}
         wall={wall}
         patchWall={patchWall}

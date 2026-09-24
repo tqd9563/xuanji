@@ -28,6 +28,8 @@ import type { SchedulerService, UpdateJobInput } from '../services/scheduler.js'
 import type { RunbookItem, RunbookTemplate, SessionState, WorklogCard } from '../types.js';
 import type { Storage } from '../storage/db.js';
 import type { SysmonSampler } from '../services/sysmon/sampler.js';
+import { isLocalRequest, type TerminalManager } from '../services/terminal.js';
+import { readGhostty, readSystemHotkeys } from '../adapters/ghostty.js';
 
 const DAY = 86_400_000;
 const execFileP = promisify(execFile);
@@ -38,8 +40,41 @@ function num(v: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-export function createApi(storage: Storage, scheduler: SchedulerService, sysmon?: SysmonSampler) {
+export function createApi(
+  storage: Storage,
+  scheduler: SchedulerService,
+  sysmon?: SysmonSampler,
+  terminals?: TerminalManager,
+) {
   const api = new Hono();
+
+  /* ---------- 全局终端(本机直连才放行,见 services/terminal.ts isLocalRequest) ---------- */
+  const localOnly = (c: Context) => {
+    const incoming = (c.env as { incoming?: { socket?: { remoteAddress?: string } } } | undefined)?.incoming;
+    return isLocalRequest(incoming?.socket?.remoteAddress, (n) => c.req.header(n));
+  };
+
+  api.get('/terminal/info', async (c) => {
+    const local = !!terminals && localOnly(c);
+    if (!local) return c.json({ local: false, ghostty: null, systemHotkeys: [], sessions: [] });
+    const [ghostty, systemHotkeys] = await Promise.all([readGhostty(), readSystemHotkeys()]);
+    return c.json({ local, ghostty, systemHotkeys, sessions: terminals!.list() });
+  });
+
+  api.post('/terminal/sessions', async (c) => {
+    if (!terminals || !localOnly(c)) return c.json({ error: '终端只对本机开放' }, 403);
+    const body = (await c.req.json().catch(() => ({}))) as { cwd?: unknown; cols?: unknown; rows?: unknown };
+    try {
+      return c.json({ session: terminals.create(body) });
+    } catch (e) {
+      return c.json({ error: e instanceof Error ? e.message : String(e) }, 500);
+    }
+  });
+
+  api.delete('/terminal/sessions/:id', (c) => {
+    if (!terminals || !localOnly(c)) return c.json({ error: '终端只对本机开放' }, 403);
+    return c.json({ ok: terminals.kill(c.req.param('id')) });
+  });
 
   api.get('/health', async (c) => {
     const cli = await cliVersion();

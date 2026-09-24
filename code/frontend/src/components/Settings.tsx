@@ -36,8 +36,24 @@ import { STOW_OPTS, stowLabel } from '@/lib/stow';
 import { modelDetail, modelLabel, useModelCatalog } from '@/lib/models';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
+import { api as termApi } from '@/api/client';
+import type { GhosttyInfo, TermTheme } from '@/api/types';
+import {
+  BUILTIN_THEMES,
+  clearTermImage,
+  editLook,
+  getTerm,
+  keyConflicts,
+  LOOK_DEFAULTS,
+  resolveLook,
+  saveTermImage,
+  setLook,
+  setTerm,
+  useTerm,
+  type CursorStyle,
+} from '@/lib/terminal';
 
-type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'monitor' | 'adv';
+type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'monitor' | 'term' | 'adv';
 
 /**
  * 这四个组件必须定义在 Settings 之外。
@@ -158,6 +174,13 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
     title: '系统监控',
     desc: '状态栏内存 / CPU 指示与会话卡片上的占用数字;采样在后端跑,只读系统信息',
   },
+  {
+    id: 'term',
+    label: '终端',
+    icon: 'M3 5h18v14H3zM7 9l3 3-3 3M12 15h5',
+    title: '终端',
+    desc: '⌘` 呼出的全局终端;外观默认读本机 Ghostty 配置,只读,不改 Ghostty',
+  },
   { id: 'adv', label: '高级', icon: 'M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4', title: '高级', desc: '不常动的东西' },
 ];
 
@@ -223,6 +246,194 @@ function SettingsRowCustom({ label, desc, children, off, hit, invalid }: Omit<Ro
   );
 }
 
+const CURSOR_TABS: { v: CursorStyle; label: string }[] = [
+  { v: 'bar', label: '竖线' },
+  { v: 'block', label: '方块' },
+  { v: 'underline', label: '下划线' },
+];
+const CWD_MODE_TABS = [
+  { v: 'session' as const, label: '跟随会话' },
+  { v: 'last' as const, label: '上次目录' },
+  { v: 'home' as const, label: '家目录' },
+];
+const NAV_MODE_TABS = [
+  { v: 'keep' as const, label: '保持' },
+  { v: 'hide' as const, label: '收起' },
+];
+
+function ThemeCard({ th, on, tag, onPick }: { th: TermTheme; on: boolean; tag?: string; onPick: () => void }) {
+  return (
+    <button className="tty-theme" role="radio" aria-checked={on} onClick={onPick}>
+      <span className="tty-theme-sw" style={{ background: th.background, color: th.foreground }}>
+        ❯
+        {th.palette.slice(1, 7).map((c, i) => (
+          <i key={i} style={{ background: c }} />
+        ))}
+      </span>
+      <span className="tty-theme-name">
+        {th.name}
+        {tag && <span> · {tag}</span>}
+      </span>
+    </button>
+  );
+}
+
+/** 设置 › 终端。外观(本机)改任一项即转「自定义」;行为(账户)走 AccountPrefs.terminal */
+function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; searching: boolean; onGoKeys: () => void }) {
+  const t = useTerm();
+  const local = useLocalPrefs();
+  const { prefs } = useAccountPrefs();
+  const g: GhosttyInfo | null = t.info?.ghostty ?? null;
+  const look = t.look;
+  const r = resolveLook(look, g);
+  const edit = (p: Parameters<typeof editLook>[2]) => setLook(editLook(look, g, p));
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [rereading, setRereading] = useState(false);
+  const combo = local.keymap['global.terminal'];
+  const conflicts = keyConflicts(combo, g, t.info?.systemHotkeys ?? []);
+  const themes = g?.theme && !BUILTIN_THEMES.some((x) => x.name === g.theme!.name) ? [g.theme, ...BUILTIN_THEMES] : BUILTIN_THEMES;
+
+  const reread = async () => {
+    setRereading(true);
+    try {
+      const info = await termApi.termInfo();
+      setTerm({ info });
+      toast(info.ghostty ? '已重新读取 Ghostty 配置' : '没找到 Ghostty 配置');
+    } catch {
+      toast('读取失败:后端不可达');
+    } finally {
+      setRereading(false);
+    }
+  };
+
+  if (t.info && !t.info.local)
+    return <p className="stg-storage">终端只对本机直连开放;当前是经远程(手机 / Tailscale)访问,这一节不可用。</p>;
+
+  return (
+    <>
+      {!searching && (
+        <div className="tty-src">
+          <span className={cn('tty-src-dot', !g && 'off')} />
+          <span>
+            {g ? (
+              <>
+                已读取 Ghostty {g.version ?? ''} 配置 <code>{g.configPath.replace(/^\/Users\/[^/]+/, '~')}</code>
+              </>
+            ) : (
+              '没找到 Ghostty 配置,外观跟随时用璇玑默认(玉色主题、不透明、无模糊)'
+            )}
+          </span>
+          <button className="btn btn-quiet" disabled={rereading} onClick={() => void reread()}>
+            {rereading ? '读取中…' : '重新读取'}
+          </button>
+        </div>
+      )}
+      <SettingsGroup show={!searching}>外观</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="外观来源">
+        <Tabs value={look.mode} options={[{ v: 'ghostty', label: '跟随 Ghostty' }, { v: 'custom', label: '自定义' }]}
+          onChange={(v) => setLook(v === 'ghostty' ? { ...look, mode: 'ghostty' } : editLook(look, g, {}))} />
+      </SettingsRow>
+      {hit('主题', '配色') && (
+        <div className="stg-row tty-wide">
+          <div className="stg-lab">
+            <span>主题</span>
+          </div>
+          <span className="stg-scope" data-scope="local">本机</span>
+          <div className="stg-ctl tty-themes" role="radiogroup" aria-label="终端主题">
+            {themes.map((th) => (
+              <ThemeCard key={th.name} th={th} on={r.theme.name === th.name} tag={g?.theme?.name === th.name ? 'Ghostty' : undefined}
+                onPick={() => edit({ theme: th.name, bg: null })} />
+            ))}
+          </div>
+        </div>
+      )}
+      <SettingsGroup show={!searching}>背景</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="背景颜色">
+        <label className="tty-color">
+          <input type="color" value={r.background} aria-label="终端背景颜色" onChange={(e) => edit({ bg: e.target.value })} />
+          <span>{r.background}</span>
+        </label>
+        {look.mode === 'custom' && look.bg && (
+          <button className="btn btn-sm" onClick={() => edit({ bg: null })}>跟随配色</button>
+        )}
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景不透明度">
+        <input type="range" min={30} max={100} value={r.opacity} aria-label="终端背景不透明度" onChange={(e) => edit({ opacity: Number(e.target.value) })} />
+        <span className="stg-val">{r.opacity}%</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景模糊">
+        <input type="range" min={0} max={40} value={r.blur} aria-label="终端背景模糊" onChange={(e) => edit({ blur: Number(e.target.value) })} />
+        <span className="stg-val">{r.blur}px</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="背景图片">
+        <Tabs value={r.hasImg && t.imgUrl ? 'file' : 'none'} options={[{ v: 'none', label: '无' }, { v: 'file', label: '本地图片…' }]}
+          onChange={(v) => {
+            if (v === 'file') fileRef.current?.click();
+            else {
+              void clearTermImage();
+              edit({ hasImg: false });
+            }
+          }} />
+        <input ref={fileRef} type="file" accept="image/*" hidden
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            void saveTermImage(f).then(() => edit({ hasImg: true }));
+          }} />
+      </SettingsRow>
+      {r.hasImg && t.imgUrl && (
+        <SettingsRow hit={hit} scope="local" label="图片不透明度">
+          <span className="tty-img-thumb" style={{ backgroundImage: `url("${t.imgUrl}")` }} />
+          <input type="range" min={5} max={100} value={r.imgOpacity} aria-label="终端背景图不透明度" onChange={(e) => edit({ imgOpacity: Number(e.target.value) })} />
+          <span className="stg-val">{r.imgOpacity}%</span>
+        </SettingsRow>
+      )}
+      <SettingsGroup show={!searching}>文字与光标</SettingsGroup>
+      <SettingsRow hit={hit} scope="local" label="字体">
+        <span className="tty-font-val">{r.fontName}</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="字号">
+        <input type="range" min={11} max={20} value={r.fontSize} aria-label="终端字号" onChange={(e) => edit({ fontSize: Number(e.target.value) })} />
+        <span className="stg-val">{r.fontSize}px</span>
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="local" label="光标">
+        <Tabs value={r.cursorStyle} options={CURSOR_TABS} onChange={(v) => edit({ cursorStyle: v })} />
+        <span title="闪烁">
+          <Switch on={r.cursorBlink} onChange={(v) => edit({ cursorBlink: v })} />
+        </span>
+      </SettingsRow>
+      <SettingsGroup show={!searching}>行为</SettingsGroup>
+      {hit('呼出 / 收起', '快捷键 冲突') && (
+        <div className="stg-row">
+          <div className="stg-lab">
+            <span>呼出 / 收起</span>
+            {/* 只在真有上游占用时出一行琥珀提示;没有冲突不写说明 */}
+            {conflicts.map((c) => (
+              <small key={c.who} className="tty-warn">
+                {c.who} 也占用了 {formatCombo(combo)},系统层优先,璇玑收不到。{c.fix}
+              </small>
+            ))}
+          </div>
+          <div className="stg-ctl">
+            <kbd className={cn(conflicts.length > 0 && 'tty-kbd-warn')}>{formatCombo(combo)}</kbd>
+            <button className="btn btn-sm" onClick={onGoKeys}>改键</button>
+          </div>
+          <span className="stg-scope" data-scope="local">本机</span>
+        </div>
+      )}
+      <SettingsRow hit={hit} scope="acct" label="新终端默认目录">
+        <Tabs value={prefs.terminal.cwdMode} options={CWD_MODE_TABS}
+          onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, cwdMode: v } })} />
+      </SettingsRow>
+      <SettingsRow hit={hit} scope="acct" label="切换视图时">
+        <Tabs value={prefs.terminal.navMode} options={NAV_MODE_TABS}
+          onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, navMode: v } })} />
+      </SettingsRow>
+    </>
+  );
+}
+
 const STOW_TABS = STOW_OPTS.map((v) => ({ v, label: stowLabel(v) }));
 
 const EFFORT_OPTS = ['', 'low', 'medium', 'high', 'xhigh', 'max'];
@@ -236,6 +447,7 @@ const PERM_LABEL: Record<string, string> = {
 
 export function Settings({
   open,
+  initialSec,
   onClose,
   cwdOptions,
   wall,
@@ -244,6 +456,8 @@ export function Settings({
   patchLive2d,
 }: {
   open: boolean;
+  /** 打开时直接落到的分区(终端浮层的 ⚙);null/缺省 = 停在上次的分区 */
+  initialSec?: SecId | null;
   onClose: () => void;
   cwdOptions: string[];
   wall: WallState;
@@ -270,9 +484,10 @@ export function Settings({
     if (!open) return;
     setQ('');
     setRecording(null);
+    if (initialSec) setSec(initialSec);
     const t = setTimeout(() => searchRef.current?.focus(), 60);
     return () => clearTimeout(t);
-  }, [open]);
+  }, [open, initialSec]);
 
   /** 面板内键盘:录入态优先吃掉一切按键,其次 Esc 关闭、⌘F 聚焦搜索 */
   useEffect(() => {
@@ -332,6 +547,10 @@ export function Settings({
       patchLocal({ keymap: { ...KEYMAP_DEFAULTS } });
     } else if (id === 'notify') {
       await patchAccount({ notify: DEFAULT_ACCOUNT.notify });
+    } else if (id === 'term') {
+      setLook({ ...LOOK_DEFAULTS, height: getTerm().look.height });
+      void clearTermImage();
+      await patchAccount({ terminal: DEFAULT_ACCOUNT.terminal });
     } else if (id === 'monitor') {
       patchLocal({ cardMem: DEFAULT_LOCAL.cardMem, cardCpu: DEFAULT_LOCAL.cardCpu });
       await patchAccount({ monitor: DEFAULT_ACCOUNT.monitor });
@@ -684,6 +903,11 @@ export function Settings({
           desc={`偏高 = 占整机 ≥ 黄色阈值 ${prefs.monitor.cpuWarn}%,或单会话 ≥ 50%(半个核)`}>
           <Tabs value={local.cardCpu} options={CARD_TABS} onChange={(v) => patchLocal({ cardCpu: v })} />
         </SettingsRow>
+      </section>
+
+      <section className="stg-sec" hidden={!secShown('term')}>
+        {!searching && <SecHead id="term" />}
+        <TerminalFields hit={hit} searching={searching} onGoKeys={() => setSec('keys')} />
       </section>
 
       <section className="stg-sec" hidden={!secShown('adv')}>

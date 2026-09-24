@@ -1,3 +1,4 @@
+import { reportDispatchCwd } from '@/lib/terminal';
 import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
@@ -662,6 +663,9 @@ export function Dispatch({ active }: { active: boolean }) {
     [cwd, prefs.cwd, quickAskCwd, projects],
   );
   const curProject = projects.find((p) => p.path === effectiveCwd);
+  // 全局终端「跟随会话」:派发页可见时上报当前会话的工作目录,离开派发页时报 null
+  const termCwd = active ? (sessionCwd ?? effectiveCwd ?? null) : null;
+  useEffect(() => reportDispatchCwd(termCwd), [termCwd]);
 
   /** 装载续接目标:清当前状态 → 记 resume 信息 → 预载历史对话(看板意图与 /resume 弹窗共用) */
   const applyResume = (info: { sessionId: string; name: string; cwd: string; project: string }) => {
