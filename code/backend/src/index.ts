@@ -16,12 +16,16 @@ import { live2dContentType, resolveLive2dFile } from './services/live2d.js';
 import { warmModelCatalog } from './services/models.js';
 import { SysmonSampler } from './services/sysmon/sampler.js';
 import { sweepIdleDispatches } from './services/dispatch.js';
+import { TerminalManager } from './services/terminal.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
 // 系统监控:有页面订阅才采;「无人查看时暂停」关掉时常驻
 const sysmon = new SysmonSampler(storage);
 sysmon.start();
+// 全局终端:shell 会话跟后端进程走,页面刷新/切视图不杀。后端退出时 pty 主端随之关闭,
+// shell 收到 SIGHUP 自行退出——不另挂信号处理:exit(0) 会改变 launchd「非正常退出才重启」的语义
+const terminals = new TerminalManager();
 // 空闲自动退出:每分钟巡检一次,阈值每次现读偏好(设置改动下一次巡检即生效;PUT /prefs 时另会立即巡检)
 setInterval(() => {
   void sweepIdleDispatches(readPrefs(storage).monitor.idleExit).catch(() => {});
@@ -43,7 +47,7 @@ void warmModelCatalog(storage)
 
 const app = new Hono();
 
-app.route('/api', createApi(storage, scheduler, sysmon));
+app.route('/api', createApi(storage, scheduler, sysmon, terminals));
 
 // 看板娘模型文件。必须注册在下面的 SPA 兜底(app.get('*'))之前,否则会被兜底吃掉,
 // 前端拿到 200 + text/html 冒充 moc3,报错含糊难查(同 /assets/* 那条的教训)。
@@ -81,4 +85,4 @@ const server = serve({ fetch: app.fetch, hostname: config.host, port: config.por
   console.log(`[xuanji] listening on http://${config.host}:${info.port}  (claudeDir: ${config.claudeDir})`);
 });
 
-attachWs(server as Server, storage, sysmon);
+attachWs(server as Server, storage, sysmon, terminals);

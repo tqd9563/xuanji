@@ -165,6 +165,7 @@ export const DEFAULT_ACCOUNT: AccountPrefs = {
     error: true,
   },
   monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
+  terminal: { cwdMode: 'session', navMode: 'keep' },
 };
 
 let account: AccountPrefs = DEFAULT_ACCOUNT;
@@ -178,7 +179,8 @@ export const getAccount = (): AccountPrefs => account;
 export async function loadAccount(): Promise<AccountPrefs> {
   try {
     const r = await api.prefs();
-    account = r.prefs;
+    // 旧后端没有 terminal 组时补默认,免得读 prefs.terminal.x 直接抛
+    account = { ...r.prefs, terminal: r.prefs.terminal ?? DEFAULT_ACCOUNT.terminal };
     accountLoaded = true;
     accEmit();
   } catch {
@@ -194,6 +196,7 @@ export async function patchAccount(p: Partial<AccountPrefs>) {
     ...p,
     notify: { ...account.notify, ...(p.notify ?? {}) },
     monitor: { ...account.monitor, ...(p.monitor ?? {}) },
+    terminal: { ...account.terminal, ...(p.terminal ?? {}) },
   };
   accEmit();
   try {

@@ -18,6 +18,8 @@ import type {
   WeeklyReview,
   WorklogCard,
   SideQuestion,
+  TermInfo,
+  TermSessionInfo,
 } from './types';
 import type { SlashCmdInfo } from '@/lib/slash';
 import type { ModelOption } from '@/lib/models';
@@ -49,6 +51,10 @@ export const api = {
   prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
   putPrefs: (patch: Partial<AccountPrefs>) =>
     mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
+  termInfo: () => get<TermInfo>('/api/terminal/info'),
+  termCreate: (body: { cwd?: string; cols?: number; rows?: number }) =>
+    mutate<{ session: TermSessionInfo }>('/api/terminal/sessions', 'POST', body),
+  termKill: (id: string) => mutate<{ ok: boolean }>(`/api/terminal/sessions/${encodeURIComponent(id)}`, 'DELETE', {}),
   projects: () => get<ProjectsResult>('/api/projects'),
   sessions: () => get<SessionsBoard>('/api/sessions'),
   /** /wd 手输路径:后端展开 `~` 并校验是否为真实目录 */

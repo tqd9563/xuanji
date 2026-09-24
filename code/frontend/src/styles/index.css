@@ -2712,3 +2712,123 @@ button.ram-chip:hover { background: var(--hover); }
 .scard[data-ram-lv="hot"] { border-left: 2px solid var(--red); }
 /* C. 设置 › 系统监控:只补校验失败文案色,其余全用 .stg-* */
 .stg-lab small.mon-invalid { color: var(--amber); }
+
+/* ============================================================
+   全局终端(DESIGN.md「全局终端」):⌘` 呼出的悬浮卡片 + 状态栏指示器
+   整块终端表面(标签栏 + 正文)用终端主题色(--t-*,由组件按 Ghostty/自定义外观注入),
+   不用璇玑玉色 token——它要看起来和用户本机的终端是同一个东西。
+   ============================================================ */
+.tty-c {
+  /* 左缘跟随侧栏宽度(14.125rem 随「正文字号」缩放),不写死 226px */
+  position: fixed; left: calc(14.125rem + 12px); right: 12px; bottom: 12px; z-index: var(--z-drawer);
+  height: var(--tty-h, 340px); min-height: 140px; max-height: calc(100vh - 56px);
+  display: flex; flex-direction: column; overflow: hidden;
+  border-radius: var(--r-m);
+  color: var(--t-fg);
+  /* 终端镜像例外(DESIGN.md Elevation):透明度与模糊镜像用户 Ghostty 配置,读不到时为 100% / 0 */
+  background: color-mix(in srgb, var(--t-bg) var(--t-op, 100%), transparent);
+  /* backdrop-filter 由组件内联设置(构建链会吃掉无前缀写法,见 Terminal.tsx) */
+  border: 1px solid color-mix(in srgb, var(--t-fg) 14%, transparent);
+  box-shadow: 0 18px 48px oklch(0 0 0 / .45), 0 2px 8px oklch(0 0 0 / .3);
+  /* 只动 transform:呼出 160ms ease-out,收起 150ms ease-in 后再隐藏;transition 连按可中途折返 */
+  transform: translate3d(0, calc(100% + 12px), 0); visibility: hidden;
+  transition: transform 150ms cubic-bezier(.55, .055, .675, .19), visibility 0s linear 150ms;
+  will-change: transform;
+}
+.tty-c.open { transform: none; visibility: visible; transition: transform 160ms var(--ease), visibility 0s; }
+.tty-c.dragging { transition: none; user-select: none; }
+.tty-c.max { height: calc(100vh - 56px); }
+@media (prefers-reduced-motion: reduce) {
+  .tty-c { transform: none; opacity: 0; transition: opacity 80ms linear, visibility 0s linear 80ms; }
+  .tty-c.open { opacity: 1; transition: opacity 80ms linear, visibility 0s; }
+}
+html[data-motion="off"] .tty-c { transform: none; opacity: 0; transition: opacity 80ms linear, visibility 0s linear 80ms; }
+html[data-motion="off"] .tty-c.open { opacity: 1; transition: opacity 80ms linear, visibility 0s; }
+@media (max-width: 960px) { .tty-c { left: 12px; } }
+/* 手机端不提供终端(后端也拒绝经 Tailscale 的请求) */
+@media (max-width: 430px) { .tty-c, .tty-sb { display: none; } }
+
+.tty-bgimg { position: absolute; inset: 0; pointer-events: none; background: center / cover no-repeat; opacity: var(--t-imgop, .35); display: none; }
+.tty-c.has-img .tty-bgimg { display: block; }
+.tty-c > :not(.tty-bgimg) { position: relative; }
+
+.tty-grip { height: 7px; flex: none; cursor: row-resize; touch-action: none; }
+.tty-grip::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 2px; margin-left: -18px; border-radius: 1px; background: color-mix(in srgb, var(--t-fg) 22%, transparent); }
+.tty-grip:hover::after { background: var(--t-accent); }
+
+.tty-head { display: flex; align-items: center; gap: 6px; padding: 0 8px 0 6px; font-size: 0.75rem; border-bottom: 1px solid color-mix(in srgb, var(--t-fg) 9%, transparent); flex: none; }
+.tty-spacer { flex: 1; }
+.tty-tabs { display: flex; align-items: flex-end; gap: 2px; overflow-x: auto; min-width: 0; scrollbar-width: none; }
+.tty-tab {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 10px 6px; margin-bottom: -1px;
+  font: 0.75rem/1.2 var(--mono); white-space: nowrap; cursor: pointer;
+  color: color-mix(in srgb, var(--t-fg) 62%, transparent);
+  background: none; border: none; border-bottom: 2px solid transparent;
+}
+.tty-tab:hover { color: var(--t-fg); }
+.tty-tab.active { color: var(--t-fg); border-bottom-color: var(--t-accent); }
+.tty-tab .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--t-dim); flex: none; }
+.tty-tab.run .dot { background: var(--t-ok); animation: pulse 1.6s var(--ease) infinite; }
+.tty-proc { color: var(--t-dim); }
+.tty-x { color: var(--t-dim); padding: 0 3px; border-radius: 3px; line-height: 1; font-size: 0.8125rem; }
+.tty-x:hover { background: color-mix(in srgb, var(--t-fg) 12%, transparent); color: var(--t-fg); }
+.tty-add, .tty-ib, .tty-cwd {
+  background: none; border: none; cursor: pointer; border-radius: var(--r-s);
+  color: color-mix(in srgb, var(--t-fg) 62%, transparent);
+}
+.tty-add { padding: 5px 9px; font-size: 0.9375rem; }
+.tty-ib { padding: 4px 7px; font-size: 0.8125rem; line-height: 1; }
+.tty-cwd { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; font: 0.75rem var(--mono); max-width: 36ch; }
+.tty-cwd > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tty-cwd .caret { font-size: 0.5625rem; }
+.tty-add:hover, .tty-ib:hover, .tty-cwd:hover, .tty-cwd[aria-expanded="true"] { background: color-mix(in srgb, var(--t-fg) 10%, transparent); color: var(--t-fg); }
+.tty-add:focus-visible, .tty-ib:focus-visible, .tty-cwd:focus-visible, .tty-tab:focus-visible { outline: 2px solid var(--t-accent); outline-offset: -2px; }
+
+.tty-host { position: relative; flex: 1; min-height: 0; }
+.tty-pane { position: absolute; inset: 6px 4px 4px 10px; visibility: hidden; }
+.tty-pane.active { visibility: inherit; }
+/* xterm 画布全透明,背景由 .tty-c 自己画(透明度 / 背景图) */
+.tty-pane .xterm, .tty-pane .xterm-viewport, .tty-pane .xterm-screen { background: transparent !important; }
+.tty-pane .xterm-viewport { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--t-fg) 25%, transparent) transparent; }
+
+/* 目录菜单:portal 到 body(浮层 overflow:hidden 会裁掉原地菜单),属璇玑外壳,用实心 surface */
+.tty-menu {
+  position: fixed; z-index: var(--z-toast); width: 300px; max-height: 320px; overflow-y: auto;
+  background: var(--surface-opaque, var(--surface)); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 4px; box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5);
+}
+.tty-menu-title { font-size: 0.6875rem; color: var(--faint); padding: 6px 10px 4px; }
+.tty-menu-sep { height: 1px; background: var(--line-soft); margin: 4px 0; }
+.tty-menu-path { color: var(--faint); font-size: 0.6875rem; flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tty-menu .tty-ctx .dd-item-label { color: var(--jade); }
+
+/* 状态栏指示器:未开 faint 点,已开玉色,有命令在跑玉色脉冲 */
+.sb-item.tty-sb .dot { background: var(--faint); }
+.sb-item.tty-sb.on .dot { background: var(--jade); }
+.sb-item.tty-sb.run .dot { animation: pulse 1.6s var(--ease) infinite; }
+
+/* 设置 › 终端 */
+.tty-src { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; padding: 8px 10px; font-size: 0.75rem; color: var(--muted); background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); }
+.tty-src code { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); overflow-wrap: anywhere; }
+.tty-src .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; flex: none; }
+.tty-src-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex: none; }
+.tty-src-dot.off { background: var(--faint); }
+.stg-row.tty-wide { flex-wrap: wrap; row-gap: 10px; }
+.stg-row.tty-wide .stg-lab { flex: 1 1 0; }
+.stg-row.tty-wide .tty-themes { order: 3; flex: 1 1 100%; }
+.tty-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 6px; }
+.tty-theme { display: flex; flex-direction: column; gap: 5px; padding: 6px; border-radius: var(--r-s); border: 1px solid var(--line-soft); background: none; text-align: left; font-size: 0.6875rem; color: var(--muted); cursor: pointer; }
+.tty-theme:hover { border-color: var(--line); color: var(--ink); }
+.tty-theme:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
+.tty-theme[aria-checked="true"] { border-color: var(--jade-dim); color: var(--ink); box-shadow: inset 0 0 0 1px var(--jade-dim); }
+.tty-theme-sw { display: flex; align-items: center; gap: 3px; height: 22px; padding: 0 5px; border-radius: 3px; overflow: hidden; font: 0.6875rem var(--mono); }
+.tty-theme-sw i { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.tty-theme-name span { color: var(--faint); }
+.tty-color { display: inline-flex; align-items: center; gap: 8px; font: 0.75rem var(--mono); color: var(--muted); cursor: pointer; }
+.tty-color input { width: 28px; height: 22px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none; cursor: pointer; }
+.tty-color input::-webkit-color-swatch-wrapper { padding: 2px; }
+.tty-color input::-webkit-color-swatch { border: none; border-radius: 2px; }
+.tty-img-thumb { width: 36px; height: 22px; border-radius: 3px; background: center / cover no-repeat var(--surface-2); border: 1px solid var(--line-soft); flex: none; }
+.tty-font-val { font: 0.8125rem "JetBrains Mono", var(--mono); color: var(--ink); }
+.stg-lab small.tty-warn { color: var(--amber); }
+kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
