@@ -2525,16 +2525,19 @@ button.ram-chip:hover { background: var(--hover); }
   --t-bg: #303446; --t-fg: #c6d0f5; --t-cursor: #f2d5cf; --t-sel: #626880;
   --t-0: #51576d; --t-1: #e78284; --t-2: #a6d189; --t-3: #e5c890; --t-4: #8caaee; --t-5: #f4b8e4; --t-6: #81c8be; --t-7: #a5adce; --t-8: #626880;
   --t-op: 90%; --t-blur: 30px; --t-fs: 14px;
-  position: fixed; left: 226px; right: 0; bottom: 0; z-index: var(--z-drawer);
-  height: var(--tty-h, 340px); min-height: 140px; max-height: calc(100vh - 44px);
+  /* 悬浮卡片而非贴边抽屉:四周留 12px 空隙、圆角与弹窗同档(--r-m)、1px 描边——
+     和设置弹窗、下拉菜单同一语汇,也和 Ghostty quick terminal 的浮窗感一致 */
+  position: fixed; left: 238px; right: 12px; bottom: 12px; z-index: var(--z-drawer);
+  height: var(--tty-h, 340px); min-height: 140px; max-height: calc(100vh - 56px);
+  border-radius: var(--r-m); overflow: hidden;
   display: flex; flex-direction: column;
   color: var(--t-fg);
   background: color-mix(in srgb, var(--t-bg) var(--t-op), transparent);
   backdrop-filter: blur(var(--t-blur)) saturate(1.2); -webkit-backdrop-filter: blur(var(--t-blur)) saturate(1.2);
-  border-top: 1px solid color-mix(in srgb, var(--t-fg) 14%, transparent);
-  box-shadow: 0 -18px 48px oklch(0 0 0 / .42);
+  border: 1px solid color-mix(in srgb, var(--t-fg) 14%, transparent);
+  box-shadow: 0 18px 48px oklch(0 0 0 / .45), 0 2px 8px oklch(0 0 0 / .3);
   /* 动效:只动 transform(合成层,不触发排版)。收起用 ease-in 120ms,visibility 延迟到位移结束再隐藏 */
-  transform: translate3d(0, 100%, 0); visibility: hidden;
+  transform: translate3d(0, calc(100% + 12px), 0); visibility: hidden;
   transition: transform 120ms cubic-bezier(.55, .055, .675, .19), visibility 0s linear 120ms;
   will-change: transform;
 }
@@ -2542,12 +2545,12 @@ button.ram-chip:hover { background: var(--hover); }
    用 transition 而非 keyframes:动画中途再按 ⌘` 会从当前位置平滑反向,不会跳帧 */
 .tty-c.open { transform: none; visibility: visible; transition: transform 160ms cubic-bezier(.215, .61, .355, 1), visibility 0s; }
 .tty-c.dragging { transition: none; }
-.tty-c.max { height: calc(100vh - 44px); }
+.tty-c.max { height: calc(100vh - 56px); }
 @media (prefers-reduced-motion: reduce) {
   .tty-c { transform: none; opacity: 0; transition: opacity 80ms linear, visibility 0s linear 80ms; }
   .tty-c.open { opacity: 1; transition: opacity 80ms linear, visibility 0s; }
 }
-@media (max-width: 1100px) { .tty-c { left: 0; } }
+@media (max-width: 1100px) { .tty-c { left: 12px; } }
 
 .tty-grip { height: 7px; cursor: row-resize; flex: none; position: relative; }
 .tty-grip::after { content: ""; position: absolute; left: 50%; top: 3px; width: 36px; height: 2px; margin-left: -18px; border-radius: 1px; background: color-mix(in srgb, var(--t-fg) 22%, transparent); }
