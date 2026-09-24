@@ -292,7 +292,6 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
   const combo = local.keymap['global.terminal'];
   const conflicts = keyConflicts(combo, g, t.info?.systemHotkeys ?? []);
   const themes = g?.theme && !BUILTIN_THEMES.some((x) => x.name === g.theme!.name) ? [g.theme, ...BUILTIN_THEMES] : BUILTIN_THEMES;
-  const gl = (k: string, v: unknown) => (g ? `Ghostty: ${k} = ${v}` : '');
 
   const reread = async () => {
     setRereading(true);
@@ -330,19 +329,17 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
         </div>
       )}
       <SettingsGroup show={!searching}>外观</SettingsGroup>
-      <SettingsRow hit={hit} scope="local" label="外观来源"
-        desc="下面每一项都可以直接改;改了任意一项即转为「自定义」,点「跟随 Ghostty」一键恢复。跟随时 Ghostty 里改完点「重新读取」即生效">
+      <SettingsRow hit={hit} scope="local" label="外观来源">
         <Tabs value={look.mode} options={[{ v: 'ghostty', label: '跟随 Ghostty' }, { v: 'custom', label: '自定义' }]}
           onChange={(v) => setLook(v === 'ghostty' ? { ...look, mode: 'ghostty' } : editLook(look, g, {}))} />
       </SettingsRow>
-      {hit('配色', '主题') && (
+      {hit('主题', '配色') && (
         <div className="stg-row tty-wide">
           <div className="stg-lab">
-            <span>配色</span>
-            <small>{g?.theme ? gl('theme', g.theme.name) : '内置 Catppuccin 四款与璇玑玉色'}</small>
+            <span>主题</span>
           </div>
           <span className="stg-scope" data-scope="local">本机</span>
-          <div className="stg-ctl tty-themes" role="radiogroup" aria-label="终端配色">
+          <div className="stg-ctl tty-themes" role="radiogroup" aria-label="终端主题">
             {themes.map((th) => (
               <ThemeCard key={th.name} th={th} on={r.theme.name === th.name} tag={g?.theme?.name === th.name ? 'Ghostty' : undefined}
                 onPick={() => edit({ theme: th.name, bg: null })} />
@@ -351,7 +348,7 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
         </div>
       )}
       <SettingsGroup show={!searching}>背景</SettingsGroup>
-      <SettingsRow hit={hit} scope="local" label="背景颜色" desc={`默认取配色自带的背景色${g?.theme ? `;${gl('background', g.theme.background)}` : ''}`}>
+      <SettingsRow hit={hit} scope="local" label="背景颜色">
         <label className="tty-color">
           <input type="color" value={r.background} aria-label="终端背景颜色" onChange={(e) => edit({ bg: e.target.value })} />
           <span>{r.background}</span>
@@ -360,16 +357,15 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
           <button className="btn btn-sm" onClick={() => edit({ bg: null })}>跟随配色</button>
         )}
       </SettingsRow>
-      <SettingsRow hit={hit} scope="local" label="背景不透明度"
-        desc={`低于 100% 时透出后面的页面与璇玑壁纸${g ? `;${gl('background-opacity', (g.opacity / 100).toString())}` : ''}`}>
+      <SettingsRow hit={hit} scope="local" label="背景不透明度">
         <input type="range" min={30} max={100} value={r.opacity} aria-label="终端背景不透明度" onChange={(e) => edit({ opacity: Number(e.target.value) })} />
         <span className="stg-val">{r.opacity}%</span>
       </SettingsRow>
-      <SettingsRow hit={hit} scope="local" label="背景模糊" desc={`透出部分的毛玻璃程度${g ? `;${gl('background-blur-radius', g.blur)}` : ''}`}>
+      <SettingsRow hit={hit} scope="local" label="背景模糊">
         <input type="range" min={0} max={40} value={r.blur} aria-label="终端背景模糊" onChange={(e) => edit({ blur: Number(e.target.value) })} />
         <span className="stg-val">{r.blur}px</span>
       </SettingsRow>
-      <SettingsRow hit={hit} scope="local" label="背景图片" desc="终端自己的背景图,铺在背景色之上、文字之下;与璇玑壁纸互不影响">
+      <SettingsRow hit={hit} scope="local" label="背景图片">
         <Tabs value={r.hasImg && t.imgUrl ? 'file' : 'none'} options={[{ v: 'none', label: '无' }, { v: 'file', label: '本地图片…' }]}
           onChange={(v) => {
             if (v === 'file') fileRef.current?.click();
@@ -387,21 +383,21 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
           }} />
       </SettingsRow>
       {r.hasImg && t.imgUrl && (
-        <SettingsRow hit={hit} scope="local" label="图片不透明度" desc="调低让文字更清楚">
+        <SettingsRow hit={hit} scope="local" label="图片不透明度">
           <span className="tty-img-thumb" style={{ backgroundImage: `url("${t.imgUrl}")` }} />
           <input type="range" min={5} max={100} value={r.imgOpacity} aria-label="终端背景图不透明度" onChange={(e) => edit({ imgOpacity: Number(e.target.value) })} />
           <span className="stg-val">{r.imgOpacity}%</span>
         </SettingsRow>
       )}
       <SettingsGroup show={!searching}>文字与光标</SettingsGroup>
-      <SettingsRow hit={hit} scope="local" label="字体" desc={r.fontNote}>
+      <SettingsRow hit={hit} scope="local" label="字体">
         <span className="tty-font-val">{r.fontName}</span>
       </SettingsRow>
-      <SettingsRow hit={hit} scope="local" label="字号" desc={g ? gl('font-size', g.fontSize) : undefined}>
+      <SettingsRow hit={hit} scope="local" label="字号">
         <input type="range" min={11} max={20} value={r.fontSize} aria-label="终端字号" onChange={(e) => edit({ fontSize: Number(e.target.value) })} />
         <span className="stg-val">{r.fontSize}px</span>
       </SettingsRow>
-      <SettingsRow hit={hit} scope="local" label="光标" desc={g ? `Ghostty: cursor-style = ${g.cursorStyle},blink = ${g.cursorBlink}` : undefined}>
+      <SettingsRow hit={hit} scope="local" label="光标">
         <Tabs value={r.cursorStyle} options={CURSOR_TABS} onChange={(v) => edit({ cursorStyle: v })} />
         <span title="闪烁">
           <Switch on={r.cursorBlink} onChange={(v) => edit({ cursorBlink: v })} />
@@ -412,15 +408,12 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
         <div className="stg-row">
           <div className="stg-lab">
             <span>呼出 / 收起</span>
-            {conflicts.length ? (
-              conflicts.map((c) => (
-                <small key={c.who} className="tty-warn">
-                  {c.who} 也占用了 {formatCombo(combo)},系统层优先,璇玑收不到。{c.fix}
-                </small>
-              ))
-            ) : (
-              <small>未检测到本机上游占用。在 Chrome 里打开璇玑时 {formatCombo(combo)} 会被浏览器自己截走,请点状态栏「终端」或改键;Pake 壳不受影响</small>
-            )}
+            {/* 只在真有上游占用时出一行琥珀提示;没有冲突不写说明 */}
+            {conflicts.map((c) => (
+              <small key={c.who} className="tty-warn">
+                {c.who} 也占用了 {formatCombo(combo)},系统层优先,璇玑收不到。{c.fix}
+              </small>
+            ))}
           </div>
           <div className="stg-ctl">
             <kbd className={cn(conflicts.length > 0 && 'tty-kbd-warn')}>{formatCombo(combo)}</kbd>
@@ -429,11 +422,11 @@ function TerminalFields({ hit, searching, onGoKeys }: { hit: RowProps['hit']; se
           <span className="stg-scope" data-scope="local">本机</span>
         </div>
       )}
-      <SettingsRow hit={hit} scope="acct" label="新终端默认目录" desc="「跟随会话」:在派发页呼出时取该会话的 worktree,其它页面用上次的目录">
+      <SettingsRow hit={hit} scope="acct" label="新终端默认目录">
         <Tabs value={prefs.terminal.cwdMode} options={CWD_MODE_TABS}
           onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, cwdMode: v } })} />
       </SettingsRow>
-      <SettingsRow hit={hit} scope="acct" label="切换视图时" desc="保持:终端留在原地,像 VS Code 的面板;收起:离开当前视图自动收起,shell 不停">
+      <SettingsRow hit={hit} scope="acct" label="切换视图时">
         <Tabs value={prefs.terminal.navMode} options={NAV_MODE_TABS}
           onChange={(v) => void patchAccount({ terminal: { ...prefs.terminal, navMode: v } })} />
       </SettingsRow>

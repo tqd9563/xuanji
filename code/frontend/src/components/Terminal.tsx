@@ -81,6 +81,9 @@ export function TerminalSheet({
   const s = useTerm();
   const { prefs } = useAccountPrefs();
   const look = useMemo(() => resolveLook(s.look, s.info?.ghostty ?? null), [s.look, s.info]);
+  /** 给 xterm 回调读当前外观(回调在实例创建时注册,不能闭包住某一次渲染的 look) */
+  const lookRef = useRef(look);
+  lookRef.current = look;
   const lives = useRef(new Map<string, Live>());
   const hostRef = useRef<HTMLDivElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -221,6 +224,26 @@ export function TerminalSheet({
       term.loadAddon(new WebLinksAddon((_e, uri) => window.open(uri, '_blank', 'noopener')));
       // ⌘ 组合一律交还给页面:⌘C/⌘V 走浏览器原生复制粘贴,⌘` / ⌘T / ⌘K 等由全局监听处理
       term.attachCustomKeyEventHandler((e) => !e.metaKey);
+      /*
+       * DECSCUSR(CSI Ps SP q):zsh / p10k 在提示符处会发「稳定光标」,xterm 照做就把闪烁关了。
+       * 与 Ghostty 显式配置 cursor-style-blink 时的行为一致:闪不闪以设置为准;光标形状仍交给程序
+       * (vim 插入模式切竖线等照常),Ps=0 回到设置里的形状。
+       */
+      term.parser.registerCsiHandler({ intermediates: ' ', final: 'q' }, (params) => {
+        const ps = Number(params[0]) || 0;
+        term.options.cursorStyle = ps === 0 ? lookRef.current.cursorStyle : ps <= 2 ? 'block' : ps <= 4 ? 'underline' : 'bar';
+        term.options.cursorBlink = lookRef.current.cursorBlink;
+        return true;
+      });
+      /*
+       * DECSET/DECRST 12(光标闪烁开关):zsh 行编辑器每次输出 terminfo 的 cnorm,而 xterm-256color 的
+       * cnorm 就是 `\e[?12l\e[?25h`——一启动就把闪烁关掉(2026-09-24 实测抓到 ESC[?12l)。
+       * Ghostty 用自己的 xterm-ghostty 描述,cnorm 不带这一段,所以那边会闪。这里单独吞掉 ?12,
+       * 闪不闪只听设置;与其它私有模式混在一条序列里时放行给默认处理,不误伤。
+       */
+      const only12 = (params: (number | number[])[]) => params.length === 1 && Number(params[0]) === 12;
+      term.parser.registerCsiHandler({ prefix: '?', final: 'l' }, only12);
+      term.parser.registerCsiHandler({ prefix: '?', final: 'h' }, only12);
       term.open(el);
       const l: Live = { term, fit, el, ws: null, retry: 0 };
       lives.current.set(tab.id, l);
