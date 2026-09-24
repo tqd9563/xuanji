@@ -2813,7 +2813,7 @@ button.ram-chip:hover { background: var(--hover); }
 <!-- ============ 原型专用:演示面板(非产品 UI) ============ -->
 <div class="tty-proto" id="tty-proto">
   <span class="tty-proto-l">原型演示</span>
-  <p class="tty-proto-d">按 <kbd>⌘`</kbd> 呼出 / 再按收起;连按可看中途反向。</p>
+  <p class="tty-proto-d">按 <kbd>⌘`</kbd> 呼出 / 再按收起;连按可看中途反向。<b style="color:var(--amber)">请用 Safari 打开</b>:Chrome 会自己截走 ⌘` / ⌃`,页面收不到;Pake 壳与 Safari 同为 WebKit,不受影响。也可点状态栏「终端」。</p>
   <div class="tty-proto-row"><span>壁纸</span><button data-w="off">关</button><button data-w="glass" class="active">玻璃</button><button data-w="file">本地图片</button></div>
   <div class="tty-proto-row"><span>去</span><button data-go="sessions" class="active">会话看板</button><button data-go="dispatch">派发页</button></div>
   <p class="tty-proto-d">在派发页新开终端,目录默认是该会话的 worktree。</p>
@@ -2928,7 +2928,7 @@ button.ram-chip:hover { background: var(--hover); }
         <table class="stg-keys">
           <tr><td>新会话</td><td class="k"><kbd>⌘N</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>速记待办</td><td class="k"><kbd>⌘J</kbd></td><td class="a"><button>改键</button></td></tr>
-          <tr><td>呼出 / 收起终端<small>与 Ghostty 全局热键冲突,见 设置 › 终端</small></td><td class="k"><kbd class="tty-kbd-warn">⌘`</kbd></td><td class="a"><button>改键</button></td></tr>
+          <tr><td>呼出 / 收起终端<small>冲突检测见 设置 › 终端</small></td><td class="k"><kbd class="tty-kbd-warn">⌘`</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>打开设置</td><td class="k"><kbd>⌘,</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>切换视图<small>非输入状态也可直接按数字</small></td><td class="k"><kbd>⌘1</kbd>…<kbd>⌘9</kbd></td><td class="a"><button>改键</button></td></tr>
           <tr><td>侧栏前后切页</td><td class="k"><kbd>⌥⌘←</kbd><kbd>⌥⌘→</kbd></td><td class="a"><button>改键</button></td></tr>
@@ -3016,7 +3016,7 @@ button.ram-chip:hover { background: var(--hover); }
         <div class="stg-row tty-cus"><div class="stg-lab"><span>光标</span><small>Ghostty: cursor-style = bar,blink = true</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-cur"><button data-v="bar" class="active">竖线</button><button data-v="block">方块</button><button data-v="underline">下划线</button></div><span class="switch on" id="tty-blink" role="switch" aria-checked="true" tabindex="0" title="闪烁"></span></div><span class="stg-scope" data-scope="local">本机</span></div>
         <div class="stg-group">行为</div>
-        <div class="stg-row"><div class="stg-lab"><span>呼出 / 收起</span><small class="tty-warn" id="tty-key-warn">Ghostty 配置里 <code>global:cmd+grave_accent</code> 也占用 ⌘`,全局热键优先,璇玑收不到。去掉 Ghostty 那行的 <code>global:</code> 前缀或改键后点「重新读取」</small></div>
+        <div class="stg-row"><div class="stg-lab"><span>呼出 / 收起</span><small class="tty-warn" id="tty-key-warn">冲突检测:Ghostty 全局热键、macOS「移动焦点到下一个窗口」(默认就是 ⌘`)任一占用都会标在这里;在 Chrome 里打开璇玑时 ⌘` 会被浏览器截走,请点状态栏「终端」或改键</small></div>
           <div class="stg-ctl"><kbd>⌘`</kbd><button class="btn btn-sm">改键</button></div><span class="stg-scope" data-scope="acct">账户</span></div>
         <div class="stg-row"><div class="stg-lab"><span>新终端默认目录</span><small>「跟随会话」:在派发页呼出时取该会话的 worktree,其它页面用上次的目录</small></div>
           <div class="stg-ctl"><div class="filter-tabs" role="group" id="tty-cwd-mode"><button data-v="session" class="active">跟随会话</button><button data-v="last">上次目录</button><button data-v="home">家目录</button></div></div><span class="stg-scope" data-scope="acct">账户</span></div>
