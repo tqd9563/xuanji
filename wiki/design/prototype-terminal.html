@@ -2589,7 +2589,8 @@ button.ram-chip:hover { background: var(--hover); }
 }
 .tty-term.active { display: block; }
 .tty-term ::selection { background: var(--t-sel); }
-.tty-ta { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+.tty-ta { position: absolute; left: 0; top: 0; width: 1px; height: 1.2em; padding: 0; border: 0; resize: none; overflow: hidden; opacity: 0; font: inherit; pointer-events: none; }
+.tty-term .pre { text-decoration: underline; text-underline-offset: 3px; color: var(--t-fg); }
 .tty-term .pp { color: var(--t-4); }
 .tty-term .pb { color: var(--t-5); }
 .tty-term .pa { color: var(--t-2); }
@@ -4017,23 +4018,36 @@ class Tty {
     this.el.appendChild(this.ta);
     this.buf = ''; this.hist = []; this.hi = 0;
     this.ta.addEventListener('keydown', e => this.key(e));
-    this.ta.addEventListener('input', () => { if (!this.busy) { this.buf += this.ta.value; this.draw(); } this.ta.value = ''; });
+    /* 输入法:组字期间 textarea 里是未上屏的拼音(带 ' 分隔),绝不能进命令行。
+       组字中只把 data 画成光标处的下划线预编辑;上屏以 textarea 最终值为准,兼容两种事件顺序:
+       Chrome 先发 input(isComposing=true)再发 compositionend;WebKit/Safari 可能在 compositionend 之后再补一个 input */
+    this.composing = false; this.pre = '';
+    this.ta.addEventListener('compositionstart', () => { this.composing = true; this.pre = ''; this.draw(); });
+    this.ta.addEventListener('compositionupdate', e => { this.pre = e.data || ''; this.draw(); });
+    this.ta.addEventListener('compositionend', () => { this.composing = false; this.pre = ''; setTimeout(() => this.commit(), 0); });
+    this.ta.addEventListener('input', e => { if (this.composing || e.isComposing) return; this.commit(); });
     this.el.addEventListener('mouseup', () => { if (!getSelection().toString()) this.ta.focus({ preventScroll: true }); });
     this.print(`<span class="dim">Last login: Thu Sep 24 09:12:41 on ttys004</span>\n`);
     this.newPrompt();
   }
   focus() { this.ta.focus({ preventScroll: true }); }
+  commit() { const v = this.ta.value; this.ta.value = ''; if (!v || this.busy) { this.draw(); return; } this.buf += v; this.draw(); }
   promptHtml() { return `<span class="pp">${esc(this.cwd)}</span>${this.br ? ` <span class="pb">${esc(this.br)}</span>` : ''} <span class="pa">❯</span> `; }
   print(h) { this.el.insertAdjacentHTML('beforeend', h); this.el.scrollTop = this.el.scrollHeight; }
   newPrompt() { this.line = document.createElement('span'); this.el.appendChild(this.line); this.draw(); }
-  draw() { this.line.innerHTML = this.promptHtml() + esc(this.buf) + '<span class="cur"></span>'; this.el.scrollTop = this.el.scrollHeight; }
+  draw() {
+    this.line.innerHTML = this.promptHtml() + esc(this.buf) + (this.pre ? `<span class="pre">${esc(this.pre)}</span>` : '') + '<span class="cur"></span>';
+    this.el.scrollTop = this.el.scrollHeight;
+    /* 隐藏 textarea 跟到光标处:输入法候选框按它的位置弹出,放在屏幕外候选框就跑到屏幕外 */
+    const c = this.line.querySelector('.cur'); if (c) { this.ta.style.left = c.offsetLeft + 'px'; this.ta.style.top = c.offsetTop + 'px'; }
+  }
   setBusy(b) { this.busy = b; this.onchange(); }
   async key(e) {
     if (e.metaKey) return;
     if (e.ctrlKey && e.key === 'c') { e.preventDefault(); if (this.busy) this.abort = true; else { this.line.innerHTML = this.promptHtml() + esc(this.buf) + '^C'; this.print('\n'); this.buf = ''; this.newPrompt(); } return; }
     if (e.ctrlKey && e.key === 'l') { e.preventDefault(); this.clear(); return; }
     if (this.busy) return;
-    if (e.isComposing) return;
+    if (e.isComposing || e.keyCode === 229 || this.composing) return;   /* 组字中的回车/退格归输入法 */
     if (e.key === 'Enter') { e.preventDefault(); await this.run(); return; }
     if (e.key === 'Backspace') { e.preventDefault(); this.buf = this.buf.slice(0, -1); this.draw(); return; }
     if (e.key === 'ArrowUp') { e.preventDefault(); if (this.hi > 0) { this.buf = this.hist[--this.hi]; this.draw(); } return; }
