@@ -309,6 +309,28 @@ export interface Todo {
   source: 'web' | 'external';
 }
 
+/**
+ * 提示词(自有数据):用户反复粘贴的开场白 / 排障模板 / 固定要求。
+ * 与 CLI 自定义斜杠命令的分工:命令是「选中即执行」,提示词是「填进输入框、改两句再发」。
+ * 存自有 SQLite,跨设备同步;~/.claude 不写(架构铁律 2)。
+ */
+export interface Prompt {
+  id: number;
+  /** 触发词:`/p <trig>` 插入;小写字母开头,字母/数字/短横线,库内唯一 */
+  trig: string;
+  name: string;
+  /** 正文,可含 {{cursor}} {{cwd}} {{branch}} {{date}} {{clipboard}} 变量,插入时由前端解析 */
+  body: string;
+  /** 作用域:null = 全局;否则为项目工作目录绝对路径,只在该目录的派发页出现 */
+  cwd: string | null;
+  /** 钉选:派发页空输入框时显示为快捷 chip(上限见 services/prompts.PIN_MAX) */
+  pinned: boolean;
+  uses: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ModelUsage {
   model: string;
   inputTokens: number;

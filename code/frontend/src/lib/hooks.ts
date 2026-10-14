@@ -96,9 +96,9 @@ export function useSeenVersion(): number {
   return useSyncExternalStore(subscribeSeen, getSeenVersion, getSeenVersion);
 }
 
-export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review' | 'worklog' | 'todo';
+export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review' | 'worklog' | 'todo' | 'prompts';
 // 新视图一律追加在末尾:⌘1–8 的既有肌肉记忆不因新增而位移(总结 = ⌘9,待办 = ⌘0 无对应数字键,靠 ⌘J/侧栏进入)
-export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron', 'review', 'worklog', 'todo'];
+export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron', 'review', 'worklog', 'todo', 'prompts'];
 
 /** 移动端断点(与 DESIGN.md「手持罗盘」形态同源:重新组织信息架构而非缩放像素) */
 export const MOBILE_QUERY = '(max-width: 430px)';

@@ -21,8 +21,9 @@ import { isBtwText, parseBtw, pinText } from '@/lib/btw';
 import { useRunbook } from '@/lib/runbook';
 import { noteContentShown } from '@/lib/jank';
 import { insertFence, isInFence, parse, wrapInline } from '@/lib/composer-code';
-import { completionName, filterCmds, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
-import type { ClosedSession, ReplayEvent, SideQuestion } from '@/api/types';
+import { completionName, nameParts, slashQuery, splitCommand, type SlashCmd, type SlashCmdInfo } from '@/lib/slash';
+import { buildSlashRows, firstLine, onPromptsChanged, pinnedChips, promptQuery, resolvePromptBody, selectableRows, visiblePrompts, type SlashRow } from '@/lib/prompts';
+import type { ClosedSession, Prompt, ReplayEvent, SideQuestion } from '@/api/types';
 
 /**
  * StreamMd — 流式 markdown 渲染,块级记忆化。
@@ -193,6 +194,7 @@ const BUILTIN_CMDS: SlashCmd[] = [
   { name: 'clear', desc: '清空上下文另起一轮,工作目录/模型/权限档不变', arg: '', kind: 'builtin' },
   { name: 'effort', desc: '切换思考深度', arg: '<low|medium|high|xhigh|max|auto>', kind: 'builtin' },
   { name: 'model', desc: '切换模型', arg: '<模型名>', kind: 'builtin' },
+  { name: 'p', desc: '插入提示词:只看我的提示词库,选中填进输入框(不发送)', arg: '[触发词]', kind: 'builtin' },
   { name: 'rename', desc: '给当前会话改名(存璇玑自有库)', arg: '<新名字>', kind: 'builtin' },
   { name: 'resume', desc: '列出本项目已关闭的会话,选中即续接', arg: '', kind: 'builtin' },
   { name: 'wd', desc: '切换新会话的工作目录', arg: '[关键词]', kind: 'builtin' },
@@ -330,6 +332,25 @@ export function Dispatch({ active }: { active: boolean }) {
   const { data: projectsData } = usePoll(api.projects, 60_000);
   const [cwd, setCwd] = useState<string>('');
   const { prefs, loaded: prefsLoaded } = useAccountPrefs();
+  const [sessionCwd, setSessionCwd] = useState<string | null>(null);
+  const projects = projectsData?.projects ?? [];
+  const quickAskCwd = prefs.quickAskCwd;
+  /** 目录优先级链与快速提问态判定收在 resolveCwd 一处(lib/quick-ask.ts),这里只取结果 */
+  const {
+    options: cwdOptions,
+    effectiveCwd,
+    isQuickAsk,
+  } = useMemo(
+    () =>
+      resolveCwd({
+        cwd,
+        prefCwd: prefs.cwd,
+        quickAskCwd,
+        projectPaths: projects.map((p) => p.path),
+      }),
+    [cwd, prefs.cwd, quickAskCwd, projects],
+  );
+  const curProject = projects.find((p) => p.path === effectiveCwd);
   const localPrefs = useLocalPrefs();
   const [modelSel, setModelSel] = useState(initialModel);
   const { models, fromServer: modelsFromServer, refresh: refreshModels } = useModelCatalog();
@@ -391,6 +412,16 @@ export function Dispatch({ active }: { active: boolean }) {
   /** 当前联想的查询词;null = 面板关闭(文本不以 / 开头,或已敲下第一个空格) */
   const [slashQ, setSlashQ] = useState<string | null>(null);
   const [slashSel, setSlashSel] = useState(0);
+  /** `/p xxx` 模式的查询词(只看提示词);null = 不在该模式。与 slashQ 任一非 null 面板才可能开 */
+  const [promptQ, setPromptQ] = useState<string | null>(null);
+  // 提示词库:60s 轮询 + 管理页变更广播即时刷新;按当前会话目录过滤作用域
+  const { data: promptsData } = usePoll(api.prompts, 60_000);
+  useEffect(() => onPromptsChanged(() => refreshPoll(api.prompts)), []);
+  const promptCwd = sessionCwd ?? effectiveCwd;
+  const prompts = useMemo(() => visiblePrompts(promptsData?.prompts ?? [], promptCwd), [promptsData, promptCwd]);
+  const pinMax = promptsData?.pinMax ?? 4;
+  /** 空输入框那一行 chip:钉选的按次数取前 pinMax 条 */
+  const pinnedPrompts = useMemo(() => pinnedChips(prompts, promptCwd, pinMax), [prompts, promptCwd, pinMax]);
   /** 会话尚未报告目录时的兜底(最近一次某个会话报过的那份),只在挂载时取一次 */
   const [fallbackCmds, setFallbackCmds] = useState<SlashCmdInfo[]>([]);
   const [fallbackUses, setFallbackUses] = useState<Record<string, number>>({});
@@ -415,16 +446,18 @@ export function Dispatch({ active }: { active: boolean }) {
       ...src.filter((c) => !builtinNames.has(c.name)).map((c) => ({ ...c, kind: 'skill' as const })),
     ];
   }, [d.commands, d.commandUses, fallbackCmds, fallbackUses]);
-  const slashRows = useMemo(
-    () => (slashQ === null ? [] : filterCmds(slashQ, allCmds)),
-    [slashQ, allCmds],
+  /** 面板全部行(含分组标题);可选中的行见 slashItems。合成口径在 lib/prompts.buildSlashRows */
+  const slashRows = useMemo<SlashRow[]>(
+    () => buildSlashRows({ slashQ, promptQ, cmds: allCmds, prompts }),
+    [slashQ, promptQ, allCmds, prompts],
   );
+  const slashItems = useMemo(() => selectableRows(slashRows), [slashRows]);
   /** 键盘处理要读最新候选,但它挂在 textarea 的 onKeyDown 里,用 ref 取当帧值 */
-  const slashRowsRef = useRef<SlashCmd[]>([]);
-  slashRowsRef.current = slashRows;
+  const slashRowsRef = useRef<ReturnType<typeof selectableRows>>([]);
+  slashRowsRef.current = slashItems;
   const slashSelRef = useRef(0);
-  slashSelRef.current = Math.min(slashSel, Math.max(0, slashRows.length - 1));
-  const slashOpen = slashQ !== null && slashRows.length > 0;
+  slashSelRef.current = Math.min(slashSel, Math.max(0, slashItems.length - 1));
+  const slashOpen = (slashQ !== null || promptQ !== null) && slashItems.length > 0;
   const slashOpenRef = useRef(false);
   slashOpenRef.current = slashOpen;
   /** 命令名集合,供镜像层判断「已完整命中某个命令」 */
@@ -442,6 +475,8 @@ export function Dispatch({ active }: { active: boolean }) {
   allCmdsRef.current = allCmds;
   /** submit 定义在后面,补全要在它之前用,经 ref 取 */
   const submitRef = useRef<(() => Promise<void>) | null>(null);
+  /** insertPrompt 同样定义在后面(要用到会话目录 / 分支) */
+  const insertPromptRef = useRef<((p: Prompt) => Promise<void>) | null>(null);
   /**
    * 用户按 Esc 主动关掉面板时记下当时的文本 —— 光把 slashQ 置空不够,
    * 下一次重绘(哪怕只是移动光标)又会从同一段文本里算出查询词把面板弹回来。
@@ -452,7 +487,7 @@ export function Dispatch({ active }: { active: boolean }) {
   /** 键盘选中的行滚进可视区(列表最多 312px 高,候选可能几十条) */
   useEffect(() => {
     slashListRef.current?.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
-  }, [slashSel, slashQ]);
+  }, [slashSel, slashQ, promptQ]);
   // 输入框高度跟随内容:下限 56px(= 原两行,短输入与改动前零差异),上限由 CSS max-height
   // 给(12 行或 40vh 取小),触顶后转 textarea 内部滚动并由 .at-max 亮出底部渐隐提示。
   // `.value =` 赋值不触发 input 事件,所以每个程序化写入点(预填/交接/建议词/历史回溯/清空)
@@ -546,10 +581,16 @@ export function Dispatch({ active }: { active: boolean }) {
     if (slashDismissedRef.current !== null && slashDismissedRef.current !== ta.value) {
       slashDismissedRef.current = null;
     }
-    const q = slashDismissedRef.current !== null ? null : slashQuery(ta.value);
+    const dismissed = slashDismissedRef.current !== null;
+    const q = dismissed ? null : slashQuery(ta.value);
+    const pq = dismissed ? null : promptQuery(ta.value);
     setSlashQ((prev) => {
       if (prev !== q) setSlashSel(0); // 查询词一变就把选中复位到第一项
       return q;
+    });
+    setPromptQ((prev) => {
+      if (prev !== pq) setSlashSel(0);
+      return pq;
     });
   };
   /**
@@ -560,11 +601,17 @@ export function Dispatch({ active }: { active: boolean }) {
     const ta = taRef.current;
     const row = slashRowsRef.current[slashSelRef.current];
     if (!ta || !row) return;
-    ta.value = `/${completionName(row)} `;
+    // 提示词行:填进输入框、光标停在 {{cursor}},不发送 —— Tab 与 ⏎ 同义
+    if (row.kind === 'prompt') {
+      void insertPromptRef.current?.(row.prompt);
+      return;
+    }
+    ta.value = `/${completionName(row.cmd)} `;
     growTa();
     ta.focus();
     ta.setSelectionRange(ta.value.length, ta.value.length);
-    if (send && !row.arg) void submitRef.current?.();
+    // `/p ` 带参数提示,补完停下 —— 面板随 growTa→syncCode 切成只看提示词
+    if (send && !row.cmd.arg) void submitRef.current?.();
   };
 
   // 输入框历史回溯:取材于当前会话自己的 d.items(t:'user'),天然按会话隔离——
@@ -631,7 +678,6 @@ export function Dispatch({ active }: { active: boolean }) {
   };
   /** 本次派发由哪条待办发起(待办页「开工」跳来):拿到 sessionId 后回填,横幅可解除关联 */
   const [fromTodo, setFromTodo] = useState<{ id: number; title: string } | null>(null);
-  const [sessionCwd, setSessionCwd] = useState<string | null>(null);
   const [fromBoard, setFromBoard] = useState(false);
   const [sessCtx, setSessCtx] = useState<SessCtx | null>(null);
   /**
@@ -645,24 +691,6 @@ export function Dispatch({ active }: { active: boolean }) {
   // 清单存在才渲染;没有清单 = 退化为现状体验,面板不出现
   const rb = useRunbook(panelSessionId);
 
-  const projects = projectsData?.projects ?? [];
-  const quickAskCwd = prefs.quickAskCwd;
-  /** 目录优先级链与快速提问态判定收在 resolveCwd 一处(lib/quick-ask.ts),这里只取结果 */
-  const {
-    options: cwdOptions,
-    effectiveCwd,
-    isQuickAsk,
-  } = useMemo(
-    () =>
-      resolveCwd({
-        cwd,
-        prefCwd: prefs.cwd,
-        quickAskCwd,
-        projectPaths: projects.map((p) => p.path),
-      }),
-    [cwd, prefs.cwd, quickAskCwd, projects],
-  );
-  const curProject = projects.find((p) => p.path === effectiveCwd);
   // 全局终端「跟随会话」:派发页可见时上报当前会话的工作目录,离开派发页时报 null
   const termCwd = active ? (sessionCwd ?? effectiveCwd ?? null) : null;
   useEffect(() => reportDispatchCwd(termCwd), [termCwd]);
@@ -789,6 +817,7 @@ export function Dispatch({ active }: { active: boolean }) {
     if (intent?.cwd) setCwd(intent.cwd);
     if (intent?.todoId !== undefined) setFromTodo({ id: intent.todoId, title: intent.prefill ?? '' });
     if (intent?.prefill && taRef.current) { taRef.current.value = intent.prefill; growTa(); }
+    if (intent?.prompt) void insertPromptRef.current?.(intent.prompt); // 提示词页「在派发页插入」
     // 只在真正进入视图/带意图跳转时聚焦:useDispatch 每次渲染返回新对象,本效应实际随每次
     // 重渲染执行;无条件聚焦会在 WS 推送/轮询触发的重渲染中反复把焦点抢回派发框,
     // 顶掉 /wd 等弹窗内输入框的焦点(2026-07-16 真机确认)
@@ -1141,6 +1170,37 @@ export function Dispatch({ active }: { active: boolean }) {
     historyDraftRef.current = '';
   };
 
+  /**
+   * 插入提示词:解析变量后填进输入框,光标停在 {{cursor}};不发送 —— 提示词是「改两句再发」的文本。
+   * 剪贴板只在正文用到 {{clipboard}} 时才读(读取会弹权限提示,用不到就别打扰)。
+   */
+  const insertPrompt = async (p: Prompt) => {
+    const ta = taRef.current;
+    if (!ta) return;
+    let clipboard = '';
+    if (p.body.includes('{{clipboard}}')) {
+      try {
+        clipboard = await navigator.clipboard.readText();
+      } catch {
+        toast('读不到剪贴板,{{clipboard}} 留空');
+      }
+    }
+    const { text, caret } = resolvePromptBody(p.body, {
+      cwd: sessionCwd ?? effectiveCwd ?? '',
+      branch: curProject?.git?.branch ?? '',
+      clipboard,
+    });
+    ta.value = text;
+    historyIdxRef.current = null; // 同手动编辑:退出历史浏览态(不是换会话,不走 resetHistoryBrowse)
+    growTa(); // 文本不再以 / 开头,面板随之收起
+    ta.focus();
+    ta.setSelectionRange(caret, caret);
+    setBtwMode(isBtwText(text));
+    // 计数失败不影响插入;成功后刷新列表让次数排序跟上
+    void api.usePrompt(p.id).then(() => refreshPoll(api.prompts)).catch(() => {});
+  };
+  insertPromptRef.current = insertPrompt;
+
   /** 离开当前会话(换会话 / 清空 / 接回 / 续接)的公共归零动作,收在这一处。
    *  输入历史回溯范围、轮次索引(含尚未渲染、待回填的更早事件)、续接信息与会话上下文
    *  必须同进同退:漏掉任何一样,上一个会话的状态就会漏进下一个会话。
@@ -1241,6 +1301,23 @@ export function Dispatch({ active }: { active: boolean }) {
       // 先显式 blur 再开弹窗,配合 WdPalette 内的轮询聚焦兜底
       ta?.blur();
       setWdPalette(true);
+      return;
+    }
+    // /p 插入提示词:带触发词直接填进输入框;没带或没命中就回填 `/p ` 让面板列出全部
+    if (/^\/p\b/.test(text)) {
+      const trig = text.replace(/^\/p\b/, '').trim().toLowerCase();
+      const hit = trig ? prompts.find((p) => p.trig === trig) : undefined;
+      if (hit) {
+        void insertPrompt(hit);
+        return;
+      }
+      if (ta) {
+        ta.value = '/p ';
+        growTa();
+        ta.focus();
+        ta.setSelectionRange(3, 3);
+      }
+      if (trig) toast(`没有触发词为「${trig}」的提示词`);
       return;
     }
     // /rename 是终端专属命令,SDK 环境不可用 → 拦截为璇玑自己的改名(display-name 存自有 SQLite)
@@ -1457,11 +1534,27 @@ export function Dispatch({ active }: { active: boolean }) {
                 会话经 Agent SDK 执行,加载与终端一致的 skills / MCP / CLAUDE.md;工具调用逐项经你审批。
                 转后台的任务建议写全任务描述并放宽权限模式,避免无人值守时卡在审批上。
               </p>
-              <div className="sugg">
-                <button onClick={() => { taRef.current!.value = '扫描近 7 天的高风险 IP,输出报告'; growTa(); taRef.current?.focus(); }}>扫描高风险 IP</button>
-                <button onClick={() => { taRef.current!.value = '用 baize 对昨日收入异动做归因,结果发飞书卡片'; growTa(); taRef.current?.focus(); }}>收入异动归因</button>
-                <button onClick={() => { taRef.current!.value = '把本周会话里踩过的坑提炼成 memory 草稿'; growTa(); taRef.current?.focus(); }}>提炼本周经验</button>
-              </div>
+              {/* 钉选的提示词:像素沿用 .sugg,内容来自「提示词」页的钉选(上限 pinMax);点一下填进输入框 */}
+              {pinnedPrompts.length > 0 && (
+                <div className="sugg">
+                  {pinnedPrompts.map((p) => (
+                    <button key={p.id} title={firstLine(p.body)} onClick={() => void insertPrompt(p)}>
+                      {p.name}<span className="pl-k">/p {p.trig}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {promptsData && (
+                <div className="pl-manage">
+                  {prompts.length === 0 ? (
+                    <>把常用开场白存进<button onClick={() => { location.hash = 'prompts'; }}>提示词</button>,钉选后会出现在这里;输入框里敲 <span className="mono">/p</span> 也能插入。</>
+                  ) : pinnedPrompts.length === 0 ? (
+                    <>还没有钉选的提示词 · 到<button onClick={() => { location.hash = 'prompts'; }}>提示词</button>里给常用的几条打钉</>
+                  ) : (
+                    <>钉选 {pinnedPrompts.length}/{pinMax} · <button onClick={() => { location.hash = 'prompts'; }}>管理</button></>
+                  )}
+                </div>
+              )}
             </div>
           )}
           {headHidden > 0 && (
@@ -1609,34 +1702,59 @@ export function Dispatch({ active }: { active: boolean }) {
           {slashOpen && (
             <div className="xj-slash" id="slash-listbox" role="listbox" aria-label="斜杠命令">
               <div className="xj-slash-list" ref={slashListRef}>
-                {slashRows.map((c, idx) => {
-                  const parts = nameParts(c.name, slashQ ?? '');
-                  return (
-                    <button
-                      key={c.name}
-                      id={`slash-opt-${idx}`}
-                      type="button"
-                      role="option"
-                      aria-selected={idx === slashSelRef.current}
-                      className={`xj-slash-item${idx === slashSelRef.current ? ' sel' : ''}`}
-                      // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
-                      onMouseDown={(ev) => {
-                        ev.preventDefault();
-                        setSlashSel(idx);
-                        slashSelRef.current = idx;
-                        pickSlash(false);
-                      }}
-                    >
-                      <span className="xj-slash-name">
-                        /{parts.before}
-                        {parts.hit && <mark>{parts.hit}</mark>}
-                        {parts.after}
-                        {c.arg && <span className="arg">{c.arg}</span>}
-                      </span>
-                      <span className="xj-slash-desc">{c.desc}</span>
-                    </button>
-                  );
-                })}
+                {(() => {
+                  // 分组标题行不占选中下标:idx 只给可选中的行递增,与 slashItems 的顺序一致
+                  let idx = -1;
+                  return slashRows.map((r) => {
+                    if (r.kind === 'grp') {
+                      return (
+                        <div className="pl-grp" key={`grp-${r.label}`} role="presentation">
+                          {r.label}
+                          <span className="n">{r.note}</span>
+                          {r.hint && <span className="act">{r.hint}</span>}
+                        </div>
+                      );
+                    }
+                    idx += 1;
+                    const i = idx;
+                    const sel = i === slashSelRef.current;
+                    // mousedown 而非 click:输入框 blur 会先关掉面板,click 等不到
+                    const onPick = (ev: { preventDefault(): void }) => {
+                      ev.preventDefault();
+                      setSlashSel(i);
+                      slashSelRef.current = i;
+                      pickSlash(false);
+                    };
+                    if (r.kind === 'prompt') {
+                      const parts = nameParts(r.prompt.trig, promptQ ?? slashQ ?? '');
+                      return (
+                        <button key={`p-${r.prompt.id}`} id={`slash-opt-${i}`} type="button" role="option" aria-selected={sel}
+                          className={`xj-slash-item${sel ? ' sel' : ''}`} onMouseDown={onPick}>
+                          <span className="xj-slash-name">
+                            /p {parts.before}
+                            {parts.hit && <mark>{parts.hit}</mark>}
+                            {parts.after}
+                          </span>
+                          <span className="xj-slash-desc"><span className="pl-tag">插入</span>{r.prompt.name} · {firstLine(r.prompt.body)}</span>
+                        </button>
+                      );
+                    }
+                    const c = r.cmd;
+                    const parts = nameParts(c.name, slashQ ?? '');
+                    return (
+                      <button key={c.name} id={`slash-opt-${i}`} type="button" role="option" aria-selected={sel}
+                        className={`xj-slash-item${sel ? ' sel' : ''}`} onMouseDown={onPick}>
+                        <span className="xj-slash-name">
+                          /{parts.before}
+                          {parts.hit && <mark>{parts.hit}</mark>}
+                          {parts.after}
+                          {c.arg && <span className="arg">{c.arg}</span>}
+                        </span>
+                        <span className="xj-slash-desc">{c.desc}</span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}
@@ -1730,6 +1848,7 @@ export function Dispatch({ active }: { active: boolean }) {
                   e.preventDefault();
                   slashDismissedRef.current = ta.value; // 只关面板,输入内容原样保留
                   setSlashQ(null);
+                  setPromptQ(null);
                   return;
                 }
               }

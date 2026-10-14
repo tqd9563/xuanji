@@ -12,6 +12,7 @@ import type {
   SessionsBoard,
   Skill,
   Todo,
+  Prompt,
   UsageRange,
   UsageReport,
   WeeklyDraft,
@@ -89,6 +90,15 @@ export const api = {
   updateTodo: (id: number, patch: Partial<{ title: string; status: Todo['status']; cwd: string | null; sessionId: string | null }>) =>
     mutate<{ todo: Todo }>(`/api/todos/${id}`, 'PATCH', patch),
   deleteTodo: (id: number) => mutate<{ ok: boolean }>(`/api/todos/${id}`, 'DELETE', {}),
+  // ---------- 提示词库 ----------
+  prompts: () => get<{ prompts: Prompt[]; pinMax: number }>('/api/prompts'),
+  createPrompt: (input: Pick<Prompt, 'trig' | 'name' | 'body' | 'cwd' | 'pinned'>) =>
+    mutate<{ prompt: Prompt }>('/api/prompts', 'POST', input),
+  updatePrompt: (id: number, patch: Partial<Pick<Prompt, 'trig' | 'name' | 'body' | 'cwd' | 'pinned'>>) =>
+    mutate<{ prompt: Prompt }>(`/api/prompts/${id}`, 'PATCH', patch),
+  deletePrompt: (id: number) => mutate<{ ok: boolean }>(`/api/prompts/${id}`, 'DELETE', {}),
+  /** 插入一次(计数用,失败不影响插入本身) */
+  usePrompt: (id: number) => mutate<{ prompt: Prompt }>(`/api/prompts/${id}/use`, 'POST', {}),
   palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------

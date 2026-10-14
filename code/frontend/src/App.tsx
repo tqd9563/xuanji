@@ -18,6 +18,7 @@ import { Sessions, type SessionsHandle } from '@/views/Sessions';
 import { Dispatch } from '@/views/Dispatch';
 import { Skills } from '@/views/Skills';
 import { Memories } from '@/views/Memories';
+import { Prompts } from '@/views/Prompts';
 import { Crons } from '@/views/Crons';
 import { Review } from '@/views/Review';
 import { Worklog } from '@/views/Worklog';
@@ -33,6 +34,7 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
   { id: 'dispatch', label: '派发', icon: 'M3 12l18-8-6 18-3-7z' },
   { id: 'skills', label: '技能', icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z' },
   { id: 'memory', label: '经验', icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4' },
+  { id: 'prompts', label: '提示词', icon: 'M5 4v16M10 7h10M10 12h7M10 17h9' },
   { id: 'cron', label: '定时', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2' },
   { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
   { id: 'worklog', label: '总结', icon: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5' },
@@ -40,10 +42,10 @@ const NAVS: { id: ViewId; label: string; icon: string }[] = [
 ];
 
 /** 移动端(≤430px)导航是 5-tab + 更多 二级菜单;这四个视图归入更多,详见 TabBar.mobileTabOf */
-const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'review', 'worklog', 'todo'];
+const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'prompts', 'review', 'worklog', 'todo'];
 const MOBILE_TITLE: Record<ViewId, string> = {
   dashboard: '首页', sessions: '会话', dispatch: '派发', cron: '定时任务',
-  projects: '项目', skills: '技能', memory: '经验', review: '回顾', worklog: '总结', todo: '待办',
+  projects: '项目', skills: '技能', memory: '经验', prompts: '提示词', review: '回顾', worklog: '总结', todo: '待办',
 };
 
 export default function App() {
@@ -305,6 +307,9 @@ export default function App() {
         </section>
         <section className={cn('view', isShown('memory') && 'active')}>
           {isShown('memory') && <Memories />}
+        </section>
+        <section className={cn('view', isShown('prompts') && 'active')}>
+          {isShown('prompts') && <Prompts />}
         </section>
         <section className={cn('view', isShown('cron') && 'active')}>
           {isShown('cron') && <Crons />}

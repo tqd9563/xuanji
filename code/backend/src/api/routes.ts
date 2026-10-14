@@ -20,6 +20,7 @@ import { queryWorklog } from '../services/worklog.js';
 import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
 import { cachedModelCatalog } from '../services/models.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
+import { normalizePrompt, pinOverLimit, PIN_MAX, trigTaken } from '../services/prompts.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
@@ -290,6 +291,50 @@ export function createApi(
     const id = Number(c.req.param('id'));
     if (!storage.getTodo(id)) return c.json({ error: 'not found' }, 404);
     storage.deleteTodo(id);
+    return c.json({ ok: true });
+  });
+
+  /* ---------- 提示词库(自有 SQLite,跨设备) ---------- */
+  api.get('/prompts', async (c) => c.json({ prompts: storage.listPrompts(), pinMax: PIN_MAX }));
+
+  api.post('/prompts', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const r = normalizePrompt(body);
+    if ('error' in r) return c.json({ error: r.error }, 400);
+    const all = storage.listPrompts();
+    const dup = trigTaken(all, r.ok.trig);
+    if (dup) return c.json({ error: `触发词 /p ${r.ok.trig} 已被「${dup.name}」占用` }, 409);
+    if (pinOverLimit(all, r.ok)) return c.json({ error: `最多钉选 ${PIN_MAX} 条,先取消一条` }, 400);
+    return c.json({ prompt: storage.createPrompt(r.ok) }, 201);
+  });
+
+  api.patch('/prompts/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const cur = storage.getPrompt(id);
+    if (!cur) return c.json({ error: 'not found' }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const r = normalizePrompt(body, cur);
+    if ('error' in r) return c.json({ error: r.error }, 400);
+    const all = storage.listPrompts();
+    const dup = trigTaken(all, r.ok.trig, id);
+    if (dup) return c.json({ error: `触发词 /p ${r.ok.trig} 已被「${dup.name}」占用` }, 409);
+    if (pinOverLimit(all, r.ok, id)) return c.json({ error: `最多钉选 ${PIN_MAX} 条,先取消一条` }, 400);
+    storage.updatePrompt(id, r.ok);
+    return c.json({ prompt: storage.getPrompt(id) });
+  });
+
+  /** 插入一次:前端解析完变量填进输入框后上报,只做计数 */
+  api.post('/prompts/:id/use', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getPrompt(id)) return c.json({ error: 'not found' }, 404);
+    storage.bumpPromptUse(id);
+    return c.json({ prompt: storage.getPrompt(id) });
+  });
+
+  api.delete('/prompts/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getPrompt(id)) return c.json({ error: 'not found' }, 404);
+    storage.deletePrompt(id);
     return c.json({ ok: true });
   });
 
