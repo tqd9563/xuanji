@@ -218,6 +218,21 @@ export interface Todo {
   source: 'web' | 'external';
 }
 
+/** 提示词(自有数据,与后端 types.ts 镜像):反复粘贴的开场白,`/p <trig>` 或钉选 chip 填进输入框 */
+export interface Prompt {
+  id: number;
+  trig: string;
+  name: string;
+  body: string;
+  /** null = 全局;否则只在该工作目录的派发页出现 */
+  cwd: string | null;
+  pinned: boolean;
+  uses: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ProjectsResult {
   projects: Project[];
   filteredNoise: number;

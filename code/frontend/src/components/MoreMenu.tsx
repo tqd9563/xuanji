@@ -10,6 +10,7 @@ const ICONS: Record<string, string> = {
   projects: 'M3 7l3-4h5l2 3h8v13H3z',
   skills: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z',
   memory: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4',
+  prompts: 'M5 4v16M10 7h10M10 12h7M10 17h9',
   review: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12',
   worklog: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5',
   todo: 'M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2',
@@ -45,6 +46,7 @@ export function MoreMenu({
   const { data: memData } = usePoll(api.memories, 60_000);
   const { data: wlData } = usePoll(api.worklog, 60_000);
   const { data: todoData } = usePoll(api.todos, 60_000);
+  const { data: promptData } = usePoll(api.prompts, 60_000);
 
   const skillsOn = skillsData?.skills.filter((s) => s.enabled).length;
 
@@ -57,6 +59,7 @@ export function MoreMenu({
         <Row id="projects" label="项目" hint={projectsData ? `${projectsData.projects.length} 个` : undefined} onClick={() => onNav('projects')} />
         <Row id="skills" label="技能" hint={skillsData ? `${skillsOn} 启用 · ${skillsData.skills.length} 共` : undefined} onClick={() => onNav('skills')} />
         <Row id="memory" label="经验" hint={memData ? `${memData.memories.length} 条` : undefined} onClick={() => onNav('memory')} />
+        <Row id="prompts" label="提示词" hint={promptData ? `${promptData.prompts.length} 条` : undefined} onClick={() => onNav('prompts')} />
         <Row id="review" label="回顾" onClick={() => onNav('review')} />
         <Row id="worklog" label="总结" hint={wlData ? `${wlData.cards.length} 条` : undefined} onClick={() => onNav('worklog')} />
         <Row

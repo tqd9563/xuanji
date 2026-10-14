@@ -2837,3 +2837,83 @@ html[data-motion="off"] .tty-c.open { opacity: 1; transition: opacity 80ms linea
 .tty-font-val { font: 0.8125rem "JetBrains Mono", var(--mono); color: var(--ink); }
 .stg-lab small.tty-warn { color: var(--amber); }
 kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
+
+/* ============ 提示词库(pl-)—— 管理页列表 / 抽屉编辑器 / 派发页面板分组与钉选 chip ============ */
+/* 斜杠面板里的分组标题:只在空 `/` 时出现,输入字符后退化成扁平表 */
+.pl-grp {
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px 3px;
+  font-size: 0.625rem; font-weight: 600; letter-spacing: .06em; color: var(--faint);
+}
+.pl-grp + .pl-grp { margin-top: 2px; }
+.pl-grp .n { font-family: var(--mono); font-weight: 400; }
+.pl-grp .act { margin-left: auto; font-weight: 400; letter-spacing: 0; color: var(--faint); font-family: var(--mono); }
+/* 提示词行与命令行的区别只有一枚「插入」小标:提醒它不是执行,是填进输入框让你改 */
+.pl-tag {
+  display: inline-block; font-size: 0.5625rem; font-weight: 600; letter-spacing: .06em; line-height: 1;
+  padding: 2px 5px; border-radius: 3px; margin-right: 7px; vertical-align: 1px;
+  color: var(--violet); background: color-mix(in oklab, var(--violet) 14%, var(--surface));
+}
+.xj-slash-item.sel .pl-tag { color: var(--ink); background: color-mix(in oklab, var(--violet) 30%, var(--surface)); }
+/* 空状态下的钉选 chip 复用 .sugg 的像素,只加触发词小字与一行管理入口 */
+.pl-manage { margin-top: 12px; font-size: 0.6875rem; color: var(--faint); }
+.pl-manage button { color: var(--faint); text-decoration: underline dotted; text-underline-offset: 3px; }
+.pl-manage button:hover { color: var(--jade); }
+.sugg button .pl-k { font-family: var(--mono); font-size: 0.625rem; color: var(--faint); margin-left: 6px; }
+.sugg button:hover .pl-k { color: inherit; }
+/* 管理页列表:沿用 .mem-item 的行高与 hover,列为「钉 / 触发词 / 名称 / 正文首行 / 作用域 / 次数」 */
+.pl-item {
+  display: grid; grid-template-columns: 22px 92px minmax(96px, auto) 1fr auto 52px;
+  align-items: center; gap: 12px; padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft); cursor: pointer; transition: background 150ms var(--ease);
+}
+.pl-item:hover { background: var(--hover); }
+.pl-item:last-child { border-bottom: none; }
+.pl-item .pin { width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--r-s); color: var(--faint); }
+.pl-item .pin svg { width: 14px; height: 14px; }
+.pl-item .pin:hover { background: var(--tint-jade); color: var(--jade); }
+.pl-item .pin.on { color: var(--jade); }
+.pl-item .trig { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.pl-item .name { font-size: 0.8125rem; color: var(--ink); white-space: nowrap; }
+.pl-item .prev { color: var(--muted); font-size: 0.75rem; font-family: var(--mono); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-item .uses { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); text-align: right; }
+.pl-scope { font-size: 0.625rem; font-weight: 600; padding: 2px 7px; border-radius: 99px; white-space: nowrap; }
+.pl-scope.global { color: var(--muted); background: var(--tint-muted); }
+.pl-scope.proj { color: var(--jade); background: var(--tint-jade); font-family: var(--mono); font-weight: 500; }
+@media (max-width: 760px) {
+  .pl-item { grid-template-columns: 22px 1fr auto; }
+  .pl-item .trig, .pl-item .prev, .pl-item .uses { display: none; }
+}
+/* 抽屉编辑器 */
+.pl-field { margin-bottom: 16px; }
+.pl-field > label { display: block; font-size: 0.6875rem; font-weight: 600; letter-spacing: .04em; color: var(--muted); margin-bottom: 6px; }
+.pl-field .help { font-size: 0.6875rem; color: var(--faint); margin-top: 6px; }
+.pl-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.pl-row .pl-field { flex: 1 1 160px; margin-bottom: 0; }
+.pl-row + .pl-field, .pl-row + .pl-row { margin-top: 16px; }
+.pl-trig { display: flex; align-items: center; }
+.pl-trig .pre { font-family: var(--mono); font-size: 0.8125rem; color: var(--faint); padding: 0 8px 0 2px; }
+.pl-trig .input { font-family: var(--mono); flex: 1; }
+.pl-body {
+  width: 100%; min-height: 168px; resize: vertical; font-family: var(--mono); font-size: 0.78125rem; line-height: 1.55;
+  padding: 10px 12px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-m);
+}
+.pl-body:focus { outline: none; border-color: var(--jade); }
+.pl-vars { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; align-items: center; }
+.pl-vars .lab { font-size: 0.6875rem; color: var(--faint); margin-right: 2px; }
+.pl-vars button {
+  font-family: var(--mono); font-size: 0.6875rem; padding: 2px 8px; border-radius: 99px;
+  color: var(--violet); background: color-mix(in oklab, var(--violet) 12%, var(--surface)); border: 1px solid transparent;
+}
+.pl-vars button:hover { border-color: var(--violet); }
+.pl-preview {
+  font-family: var(--mono); font-size: 0.75rem; line-height: 1.55; color: var(--muted); white-space: pre-wrap;
+  padding: 10px 12px; border: 1px dashed var(--line); border-radius: var(--r-m); background: transparent;
+}
+.pl-preview .cur { display: inline-block; width: 1px; height: 1em; background: var(--jade); vertical-align: -2px; margin: 0 1px; animation: pl-blink 1s steps(1) infinite; }
+@keyframes pl-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .pl-preview .cur { animation: none; } }
+.pl-switch { display: flex; align-items: center; gap: 10px; font-size: 0.8125rem; color: var(--ink); cursor: pointer; padding-top: 4px; }
+.pl-switch small { color: var(--faint); font-size: 0.6875rem; }
+/* 管理页空状态里的示例 */
+.pl-empty-eg { display: inline-grid; gap: 6px; margin: 14px auto 0; text-align: left; font-family: var(--mono); font-size: 0.75rem; color: var(--faint); }
+.pl-empty-eg span b { color: var(--muted); font-weight: 500; }
