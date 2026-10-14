@@ -2912,8 +2912,6 @@ kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
 .pl-preview .cur { display: inline-block; width: 1px; height: 1em; background: var(--jade); vertical-align: -2px; margin: 0 1px; animation: pl-blink 1s steps(1) infinite; }
 @keyframes pl-blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .pl-preview .cur { animation: none; } }
-.pl-switch { display: flex; align-items: center; gap: 10px; font-size: 0.8125rem; color: var(--ink); cursor: pointer; padding-top: 4px; }
-.pl-switch small { color: var(--faint); font-size: 0.6875rem; }
 /* 管理页空状态里的示例 */
 .pl-empty-eg { display: inline-grid; gap: 6px; margin: 14px auto 0; text-align: left; font-family: var(--mono); font-size: 0.75rem; color: var(--faint); }
 .pl-empty-eg span b { color: var(--muted); font-weight: 500; }

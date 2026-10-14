@@ -221,6 +221,7 @@ export function Prompts() {
           <>
             <span>插入 {editing.uses} 次</span>
             <span>{editing.lastUsedAt ? `最近 ${timeAgo(editing.lastUsedAt)}` : '还没插入过'}</span>
+            <span>{editing.pinned ? '已钉选' : '未钉选'} · 在列表图钉处切换</span>
           </>
         ) : <span>保存后立刻可用,无需重启会话</span>}
         foot={
@@ -248,31 +249,16 @@ export function Prompts() {
                 <div className="help">小写字母开头,字母 / 数字 / 短横线;派发页输入 <span className="mono">/p {draft.trig || 'debug'}</span> 回车即插入</div>
               </div>
             </div>
-            <div className="pl-row">
-              <div className="pl-field">
-                <label htmlFor="pl-f-scope">作用域</label>
-                <select id="pl-f-scope" className="input" style={{ width: '100%' }} value={draft.cwd ?? ''} onChange={(e) => setDraft({ ...draft, cwd: e.target.value || null })}>
-                  <option value="">全局 · 所有工作目录可见</option>
-                  {scopeOptions.map((p) => (
-                    <option key={p} value={p}>仅 {shortName(p)} · {p}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="pl-field">
-                <label>钉选</label>
-                <label className="pl-switch">
-                  <span
-                    className={`switch${draft.pinned ? ' on' : ''}`}
-                    role="switch"
-                    aria-checked={draft.pinned}
-                    aria-label="钉选"
-                    tabIndex={0}
-                    onClick={() => setDraft({ ...draft, pinned: !draft.pinned })}
-                    onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setDraft({ ...draft, pinned: !draft.pinned }); } }}
-                  />
-                  <span>新会话空输入框时显示为快捷 chip<br /><small>最多 {pinMax} 条,与手机端同步</small></span>
-                </label>
-              </div>
+            {/* 钉选不在这里改:列表行左侧的图钉是唯一入口(一处改、处处同),抽屉只管内容 */}
+            <div className="pl-field" style={{ marginTop: 16 }}>
+              <label htmlFor="pl-f-scope">作用域</label>
+              <select id="pl-f-scope" className="input" style={{ width: '100%' }} value={draft.cwd ?? ''} onChange={(e) => setDraft({ ...draft, cwd: e.target.value || null })}>
+                <option value="">全局 · 所有工作目录可见</option>
+                {scopeOptions.map((p) => (
+                  <option key={p} value={p}>仅 {shortName(p)} · {p}</option>
+                ))}
+              </select>
+              <div className="help">绑定项目的提示词只在该工作目录的派发页出现(面板、chip、/p 一并过滤)</div>
             </div>
             <div className="pl-field">
               <label htmlFor="pl-f-body">正文</label>
