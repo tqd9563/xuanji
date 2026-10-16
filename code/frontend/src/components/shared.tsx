@@ -438,7 +438,11 @@ export function Drawer({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // 抽屉里的自绘下拉开着时,Esc 只收下拉(DropUp 自己监听),不连带关掉整个抽屉。
+      // 两个监听都挂在 document 上、谁先触发不确定;此刻 React 尚未提交下拉的关闭,DOM 上仍是 .open
+      if (document.querySelector('.drawer.show .dd.open')) return;
+      onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
