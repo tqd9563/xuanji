@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, subscribeChanges } from '@/api/client';
 import { useHashRoute, usePoll, VIEW_IDS, isTypingTarget, type ViewId } from '@/lib/hooks';
+import { digitOf, NAVS, stepView } from '@/lib/nav';
 import { setPalette, cn } from '@/lib/utils';
 import { ConfirmHost, MdWarmup, ToastHost, toast } from '@/components/shared';
 import { Settings } from '@/components/Settings';
@@ -26,20 +27,6 @@ import { Todos, startTodo, notifyTodosChanged } from '@/views/Todos';
 import { TodoPalette } from '@/components/TodoPalette';
 import { TerminalSheet, toggleTerminal } from '@/components/Terminal';
 import { matchToggleKey } from '@/lib/terminal';
-
-const NAVS: { id: ViewId; label: string; icon: string }[] = [
-  { id: 'dashboard', label: '仪表盘', icon: 'M3 3h7v9H3zM14 3h7v5h-7zM14 12h7v9h-7zM3 16h7v5H3z' },
-  { id: 'projects', label: '项目', icon: 'M3 7l3-4h5l2 3h8v13H3z' },
-  { id: 'sessions', label: '会话', icon: 'M4 5h16v11H8l-4 4z' },
-  { id: 'dispatch', label: '派发', icon: 'M3 12l18-8-6 18-3-7z' },
-  { id: 'skills', label: '技能', icon: 'M12 2l2.6 6.6L21 11l-6.4 2.4L12 20l-2.6-6.6L3 11l6.4-2.4z' },
-  { id: 'memory', label: '经验', icon: 'M5 3h11l3 3v15H5zM9 8h7M9 12h7M9 16h4' },
-  { id: 'prompts', label: '提示词', icon: 'M5 4v16M10 7h10M10 12h7M10 17h9' },
-  { id: 'cron', label: '定时', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8v5l3 2' },
-  { id: 'review', label: '回顾', icon: 'M4 5h16v16H4zM4 9.5h16M8.5 3v4M15.5 3v4M8 14l2.5 2.5L16 12' },
-  { id: 'worklog', label: '总结', icon: 'M4 4h16v16H4zM8 9h8M8 13h8M8 17h5' },
-  { id: 'todo', label: '待办', icon: 'M4 6h16M4 12h16M4 18h10M2.5 6l1 1 2-2' },
-];
 
 /** 移动端(≤430px)导航是 5-tab + 更多 二级菜单;这四个视图归入更多,详见 TabBar.mobileTabOf */
 const MOBILE_SECONDARY: ViewId[] = ['projects', 'skills', 'memory', 'prompts', 'review', 'worklog', 'todo'];
@@ -175,8 +162,8 @@ export default function App() {
       const next = matchKey(e, km['global.nextView']) || (altAlias && e.key === 'ArrowRight');
       if (prev || next) {
         e.preventDefault();
-        const cur = VIEW_IDS.indexOf(view);
-        nav(VIEW_IDS[(cur + (next ? 1 : -1) + VIEW_IDS.length) % VIEW_IDS.length]!);
+        // 按侧栏顺序(NAVS)而不是数字键顺序(VIEW_IDS)走,两者可以不同,见 lib/nav.ts
+        nav(stepView(view, next ? 1 : -1));
         return;
       }
       const i = parseInt(e.key, 10);
@@ -233,11 +220,14 @@ export default function App() {
           </div>
         </div>
         <nav className="nav">
-          {NAVS.map((n, i) => (
+          {NAVS.map((n) => {
+            // 数字键按 VIEW_IDS 映射,不等于侧栏下标(见 lib/nav.ts);没有数字键的视图只提示方向键
+            const d = digitOf(n.id);
+            return (
             <button
               key={n.id}
               className={view === n.id ? 'active' : ''}
-              title={`快捷键 ⌘${i + 1}(非输入状态也可直接按 ${i + 1});⌥⌘←/→ 在侧栏前后切换`}
+              title={`${d ? `快捷键 ⌘${d}(非输入状态也可直接按 ${d});` : ''}⌥⌘←/→ 在侧栏前后切换`}
               onClick={() => nav(n.id)}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" strokeLinecap="round">
@@ -245,7 +235,8 @@ export default function App() {
               </svg>
               {n.label}
             </button>
-          ))}
+            );
+          })}
         </nav>
         <div className="side-foot">
           <button

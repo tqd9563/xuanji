@@ -97,7 +97,8 @@ export function useSeenVersion(): number {
 }
 
 export type ViewId = 'dashboard' | 'projects' | 'sessions' | 'dispatch' | 'skills' | 'memory' | 'cron' | 'review' | 'worklog' | 'todo' | 'prompts';
-// 新视图一律追加在末尾:⌘1–8 的既有肌肉记忆不因新增而位移(总结 = ⌘9,待办 = ⌘0 无对应数字键,靠 ⌘J/侧栏进入)
+// 数字键顺序:新视图一律追加在末尾,⌘1–8 的既有肌肉记忆不因新增而位移(总结 = ⌘9;待办、提示词无数字键)。
+// 它**不是**侧栏顺序 —— 侧栏与 ⌥⌘←/→ 用 lib/nav.ts 的 NAVS,两者可以不同。
 export const VIEW_IDS: ViewId[] = ['dashboard', 'projects', 'sessions', 'dispatch', 'skills', 'memory', 'cron', 'review', 'worklog', 'todo', 'prompts'];
 
 /** 移动端断点(与 DESIGN.md「手持罗盘」形态同源:重新组织信息架构而非缩放像素) */
