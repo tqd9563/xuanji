@@ -2893,6 +2893,8 @@ kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
 .pl-trig { display: flex; align-items: center; }
 .pl-trig .pre { font-family: var(--mono); font-size: 0.8125rem; color: var(--faint); padding: 0 8px 0 2px; }
 .pl-trig .input { font-family: var(--mono); flex: 1; }
+/* 作用域下拉:候选是全部项目目录(常 30+ 项),自绘菜单本身不设高度上限,这里封顶并内部滚动 */
+.pl-scope-dd .dd-menu { max-height: 320px; overflow-y: auto; max-width: none; }
 .pl-body {
   width: 100%; min-height: 168px; resize: vertical; font-family: var(--mono); font-size: 0.78125rem; line-height: 1.55;
   padding: 10px 12px; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-m);

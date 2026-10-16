@@ -13,6 +13,7 @@ import { getAccount } from '@/lib/prefs';
 import { timeAgo } from '@/lib/utils';
 import { filterPromptsView, firstLine, notifyPromptsChanged, resolvePromptBody, todayStr, type PromptFilter } from '@/lib/prompts';
 import { confirmBox, Drawer, Empty, toast } from '@/components/shared';
+import { DropUp } from '@/components/DropUp';
 import { Input } from '@/components/ui/input';
 
 const FILTERS: { v: PromptFilter; label: string }[] = [
@@ -251,13 +252,17 @@ export function Prompts() {
             </div>
             {/* 钉选不在这里改:列表行左侧的图钉是唯一入口(一处改、处处同),抽屉只管内容 */}
             <div className="pl-field" style={{ marginTop: 16 }}>
-              <label htmlFor="pl-f-scope">作用域</label>
-              <select id="pl-f-scope" className="input" style={{ width: '100%' }} value={draft.cwd ?? ''} onChange={(e) => setDraft({ ...draft, cwd: e.target.value || null })}>
-                <option value="">全局 · 所有工作目录可见</option>
-                {scopeOptions.map((p) => (
-                  <option key={p} value={p}>仅 {shortName(p)} · {p}</option>
-                ))}
-              </select>
+              <label>作用域</label>
+              {/* 自绘下拉(DESIGN.md「自绘下拉」模态内变体):原生 select 的弹层由 OS 绘制,不随璇玑主题 */}
+              <DropUp
+                id="pl-f-scope"
+                down
+                className="pl-scope-dd"
+                value={draft.cwd ?? ''}
+                options={['', ...scopeOptions]}
+                labelOf={(v) => (v ? `仅 ${shortName(v)} · ${v}` : '全局 · 所有工作目录可见')}
+                onChange={(v) => setDraft({ ...draft, cwd: v || null })}
+              />
               <div className="help">绑定项目的提示词只在该工作目录的派发页出现(面板、chip、/p 一并过滤)</div>
             </div>
             <div className="pl-field">
