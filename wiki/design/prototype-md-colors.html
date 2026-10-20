@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · Markdown 输出色高亮方案对比</title>
+<!--
+  四套方案 (A/B/C/D) 在同一篇真实结构样例上并排对比。
+  色彩 token 与根目录 DESIGN.md 同源;改动 token 必须先改 DESIGN.md。
+  方案 A:明度阶梯(零新增颜色)
+  方案 B:玉色锚点(H1 用品牌色,加粗走 mono)
+  方案 C:结构色带(文字不变色,左侧色条 + 底 tint)
+  方案 D:OpenCode 风格散文色(新增低饱和 prose-* token,需 DESIGN.md 增补)
+-->
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface: oklch(0.185 0.008 120);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --jade-dim: oklch(0.68 0.10 115);
+    --on-jade: oklch(0.18 0.02 120);
+    --amber: oklch(0.78 0.14 80);
+    --blue: oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --red: oklch(0.68 0.19 25);
+    --green: oklch(0.74 0.12 155);
+    --mono: ui-monospace, SF Mono, Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-m: 10px;
+    --r-s: 6px;
+    /* 方案 D 新增散文色 token(仅供本方案,需 DESIGN.md 增补一条 Named Rule) */
+    --prose-h1: oklch(0.75 0.09 200);
+    --prose-h2: oklch(0.72 0.07 260);
+    --prose-h3: oklch(0.70 0.05 160);
+    --prose-strong: oklch(0.80 0.08 85);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 0.875rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- 页面外壳 ---- */
+  .page-head {
+    position: sticky; top: 0; z-index: 5;
+    background: color-mix(in oklab, var(--bg) 88%, transparent);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line-soft);
+    padding: 16px clamp(20px, 4vw, 48px) 14px;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  .page-head h1 {
+    margin: 0; font-size: 1.0625rem; font-weight: 600; letter-spacing: 0.01em;
+  }
+  .page-head .sub { color: var(--muted); font-size: 0.8125rem; }
+  .legend {
+    margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap;
+  }
+  .lg-item {
+    font-family: var(--mono); font-size: 0.6875rem; color: var(--muted);
+    border: 1px solid var(--line-soft); border-radius: var(--r-s);
+    padding: 3px 8px;
+  }
+  .lg-swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+
+  /* 焦点切换:单选全宽查看某一方案 */
+  .focus-bar {
+    padding: 10px clamp(20px, 4vw, 48px);
+    display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .focus-bar .hint { color: var(--faint); font-size: 0.75rem; margin-right: 8px; }
+  .focus-btn {
+    background: transparent; border: 1px solid var(--line-soft); color: var(--muted);
+    font-family: var(--mono); font-size: 0.75rem; border-radius: var(--r-s);
+    padding: 4px 10px; cursor: pointer; transition: color 120ms, background 120ms, border-color 120ms;
+  }
+  .focus-btn:hover { background: var(--hover); color: var(--ink); }
+  .focus-btn.active {
+    background: color-mix(in oklab, var(--jade) 14%, transparent);
+    color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent);
+  }
+
+  /* ---- 方案网格 ---- */
+  .grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1px;
+    background: var(--line-soft);
+    border-top: 1px solid var(--line-soft);
+  }
+  .grid.focus-a .panel:not(.scheme-a),
+  .grid.focus-b .panel:not(.scheme-b),
+  .grid.focus-c .panel:not(.scheme-c),
+  .grid.focus-d .panel:not(.scheme-d) { display: none; }
+  .grid.focus-a, .grid.focus-b, .grid.focus-c, .grid.focus-d {
+    grid-template-columns: 1fr;
+  }
+
+  .panel { background: var(--bg); display: flex; flex-direction: column; min-width: 0; }
+  .panel-head {
+    position: sticky; top: 56px; z-index: 2;
+    background: var(--surface-2);
+    border-bottom: 1px solid var(--line-soft);
+    padding: 10px 16px;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  .panel-head .tag {
+    font-family: var(--mono); font-size: 0.6875rem; font-weight: 600;
+    color: var(--jade);
+    background: color-mix(in oklab, var(--jade) 13%, transparent);
+    border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent);
+    border-radius: 4px; padding: 1px 7px; flex: none;
+  }
+  .panel-head .name { font-size: 0.875rem; font-weight: 600; color: var(--ink); }
+  .panel-head .desc { color: var(--muted); font-size: 0.75rem; margin-left: auto; text-align: right; }
+
+  .panel-body {
+    padding: 18px clamp(16px, 3vw, 28px) 28px;
+    /* 模拟助手消息气泡的容器宽度 */
+    max-width: 72ch;
+  }
+
+  /* ---- 基础 .md 样式(复刻 index.css 604-623 行,四方案共用底座) ---- */
+  .md { font-size: 0.875rem; line-height: 1.6; color: var(--ink); text-wrap: pretty; }
+  .md > *:first-child { margin-top: 0; }
+  .md > *:last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md pre, .md table, .md blockquote { margin: 0 0 10px; }
+  .md h1, .md h2, .md h3, .md h4 { font-size: 0.9375rem; font-weight: 700; margin: 14px 0 8px; }
+  .md h1 { font-size: 1.0625rem; }
+  .md ul { padding-left: 1.25em; list-style: disc; }
+  .md ol { padding-left: 1.4em; list-style: decimal; }
+  .md li { margin: 3px 0; }
+  .md li > p { margin-bottom: 4px; }
+  .md strong { font-weight: 700; }
+  .md em { font-style: italic; }
+  .md a { color: var(--jade); text-underline-offset: 2px; }
+  .md code { font-family: var(--mono); font-size: 0.8125em; background: var(--surface-2); border: 1px solid var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+  .md pre { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-m); padding: 10px 12px; overflow-x: auto; }
+  .md pre code { background: none; border: 0; padding: 0; font-size: 0.75rem; line-height: 1.6; }
+  .md table { border-collapse: collapse; font-size: 0.8125rem; max-width: 100%; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--line-soft); padding: 5px 10px; text-align: left; }
+  .md th { background: var(--surface-2); font-weight: 600; }
+  .md td { font-variant-numeric: tabular-nums; }
+  .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
+  .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
+
+  /* ============ 方案 A:明度阶梯(零新增颜色) ============ */
+  .scheme-a .md h1 { color: var(--ink); font-size: 1.0625rem; }
+  .scheme-a .md h2 { color: var(--ink); }
+  .scheme-a .md h3 { color: var(--muted); font-weight: 600; }
+  .scheme-a .md h4 { color: var(--faint); font-weight: 600; }
+  .scheme-a .md strong { color: var(--ink); font-weight: 750; }
+
+  /* ============ 方案 B:玉色锚点(H1 品牌 + strong mono) ============ */
+  .scheme-b .md h1 {
+    color: var(--jade);
+    font-size: 1.0625rem;
+    border-left: 3px solid var(--jade);
+    padding-left: 8px;
+  }
+  .scheme-b .md h2 { color: var(--ink); }
+  .scheme-b .md h3 { color: var(--ink); font-weight: 600; }
+  .scheme-b .md h4 { color: var(--muted); font-weight: 600; }
+  .scheme-b .md strong {
+    font-family: var(--mono);
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  /* ============ 方案 C:结构色带(文字不变色,色条 + 底 tint) ============ */
+  .scheme-c .md h1 {
+    color: var(--ink);
+    border-left: 3px solid var(--jade);
+    padding-left: 8px;
+    font-size: 1.0625rem;
+  }
+  .scheme-c .md h2 {
+    color: var(--ink);
+    border-left: 3px solid var(--line);
+    padding-left: 8px;
+  }
+  .scheme-c .md h3 {
+    color: var(--ink);
+    background: var(--surface-2);
+    padding: 2px 8px;
+    border-radius: 4px;
+    width: fit-content;
+    font-weight: 600;
+  }
+  .scheme-c .md h4 { color: var(--muted); font-weight: 600; }
+  .scheme-c .md strong { color: var(--ink); font-weight: 750; }
+
+  /* ============ 方案 D:OpenCode 风格散文色(新增 prose-* token) ============ */
+  .scheme-d .md h1 { color: var(--prose-h1); font-size: 1.0625rem; }
+  .scheme-d .md h2 { color: var(--prose-h2); }
+  .scheme-d .md h3 { color: var(--prose-h3); font-weight: 600; }
+  .scheme-d .md h4 { color: var(--muted); font-weight: 600; }
+  .scheme-d .md strong { color: var(--prose-strong); font-weight: 700; }
+
+  /* 响应式:窄屏单列 */
+  @media (max-width: 880px) {
+    .grid { grid-template-columns: 1fr; }
+    .panel-head .desc { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="page-head">
+  <h1>Claude 输出色高亮方案对比</h1>
+  <span class="sub">同一篇样例 × 四套方案 · token 与 DESIGN.md 同源</span>
+  <div class="legend">
+    <span class="lg-item"><span class="lg-swatch" style="background:var(--ink)"></span>ink 正文</span>
+    <span class="lg-item"><span class="lg-swatch" style="background:var(--jade)"></span>jade 链接</span>
+    <span class="lg-item"><span class="lg-swatch" style="background:var(--prose-h1)"></span>prose-h1 (D)</span>
+    <span class="lg-item"><span class="lg-swatch" style="background:var(--prose-strong)"></span>prose-strong (D)</span>
+  </div>
+</header>
+
+<div class="focus-bar">
+  <span class="hint">单选可全宽查看某一方案(再点取消):</span>
+  <button class="focus-btn" data-focus="a">A 明度阶梯</button>
+  <button class="focus-btn" data-focus="b">B 玉色锚点</button>
+  <button class="focus-btn" data-focus="c">C 结构色带</button>
+  <button class="focus-btn" data-focus="d">D 散文色</button>
+</div>
+
+<template id="sample">
+  <h1>会话所有权规则落地</h1>
+  <p>这次改动把 4.3 的所有权规则从设计落到代码:终端存活的 interactive 会话只读不接管,web 只 resume 自己派发的、已退出的、blocked 的后台会话。核心是 <code>resumeGuard()</code> 在 <code>resume()</code> 调用前做一次 <code>agents --json</code> 健康检查。</p>
+
+  <h2>改动概要</h2>
+  <p>三个文件,<strong>约 120 行</strong>。关键是 <em>不碰</em> 已有的 resume 流程,只在入口前加一道闸。</p>
+
+  <h3>新增:resumeGuard</h3>
+  <p>位置 <code>AgentSdkAdapter</code>。读 <code>agents --json --all</code>,按 <code>sessionId</code> 匹配,返回 <code>{ kind, state, pidAlive }</code> 三元组。</p>
+
+  <pre><code>type GuardResult =
+  | { ok: true; kind: 'background' | 'interactive'; state: SessionState }
+  | { ok: false; reason: 'not_found' | 'pid_alive_interactive' };
+
+function resumeGuard(sessionId: string): Promise&lt;GuardResult&gt; {
+  const agents = await cli('agents --json --all');
+  const hit = agents.find(a => a.sessionId === sessionId);
+  if (!hit) return { ok: false, reason: 'not_found' };
+  if (hit.kind === 'interactive' && isPidAlive(hit.pid)) {
+    return { ok: false, reason: 'pid_alive_interactive' };
+  }
+  return { ok: true, kind: hit.kind, state: hit.state };
+}</code></pre>
+
+  <h3>接入点:DispatchService</h3>
+  <p><code>resume()</code> 首行先调 guard,失败按 reason 抛错:</p>
+  <ul>
+    <li><code>not_found</code> → 会话已不存在,提示用户重新派发</li>
+    <li><code>pid_alive_interactive</code> → 终端正用着,只读不接管(返回 409)</li>
+  </ul>
+
+  <h4>边界情况</h4>
+  <ol>
+    <li>daemon 不在时 <code>agents --json</code> 会超时——降级为放行,记一条 warn(宁可放过不可误杀)</li>
+    <li>blocked 的后台会话 pid 仍存活但 kind=background,放行</li>
+  </ol>
+
+  <h2>验证</h2>
+  <p>详见 <a href="#">!12 会话所有权守卫</a>,契约测试覆盖三条路径。对比数据:</p>
+  <table>
+    <thead><tr><th>场景</th><th>改动前</th><th>改动后</th></tr></thead>
+    <tbody>
+      <tr><td>web resume 终端存活会话</td><td>静默接管 → 写坏状态</td><td>409 + 提示</td></tr>
+      <tr><td>resume 已退出会话</td><td>正常</td><td>正常(不变)</td></tr>
+      <tr><td>daemon 不在</td><td>直接报错</td><td>降级放行 + warn</td></tr>
+    </tbody>
+  </table>
+
+  <blockquote>所有权规则是 T2 风险(会话并发冲突)的唯一防线,这道闸宁可错放不可错杀——误杀会让用户在 web 里 resume 不了自己刚派发的会话。</blockquote>
+
+  <hr>
+  <p>下一步:把这个 guard 暴露成 API,前端 resume 按钮点击前先探一次,卡住就直接禁用按钮而不是发出去再报错。</p>
+</template>
+
+<div class="grid" id="grid">
+
+  <section class="panel scheme-a">
+    <div class="panel-head">
+      <span class="tag">A</span>
+      <span class="name">明度阶梯</span>
+      <span class="desc">零新增颜色 · ink→muted→faint 阶梯 · 最稳</span>
+    </div>
+    <div class="panel-body"><div class="md"></div></div>
+  </section>
+
+  <section class="panel scheme-b">
+    <div class="panel-head">
+      <span class="tag">B</span>
+      <span class="name">玉色锚点</span>
+      <span class="desc">H1 用 jade · strong 走 mono · 一成玉规则内</span>
+    </div>
+    <div class="panel-body"><div class="md"></div></div>
+  </section>
+
+  <section class="panel scheme-c">
+    <div class="panel-head">
+      <span class="tag">C</span>
+      <span class="name">结构色带</span>
+      <span class="desc">文字不变色 · 左侧色条 + 底 tint · 绕开着色争议</span>
+    </div>
+    <div class="panel-body"><div class="md"></div></div>
+  </section>
+
+  <section class="panel scheme-d">
+    <div class="panel-head">
+      <span class="tag">D</span>
+      <span class="name">OpenCode 风格散文色</span>
+      <span class="desc">新增 prose-* 低饱和 token · 需 DESIGN.md 增补</span>
+    </div>
+    <div class="panel-body"><div class="md"></div></div>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var tpl = document.getElementById('sample');
+    document.querySelectorAll('.panel .md').forEach(function (host) {
+      host.appendChild(tpl.content.cloneNode(true));
+    });
+  })();
+
+  var grid = document.getElementById('grid');
+  var btns = document.querySelectorAll('.focus-btn');
+  btns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var f = b.dataset.focus;
+      var wasActive = b.classList.contains('active');
+      btns.forEach(function (x) { x.classList.remove('active'); });
+      grid.classList.remove('focus-a','focus-b','focus-c','focus-d');
+      if (!wasActive) {
+        b.classList.add('active');
+        grid.classList.add('focus-' + f);
+      }
+    });
+  });
+</script>
+</body>
+</html>
