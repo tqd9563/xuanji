@@ -65,6 +65,13 @@
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
   --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
 
+  /* Markdown 散文色(可选输出配色「散文色」方案;详见 DESIGN.md §2 Markdown 散文色)
+     chroma 压在 ≤0.09,与状态色(最低 0.11)拉开饱和度档差,不争状态语义 */
+  --prose-h1:     oklch(0.75 0.09 200);
+  --prose-h2:     oklch(0.72 0.07 260);
+  --prose-h3:     oklch(0.70 0.05 160);
+  --prose-strong:  oklch(0.80 0.08 85);
+
   /* 字 */
   --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -621,6 +628,31 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md td { font-variant-numeric: tabular-nums; }
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
+
+/* Claude 输出配色:由 <html data-md-color="..."> 驱动,默认不写属性即保持现状(全 ink)。
+   仅覆写标题/加粗文字色;链接(恒 jade)、代码(恒 surface-2 底)、blockquote(恒 muted)不动。
+   详见 DESIGN.md §2 Markdown 散文色。 */
+
+/* 玉色锚点:H1 品牌色 + 左条,H2 加结构回响 */
+[data-md-color="jade"] .md h1 {
+  color: var(--jade);
+  border-left: 3px solid var(--jade);
+  padding-left: 8px;
+}
+[data-md-color="jade"] .md h2 {
+  border-left: 3px solid var(--line);
+  padding-left: 8px;
+}
+[data-md-color="jade"] .md h3 { font-weight: 600; }
+[data-md-color="jade"] .md h4 { color: var(--muted); font-weight: 600; }
+
+/* 散文色:标题与加粗用 prose-* 低饱和 token */
+[data-md-color="prose"] .md h1 { color: var(--prose-h1); }
+[data-md-color="prose"] .md h2 { color: var(--prose-h2); }
+[data-md-color="prose"] .md h3 { color: var(--prose-h3); font-weight: 600; }
+[data-md-color="prose"] .md h4 { color: var(--muted); font-weight: 600; }
+[data-md-color="prose"] .md strong { color: var(--prose-strong); }
+
 
 /* 代码块复制按钮。定位壳套在 pre 外面而不是 pre 自己:pre 横向滚动,
    absolute 子元素会跟着滚走,按钮必须钉在可视区右上角。 */

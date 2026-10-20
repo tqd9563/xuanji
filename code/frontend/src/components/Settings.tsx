@@ -197,6 +197,11 @@ const CARD_TABS = [
   { v: 'high' as const, label: '偏高时' },
   { v: 'off' as const, label: '不显示' },
 ];
+const MD_COLOR_TABS = [
+  { v: 'default' as const, label: '默认' },
+  { v: 'jade' as const, label: '玉色锚点' },
+  { v: 'prose' as const, label: '散文色' },
+];
 
 /**
  * CPU 黄/红阈值:滑杆草稿态。黄 ≥ 红时说明转 amber 并不保存(判色继续用上次合法值),
@@ -541,6 +546,7 @@ export function Settings({
         reduceMotion: DEFAULT_LOCAL.reduceMotion,
         stowIdle: DEFAULT_LOCAL.stowIdle,
         stowDone: DEFAULT_LOCAL.stowDone,
+        mdColor: DEFAULT_LOCAL.mdColor,
       });
       patchWall(WALL_DEFAULTS);
     } else if (id === 'keys') {
@@ -791,6 +797,9 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ reduceMotion: v })}
           />
+        </SettingsRow>
+        <SettingsRow hit={hit} label="输出配色" desc="Claude 输出的标题与加粗着色;默认全白靠字重" scope="local">
+          <Tabs value={local.mdColor} options={MD_COLOR_TABS} onChange={(v) => patchLocal({ mdColor: v })} />
         </SettingsRow>
         <SettingsGroup show={!searching}>会话看板</SettingsGroup>
         <SettingsRow hit={hit} label="「空闲」默认展示" desc="折叠态显示最近几张,更早的点列头展开" scope="local">

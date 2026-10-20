@@ -23,6 +23,8 @@ export type FontScale = 'sm' | 'md' | 'lg';
 export type MotionPref = 'system' | 'on' | 'off';
 /** 会话卡片上的内存/CPU 数字:始终 / 偏高时 / 不显示 */
 export type CardMetric = 'always' | 'high' | 'off';
+/** Claude 输出 markdown 的配色方案:default 全白靠字重 / jade H1 玉色锚点 / prose 低饱和散文色 */
+export type MdColor = 'default' | 'jade' | 'prose';
 
 export interface LocalPrefs {
   /** `mod` = ⌘⏎ 发送 / Enter 换行(现状);`enter` = Enter 发送 / ⇧⏎ 换行 */
@@ -40,6 +42,8 @@ export interface LocalPrefs {
   cardMem: CardMetric;
   /** 卡片显示 CPU 数字(默认只在偏高时,避免挤压标题) */
   cardCpu: CardMetric;
+  /** Claude 输出 markdown 的配色方案(本机) */
+  mdColor: MdColor;
   keymap: Keymap;
 }
 
@@ -52,6 +56,7 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   stowDone: 5,
   cardMem: 'always',
   cardCpu: 'high',
+  mdColor: 'default',
   keymap: KEYMAP_DEFAULTS,
 };
 
@@ -72,6 +77,7 @@ function normalizeLocal(raw: unknown): LocalPrefs {
     stowDone: stowOf(o.stowDone, DEFAULT_LOCAL.stowDone),
     cardMem: oneOf(o.cardMem, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardMem),
     cardCpu: oneOf(o.cardCpu, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardCpu),
+    mdColor: oneOf(o.mdColor, ['default', 'jade', 'prose'] as const, DEFAULT_LOCAL.mdColor),
     keymap: normalizeKeymap(o.keymap),
   };
 }
@@ -139,6 +145,7 @@ export function applyLocalToDom(p: LocalPrefs = local) {
   el.dataset.fontScale = p.fontScale;
   el.dataset.motion = p.reduceMotion;
   el.dataset.turnHead = String(p.turnHead);
+  el.dataset.mdColor = p.mdColor;
 }
 
 /* ---------- 账户偏好 ---------- */
