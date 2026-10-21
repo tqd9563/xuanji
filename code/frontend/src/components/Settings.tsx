@@ -69,18 +69,21 @@ interface RowProps {
   scope: 'local' | 'acct';
   children: React.ReactNode;
   off?: boolean;
+  /** 标签区下方的附加内容(如即时预览小样) */
+  extra?: React.ReactNode;
   /** 当前搜索词的命中判定;不命中即整行不渲染 */
   hit: (...text: (string | undefined)[]) => boolean;
 }
 
 /** 一行设置。scope 决定行尾那枚标记,是这个组件的语义核心 */
-export function SettingsRow({ label, desc, scope, children, off, hit }: RowProps) {
+export function SettingsRow({ label, desc, scope, children, off, extra, hit }: RowProps) {
   if (!hit(label, desc)) return null;
   return (
     <div className={cn('stg-row', off && 'is-off')}>
       <div className="stg-lab">
         <span>{label}</span>
         {desc && <small>{desc}</small>}
+        {extra}
       </div>
       <div className="stg-ctl">{children}</div>
       <span className="stg-scope" data-scope={scope}>
@@ -196,6 +199,10 @@ const CARD_TABS = [
   { v: 'always' as const, label: '始终' },
   { v: 'high' as const, label: '偏高时' },
   { v: 'off' as const, label: '不显示' },
+];
+const MD_HL_TABS = [
+  { v: 'off' as const, label: '关' },
+  { v: 'on' as const, label: '开' },
 ];
 
 /**
@@ -541,6 +548,7 @@ export function Settings({
         reduceMotion: DEFAULT_LOCAL.reduceMotion,
         stowIdle: DEFAULT_LOCAL.stowIdle,
         stowDone: DEFAULT_LOCAL.stowDone,
+        mdHighlight: DEFAULT_LOCAL.mdHighlight,
       });
       patchWall(WALL_DEFAULTS);
     } else if (id === 'keys') {
@@ -777,6 +785,24 @@ export function Settings({
             ]}
             onChange={(v) => patchLocal({ fontScale: v })}
           />
+        </SettingsRow>
+        <SettingsRow
+          hit={hit}
+          label="回答高亮"
+          desc="给 Claude 回答里的标题与加粗上色,正文与链接不变"
+          scope="local"
+          extra={
+            <div className="stg-peek" aria-hidden="true">
+              <div className="md">
+                <h2>标题</h2>
+                <p>
+                  正文里的<strong>加粗</strong>与 <code>行内码</code>,<a>链接</a>
+                </p>
+              </div>
+            </div>
+          }
+        >
+          <Tabs value={local.mdHighlight} options={MD_HL_TABS} onChange={(v) => patchLocal({ mdHighlight: v })} />
         </SettingsRow>
         <SettingsRow hit={hit} label="吸顶轮次头" desc="提问滚出视口后在顶部显示当前轮" scope="local">
           <Switch on={local.turnHead} onChange={(v) => patchLocal({ turnHead: v })} />
