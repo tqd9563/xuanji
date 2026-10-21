@@ -1,5 +1,5 @@
 ### 新增
-- **Markdown 输出色高亮原型**:wiki/design 新增 `prototype-md-colors.html`,在同一篇真实结构样例上并排对比四套标题/加粗着色方案(A 明度阶梯 / B 玉色锚点 / C 结构色带 / D OpenCode 风格散文色),带单选全宽查看;token 与 DESIGN.md 同源,供评审选定方向后再落代码。
-- **Claude 输出配色(玉色锚点 / 散文色)**:设置 › 外观 › 阅读新增「输出配色」三档开关(默认 / 玉色锚点 / 散文色),默认保持现状(全白靠字重)。玉色锚点 = H1 用 jade 文字 + 左条、H2 加结构回响;散文色 = 标题与加粗用新增 `--prose-*` 低饱和 token(chroma ≤0.09,与状态色正交)。改 `<html data-md-color>` 由 CSS 接管,只覆写标题/加粗文字色,链接/代码/blockquote 不动;存本机 localStorage,手机与 Mac 各自一套。
+- **Claude 回答高亮**：回答里的一、二级标题与表头改为紫色，三级及以下标题为粉色，加粗为琥珀色，列表序号与圆点退为浅灰；正文、链接、行内码、代码块不变。长回答扫一眼即可找到骨架与结论，原先全部是同一种白。
+- **设置 › 外观 › 阅读「回答高亮」**：关 / 开两档，默认开，带即时预览小样；关闭即回到全白靠字重的旧观感。存本机，手机与 Mac 各自一套。
 ### 变更
-- **DESIGN.md 增补散文色词汇**:新增 `--prose-h1/h2/h3/strong` 四个 token + §2「Markdown 散文色」小节 +「散文色与状态色正交规则」Named Rule,圈定 prose 色只用于 markdown 正文标题/加粗、chroma 与状态色拉开档差、永不扩散到 UI 状态元素。
+- **DESIGN.md 增补回答高亮词汇**：新增 `md-heading / md-heading-3 / md-strong / md-quote` 四个 token 与「回答高亮作用域规则」，限定它们只用于 markdown 正文，作为「状态色即语义规则」唯一的例外。获批原型见 `wiki/design/prototype-md-highlight.html`。

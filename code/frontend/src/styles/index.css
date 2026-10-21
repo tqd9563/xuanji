@@ -65,12 +65,12 @@
   --tint-muted: color-mix(in oklab, var(--muted) 12%, transparent);
   --tint-violet: color-mix(in oklab, var(--violet) 14%, transparent);
 
-  /* Markdown 散文色(可选输出配色「散文色」方案;详见 DESIGN.md §2 Markdown 散文色)
-     chroma 压在 ≤0.09,与状态色(最低 0.11)拉开饱和度档差,不争状态语义 */
-  --prose-h1:     oklch(0.75 0.09 200);
-  --prose-h2:     oklch(0.72 0.07 260);
-  --prose-h3:     oklch(0.70 0.05 160);
-  --prose-strong:  oklch(0.80 0.08 85);
+  /* Claude 回答高亮(设置 › 外观 › 回答高亮;DESIGN.md §2「Markdown 回答高亮」)。
+     只在 .md 正文里用:结构=紫(模型给出的骨架),h3 转 +45° 邻色,强调=琥珀 */
+  --md-heading:   oklch(0.73 0.11 300);
+  --md-heading-3: oklch(0.76 0.11 345);
+  --md-strong:    oklch(0.78 0.14 80);
+  --md-quote:     oklch(0.64 0.085 300);
 
   /* 字 */
   --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
@@ -629,29 +629,17 @@ button.tok-row:focus-visible { outline: 2px solid var(--jade); outline-offset: -
 .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
 .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
 
-/* Claude 输出配色:由 <html data-md-color="..."> 驱动,默认不写属性即保持现状(全 ink)。
-   仅覆写标题/加粗文字色;链接(恒 jade)、代码(恒 surface-2 底)、blockquote(恒 muted)不动。
-   详见 DESIGN.md §2 Markdown 散文色。 */
-
-/* 玉色锚点:H1 品牌色 + 左条,H2 加结构回响 */
-[data-md-color="jade"] .md h1 {
-  color: var(--jade);
-  border-left: 3px solid var(--jade);
-  padding-left: 8px;
-}
-[data-md-color="jade"] .md h2 {
-  border-left: 3px solid var(--line);
-  padding-left: 8px;
-}
-[data-md-color="jade"] .md h3 { font-weight: 600; }
-[data-md-color="jade"] .md h4 { color: var(--muted); font-weight: 600; }
-
-/* 散文色:标题与加粗用 prose-* 低饱和 token */
-[data-md-color="prose"] .md h1 { color: var(--prose-h1); }
-[data-md-color="prose"] .md h2 { color: var(--prose-h2); }
-[data-md-color="prose"] .md h3 { color: var(--prose-h3); font-weight: 600; }
-[data-md-color="prose"] .md h4 { color: var(--muted); font-weight: 600; }
-[data-md-color="prose"] .md strong { color: var(--prose-strong); }
+/* Claude 回答高亮:<html data-md-hl="on"> 时生效(off 即现状全白靠字重)。
+   只改颜色不改排版;链接(恒 jade)、行内码、代码块正文不动。 */
+[data-md-hl="on"] .md :is(h1, h2) { color: var(--md-heading); }
+[data-md-hl="on"] .md :is(h3, h4, h5, h6) { color: var(--md-heading-3); }
+[data-md-hl="on"] .md strong { color: var(--md-strong); }
+/* 标题里的加粗跟随标题色,不在一行里同时出现两种色相 */
+[data-md-hl="on"] .md :is(h1, h2, h3, h4, h5, h6) strong { color: inherit; }
+[data-md-hl="on"] .md th { color: var(--md-heading); }
+[data-md-hl="on"] .md blockquote { border-left-color: var(--md-quote); }
+/* 列表记号退后一层,让正文与加粗成为视线落点 */
+[data-md-hl="on"] .md :is(ul, ol) > li::marker { color: var(--faint); }
 
 
 /* 代码块复制按钮。定位壳套在 pre 外面而不是 pre 自己:pre 横向滚动,
@@ -1880,6 +1868,11 @@ body.wall-glass .modal.stg-modal { background: var(--surface-opaque); }
 .stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
 .stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
 .stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
+.stg-peek { margin-top: 6px; }
+.stg-peek .md { display: flex; gap: 12px; align-items: baseline; font-size: 0.75rem; }
+.stg-peek .md h2 { font-size: 0.75rem; margin: 0; }
+.stg-peek .md p { margin: 0; }
+.stg-peek .md code { font-size: 0.6875rem; }
 .stg-thumbs { display: flex; gap: 8px; }
 /* 文件选择:input 视觉上藏起但不 display:none —— 部分 WebKit 对 display:none 的 file input 不响应 label 激活 */
 .stg-file { position: relative; overflow: hidden; cursor: pointer; }
