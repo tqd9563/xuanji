@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { getAccount, useAccountPrefs, useLocalPrefs, type SendKey } from '@/lib/prefs';
 import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
-import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey } from '@/lib/dispatch';
+import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey, toggleOption, composeAnswer } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
 import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
@@ -2298,13 +2298,15 @@ function QuestionCard({
   item: Extract<ChatItem, { t: 'question' }>;
   onAnswer: (id: string, answers: Record<string, string>) => void;
 }) {
-  const [sel, setSel] = useState<Record<string, string>>({});
+  const [sel, setSel] = useState<Record<string, string[]>>({});
   const [custom, setCustom] = useState<Record<string, string>>({});
   const answered = item.answers;
   const single = item.questions.length === 1 && !item.questions[0]!.multiSelect;
 
   const submit = (answers: Record<string, string>) => onAnswer(item.requestId, answers);
-  const ready = item.questions.every((q) => (custom[q.question] ?? sel[q.question] ?? '').trim());
+  const answerOf = (q: QuestionSpec) =>
+    composeAnswer(sel[q.question] ?? [], custom[q.question] ?? '', q.multiSelect === true);
+  const ready = item.questions.every((q) => answerOf(q));
 
   return (
     <div className={cn('approval qcard', answered && 'resolved')}>
@@ -2322,17 +2324,12 @@ function QuestionCard({
                 {q.options.map((o) => (
                   <button
                     key={o.label}
-                    className={cn('q-opt', sel[q.question] === o.label && 'sel')}
+                    className={cn('q-opt', sel[q.question]?.includes(o.label) && 'sel')}
+                    aria-pressed={q.multiSelect ? (sel[q.question]?.includes(o.label) ?? false) : undefined}
                     onClick={() => {
                       if (single) return submit({ [q.question]: o.label });
-                      setSel((prev) => {
-                        if (q.multiSelect) {
-                          const cur = (prev[q.question] ?? '').split('、').filter(Boolean);
-                          const next = cur.includes(o.label) ? cur.filter((x) => x !== o.label) : [...cur, o.label];
-                          return { ...prev, [q.question]: next.join('、') };
-                        }
-                        return { ...prev, [q.question]: o.label };
-                      });
+                      const next = toggleOption(sel[q.question] ?? [], o.label, q.multiSelect === true);
+                      setSel((prev) => ({ ...prev, [q.question]: next }));
                     }}
                   >
                     <b>{o.label}</b>
@@ -2364,7 +2361,7 @@ function QuestionCard({
             onClick={() => {
               const answers: Record<string, string> = {};
               for (const q of item.questions) {
-                answers[q.question] = (custom[q.question] ?? sel[q.question] ?? '').trim();
+                answers[q.question] = answerOf(q);
               }
               submit(answers);
             }}

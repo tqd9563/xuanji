@@ -11,6 +11,19 @@ export interface QuestionSpec {
   options: { label: string; description?: string }[];
 }
 
+/** 提问卡选中态的单次点击:单选替换,多选切换(保持点击顺序) */
+export function toggleOption(cur: string[], label: string, multi: boolean): string[] {
+  if (!multi) return [label];
+  return cur.includes(label) ? cur.filter((x) => x !== label) : [...cur, label];
+}
+
+/** 提问卡单题最终答案:单选时自定义回答覆盖选项;多选时选项与自定义回答并列 */
+export function composeAnswer(picked: string[], custom: string, multi: boolean): string {
+  const c = custom.trim();
+  if (!multi) return c || (picked[0] ?? '');
+  return [...picked, ...(c ? [c] : [])].join('、');
+}
+
 /** 消息发送时间(ms epoch)。实时消息在到达时打点,历史消息取 session jsonl 的 ts;
  *  工具卡/审批等非对话事件无此字段(源数据本就没有时间),不显示时间也不参与跨天分隔。 */
 /** 随消息内联发送的图片(输入框里粘贴的截图)。data 是不带 data: 前缀的 base64。 */
