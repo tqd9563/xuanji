@@ -50,7 +50,8 @@ export interface BtwState {
   inFlight: { requestId: string; question: string; startedAt: number } | null;
   records: SideQuestion[];
   /** 最近一次失败(含取消):面板据此显示重问/改到主对话问 */
-  error: { requestId: string; question: string; message: string } | null;
+  /** at = 这一问的发起时刻(被前置拦截、没走到 btw-start 的退化为报错时刻) */
+  error: { requestId: string; question: string; message: string; at: number } | null;
 }
 
 const BTW_EMPTY: BtwState = { sessionId: null, inFlight: null, records: [], error: null };
@@ -458,7 +459,12 @@ export function useDispatch() {
         setBtw((b) => ({
           ...b,
           inFlight: null,
-          error: { requestId: String(e.requestId), question: String(e.question), message: String(e.message) },
+          error: {
+            requestId: String(e.requestId),
+            question: String(e.question),
+            message: String(e.message),
+            at: b.inFlight?.startedAt ?? Date.now(),
+          },
         }));
         break;
       case 'error':

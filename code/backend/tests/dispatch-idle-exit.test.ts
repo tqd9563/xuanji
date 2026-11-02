@@ -8,7 +8,7 @@ import path from 'node:path';
  * 超过 N 分钟无输入/输出 → 结束子进程但保留会话(卡片/记录/回放),下条消息以 --resume 冷启动。
  * 用假 query() 驱动,不连真实 SDK 子进程;假流在 interrupt 时结束,模拟进程退出。
  */
-const { fakes, calls } = vi.hoisted(() => ({ fakes: [] as any[], calls: [] as any[] }));
+const { fakes, calls, asked } = vi.hoisted(() => ({ fakes: [] as any[], calls: [] as any[], asked: [] as string[] }));
 
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   query: vi.fn((arg: any) => {
@@ -39,6 +39,10 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
         },
         interrupt: vi.fn(async () => close()),
         setModel: vi.fn(async () => {}),
+        askSideQuestion: vi.fn(async (q: string) => {
+          asked.push(q);
+          return { response: '答', synthetic: false };
+        }),
         getContextUsage: vi.fn(async () => ({ percentage: 0 })),
         usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET: vi.fn(async () => ({ rate_limits_available: false })),
       },
@@ -124,6 +128,26 @@ describe('派发会话空闲自动退出', () => {
     await flush();
     expect(s.state).toBe('working');
     expect(liveDispatches().find((d) => d.sessionId === 'sess-resume')?.idleExited).toBeUndefined();
+  });
+
+  it('退出后旁路提问:静默 --resume 冷启动再问,不推用户消息、不开新回合', async () => {
+    const { s } = await idleSession('sess-btw');
+    await sweepIdleDispatches(10, s.lastEventAt + 10 * MIN);
+    await flush();
+    const before = calls.length;
+    const evs: any[] = [];
+    s.subscribe((e) => evs.push(e));
+    await s.askSideQuestion('暗号?');
+    expect(calls.length).toBe(before + 1);
+    expect(calls[calls.length - 1].options).toMatchObject({ resume: 'sess-btw' });
+    expect(s.hibernated).toBe(false);
+    expect(asked).toEqual(['暗号?']);
+    // 没有往主对话推任何东西:无 user-echo、状态仍是 idle,答案走 btw-result
+    expect(evs.some((e) => e.ev === 'user-echo')).toBe(false);
+    expect(s.state).toBe('idle');
+    expect(evs.find((e) => e.ev === 'btw-result')?.record.answer).toBe('答');
+    // 问完照常可再被空闲巡检收掉
+    expect(await sweepIdleDispatches(10, s.lastEventAt + 10 * MIN)).toContain('sess-btw');
   });
 
   it('设置变更即生效:阈值随每次巡检现读,调短后同一时刻即可命中', async () => {

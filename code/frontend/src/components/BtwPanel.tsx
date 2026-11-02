@@ -102,7 +102,8 @@ export function BtwPanel({ state, cwd, mainIdle, onClose, onCancel, onRetry, onT
 
   const showing: 'ask' | 'err' | 'done' | 'empty' = inFlight ? 'ask' : error ? 'err' : cur ? 'done' : 'empty';
   const headQ = inFlight?.question ?? error?.question ?? cur?.question ?? '';
-  const headT = inFlight ? fmtTime(inFlight.startedAt) : cur ? fmtTime(cur.createdAt) : '';
+  // 报错态要用这一问自己的时刻:之前退化成 cur.createdAt,显示的是上一条成功记录的时间
+  const headT = inFlight ? fmtTime(inFlight.startedAt) : error ? fmtTime(error.at) : cur ? fmtTime(cur.createdAt) : '';
 
   return (
     <aside className="btw" aria-label="旁路提问">
