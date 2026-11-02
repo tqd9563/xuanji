@@ -785,11 +785,10 @@ export class DispatchSession {
       this.emit({ ev: 'btw-error', requestId, question, message: '会话尚未就绪,发出第一条消息后再问' });
       return;
     }
-    if (this.hibernated) {
-      // 旁路提问复用主会话的子进程;进程已空闲退出时不为一句旁路提问冷启动整个会话
-      this.emit({ ev: 'btw-error', requestId, question, message: '会话已空闲自动退出,先发一条消息接上再问' });
-      return;
-    }
+    // 进程已空闲退出:静默冷启动(--resume,不推任何用户消息)再问。实测(SDK 0.3.280)resume 时历史即已载入、
+    // 未收到消息的进程可直接应答 side_question,转录只多 mode/cost-state 两行元数据,主对话上下文零增长。
+    // 问完不额外处理,照常由空闲巡检再收掉。
+    if (this.hibernated) this.wake();
     const ac = new AbortController();
     this.sideQuestion = { requestId, ac };
     this.emit({ ev: 'btw-start', requestId, question });
@@ -859,11 +858,13 @@ export class DispatchSession {
     await this.end();
   }
 
-  /** 冷启动接回:新输入队列 + `--resume <sessionId>`(不分叉,沿用同一会话) */
+  /**
+   * 冷启动接回:新输入队列 + `--resume <sessionId>`(不分叉,沿用同一会话)。
+   * 不碰 turnEnded:旁路提问接回时并没有开新一轮,要开的话由 send() 自己置位。
+   */
   private wake() {
     this.hibernated = false;
     this.input = new AsyncQueue<SDKUserMessage>();
-    this.turnEnded = false;
     this.startQuery(this.sessionId ?? this.resumeFrom ?? undefined, false);
   }
 }
