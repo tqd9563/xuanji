@@ -1,5 +1,7 @@
 /** Adapter 契约测试:fixture 即契约,CLI 升级破坏格式时这里先红(T1)。 */
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   decodeProjectDir,
@@ -25,6 +27,23 @@ describe('decodeProjectDir', () => {
   it('无 jsonl 时退化为朴素替换', async () => {
     const p = await decodeProjectDir(path.join(FIX, 'projects'), '-Users-me-nothing');
     expect(p).toBe('/Users/me/nothing');
+  });
+  it('无 jsonl 时沿文件系统还原含 _ . - 的真实路径,同前缀兄弟目录不串', async () => {
+    // macOS 的 tmpdir 经 /var → /private/var 软链,取真实路径才与编码串逐级对得上
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'xj-decode-')));
+    for (const d of ['baize', 'baize_web', 'baize-runs/.narrate-cwd', 'a.b/c-d']) {
+      fs.mkdirSync(path.join(base, d), { recursive: true });
+    }
+    const enc = (p: string) => p.replace(/[^a-zA-Z0-9]/g, '-');
+    const root = path.join(FIX, 'projects');
+    try {
+      for (const d of ['baize', 'baize_web', 'baize-runs/.narrate-cwd', 'a.b/c-d']) {
+        const real = path.join(base, d);
+        expect(await decodeProjectDir(root, enc(real))).toBe(real);
+      }
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 
