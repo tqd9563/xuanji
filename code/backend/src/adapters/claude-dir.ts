@@ -12,9 +12,11 @@ import type { HistoryEntry, Memory, Replay, ReplayEvent, Skill } from '../types.
 // ---------- 项目目录 ----------
 
 /**
- * 解码 projects/ 目录名 → 真实路径。编码规则是 '/'→'-',但路径本身可含 '-',
+ * 解码 projects/ 目录名 → 真实路径。编码规则是「非字母数字一律 → '-'」('/' '_' '.' '-' 都变 '-'),
  * 无法纯文本反解。策略:优先从该目录最新 session jsonl 里嗅探 "cwd" 字段;
- * 兜底用朴素替换。
+ * 没有 jsonl(会话被 Claude Code 按保留期清理、只剩 memory/)时沿文件系统逐级比对真实目录名;
+ * 都失败才用朴素替换。曾只有朴素替换:~/baize_web 被还原成 /Users/x/baize/web,
+ * 判为「目录已不存在」后整个项目从列表与 ⌘D 候选里消失。
  */
 export async function decodeProjectDir(projectsRoot: string, dirName: string): Promise<string> {
   const dir = path.join(projectsRoot, dirName);
@@ -33,7 +35,28 @@ export async function decodeProjectDir(projectsRoot: string, dirName: string): P
   } catch {
     /* fall through */
   }
-  return dirName.replace(/-/g, '/');
+  return (await probeFsPath(dirName)) ?? dirName.replace(/-/g, '/');
+}
+
+const encodeName = (name: string) => name.replace(/[^a-zA-Z0-9]/g, '-');
+
+/** 从根目录逐级 readdir,找「编码后能接上剩余串」的子目录;同前缀兄弟(baize 与 baize_web)长名优先,走不通再回溯 */
+async function probeFsPath(dirName: string): Promise<string | null> {
+  const walk = async (dir: string, rest: string): Promise<string | null> => {
+    if (!rest) return dir;
+    const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    const hits = entries
+      .filter((e) => e.isDirectory() || e.isSymbolicLink())
+      .map((e) => ({ name: e.name, enc: '-' + encodeName(e.name) }))
+      .filter(({ enc }) => rest === enc || rest.startsWith(enc + '-'))
+      .sort((a, b) => b.enc.length - a.enc.length);
+    for (const { name, enc } of hits) {
+      const found = await walk(path.join(dir, name), rest.slice(enc.length));
+      if (found) return found;
+    }
+    return null;
+  };
+  return dirName.startsWith('-') ? walk('/', dirName) : null;
 }
 
 async function sniffCwd(jsonlPath: string): Promise<string | null> {
