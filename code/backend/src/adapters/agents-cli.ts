@@ -3,6 +3,9 @@
  * 失败降级为空列表 + 健康标记,不 crash(T6 风险缓解)。
  */
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 import type { AgentSession, SessionState } from '../types.js';
 
@@ -148,10 +151,26 @@ export function agentProcessesFrom(raw: unknown[], alive: (pid: number) => boole
   return out;
 }
 
+/** 系统 PATH 上的 `claude`(用户终端那份);派发会话用的是 SDK 自带的另一份,见 sdkCliVersion */
 export async function cliVersion(): Promise<string | null> {
   try {
     const { stdout } = await execFileP('claude', ['--version'], { timeout: 10_000 });
     return stdout.trim().split('\n')[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Agent SDK 自带 CLI 的版本(派发会话、模型目录探测实际跑的那份),格式对齐 `claude --version`。
+ * 它与系统 `claude` 各自升级、版本常不一致(2026-11 系统 2.1.312 vs SDK 自带 2.1.280),
+ * 模型目录的缓存键必须用这份,否则升级 SDK 后启动预热会误判命中。读不到返回 null。
+ */
+export function sdkCliVersion(): string | null {
+  try {
+    const entry = createRequire(import.meta.url).resolve('@anthropic-ai/claude-agent-sdk');
+    const manifest = JSON.parse(readFileSync(join(dirname(entry), 'manifest.json'), 'utf8')) as { version?: unknown };
+    return typeof manifest.version === 'string' ? `${manifest.version} (Claude Code)` : null;
   } catch {
     return null;
   }

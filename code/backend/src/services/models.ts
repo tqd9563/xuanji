@@ -7,12 +7,12 @@
  *
  * 两条刷新路径:
  *  - 每个派发会话 init 之后顺手拉一次(零成本,与斜杠命令目录同款);
- *  - 后端启动时若缓存的 CLI 版本与当前不一致,起一个不发消息的空会话专门拉一次
+ *  - 后端启动时若缓存的 CLI 版本(SDK 自带那份,非系统 `claude`)与当前不一致,起一个不发消息的空会话专门拉一次
  *    (实测 ~8s、0 token),这样升级 CLI 后打开面板不用先派发一个会话才能看到新模型。
  * 目录落 meta 表(单键 JSON),重启后立刻可用;fresh=false 表示这是缓存而非本次会话报的。
  */
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { cliVersion } from '../adapters/agents-cli.js';
+import { sdkCliVersion } from '../adapters/agents-cli.js';
 import type { Storage } from '../storage/db.js';
 
 const META_KEY = 'model-catalog';
@@ -31,7 +31,7 @@ export type ModelInfo = {
 
 export interface ModelCatalog {
   models: ModelInfo[];
-  /** 拉取目录时的 CLI 版本(`claude --version` 首行);null = 未探测到 */
+  /** 拉取目录时 SDK 自带 CLI 的版本(如 `2.1.321 (Claude Code)`);null = 未探测到 */
   cliVersion: string | null;
   at: number;
 }
@@ -130,7 +130,7 @@ export async function probeModelCatalog(): Promise<ModelInfo[]> {
  * 探测失败只记日志 —— 前端有写死的兜底清单,少的只是新模型那几行。
  */
 export async function warmModelCatalog(storage: Storage): Promise<'hit' | 'refreshed' | 'failed'> {
-  const version = await cliVersion();
+  const version = sdkCliVersion();
   const cached = cachedModelCatalog(storage);
   if (cached && version && cached.cliVersion === version) return 'hit';
   try {

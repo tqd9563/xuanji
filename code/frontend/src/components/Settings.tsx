@@ -33,7 +33,7 @@ import {
   type ActionId,
 } from '@/lib/keymap';
 import { STOW_OPTS, stowLabel } from '@/lib/stow';
-import { modelDetail, modelLabel, useModelCatalog } from '@/lib/models';
+import { modelDetail, modelLabel, primaryModels, useModelCatalog } from '@/lib/models';
 import { WALL_DEFAULTS, type WallState } from '@/lib/wallpaper';
 import { cn } from '@/lib/utils';
 import { api as termApi } from '@/api/client';
@@ -479,7 +479,7 @@ export function Settings({
   /** 模型候选来自后端目录(CLI /model 面板那份);已存的值不在目录里(手输 id)也要显示出来 */
   const { models } = useModelCatalog();
   const modelOpts = useMemo(() => {
-    const vals = ['', ...models.map((m) => m.value)];
+    const vals = ['', ...primaryModels(models).map((m) => m.value)];
     return prefs.model && !vals.includes(prefs.model) ? [...vals, prefs.model] : vals;
   }, [models, prefs.model]);
   const bodyRef = useRef<HTMLDivElement>(null);
