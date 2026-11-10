@@ -14,7 +14,7 @@ import {
   type Query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import { cliVersion, listAgents } from '../adapters/agents-cli.js';
+import { listAgents, sdkCliVersion } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
@@ -595,8 +595,9 @@ export class DispatchSession {
   private refreshModels() {
     const q = this.q;
     if (typeof q?.supportedModels !== 'function') return;
-    void Promise.all([q.supportedModels(), cliVersion()])
-      .then(([raw, version]) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), version))
+    void q
+      .supportedModels()
+      .then((raw) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), sdkCliVersion()))
       .catch(() => {});
   }
 
