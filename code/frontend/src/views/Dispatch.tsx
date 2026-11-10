@@ -6,7 +6,7 @@ import { matchKey } from '@/lib/keymap';
 import { usePoll, refreshPoll, isTypingTarget, useIsMobile } from '@/lib/hooks';
 import { takeDispatchIntent, useDispatch, type ChatItem, type QuestionSpec, chatKey } from '@/lib/dispatch';
 import { resolveCwd } from '@/lib/quick-ask';
-import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, toSdkModel, useModelCatalog } from '@/lib/models';
+import { DEFAULT_MODEL, defaultEffortOf, findModel, modelDetail, modelLabel, normalizeModelValue, olderModels, primaryModels, toSdkModel, useModelCatalog } from '@/lib/models';
 import { canWrapup, cn, daySeparator, fmtTurnDur, idleStatusText, LONG_TURN_MS, markSeen, projHue } from '@/lib/utils';
 import { DropUp } from '@/components/DropUp';
 import { ResumePalette } from '@/components/ResumePalette';
@@ -363,11 +363,13 @@ export function Dispatch({ active }: { active: boolean }) {
   useEffect(() => {
     if (d.sessionId) refreshModels();
   }, [d.sessionId]);
-  /** 下拉/面板候选:目录行 + 当前选中的手输值(不在目录里也得让它显示出来) */
+  /** 下拉/面板候选:主列表(旧版本收起)+ 当前选中值(旧版本或手输 id,不在主列表里也得让它显示出来) */
   const modelOptions = useMemo(() => {
-    const vals = models.map((m) => m.value);
+    const vals = primaryModels(models).map((m) => m.value);
     return vals.includes(modelSel) ? vals : [...vals, modelSel];
   }, [models, modelSel]);
+  /** ⌘M 面板搜索时才出现的旧版本行 */
+  const olderModelOptions = useMemo(() => olderModels(models).map((m) => m.value), [models]);
   /** 会话进行中切模型:`default` 行不能原样发给 setModel,换成它解析到的真实 id */
   const liveModelOf = (v: string) => (v === DEFAULT_MODEL ? (findModel(models, v)?.resolvedModel ?? v) : v);
   const [effortSel, setEffortSel] = useState(initialEffort);
@@ -2062,6 +2064,7 @@ export function Dispatch({ active }: { active: boolean }) {
             emptyNoun="模型"
             value={d.started ? (normalizeModelValue(models, d.model) ?? d.model ?? modelSel) : modelSel}
             options={modelOptions}
+            searchOnlyOptions={olderModelOptions}
             labelOf={(m) => modelLabel(models, m)}
             detailOf={(m) => modelDetail(models, m)}
             initialQuery={modelQuery}

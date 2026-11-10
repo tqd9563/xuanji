@@ -64,6 +64,30 @@ export function normalizeModelValue(catalog: ModelOption[], v: string | null | u
   return looksLikeModelId(v) ? v.trim() : null;
 }
 
+/** 模型家族(按解析到的真实 id 判),认不出返回 null */
+function familyOf(m: ModelOption): string | null {
+  return /\b(opus|fable|sonnet|haiku)\b/i.exec((m.resolvedModel ?? m.value).replace(/-/g, ' '))?.[1]?.toLowerCase() ?? null;
+}
+
+/**
+ * 主列表的目录行:CLI 2.1.29x 起 supportedModels() 除了 `opus`/`fable` 这类别名行,还会附带一串
+ * 钉死版本的完整 id 行(claude-fable-5-1、claude-opus-4-8…)。同家族已有别名行时,完整 id 行
+ * 属于「旧版本」,不进默认列表,只在搜索时出现(见 olderModels);家族没有别名行时
+ * (如 2.1.280 目录里的 `claude-fable-5-1[1m]`)它就是该家族唯一入口,照常显示。
+ */
+export function primaryModels(catalog: ModelOption[]): ModelOption[] {
+  const aliased = new Set(
+    catalog.filter((m) => m.value !== DEFAULT_MODEL && !looksLikeModelId(m.value)).map(familyOf).filter(Boolean),
+  );
+  return catalog.filter((m) => !looksLikeModelId(m.value) || !aliased.has(familyOf(m)));
+}
+
+/** 被 primaryModels 收起的旧版本行(搜索时才出现) */
+export function olderModels(catalog: ModelOption[]): ModelOption[] {
+  const primary = new Set(primaryModels(catalog));
+  return catalog.filter((m) => !primary.has(m));
+}
+
 /** 发给 SDK 的 model:`default` 行不传(交给 CLI 默认),其余原样 */
 export function toSdkModel(v: string): string | undefined {
   return v === DEFAULT_MODEL ? undefined : v;
