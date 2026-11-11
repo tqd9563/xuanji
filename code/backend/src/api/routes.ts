@@ -31,6 +31,7 @@ import type { Storage } from '../storage/db.js';
 import type { SysmonSampler } from '../services/sysmon/sampler.js';
 import { isLocalRequest, type TerminalManager } from '../services/terminal.js';
 import { readGhostty, readSystemHotkeys } from '../adapters/ghostty.js';
+import type { LarkBridge } from '../services/lark/bridge.js';
 
 const DAY = 86_400_000;
 const execFileP = promisify(execFile);
@@ -46,6 +47,7 @@ export function createApi(
   scheduler: SchedulerService,
   sysmon?: SysmonSampler,
   terminals?: TerminalManager,
+  lark?: LarkBridge,
 ) {
   const api = new Hono();
 
@@ -146,7 +148,36 @@ export function createApi(
       // 调短空闲退出阈值时立即生效,不等下一分钟的巡检
       void sweepIdleDispatches(prefs.monitor.idleExit).catch(() => {});
     }
+    // 飞书中控启停即时生效:连 / 断长连接
+    if (patch && typeof patch === 'object' && 'lark' in patch) lark?.applyPrefs();
     return c.json({ prefs });
+  });
+
+  /* ---------- 飞书中控(设置 › 飞书) ---------- */
+  api.get('/lark/status', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    return c.json(await lark.status());
+  });
+  api.post('/lark/reconnect', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    await lark.reconnect();
+    return c.json(await lark.status());
+  });
+  /** 绑定码与解绑决定「谁能远程操作这台 Mac」:只接受本机直连,经反向代理进来的请求一律拒绝 */
+  api.post('/lark/bind-code', (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    if (!localOnly(c)) return c.json({ error: '只能在本机操作' }, 403);
+    return c.json(lark.createBindCode());
+  });
+  api.delete('/lark/owner', (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    if (!localOnly(c)) return c.json({ error: '只能在本机操作' }, 403);
+    lark.unbind();
+    return c.json({ ok: true });
+  });
+  api.post('/lark/test', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    return c.json(await lark.sendTest());
   });
 
   /** 系统监控最新快照(实时推送走 /ws/sysmon;这里给调试与首屏兜底,无缓存时现采一次) */

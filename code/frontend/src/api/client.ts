@@ -21,6 +21,7 @@ import type {
   SideQuestion,
   TermInfo,
   TermSessionInfo,
+  LarkStatus,
 } from './types';
 import type { SlashCmdInfo } from '@/lib/slash';
 import type { ModelOption } from '@/lib/models';
@@ -52,6 +53,12 @@ export const api = {
   prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
   putPrefs: (patch: Partial<AccountPrefs>) =>
     mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
+  /* 飞书中控(设置 › 飞书) */
+  larkStatus: () => get<LarkStatus>('/api/lark/status'),
+  larkReconnect: () => mutate<LarkStatus>('/api/lark/reconnect', 'POST', {}),
+  larkBindCode: () => mutate<{ code: string; expiresAt: number }>('/api/lark/bind-code', 'POST', {}),
+  larkUnbind: () => mutate<{ ok: boolean }>('/api/lark/owner', 'DELETE', {}),
+  larkTest: () => mutate<{ ok: boolean; error?: string }>('/api/lark/test', 'POST', {}),
   termInfo: () => get<TermInfo>('/api/terminal/info'),
   termCreate: (body: { cwd?: string; cols?: number; rows?: number }) =>
     mutate<{ session: TermSessionInfo }>('/api/terminal/sessions', 'POST', body),

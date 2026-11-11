@@ -17,6 +17,7 @@ import { warmModelCatalog } from './services/models.js';
 import { SysmonSampler } from './services/sysmon/sampler.js';
 import { sweepIdleDispatches } from './services/dispatch.js';
 import { TerminalManager } from './services/terminal.js';
+import { LarkBridge } from './services/lark/bridge.js';
 
 const storage = new Storage(config.dataDir);
 const scheduler = new SchedulerService(storage);
@@ -26,6 +27,9 @@ sysmon.start();
 // 全局终端:shell 会话跟后端进程走,页面刷新/切视图不杀。后端退出时 pty 主端随之关闭,
 // shell 收到 SIGHUP 自行退出——不另挂信号处理:exit(0) 会改变 launchd「非正常退出才重启」的语义
 const terminals = new TerminalManager();
+// 飞书中控:观察全部派发会话,启用时与飞书保持长连接(凭证由 lark-cli 配置档保管)
+const lark = new LarkBridge(storage);
+lark.start();
 // 空闲自动退出:每分钟巡检一次,阈值每次现读偏好(设置改动下一次巡检即生效;PUT /prefs 时另会立即巡检)
 setInterval(() => {
   void sweepIdleDispatches(readPrefs(storage).monitor.idleExit).catch(() => {});
@@ -47,7 +51,7 @@ void warmModelCatalog(storage)
 
 const app = new Hono();
 
-app.route('/api', createApi(storage, scheduler, sysmon, terminals));
+app.route('/api', createApi(storage, scheduler, sysmon, terminals, lark));
 
 // 看板娘模型文件。必须注册在下面的 SPA 兜底(app.get('*'))之前,否则会被兜底吃掉,
 // 前端拿到 200 + text/html 冒充 moc3,报错含糊难查(同 /assets/* 那条的教训)。

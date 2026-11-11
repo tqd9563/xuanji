@@ -57,6 +57,14 @@ export interface TerminalPrefs {
   navMode: 'keep' | 'hide';
 }
 
+/** 飞书中控(设置 › 飞书)。白名单与单聊 chat_id 不在这里:它们只能经绑定码写入,不随偏好整体回写 */
+export interface LarkPrefs {
+  /** 启用 = 保持与飞书的长连接 */
+  enabled: boolean;
+  /** 推送时机:锁屏时 / 关闭(从飞书发起的回合不受此限,始终回推) */
+  push: 'locked' | 'off';
+}
+
 export interface AccountPrefs {
   /** 新会话默认模型;空串 = 沿用上次用过的 */
   model: string;
@@ -79,6 +87,7 @@ export interface AccountPrefs {
   notify: NotifyPrefs;
   monitor: MonitorPrefs;
   terminal: TerminalPrefs;
+  lark: LarkPrefs;
 }
 
 /** 与前端 Dispatch 的既有默认值保持一致:权限免审批、模型与目录沿用上次 */
@@ -101,6 +110,8 @@ export const DEFAULT_PREFS: AccountPrefs = {
   },
   monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
   terminal: { cwdMode: 'session', navMode: 'keep' },
+  // 默认关:未登记机器人凭证时开着只会反复报「未配置」
+  lark: { enabled: false, push: 'locked' },
 };
 
 const INTERVALS = [5, 10, 30, 60] as const;
@@ -137,6 +148,14 @@ function sanitizeTerminal(input: unknown, base: TerminalPrefs): TerminalPrefs {
   return {
     cwdMode: t.cwdMode === 'session' || t.cwdMode === 'last' || t.cwdMode === 'home' ? t.cwdMode : base.cwdMode,
     navMode: t.navMode === 'keep' || t.navMode === 'hide' ? t.navMode : base.navMode,
+  };
+}
+
+function sanitizeLark(input: unknown, base: LarkPrefs): LarkPrefs {
+  const l = (input ?? {}) as Partial<LarkPrefs>;
+  return {
+    enabled: bool(l.enabled, base.enabled),
+    push: l.push === 'locked' || l.push === 'off' ? l.push : base.push,
   };
 }
 
@@ -183,6 +202,7 @@ export function sanitize(input: unknown, base: AccountPrefs = DEFAULT_PREFS): Ac
     },
     monitor: sanitizeMonitor(o.monitor, base.monitor),
     terminal: sanitizeTerminal(o.terminal, base.terminal),
+    lark: sanitizeLark(o.lark, base.lark),
   };
 }
 
@@ -207,6 +227,7 @@ export function writePrefs(storage: Storage, patch: unknown): AccountPrefs {
     notify: { ...cur.notify, ...(p.notify ?? {}) },
     monitor: { ...cur.monitor, ...(p.monitor ?? {}) },
     terminal: { ...cur.terminal, ...(p.terminal ?? {}) },
+    lark: { ...cur.lark, ...(p.lark ?? {}) },
   };
   const next = sanitize(merged, cur);
   storage.setMeta(META_KEY, JSON.stringify(next));

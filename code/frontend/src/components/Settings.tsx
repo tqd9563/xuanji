@@ -4,9 +4,9 @@
  * 每一行都必须标注存储范围——「本机」只存这台浏览器,「账户」落后端并跨设备同步。
  * 个人工具在 Mac 与手机上共用一套数据,不标清楚就会反复出现「我在这边改了那边没变」。
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/api/client';
-import type { MonitorPrefs } from '@/api/types';
+import type { LarkStatus, MonitorPrefs } from '@/api/types';
 import { DropUp } from '@/components/DropUp';
 import { confirmBox, toast } from '@/components/shared';
 import { Live2dFields } from '@/components/Live2dSettings';
@@ -53,7 +53,7 @@ import {
   type CursorStyle,
 } from '@/lib/terminal';
 
-type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'monitor' | 'term' | 'adv';
+type SecId = 'dispatch' | 'look' | 'keys' | 'notify' | 'lark' | 'monitor' | 'term' | 'adv';
 
 /**
  * 这四个组件必须定义在 Settings 之外。
@@ -171,6 +171,13 @@ const SECTIONS: { id: SecId; label: string; icon: string; title: string; desc: s
     desc: '范围与事件取与——两者都开才会通知',
   },
   {
+    id: 'lark',
+    label: '飞书',
+    icon: 'M7 2.5h10v19H7zM10.5 18.5h3',
+    title: '飞书',
+    desc: 'Mac 锁屏时,把需要你处理的事推到飞书单聊;从飞书发起的会话始终推送',
+  },
+  {
     id: 'monitor',
     label: '系统监控',
     icon: 'M3 4h18v12H3zM7 12l3-3 2 2 5-4M8 20h8M12 16v4',
@@ -250,6 +257,189 @@ function SettingsRowCustom({ label, desc, children, off, hit, invalid }: Omit<Ro
       <div className="stg-ctl">{children}</div>
       <span className="stg-scope" data-scope="acct">账户</span>
     </div>
+  );
+}
+
+/* ---------- 飞书中控(设置 › 飞书) ---------- */
+
+const LARK_PUSH_TABS = [
+  { v: 'locked' as const, label: '锁屏时' },
+  { v: 'off' as const, label: '关闭' },
+];
+
+const LARK_CONN: Record<LarkStatus['state'], string> = {
+  ok: '已连接',
+  connecting: '连接中…',
+  unset: '未配置',
+  fail: '连接失败',
+  off: '已停用',
+};
+
+/** open_id 只露头尾,够认出是不是自己即可 */
+const shortId = (id: string) => (id.length > 12 ? `${id.slice(0, 7)}…${id.slice(-4)}` : id);
+
+/**
+ * 「飞书」分区。连接状态每 3 秒拉一次(只在分区可见时),让「启用 / 重试 / 绑定」之后
+ * 的结果不用手动刷新就能看到。白名单只能经绑定码建立:在飞书单聊里发 `/bind 码`。
+ */
+function LarkFields({
+  hit,
+  visible,
+  searching,
+  gotoNotify,
+}: {
+  hit: RowProps['hit'];
+  visible: boolean;
+  searching: boolean;
+  gotoNotify: () => void;
+}) {
+  const { prefs } = useAccountPrefs();
+  const lark = prefs.lark;
+  const [st, setSt] = useState<LarkStatus | null>(null);
+  const refresh = useCallback(async () => {
+    try {
+      setSt(await api.larkStatus());
+    } catch {
+      setSt(null);
+    }
+  }, []);
+  useEffect(() => {
+    if (!visible) return;
+    void refresh();
+    const t = setInterval(() => void refresh(), 3000);
+    return () => clearInterval(t);
+  }, [visible, refresh, lark.enabled]);
+
+  const off = !lark.enabled;
+  const state: LarkStatus['state'] = off ? 'off' : (st?.state ?? 'connecting');
+  const connText = state === 'ok' && st?.bot ? `${LARK_CONN.ok} · ${st.bot.name}` : LARK_CONN[state];
+  const connDesc =
+    state === 'ok' ? (
+      'lark-cli 配置档 xuanji · 长连接接收,不需要公网地址'
+    ) : state === 'connecting' ? (
+      '正在与飞书建立长连接'
+    ) : state === 'unset' ? (
+      <>
+        在终端执行 <code>lark-cli config init --name xuanji --app-id … --app-secret-stdin</code> 登记凭证后点重试
+      </>
+    ) : state === 'fail' ? (
+      (st?.error ?? '连接失败') + '。一个飞书应用只能有一个接收方,确认没有别的服务占着同一个机器人'
+    ) : (
+      '飞书中控已关闭,长连接已断开'
+    );
+  const pushDesc =
+    lark.push === 'off'
+      ? '不主动推送;仍可在飞书里查看、派发与续接,从飞书发起的回合照常回推'
+      : st?.locked
+        ? 'Mac 当前已锁屏 · 正在推送'
+        : 'Mac 当前未锁屏 · 网页派发的会话暂不推送';
+  const bind = st?.bindCode && st.bindCode.expiresAt > Date.now() ? st.bindCode : null;
+
+  const setLark = (p: Partial<typeof lark>) => void patchAccount({ lark: { ...getAccount().lark, ...p } });
+
+  return (
+    <>
+      <SettingsGroup show={!searching}>连接</SettingsGroup>
+      {hit('机器人', typeof connDesc === 'string' ? connDesc : '') && (
+        <div className="stg-row">
+          <div className="stg-lab">
+            <span>机器人</span>
+            <small>{connDesc}</small>
+          </div>
+          <div className="stg-ctl">
+            <span className="lark-conn" data-state={state}>
+              <span className="lark-conn-dot" aria-hidden />
+              {connText}
+            </span>
+            {(state === 'fail' || state === 'unset') && (
+              <button
+                className="btn btn-sm"
+                onClick={async () => {
+                  try {
+                    setSt(await api.larkReconnect());
+                  } catch (e) {
+                    toast(e instanceof Error ? e.message : String(e));
+                  }
+                }}
+              >
+                重试
+              </button>
+            )}
+          </div>
+          <span className="stg-scope" data-scope="acct">
+            账户
+          </span>
+        </div>
+      )}
+      <SettingsRow hit={hit} label="启用飞书中控" desc="关闭即断开长连接,飞书里的消息与卡片按钮都不再生效" scope="acct">
+        <Switch on={lark.enabled} onChange={(v) => setLark({ enabled: v })} />
+      </SettingsRow>
+      <SettingsRow
+        hit={hit}
+        off={off}
+        label="白名单"
+        desc={
+          bind
+            ? `在飞书里给机器人单聊发「/bind ${bind.code}」完成绑定,10 分钟内有效`
+            : '只接受名单内用户的单聊消息与卡片点击;群聊与其他人一律不回应'
+        }
+        scope="acct"
+      >
+        {st?.owner ? (
+          <>
+            <span className="lark-who">你本人</span>
+            <code className="lark-id" title={st.owner.openId}>
+              {shortId(st.owner.openId)}
+            </code>
+            <button
+              className="btn btn-sm"
+              disabled={off}
+              onClick={async () => {
+                if (!(await confirmBox('解除绑定?解除后飞书里的消息与卡片按钮都不再生效,需重新生成绑定码。'))) return;
+                await api.larkUnbind().catch(() => {});
+                void refresh();
+              }}
+            >
+              解除绑定
+            </button>
+          </>
+        ) : bind ? (
+          <code className="lark-code">{bind.code}</code>
+        ) : (
+          <button
+            className="btn btn-sm"
+            disabled={off || state !== 'ok'}
+            onClick={async () => {
+              await api.larkBindCode().catch((e: unknown) => toast(e instanceof Error ? e.message : String(e)));
+              void refresh();
+            }}
+          >
+            生成绑定码
+          </button>
+        )}
+      </SettingsRow>
+      <SettingsGroup show={!searching}>推送</SettingsGroup>
+      <SettingsRow hit={hit} off={off} label="推送时机" desc={pushDesc} scope="acct">
+        <Tabs value={lark.push} options={LARK_PUSH_TABS} onChange={(v) => setLark({ push: v })} />
+      </SettingsRow>
+      <SettingsRow hit={hit} off={off} label="推送范围与事件" desc="与 macOS 横幅共用「通知」分区的两组开关,不另设一套" scope="acct">
+        <button className="btn btn-sm" onClick={gotoNotify}>
+          去「通知」
+        </button>
+      </SettingsRow>
+      <SettingsRow hit={hit} off={off} label="测试推送" desc="立即发一张测试卡片到飞书单聊,不受锁屏限制" scope="acct">
+        <button
+          className="btn btn-sm"
+          disabled={off || state !== 'ok' || !st?.owner}
+          onClick={async () => {
+            const r = await api.larkTest().catch((e: unknown) => ({ ok: false, error: e instanceof Error ? e.message : String(e) }));
+            toast(r.ok ? '测试卡片已发送,去飞书单聊看看' : `发送失败:${r.error ?? '未知错误'}`);
+          }}
+        >
+          发送测试卡片
+        </button>
+      </SettingsRow>
+    </>
   );
 }
 
@@ -555,6 +745,9 @@ export function Settings({
       patchLocal({ keymap: { ...KEYMAP_DEFAULTS } });
     } else if (id === 'notify') {
       await patchAccount({ notify: DEFAULT_ACCOUNT.notify });
+    } else if (id === 'lark') {
+      // 只复位推送时机;启用与白名单是「接没接上」的事实,不是偏好
+      await patchAccount({ lark: { ...getAccount().lark, push: DEFAULT_ACCOUNT.lark.push } });
     } else if (id === 'term') {
       setLook({ ...LOOK_DEFAULTS, height: getTerm().look.height });
       void clearTermImage();
@@ -887,6 +1080,19 @@ export function Settings({
             onChange={(v) => void patchAccount({ notify: { ...prefs.notify, error: v } })}
           />
         </SettingsRow>
+      </section>
+
+      <section className="stg-sec" hidden={!secShown('lark')}>
+        {!searching && <SecHead id="lark" />}
+        <LarkFields
+          hit={hit}
+          visible={secShown('lark')}
+          searching={searching}
+          gotoNotify={() => {
+            setQ('');
+            setSec('notify');
+          }}
+        />
       </section>
 
       <section className="stg-sec" hidden={!secShown('monitor')}>
