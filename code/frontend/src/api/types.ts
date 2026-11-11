@@ -390,6 +390,25 @@ export interface AccountPrefs {
   notify: NotifyPrefs;
   monitor: MonitorPrefs;
   terminal: TerminalPrefs;
+  lark: LarkPrefs;
+}
+
+/** 飞书中控(账户):与后端 services/prefs.ts 的 LarkPrefs 对应。白名单不在偏好里,经绑定码写入 */
+export interface LarkPrefs {
+  enabled: boolean;
+  push: 'locked' | 'off';
+}
+
+/** GET /api/lark/status:与后端 services/lark/bridge.ts 的 LarkStatus 对应 */
+export interface LarkStatus {
+  enabled: boolean;
+  state: 'ok' | 'connecting' | 'unset' | 'fail' | 'off';
+  error?: string;
+  bot?: { name: string };
+  owner?: { openId: string; boundAt: number };
+  bindCode?: { code: string; expiresAt: number };
+  push: 'locked' | 'off';
+  locked: boolean;
 }
 
 /** 全局终端行为(账户):与后端 services/prefs.ts 的 TerminalPrefs 对应;外观属本机,见 lib/terminal.ts */

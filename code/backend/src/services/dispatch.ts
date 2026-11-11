@@ -338,6 +338,15 @@ export class DispatchSession {
     return this.events.map((e, i) => ({ e, at: this.eventAt[i] ?? this.startedAt }));
   }
 
+  /** 回放缓冲里最后一条完整的 assistant 回复(飞书「续接」卡带回上一轮摘要用) */
+  get lastAssistantText(): string | undefined {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const e = this.events[i]!;
+      if (e.ev === 'assistant' && e.text.trim()) return e.text;
+    }
+    return undefined;
+  }
+
   subscribe(l: (e: DispatchEvent) => void): () => void {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
@@ -874,14 +883,37 @@ export class DispatchSession {
 
 const sessions = new Map<string, DispatchSession>();
 
+/**
+ * 会话创建观察者:飞书中控需要看见**所有**派发会话(网页、定时任务、飞书自己发起的)
+ * 才能在锁屏时推送,而事件订阅是逐会话的,故在创建处统一广播。观察者在会话发出第一条事件之前被调用。
+ */
+const createdObservers = new Set<(s: DispatchSession) => void>();
+export function onDispatchCreated(fn: (s: DispatchSession) => void): () => void {
+  createdObservers.add(fn);
+  return () => createdObservers.delete(fn);
+}
+
 export function createDispatch(storage: Storage, opts: DispatchOpts): DispatchSession {
   const s = new DispatchSession(storage, opts);
   sessions.set(s.id, s);
+  for (const fn of createdObservers) {
+    try {
+      fn(s);
+    } catch (e) {
+      console.error('[xuanji] dispatch observer failed:', e);
+    }
+  }
   return s;
 }
 
 export function getDispatch(id: string): DispatchSession | undefined {
   return sessions.get(id);
+}
+
+/** 按 Claude 会话 id 找本进程内存活的派发会话(含空闲退出、仍可冷启动接回的) */
+export function findDispatchBySessionId(sessionId: string): DispatchSession | undefined {
+  for (const s of sessions.values()) if (s.sessionId === sessionId) return s;
+  return undefined;
 }
 
 /** 结束并移除进程内存活的派发会话(看板「关闭」);返回是否命中 */
