@@ -94,10 +94,17 @@ function header(title: string, template: Template, ref?: SessionRef, subtitle?: 
   return h;
 }
 
-function card(title: string, template: Template, elements: El[], ref?: SessionRef, subtitle?: string): object {
+function card(
+  title: string,
+  template: Template,
+  elements: El[],
+  ref?: SessionRef,
+  subtitle?: string,
+  colors?: Record<string, { light_mode: string; dark_mode: string }>,
+): object {
   return {
     schema: '2.0',
-    config: { update_multi: true, width_mode: 'fill' },
+    config: { update_multi: true, width_mode: 'fill', ...(colors && Object.keys(colors).length ? { style: { color: colors } } : {}) },
     header: header(title, template, ref, subtitle),
     body: { elements },
   };
@@ -378,6 +385,30 @@ export const plainLine = (s: string) =>
  * 框的边框与底色取该项目标签色的浅档,项目标签只在框顶出现一次,行内不再重复。
  * 项目之间按框内最近活动排序,框内保持看板原有顺序。
  */
+/**
+ * 项目框的底色与边框:飞书内置 `-50 / -200` 档在深色模式下会变成大块饱和色(用户 2026-11-11 嫌太深),
+ * 改用自定义 RGBA 低透明度,浅色 / 深色各一档,透明度照抄 anomaly-board(底 0.06 / 0.10,边 0.22 / 0.30)。
+ * 色相跟项目标签的内置色名走,RGB 取该色名的中间档近似值;标签本身仍用内置色(方案 D)。
+ */
+const BOX_RGB: Record<string, string> = {
+  lime: '140,170,20',
+  blue: '51,112,255',
+  turquoise: '20,170,150',
+  carmine: '225,60,120',
+  wathet: '20,160,220',
+  green: '52,170,80',
+  violet: '130,80,240',
+  purple: '180,60,200',
+  indigo: '80,90,230',
+};
+export function boxColors(color: string): Record<string, { light_mode: string; dark_mode: string }> {
+  const rgb = BOX_RGB[color] ?? '120,120,120';
+  return {
+    [`box-${color}-bg`]: { light_mode: `rgba(${rgb},0.06)`, dark_mode: `rgba(${rgb},0.10)` },
+    [`box-${color}-border`]: { light_mode: `rgba(${rgb},0.22)`, dark_mode: `rgba(${rgb},0.30)` },
+  };
+}
+
 function projectBoxes(list: ListRow[], currentId: string | null): El[] {
   const order: string[] = [];
   const by = new Map<string, ListRow[]>();
@@ -423,8 +454,8 @@ function projectBoxes(list: ListRow[], currentId: string | null): El[] {
       tag: 'interactive_container',
       width: 'fill',
       has_border: true,
-      border_color: `${color}-200`,
-      background_style: `${color}-50`,
+      border_color: `box-${color}-border`,
+      background_style: `box-${color}-bg`,
       corner_radius: '8px',
       padding: '10px 12px 10px 12px',
       vertical_spacing: '6px',
@@ -442,17 +473,19 @@ export function listCard(rows: ListRow[], currentId: string | null, opts: { all:
   ];
   if (opts.all) groups.push(['已完成', rows.filter((r) => r.kind === 'done')]);
   const els: El[] = [];
+  let colors: Record<string, { light_mode: string; dark_mode: string }> = {};
   for (const [g, list] of groups) {
     if (!list.length) continue;
     els.push(md(`**${g} ${list.length}**`));
     els.push(...projectBoxes(list, currentId));
+    for (const r of list) colors = { ...colors, ...boxColors(projectTagColor(r.ref.project, r.ref.paletteIdx)) };
   }
   if (!els.length) els.push(text('没有进行中的会话', 'grey'));
   if (opts.truncated > 0) els.push(note(`另有 ${opts.truncated} 个未列出`));
   els.push(hr);
   if (opts.currentName) els.push(note(`**当前会话** ${mdSafe(opts.currentName)}`));
   const total = rows.length + opts.truncated;
-  return card('会话', 'blue', els, undefined, `${total} 个${opts.all ? '' : ' · 不含已完成'}`);
+  return card('会话', 'blue', els, undefined, `${total} 个${opts.all ? '' : ' · 不含已完成'}`, colors);
 }
 
 /** 点「续接」后的回执:只有上一轮摘要(用户 2026-11-11 要求删去唤醒 / 排队说明) */

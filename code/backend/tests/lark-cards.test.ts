@@ -193,8 +193,12 @@ describe('卡片', () => {
     });
     const c = listCard([r('a', 'scratch', 1, 0), r('b', 'xuanji', 5, 16), r('c', 'scratch', 9, 0), r('d', 'xuanji', 2, 16)], null, { all: false, truncated: 0 });
     const boxes = (JSON.parse(json(c)).body.elements as { tag: string; border_color?: string; background_style?: string }[]).filter((x) => x.tag === 'interactive_container');
-    expect(boxes.map((b) => b.border_color)).toEqual(['lime-200', 'wathet-200']);
-    expect(boxes.map((b) => b.background_style)).toEqual(['lime-50', 'wathet-50']);
+    expect(boxes.map((b) => b.border_color)).toEqual(['box-lime-border', 'box-wathet-border']);
+    expect(boxes.map((b) => b.background_style)).toEqual(['box-lime-bg', 'box-wathet-bg']);
+    // 框色走低透明度自定义色(内置 -50 档在深色模式下太深),且每个用到的色都在 config 里有定义
+    const colors = JSON.parse(json(c)).config.style.color as Record<string, { light_mode: string; dark_mode: string }>;
+    for (const k of ['box-lime-bg', 'box-lime-border', 'box-wathet-bg', 'box-wathet-border']) expect(colors[k]).toBeTruthy();
+    expect(colors['box-wathet-bg']!.dark_mode).toMatch(/,0\.10\)$/);
     expect(buttons(c).map((b) => b.value?.s)).toEqual(['c', 'a', 'b', 'd']);
     expect(json(c).match(/<text_tag color='lime'>scratch<\/text_tag>/g)).toHaveLength(1);
     // 摘要去掉 markdown 记号与换行
