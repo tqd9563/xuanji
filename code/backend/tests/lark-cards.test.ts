@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCliJson, isReadyLine } from '../src/adapters/lark-cli.js';
+import { isConflictError, parseCliJson, isReadyLine } from '../src/adapters/lark-cli.js';
 import { parseScreenLocked } from '../src/adapters/screen-lock.js';
 import { matchProjects, relTime } from '../src/services/lark/bridge.js';
 import {
@@ -247,6 +247,12 @@ describe('适配器解析', () => {
     expect(env).toMatchObject({ ok: false, error: 'another event bus', errorType: 'validation/failed_precondition' });
     expect(parseCliJson('{"code":230002,"msg":"bot not in chat"}')).toMatchObject({ ok: false, error: 'bot not in chat' });
     expect(parseCliJson('')).toMatchObject({ ok: false });
+  });
+  it('占用冲突可自动重试,配置类错误不重试', () => {
+    expect(isConflictError('cannot start consumer: another consumer (pid 15611) is already running for this subscription')).toBe(true);
+    expect(isConflictError('another event bus is already connected to this app (1 remote event connection(s) detected via API)')).toBe(true);
+    expect(isConflictError('app cli_x has not applied for the required scope(s): im:message')).toBe(false);
+    expect(isConflictError('profile "xuanji" not found')).toBe(false);
   });
   it('ready 标记', () => {
     expect(isReadyLine('[event] ready event_key=im.message.receive_v1')).toBe(true);
