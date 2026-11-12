@@ -4,7 +4,9 @@
  * 设计要点(决策见 .planning/xuanji/findings.md,视觉见 DESIGN.md「飞书中控」):
  * - 只认绑定过的那一个人(owner)的**单聊**;其他人、群聊一律不回应。owner 只能经设置页生成的绑定码建立。
  * - 推送时机:从飞书发起的回合始终回推;其余只在 Mac 锁屏、且「通知」分区的范围与事件都开着时推。
- * - 卡片状态以本进程内存为准(登记表按 message_id 索引);后端重启后点旧卡片只会得到「已失效」提示。
+ * - 卡片状态以本进程内存为准(登记表按 message_id 索引),重启即清空;但按钮值自带执行所需信息、
+ *   「卡片 → 会话」映射与当前会话落库,所以重启后续接、选择、重试、引用回复照常可用,
+ *   只有依赖进程内请求的(审批、提问、中断、完整回复)才显示「已失效」。
  * - 会话所有权铁律照旧:终端里仍开着的交互会话只读,飞书不能接管(canResume 判定)。
  */
 import { readHistory, scanProjectDirs } from '../../adapters/claude-dir.js';
@@ -68,6 +70,13 @@ import { join } from 'node:path';
 import { INLINE_IMAGE_MAX_BYTES, INLINE_IMAGE_MAX_COUNT, type InlineImage } from '../../types.js';
 
 const OWNER_KEY = 'lark.owner';
+/**
+ * 卡片消息 → 会话 id 的映射与「当前会话」落库:后端重启后,引用回复旧卡片仍能续到原会话,
+ * 当前会话也不丢(内存里的卡片登记表只管卡片状态,重启即清空)。映射封顶 MSG_SESSION_CAP 条。
+ */
+const MSG_SESSION_KEY = 'lark.msgsess';
+const CURRENT_KEY = 'lark.current';
+const MSG_SESSION_CAP = 500;
 /** 当前会话的有效期:超过就不再默认发给它,先弹选择卡 */
 const CURRENT_TTL_MS = 30 * 60_000;
 /** 进度卡最短刷新间隔(飞书对单条消息的更新有频率限制) */
@@ -169,7 +178,35 @@ export class LarkBridge {
   private pending: Pending | null = null;
   private unhook?: () => void;
 
-  constructor(private storage: Storage) {}
+  constructor(private storage: Storage) {
+    // 重启后接回上次的当前会话(仍受 30 分钟有效期约束)
+    try {
+      const c = JSON.parse(storage.getMeta(CURRENT_KEY) ?? 'null') as { sessionId?: string; at?: number } | null;
+      if (c?.sessionId && typeof c.at === 'number') this.current = { sessionId: c.sessionId, at: c.at };
+    } catch {
+      /* 坏值忽略 */
+    }
+  }
+
+  private msgSessions(): Record<string, string> {
+    try {
+      return (JSON.parse(this.storage.getMeta(MSG_SESSION_KEY) ?? '{}') as Record<string, string>) ?? {};
+    } catch {
+      return {};
+    }
+  }
+
+  /** 记下「这张卡属于哪个会话」;同一张卡后来才知道 sessionId 的(新派发)在拿到时补记 */
+  private rememberMsg(messageId: string | undefined, sessionId: string | null | undefined) {
+    if (!messageId || !sessionId) return;
+    const m = this.msgSessions();
+    if (m[messageId] === sessionId) return;
+    delete m[messageId];
+    m[messageId] = sessionId;
+    const keys = Object.keys(m);
+    for (const k of keys.slice(0, Math.max(0, keys.length - MSG_SESSION_CAP))) delete m[k];
+    this.storage.setMeta(MSG_SESSION_KEY, JSON.stringify(m));
+  }
 
   // ---------- 生命周期 ----------
 
@@ -315,7 +352,11 @@ export class LarkBridge {
       console.error('[xuanji] lark send failed:', r.error);
       return undefined;
     }
-    if (entry) this.cards.set(r.data.message_id, entry);
+    if (entry) {
+      this.cards.set(r.data.message_id, entry);
+      const sid = 'dispatchId' in entry ? getDispatch(entry.dispatchId)?.sessionId : entry.kind === 'switched' ? entry.sessionId : undefined;
+      this.rememberMsg(r.data.message_id, sid);
+    }
     return r.data.message_id;
   }
 
@@ -419,7 +460,13 @@ export class LarkBridge {
         if (w.progress) await this.finishProgress(w, 'stopped');
         if (w.larkTurn || (await this.shouldPush(w, 'error'))) {
           const ref = this.ref(w);
-          await this.push(errorCard(ref, e.message), { kind: 'error', dispatchId: w.s.id, ref, message: e.message, done: false });
+          await this.push(errorCard(ref, e.message, 'pending', { sessionId: w.s.sessionId ?? undefined, text: w.lastLarkText }), {
+            kind: 'error',
+            dispatchId: w.s.id,
+            ref,
+            message: e.message,
+            done: false,
+          });
         }
         w.larkTurn = false;
         this.resetTurn(w);
@@ -484,6 +531,7 @@ export class LarkBridge {
         : { ...p.view, state: 'stopped', steps: [...w.steps], elapsedMs: Date.now() - w.turnStart, contextPct: w.contextPct };
     if (!p.messageId) return;
     this.cards.set(p.messageId, { kind: 'progress', dispatchId: w.s.id, view });
+    this.rememberMsg(p.messageId, w.s.sessionId);
     await patchCard(p.messageId, progressCard(view));
   }
 
@@ -627,6 +675,8 @@ export class LarkBridge {
 
   private setCurrent(t: { dispatchId?: string; sessionId?: string }) {
     this.current = { ...t, at: Date.now() };
+    const sid = t.sessionId ?? (t.dispatchId ? getDispatch(t.dispatchId)?.sessionId : undefined);
+    if (sid) this.storage.setMeta(CURRENT_KEY, JSON.stringify({ sessionId: sid, at: this.current.at }));
   }
 
   private async routeText(textIn: string, replyTo?: string) {
@@ -638,6 +688,9 @@ export class LarkBridge {
       }
       const target = c ? this.targetOfCard(c) : undefined;
       if (target) return this.sendTo(target, textIn);
+      // 登记表里没有(后端重启过):按落库的「卡片 → 会话」映射续接
+      const sid = this.msgSessions()[replyTo];
+      if (sid) return this.sendTo({ sessionId: sid }, textIn);
     }
     // 2) 当前会话(30 分钟内)
     if (this.current && Date.now() - this.current.at < CURRENT_TTL_MS) {
@@ -896,13 +949,13 @@ export class LarkBridge {
       /* 同上 */
     }
     const name = String(e.action_name ?? '');
-    if (!entry) {
-      // 后端重启过或卡片太旧:登记表里已没有它
-      await patchCard(mid, closedCard('已失效', '璇玑重启过,这张卡片已失效。发 /ls 重新获取'));
-      return;
-    }
     if (this.current) this.current.at = Date.now();
     const a = String(value.a ?? (name === 'new_submit' ? 'new-submit' : name === 'q_submit' ? 'q-submit' : ''));
+    if (!entry) {
+      // 后端重启过:登记表里没有这张卡,按按钮自带的信息尽量照常执行
+      await this.onStatelessAction(mid, a, value, form);
+      return;
+    }
 
     switch (entry.kind) {
       case 'perm': {
@@ -982,24 +1035,8 @@ export class LarkBridge {
       }
       case 'list': {
         const sid = String(value.s ?? '');
-        if (a === 'focus' && sid) {
-          const d = findDispatchBySessionId(sid);
-          this.setCurrent({ dispatchId: d?.id, sessionId: sid });
-          const card = await this.boardCard(sid);
-          const ref = this.refOf(card?.cwd ?? d?.cwd ?? '', card?.name ?? d?.displayName ?? '');
-          await this.push(switchedCard(ref, await this.lastReply(sid)), { kind: 'switched', sessionId: sid });
-          return;
-        }
-        if (a === 'resend' && sid) {
-          const d = findDispatchBySessionId(sid);
-          const w = d ? this.watches.get(d.id) : undefined;
-          if (w?.pendingPerm) {
-            const { requestId, view } = w.pendingPerm;
-            await this.push(permCard(view), { kind: 'perm', dispatchId: w.s.id, requestId, view });
-          } else {
-            await sendMarkdown(owner.chatId, '这个会话的审批不在璇玑里(可能是终端会话),请到对应终端处理');
-          }
-        }
+        if (a === 'focus' && sid) return this.focus(sid);
+        if (a === 'resend' && sid) return this.resend(sid);
         return;
       }
       case 'newform': {
@@ -1049,6 +1086,83 @@ export class LarkBridge {
       default:
         return;
     }
+  }
+
+  /** 「续接」:切换当前会话并推一张带上一轮摘要的回执 */
+  private async focus(sid: string) {
+    const d = findDispatchBySessionId(sid);
+    this.setCurrent({ dispatchId: d?.id, sessionId: sid });
+    const card = await this.boardCard(sid);
+    const ref = this.refOf(card?.cwd ?? d?.cwd ?? '', card?.name ?? d?.displayName ?? '');
+    await this.push(switchedCard(ref, await this.lastReply(sid)), { kind: 'switched', sessionId: sid });
+  }
+
+  private async resend(sid: string) {
+    const d = findDispatchBySessionId(sid);
+    const w = d ? this.watches.get(d.id) : undefined;
+    if (w?.pendingPerm) {
+      const { requestId, view } = w.pendingPerm;
+      await this.push(permCard(view), { kind: 'perm', dispatchId: w.s.id, requestId, view });
+    } else {
+      await sendMarkdown(this.owner()!.chatId, '这个会话现在没有在等审批(或审批不在璇玑里,如终端会话)');
+    }
+  }
+
+  /**
+   * 登记表里找不到卡片时的兜底:凡是按钮值自带足够信息的动作照常执行;
+   * 依赖进程内状态的(审批、提问、中断、完整回复)才说明已失效——那些请求随重启一起结束了。
+   */
+  private async onStatelessAction(mid: string, a: string, value: Record<string, unknown>, form: Record<string, unknown>) {
+    const sid = typeof value.s === 'string' ? value.s : '';
+    const t = typeof value.t === 'string' ? value.t : '';
+    switch (a) {
+      case 'focus':
+        if (sid) return this.focus(sid);
+        break;
+      case 'resend':
+        if (sid) return this.resend(sid);
+        break;
+      case 'route':
+        if (sid && t) {
+          const card = await this.boardCard(sid);
+          await patchCard(mid, closedCard('已发送', `已发给「${clip(card?.name ?? sid.slice(0, 8), 30)}」,并设为当前会话`));
+          return this.sendTo({ sessionId: sid }, t);
+        }
+        break;
+      case 'route-new':
+        await patchCard(mid, closedCard('已发送', '作为新任务派发'));
+        return this.newTask();
+      case 'pick': {
+        const path = typeof value.p === 'string' ? value.p : '';
+        if (path && t) {
+          await patchCard(mid, closedCard('已选择项目', `已选 ${path.split('/').pop()},正在派发`));
+          return this.dispatchNew(path, t, this.defaultModel());
+        }
+        break;
+      }
+      case 'new-submit': {
+        const cwd = String(form.proj ?? '');
+        const task = String(form.task ?? '').trim();
+        if (cwd && task) return this.dispatchNew(cwd, task, String(form.model ?? 'default'), mid);
+        break;
+      }
+      case 'new-cancel':
+        await patchCard(mid, closedCard('已取消派发', '已取消'));
+        return;
+      case 'retry':
+        if (sid) {
+          await patchCard(mid, closedCard('出错退出 · 已重试', '已在飞书重试'));
+          return this.sendTo({ sessionId: sid }, t || '继续');
+        }
+        break;
+    }
+    await patchCard(mid, closedCard('已失效', '璇玑重启过,这个请求已随之结束。发 /ls 查看会话现状'));
+  }
+
+  private defaultModel(): string {
+    const prefs = readPrefs(this.storage);
+    const models = this.models();
+    return prefs.model && models.some((m) => m.id === prefs.model) ? prefs.model : models[0]!.id;
   }
 
   private async answerQuestion(mid: string, entry: Extract<CardEntry, { kind: 'question' }>, answers: Record<string, string>) {
