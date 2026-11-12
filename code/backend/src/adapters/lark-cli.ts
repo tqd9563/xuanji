@@ -140,6 +140,16 @@ export interface Consumer {
   stop(): void;
 }
 
+/** 占用冲突的重试间隔 */
+export const CONFLICT_RETRY_MS = 30_000;
+
+/**
+ * 是否为「已有别的接收方」类错误。实测两种措辞(lark-cli 1.0.99):
+ * 跨机器 `another event bus is already connected to this app`;
+ * 同机器 `another consumer (pid N) is already running for this subscription`。
+ */
+export const isConflictError = (msg: string) => /another (event bus|consumer)|already (connected|running)/i.test(msg);
+
 /** stderr 的一行是否为 ready 标记 */
 export const isReadyLine = (line: string) => line.startsWith('[event] ready event_key=');
 
@@ -201,6 +211,10 @@ export function consume(
       if (stopped) return;
       if (fatal) {
         onState({ kind: 'fail', error: fatal.error, fatal: true });
+        // 被别的接收方占着(典型:验收环境与生产后端同时连着同一个机器人)是暂时的:
+        // 照样报「连接失败」让用户看到原因,但每 30 秒自己再试,对方一退出就自动接上,不必手点重试。
+        // 配置缺失这类真·致命错误不重试,免得空转。
+        if (isConflictError(fatal.error)) retry = setTimeout(start, CONFLICT_RETRY_MS);
         return;
       }
       onState({ kind: 'fail', error: '长连接已断开,正在重连', fatal: false });
