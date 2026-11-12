@@ -65,3 +65,44 @@ export function splitMarkdown(text: string, max: number): string[] {
   if (rest) out.push(rest);
   return out;
 }
+
+export interface Attachments {
+  /** 图片资源 key(img_xxx) */
+  images: string[];
+  files: { key: string; name: string }[];
+  /** 去掉附件标记后剩下的文字(富文本消息里的说明) */
+  text: string;
+}
+
+/**
+ * 从 lark-cli 预渲染的消息内容里取出附件。实测渲染格式(lark-cli 1.0.99 convertlib):
+ * 图片 `[Image: img_v3_xxx]`,文件 `<file key="file_v3_xxx" name="a.pdf"/>`;富文本(post)里图文混排。
+ */
+export function parseAttachments(content: string): Attachments {
+  const images: string[] = [];
+  const files: { key: string; name: string }[] = [];
+  let text = content.replace(/\[Image:\s*([^\]\s]+)\]/g, (_, k: string) => {
+    images.push(k);
+    return ' ';
+  });
+  text = text.replace(/<file\s+key="([^"]+)"(?:\s+name="([^"]*)")?\s*\/>/g, (_, k: string, n?: string) => {
+    files.push({ key: k, name: n || k });
+    return ' ';
+  });
+  return { images, files, text: text.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() };
+}
+
+/** 落盘文件名:去掉路径分隔符与控制字符,保留扩展名 */
+export function safeFileName(name: string): string {
+  const s = name.replace(/[\/\\\x00-\x1f]/g, '_').replace(/^\.+/, '_').trim();
+  return (s || 'file').slice(0, 120);
+}
+
+/** 按文件头判图片格式;不是 Claude 支持的四种就返回 null(按普通文件处理) */
+export function sniffImageType(buf: Buffer): 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp' | null {
+  if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.length >= 6 && buf.subarray(0, 4).toString('ascii') === 'GIF8') return 'image/gif';
+  if (buf.length >= 12 && buf.subarray(0, 4).toString('ascii') === 'RIFF' && buf.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  return null;
+}

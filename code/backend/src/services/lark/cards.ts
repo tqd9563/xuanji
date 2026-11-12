@@ -608,3 +608,19 @@ export function helpCard(botName: string, currentName?: string): object {
 export function infoCard(title: string, body: string, template: Template = 'blue'): object {
   return card(title, template, [text(body)]);
 }
+
+export interface AttachmentView {
+  name: string;
+  kind: 'image' | 'file';
+  bytes: number;
+}
+
+const fmtBytes = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+/** 收到图片 / 文件后的回执:附件先挂起,下一句话会带上它(做法参照 ~/feishu-claude) */
+export function attachmentsCard(items: AttachmentView[]): object {
+  return card('已收到附件', 'green', [
+    md(items.map((a) => `${a.kind === 'image' ? '🖼' : '📎'} ${mdSafe(clip(a.name, 60))} <font color='grey'>${fmtBytes(a.bytes)}</font>`).join('\n')),
+    text('说说要拿它做什么,我会带上它。'),
+  ]);
+}

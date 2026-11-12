@@ -5,6 +5,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const h = vi.hoisted(() => {
+  // 附件落盘目录:必须在桥接模块加载前设好(LARK_INBOX 在模块顶层读取)
+  /* eslint-disable @typescript-eslint/no-require-imports */
+  const os = require('node:os') as typeof import('node:os');
+  const fs = require('node:fs') as typeof import('node:fs');
+  const path = require('node:path') as typeof import('node:path');
+  /* eslint-enable @typescript-eslint/no-require-imports */
+  process.env.XUANJI_LARK_INBOX = fs.mkdtempSync(path.join(os.tmpdir(), 'lark-inbox-'));
   type Ev = Record<string, unknown>;
   const st = {
     sent: [] as { chatId: string; card: Record<string, unknown>; mid: string }[],
@@ -18,6 +25,8 @@ const h = vi.hoisted(() => {
     sessions: new Map<string, FakeSession>(),
     canResume: { ok: true } as { ok: boolean; reason?: string; fork?: boolean },
     board: { idle: [], running: [], blocked: [], review: [], done: [] } as Record<string, unknown[]>,
+    download: 'ok' as 'ok' | 'scope',
+    downloads: [] as { key: string; type: string; dir: string; name: string }[],
     seq: 0,
   };
   class FakeSession {
@@ -28,6 +37,7 @@ const h = vi.hoisted(() => {
     state = 'idle';
     lastAssistantText: string | undefined;
     sent: string[] = [];
+    images: unknown[][] = [];
     resolved: [string, string][] = [];
     interrupted = 0;
     private ls = new Set<(e: Ev) => void>();
@@ -44,8 +54,9 @@ const h = vi.hoisted(() => {
     emit(e: Ev) {
       for (const l of this.ls) l(e);
     }
-    send(t: string) {
+    send(t: string, images: unknown[] = []) {
       this.sent.push(t);
+      this.images.push(images);
       this.state = 'working';
       this.emit({ ev: 'user-echo', text: t });
     }
@@ -67,7 +78,7 @@ const h = vi.hoisted(() => {
     for (const o of st.observers) o(s);
     return s;
   };
-  return { st, FakeSession, make };
+  return { st, FakeSession, make, fs, path };
 });
 
 vi.mock('../src/adapters/lark-cli.js', () => ({
@@ -87,6 +98,16 @@ vi.mock('../src/adapters/lark-cli.js', () => ({
   patchCard: async (mid: string, card: Record<string, unknown>) => {
     h.st.patched.push({ mid, card });
     return { ok: true };
+  },
+  downloadResource: async (_mid: string, key: string, type: string, dir: string, name: string) => {
+    h.st.downloads.push({ key, type, dir, name });
+    if (h.st.download === 'scope') {
+      return { ok: false, error: 'Access denied. One of the following scopes is required: [im:message:readonly]' };
+    }
+    // 图片写一个最小 PNG 头,文件写一段文本;lark-cli 会给文件名补扩展名,这里同样模拟
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    h.fs.writeFileSync(h.path.join(dir, type === 'image' ? `${name}.png` : name), type === 'image' ? png : 'pdf-bytes');
+    return { ok: true, data: {} };
   },
   sendMarkdown: async (_c: string, md: string) => {
     h.st.texts.push(md);
@@ -150,7 +171,7 @@ async function boundBridge() {
 }
 
 beforeEach(() => {
-  Object.assign(h.st, { sent: [], patched: [], texts: [], locked: true, observers: [], canResume: { ok: true } });
+  Object.assign(h.st, { sent: [], patched: [], texts: [], locked: true, observers: [], canResume: { ok: true }, download: 'ok', downloads: [] });
   h.st.sessions.clear();
   h.st.board = { idle: [], running: [], blocked: [], review: [], done: [] };
 });
@@ -389,5 +410,75 @@ describe('从飞书发消息', () => {
     expect(d.cwd).toBe('/p/xuanji');
     expect(d.sent).toEqual(['补一下 README']);
     expect(h.st.sent.map((x) => title(x.card))).toEqual(['已派发', '进行中']);
+  });
+});
+
+describe('图片与文件', () => {
+  async function withSession() {
+    await boundBridge();
+    const s1 = h.make('sid-1', '/p/xuanji', '飞书中控');
+    s1.emit({ ev: 'result', costUsd: 0, contextTokens: 0, contextPct: 0, durationMs: 1 });
+    await flush();
+    msg('先看下', { reply_to: h.st.sent[0]!.mid }); // 设为当前会话
+    await flush();
+    return s1;
+  }
+
+  it('只发图片:先回「已收到附件」,下一句话带着图片发进当前会话', async () => {
+    const s1 = await withSession();
+    msg('[Image: img_v3_abc]', { message_type: 'image' });
+    await flush();
+    expect(h.st.downloads).toEqual([expect.objectContaining({ key: 'img_v3_abc', type: 'image' })]);
+    expect(title(h.st.sent.at(-1)!.card)).toBe('已收到附件');
+    expect(s1.sent).toEqual(['先看下']); // 还没发
+    msg('这张截图里报错是什么原因');
+    await flush();
+    expect(s1.sent.at(-1)).toBe('这张截图里报错是什么原因');
+    expect(s1.images.at(-1)).toEqual([{ media_type: 'image/png', data: expect.any(String) }]);
+    // 附件只带一次
+    msg('再说一句');
+    await flush();
+    expect(s1.images.at(-1)).toEqual([]);
+  });
+
+  it('文件:保存到收件目录(不进项目目录),把路径附在下一句话末尾', async () => {
+    const s1 = await withSession();
+    msg('<file key="file_v3_x" name="案件事实时间线说明.pdf"/>', { message_type: 'file' });
+    await flush();
+    const d = h.st.downloads[0]!;
+    expect(d.dir.startsWith(process.env.XUANJI_LARK_INBOX!)).toBe(true);
+    expect(d.name).toBe('案件事实时间线说明.pdf');
+    msg('把第一段第三条的时间改成 13:11');
+    await flush();
+    const sent = s1.sent.at(-1)!;
+    expect(sent).toContain('把第一段第三条的时间改成 13:11');
+    expect(sent).toContain(`案件事实时间线说明.pdf: ${d.dir}/案件事实时间线说明.pdf`);
+  });
+
+  it('富文本里图文都有:不挂起,直接作为一条消息发出', async () => {
+    const s1 = await withSession();
+    msg('看这里\n[Image: img_v3_1]\n为什么是空白', { message_type: 'post' });
+    await flush();
+    expect(s1.sent.at(-1)).toBe('看这里\n\n为什么是空白');
+    expect(s1.images.at(-1)).toHaveLength(1);
+  });
+
+  it('缺读消息权限时明确说出要开哪个权限,且不把半截附件带进下一句', async () => {
+    const s1 = await withSession();
+    h.st.download = 'scope';
+    msg('[Image: img_v3_abc]', { message_type: 'image' });
+    await flush();
+    expect(h.st.texts.at(-1)).toContain('im:message:readonly');
+    h.st.download = 'ok';
+    msg('继续');
+    await flush();
+    expect(s1.images.at(-1)).toEqual([]);
+  });
+
+  it('语音、视频、表情直说不支持', async () => {
+    await boundBridge();
+    msg('[Audio]', { message_type: 'audio' });
+    await flush();
+    expect(h.st.texts.at(-1)).toContain('暂不支持');
   });
 });
