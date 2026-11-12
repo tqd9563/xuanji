@@ -7,7 +7,7 @@ import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
 import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
 import { dashboard } from '../services/dashboard.js';
-import { canResume, endDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
+import { canResume, endDispatchBySessionId, findDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
 import { readPrefs, writePrefs } from '../services/prefs.js';
 import { appendJank, readJank, sanitizeJank } from '../services/client-jank.js';
@@ -618,7 +618,16 @@ export function createApi(
     return null;
   }
 
-  api.get('/schedules', async (c) => c.json({ jobs: scheduler.list() }));
+  /**
+   * 定时会话不进看板,「定时」页是它们唯一的入口:附上本进程内仍在的派发会话 id,
+   * 前端据此 attach 接回原事件流(审批/续接),而不是对一个活着的会话再 --resume 起第二个 CLI 进程。
+   */
+  const liveDispatchIdOf = (sessionId: string | null) =>
+    (sessionId ? findDispatchBySessionId(sessionId)?.id : undefined) ?? null;
+
+  api.get('/schedules', async (c) =>
+    c.json({ jobs: scheduler.list().map((j) => ({ ...j, liveDispatchId: liveDispatchIdOf(j.resultSessionId) })) }),
+  );
 
   api.post('/schedules', async (c) => {
     const body = await c.req.json().catch(() => ({}));
@@ -682,7 +691,8 @@ export function createApi(
     if (!scheduler.get(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
     const limitParam = c.req.query('limit');
     const limit = limitParam === 'all' ? 100_000 : (num(limitParam) ?? 7);
-    return c.json(scheduler.runs(c.req.param('id'), limit));
+    const { runs, total } = scheduler.runs(c.req.param('id'), limit);
+    return c.json({ runs: runs.map((r) => ({ ...r, liveDispatchId: liveDispatchIdOf(r.sessionId) })), total });
   });
 
   api.post('/schedules/:id/run-now', async (c) => {

@@ -321,6 +321,13 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
       case 'queue-operation':
       case 'cost-state': // CLI 成本记账快照
       case 'atis-latch': // CLI 内部状态,无对话内容
+      // CLI 2.1.32x 起的请求日志与账号元数据:对话内容已在 user/assistant 行里,这些只是重复的请求快照
+      // (近 40 个转录里 39 个带 api-request*,单个会话动辄上百行),不跳过回放就被原始 JSON 刷屏
+      case 'api-request':
+      case 'api-request-blob':
+      case 'api-request-shape':
+      case 'session-owner':
+      case 'tools-used':
         break;
       default:
         // 未知事件类型 → 降级原样透传(adapter 兜底,T1 风险缓解)

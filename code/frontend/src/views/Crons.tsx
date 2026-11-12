@@ -15,6 +15,17 @@ import { Input } from '@/components/ui/input';
 
 type Filter = 'all' | 'once' | 'cron';
 
+/**
+ * 回放抽屉的上下文。定时会话不进「会话」看板(续接并发过消息后才回去),这里是它们唯一的入口,
+ * 所以每期都能续接;dispatchId 非空 = 会话仍在后端进程内,走 attach 而不是再起一个 --resume 进程。
+ */
+interface ReplayMeta {
+  sessionId: string;
+  cwd: string;
+  status: string;
+  dispatchId: string | null;
+}
+
 const STATE_PILL: Record<ScheduledJob['status'], { cls: string; txt: string }> = {
   pending: { cls: 'pill-sched', txt: '待执行' },
   running: { cls: 'pill-run', txt: '运行中' },
@@ -420,7 +431,7 @@ export function Crons() {
   const [modalJob, setModalJob] = useState<ScheduledJob | 'new' | null>(null);
 
   const [replay, setReplay] = useState<Replay | null>(null);
-  const [replayMeta, setReplayMeta] = useState<{ sessionId: string; cwd: string; status: string; resumable: boolean } | null>(null);
+  const [replayMeta, setReplayMeta] = useState<ReplayMeta | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const jobs = data?.jobs ?? [];
@@ -447,7 +458,7 @@ export function Crons() {
     });
   };
 
-  const openReplay = async (sessionId: string, meta: { cwd: string; status: string; resumable: boolean }) => {
+  const openReplay = async (sessionId: string, meta: Omit<ReplayMeta, 'sessionId'>) => {
     setDrawerOpen(true);
     setReplay(null);
     setReplayMeta({ sessionId, ...meta });
@@ -459,9 +470,12 @@ export function Crons() {
     }
   };
 
-  const resumeToDispatch = (jobName: string, cwd: string, sessionId: string) => {
+  /** 进派发页继续这个会话:进程内还在 → attach 接回原事件流;否则 --resume 冷启动续接 */
+  const resumeToDispatch = (jobName: string, meta: ReplayMeta) => {
     setDrawerOpen(false);
-    setDispatchIntent({ resume: { sessionId, name: jobName, cwd, project: cwd.split('/').filter(Boolean).pop() ?? cwd } });
+    const { sessionId, cwd, dispatchId } = meta;
+    const target = { sessionId, name: jobName, cwd, project: cwd.split('/').filter(Boolean).pop() ?? cwd };
+    setDispatchIntent(dispatchId ? { attach: { dispatchId, ...target } } : { resume: target });
     location.hash = 'dispatch';
   };
 
@@ -595,7 +609,7 @@ export function Crons() {
                           className="btn btn-sm btn-primary"
                           onClick={(e) => {
                             e.stopPropagation();
-                            void openReplay(job.resultSessionId!, { cwd: job.cwd, status: job.status, resumable: true });
+                            void openReplay(job.resultSessionId!, { cwd: job.cwd, status: job.status, dispatchId: job.liveDispatchId ?? null });
                           }}
                         >
                           去审批
@@ -692,7 +706,7 @@ export function Crons() {
                                         void openReplay(r.sessionId!, {
                                           cwd: job.cwd,
                                           status: r.status,
-                                          resumable: r.status === 'blocked' || r.status === 'running',
+                                          dispatchId: r.liveDispatchId ?? null,
                                         });
                                       }}
                                     >
@@ -812,12 +826,12 @@ export function Crons() {
         }
         foot={
           <>
-            {replayMeta?.resumable && (
+            {replayMeta && (
               <button
                 className="btn btn-sm btn-primary"
-                onClick={() => resumeToDispatch(replay?.title ?? '定时任务', replayMeta.cwd, replayMeta.sessionId)}
+                onClick={() => resumeToDispatch(replay?.title ?? '定时任务', replayMeta)}
               >
-                {replayMeta.status === 'blocked' ? '去处理审批' : '续接此会话(--resume)'}
+                {replayMeta.status === 'blocked' ? '去处理审批' : replayMeta.dispatchId ? '接回此会话' : '续接此会话(--resume)'}
               </button>
             )}
             <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>

@@ -740,7 +740,9 @@ export class DispatchSession {
   send(text: string, images?: InlineImage[]) {
     if (this.hibernated) this.wake();
     // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
-    this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
+    // 续接(非分叉)时首条消息发在 init 之前,sessionId 尚空,但会话 id 就是 resumeFrom——照实归属,
+    // 否则「用户接着聊过这个会话」的判定(定时会话认领回看板)会漏掉只发了一条的续接
+    this.storage.recordPrompt(this.cwd, text, this.sessionId ?? (this.fork ? null : this.resumeFrom) ?? undefined);
     this.turnEnded = false; // 新一轮开始:之前 result 后的后台任务压制状态作废,交回正常事件流
     // 图片跟着回显走:user-echo 是所有已连接客户端(含中途 attach 的)唯一的用户消息来源,
     // 发送端若自行本地渲染会与它重复,故图片同走这条链路。

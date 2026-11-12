@@ -864,6 +864,23 @@ export class Storage {
       .all(jobId, limit) as ScheduledRun[];
   }
 
+  /**
+   * 「纯定时」会话:定时任务跑出来、用户还没亲自接着聊过的会话 id。这些会话不进「会话」看板,
+   * 只在「定时」页按运行记录查看。用户续接后发过消息(dispatch_prompts 里有该 sessionId 的记录)
+   * 即视为认领,回到看板——此后它就是用户自己的对话。定时任务自身的那条 prompt 发在 init 之前,
+   * 落库时没有 sessionId,不会被误判为认领。
+   */
+  scheduledOnlySessionIds(): Set<string> {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT DISTINCT r.session_id as sessionId FROM scheduled_runs r
+         WHERE r.session_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM dispatch_prompts p WHERE p.session_id = r.session_id)`,
+      )
+      .all() as { sessionId: string }[];
+    return new Set(rows.map((r) => r.sessionId));
+  }
+
   countScheduledRuns(jobId: string): number {
     const row = this.sqlite.prepare('SELECT COUNT(*) as n FROM scheduled_runs WHERE job_id = ?').get(jobId) as { n: number };
     return row.n;
