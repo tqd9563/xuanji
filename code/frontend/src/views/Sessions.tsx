@@ -237,6 +237,7 @@ function FullCard({ s, sel, dim, drag, onOpen, onClose, onReply, onSuspend, onAr
         <span className="title">{s.name}</span>
         {isUnread(s) && <span className="tag t-unread">待验收</span>}
         {s.state === 'blocked' && <span className="tag t-unread">等输入</span>}
+        {s.scheduled && <Tag>定时</Tag>}
         <Tag>{s.source === 'web' ? 'web' : s.kind === 'background' ? '后台' : '终端'}</Tag>
         {s.readonly && <Tag>只读</Tag>}
         <SessionMetrics sessionId={s.sessionId} idleExited={s.idleExited} />

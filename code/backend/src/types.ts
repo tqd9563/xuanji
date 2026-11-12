@@ -93,6 +93,8 @@ export interface AgentSession {
   suspended?: boolean;
   /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
   idleExited?: boolean;
+  /** 定时任务跑出来、用户尚未接着聊过的会话(仅「需审批」时才会出现在看板上) */
+  scheduled?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */
