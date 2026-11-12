@@ -17,7 +17,7 @@ import {
   type SessionRef,
   type Step,
 } from '../src/services/lark/cards.js';
-import { parseCommand, splitMarkdown } from '../src/services/lark/parse.js';
+import { parseAttachments, parseCommand, safeFileName, sniffImageType, splitMarkdown } from '../src/services/lark/parse.js';
 
 const ref: SessionRef = { name: '飞书中控', project: 'xuanji', paletteIdx: 16 };
 const json = (c: object) => JSON.stringify(c);
@@ -271,5 +271,26 @@ describe('杂项', () => {
     expect(relTime(10_000)).toBe('刚刚');
     expect(relTime(5 * 60_000)).toBe('5 分钟前');
     expect(relTime(3 * 3600_000)).toBe('3 小时前');
+  });
+});
+
+describe('附件解析', () => {
+  it('取出图片与文件 key,剩下说明文字', () => {
+    expect(parseAttachments('[Image: img_v3_a]')).toEqual({ images: ['img_v3_a'], files: [], text: '' });
+    expect(parseAttachments('<file key="file_v3_b" name="a b.pdf"/>')).toEqual({ images: [], files: [{ key: 'file_v3_b', name: 'a b.pdf' }], text: '' });
+    expect(parseAttachments('看这个 [Image: img_1] 和 [Image: img_2]').images).toEqual(['img_1', 'img_2']);
+    expect(parseAttachments('纯文字').text).toBe('纯文字');
+  });
+  it('文件名不能逃出收件目录', () => {
+    expect(safeFileName('../../etc/passwd')).not.toContain('/');
+    expect(safeFileName('..')).not.toMatch(/^\./);
+    expect(safeFileName('')).toBe('file');
+  });
+  it('按文件头判图片格式', () => {
+    expect(sniffImageType(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0, 0, 0]))).toBe('image/png');
+    expect(sniffImageType(Buffer.from([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
+    expect(sniffImageType(Buffer.from('GIF89a'))).toBe('image/gif');
+    expect(sniffImageType(Buffer.from('RIFF0000WEBPVP8 '))).toBe('image/webp');
+    expect(sniffImageType(Buffer.from('%PDF-1.7'))).toBeNull();
   });
 });

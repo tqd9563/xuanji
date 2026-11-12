@@ -11,6 +11,7 @@ import { readHistory, scanProjectDirs } from '../../adapters/claude-dir.js';
 import {
   botInfo,
   consume,
+  downloadResource,
   patchCard,
   sendCard,
   sendMarkdown,
@@ -57,8 +58,14 @@ import {
   type QuestionView,
   type SessionRef,
   type Step,
+  attachmentsCard,
+  type AttachmentView,
 } from './cards.js';
-import { parseCommand, splitMarkdown } from './parse.js';
+import { parseAttachments, parseCommand, safeFileName, sniffImageType, splitMarkdown } from './parse.js';
+import { mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { INLINE_IMAGE_MAX_BYTES, INLINE_IMAGE_MAX_COUNT, type InlineImage } from '../../types.js';
 
 const OWNER_KEY = 'lark.owner';
 /** 当前会话的有效期:超过就不再默认发给它,先弹选择卡 */
@@ -73,6 +80,19 @@ const PROGRESS_MIN_INTERVAL_MS = 2_000;
 const PROGRESS_HEARTBEAT_MS = 5_000;
 const PROGRESS_TICK_MS = 500;
 const BIND_TTL_MS = 10 * 60_000;
+/** 挂起的附件多久没被用上就丢弃 */
+const ATTACH_TTL_MS = 30 * 60_000;
+/**
+ * 飞书发来的附件落在这里:不进任何项目目录(免得污染仓库),按日期 / 消息分目录。
+ * 图片同时以内联图片交给 Claude(与网页粘贴同一条通道),文件只给路径,由 Claude 自己读。
+ */
+export const LARK_INBOX = process.env.XUANJI_LARK_INBOX ?? join(homedir(), '.xuanji', 'lark-inbox');
+
+interface Pending {
+  images: InlineImage[];
+  files: { name: string; path: string }[];
+  at: number;
+}
 const DAY = 86_400_000;
 
 interface Owner {
@@ -145,6 +165,8 @@ export class LarkBridge {
   private selfResolved = new Set<string>();
   private current: { dispatchId?: string; sessionId?: string; at: number } | null = null;
   private bind: { code: string; expiresAt: number } | null = null;
+  /** 收到、还没被下一句话带走的附件 */
+  private pending: Pending | null = null;
   private unhook?: () => void;
 
   constructor(private storage: Storage) {}
@@ -490,8 +512,21 @@ export class LarkBridge {
     if (sender !== owner.openId) return;
     if (chatId !== owner.chatId) this.storage.setMeta(OWNER_KEY, JSON.stringify({ ...owner, chatId }));
 
-    if (e.message_type !== 'text' && e.message_type !== 'post') {
-      await sendMarkdown(owner.chatId, '暂时只支持文字消息');
+    const type = String(e.message_type ?? '');
+    if (!['text', 'post', 'image', 'file'].includes(type)) {
+      await sendMarkdown(owner.chatId, '暂不支持语音、视频和表情;文字、图片、文件都可以');
+      return;
+    }
+    const att = parseAttachments(content);
+    if (att.images.length || att.files.length) {
+      const got = await this.fetchAttachments(mid, att.images, att.files);
+      if (!got) return;
+      // 只有附件没有话:先挂起,等下一句话带上;富文本里图文都有:直接当一条消息发
+      if (!att.text) {
+        await this.push(attachmentsCard(got));
+        return;
+      }
+      await this.routeText(att.text, String(e.reply_to ?? '') || undefined);
       return;
     }
     const cmd = parseCommand(content);
@@ -518,6 +553,62 @@ export class LarkBridge {
         await this.routeText(cmd.text, String(e.reply_to ?? '') || undefined);
         return;
     }
+  }
+
+  /** 下载附件并挂起;失败时回一句原因(缺权限时点名要开哪个) */
+  private async fetchAttachments(messageId: string, images: string[], files: { key: string; name: string }[]): Promise<AttachmentView[] | null> {
+    const owner = this.owner()!;
+    const day = new Date().toISOString().slice(0, 10);
+    const dir = join(LARK_INBOX, day, messageId);
+    mkdirSync(dir, { recursive: true });
+    if (!this.pending || Date.now() - this.pending.at > ATTACH_TTL_MS) this.pending = { images: [], files: [], at: Date.now() };
+    const p = this.pending;
+    p.at = Date.now();
+    const views: AttachmentView[] = [];
+    const items = [
+      ...images.map((k, i) => ({ key: k, name: `image-${i + 1}`, type: 'image' as const })),
+      ...files.map((f) => ({ key: f.key, name: safeFileName(f.name), type: 'file' as const })),
+    ];
+    for (const it of items) {
+      const r = await downloadResource(messageId, it.key, it.type, dir, it.name);
+      if (!r.ok) {
+        const scope = /scope|权限/i.test(r.error ?? '');
+        await sendMarkdown(
+          owner.chatId,
+          scope
+            ? '下载附件失败:机器人缺少读取消息的权限。请在飞书开放平台给这个应用开通 **im:message:readonly** 并发布新版本'
+            : `下载附件失败:${clip(r.error ?? '未知错误', 200)}`,
+        );
+        return null;
+      }
+      // lark-cli 会按 Content-Type 补扩展名,实际落盘名以目录里出现的为准
+      const path = resolveSaved(dir, it.name);
+      if (!path) {
+        await sendMarkdown(owner.chatId, '下载附件失败:没有找到落盘的文件');
+        return null;
+      }
+      const buf = readFileSync(path);
+      const mt = it.type === 'image' ? sniffImageType(buf) : null;
+      if (mt && buf.length <= INLINE_IMAGE_MAX_BYTES && p.images.length < INLINE_IMAGE_MAX_COUNT) {
+        p.images.push({ media_type: mt, data: buf.toString('base64') });
+      } else {
+        // 超限或格式不受支持的图片也退化成文件路径,Claude 照样能读
+        p.files.push({ name: path.split('/').pop()!, path });
+      }
+      views.push({ name: it.type === 'image' ? `图片 ${p.images.length + p.files.length}` : path.split('/').pop()!, kind: it.type, bytes: buf.length });
+    }
+    return views;
+  }
+
+  /** 取走挂起的附件:图片原样,文件拼成一段路径说明附在消息末尾 */
+  private takePending(text: string): { text: string; images: InlineImage[] } {
+    const p = this.pending;
+    this.pending = null;
+    if (!p || Date.now() - p.at > ATTACH_TTL_MS) return { text, images: [] };
+    const note = p.files.length
+      ? `\n\n附件(飞书发来,已保存在本机,可直接读取):\n${p.files.map((f) => `- ${f.name}: ${f.path}`).join('\n')}`
+      : '';
+    return { text: text + note, images: p.images };
   }
 
   private currentName(): string | undefined {
@@ -605,7 +696,8 @@ export class LarkBridge {
       this.resetTurn(w);
       await this.startProgress(w);
     }
-    d.send(textIn);
+    const out = this.takePending(textIn);
+    d.send(out.text, out.images);
   }
 
   private async boardCard(sessionId: string): Promise<AgentSession | undefined> {
@@ -748,7 +840,8 @@ export class LarkBridge {
       w.expectEcho++;
       await this.startProgress(w);
     }
-    d.send(task);
+    const out = this.takePending(task);
+    d.send(out.text, out.images);
   }
 
   // ---------- 飞书 → 璇玑:机器人菜单 ----------
@@ -992,4 +1085,20 @@ export function matchProjects<T extends { name: string }>(projects: T[], kw: str
   const exact = projects.filter((p) => p.name.toLowerCase() === k);
   if (exact.length) return exact;
   return projects.filter((p) => p.name.toLowerCase().includes(k));
+}
+
+/** lark-cli 可能给文件名补扩展名:先找原名,再找「原名.任意扩展名」 */
+function resolveSaved(dir: string, name: string): string | null {
+  const exact = join(dir, name);
+  try {
+    if (statSync(exact).isFile()) return exact;
+  } catch {
+    /* 没有原名,往下找 */
+  }
+  try {
+    const hit = readdirSync(dir).find((f) => f.startsWith(`${name}.`));
+    return hit ? join(dir, hit) : null;
+  } catch {
+    return null;
+  }
 }

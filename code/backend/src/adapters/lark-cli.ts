@@ -55,7 +55,7 @@ export function parseCliJson<T>(stdout: string): LarkResult<T> {
 }
 
 /** 执行一次 lark-cli 调用;stdin 用于传大段 JSON(卡片内容),避免进程参数里出现长串 */
-export function larkCall<T = unknown>(args: string[], stdin?: string): Promise<LarkResult<T>> {
+export function larkCall<T = unknown>(args: string[], stdin?: string, opts: { cwd?: string } = {}): Promise<LarkResult<T>> {
   return new Promise((resolve) => {
     let out = '';
     let err = '';
@@ -68,7 +68,7 @@ export function larkCall<T = unknown>(args: string[], stdin?: string): Promise<L
     };
     let child: ChildProcess;
     try {
-      child = spawn(BIN, ['--profile', LARK_PROFILE, ...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+      child = spawn(BIN, ['--profile', LARK_PROFILE, ...args], { stdio: ['pipe', 'pipe', 'pipe'], cwd: opts.cwd });
     } catch (e) {
       return finish({ ok: false, error: e instanceof Error ? e.message : String(e) });
     }
@@ -115,6 +115,19 @@ export function patchCard(messageId: string, card: object) {
   return larkCall(
     ['api', 'PATCH', `/open-apis/im/v1/messages/${messageId}`, '--as', 'bot', '--data', '-'],
     JSON.stringify({ content: JSON.stringify(card) }),
+  );
+}
+
+/**
+ * 下载消息里的图片 / 文件到 dir/name。lark-cli 只允许写进工作目录、/tmp、~/files 之内,
+ * 所以把子进程的 cwd 设成目标目录、--output 给相对文件名。
+ * 需要机器人有 im:message:readonly(或 im:message / im:message.history:readonly)权限。
+ */
+export function downloadResource(messageId: string, key: string, type: 'image' | 'file', dir: string, name: string) {
+  return larkCall(
+    ['im', '+messages-resources-download', '--as', 'bot', '--message-id', messageId, '--file-key', key, '--type', type, '--output', name],
+    undefined,
+    { cwd: dir },
   );
 }
 
