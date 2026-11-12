@@ -11,7 +11,9 @@ import {
   PROJECT_TAG_COLORS,
   projectTagColor,
   questionCard,
+  pickProjectCard,
   REPLY_CLIP,
+  routeCard,
   switchedCard,
   type ListRow,
   type SessionRef,
@@ -292,5 +294,21 @@ describe('附件解析', () => {
     expect(sniffImageType(Buffer.from('GIF89a'))).toBe('image/gif');
     expect(sniffImageType(Buffer.from('RIFF0000WEBPVP8 '))).toBe('image/webp');
     expect(sniffImageType(Buffer.from('%PDF-1.7'))).toBeNull();
+  });
+});
+
+describe('按钮自带执行信息(重启后仍可用)', () => {
+  it('选择卡、项目选择卡、出错卡的按钮值带着会话 id 与要发的话', () => {
+    const route = routeCard('看一下这个', [{ sessionId: 'sid-9', ref }]);
+    expect(buttons(route).map((b) => b.value)).toEqual([
+      { a: 'route', s: 'sid-9', t: '看一下这个' },
+      { a: 'route-new', t: '看一下这个' },
+    ]);
+    expect(buttons(pickProjectCard('atlas', '补文档', [{ name: 'atlas-sdk', path: '/p/atlas-sdk' }]))[0]!.value).toEqual({
+      a: 'pick',
+      p: '/p/atlas-sdk',
+      t: '补文档',
+    });
+    expect(buttons(errorCard(ref, 'boom', 'pending', { sessionId: 'sid-1', text: '跑一下' }))[0]!.value).toEqual({ a: 'retry', s: 'sid-1', t: '跑一下' });
   });
 });

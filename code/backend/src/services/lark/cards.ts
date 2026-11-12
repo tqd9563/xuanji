@@ -352,9 +352,26 @@ export function progressCard(v: ProgressView): object {
 
 // ---------- 出错 ----------
 
-export function errorCard(ref: SessionRef, message: string, state: 'pending' | 'retried' = 'pending'): object {
+/**
+ * 按钮回调值里自带「做这件事所需的全部信息」(会话 id、要重发的话、要派发的任务),
+ * 后端重启、内存里的卡片登记表清空后按钮照样能用(用户 2026-11-12 重启后点「续接」只得到「已失效」)。
+ * 文本类参数截到 BUTTON_TEXT_MAX,卡片体积有上限。
+ */
+export const BUTTON_TEXT_MAX = 1500;
+
+export function errorCard(
+  ref: SessionRef,
+  message: string,
+  state: 'pending' | 'retried' = 'pending',
+  retry: { sessionId?: string; text?: string } = {},
+): object {
   const els: El[] = [md(fence(clip(message, 800))), text('会话已保留,上下文未丢失。', 'grey')];
-  if (state === 'pending') els.push(buttons(button('重试上一条', { a: 'retry' }, 'primary')));
+  if (state === 'pending') {
+    const v: Record<string, unknown> = { a: 'retry' };
+    if (retry.sessionId) v.s = retry.sessionId;
+    if (retry.text) v.t = clip(retry.text, BUTTON_TEXT_MAX);
+    els.push(buttons(button('重试上一条', v, 'primary')));
+  }
   else els.push(note('已在飞书重试'));
   return card(state === 'pending' ? '出错退出' : '出错退出 · 已重试', 'red', els, ref);
 }
@@ -568,7 +585,7 @@ export function closedCard(title: string, line: string): object {
 export function pickProjectCard(kw: string, task: string, options: { name: string; path: string }[]): object {
   return card('选择项目', 'blue', [
     text(`「${kw}」匹配到 ${options.length} 个项目:`),
-    ...options.slice(0, 8).map((o) => button(o.name, { a: 'pick', p: o.path }, 'default', { width: 'fill' })),
+    ...options.slice(0, 8).map((o) => button(o.name, { a: 'pick', p: o.path, t: clip(task, BUTTON_TEXT_MAX) }, 'default', { width: 'fill' })),
     md(fence(clip(task, 300))),
   ]);
 }
@@ -582,9 +599,9 @@ export function routeCard(textIn: string, options: RouteOption[]): object {
   const els: El[] = [text('上一次交互已超过 30 分钟,为免发错,先确认一下:', 'grey'), md(fence(clip(textIn, 300)))];
   for (const o of options.slice(0, 5)) {
     els.push(md(`<text_tag color='${projectTagColor(o.ref.project, o.ref.paletteIdx)}'>${mdSafe(clip(o.ref.project, 24))}</text_tag>`));
-    els.push(button(clip(o.ref.name, 30), { a: 'route', s: o.sessionId }, 'default', { width: 'fill' }));
+    els.push(button(clip(o.ref.name, 30), { a: 'route', s: o.sessionId, t: clip(textIn, BUTTON_TEXT_MAX) }, 'default', { width: 'fill' }));
   }
-  els.push(button('作为新任务派发…', { a: 'route-new' }, 'default', { width: 'fill' }));
+  els.push(button('作为新任务派发…', { a: 'route-new', t: clip(textIn, BUTTON_TEXT_MAX) }, 'default', { width: 'fill' }));
   return card('发给哪个会话?', 'blue', els);
 }
 

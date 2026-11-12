@@ -482,3 +482,74 @@ describe('图片与文件', () => {
     expect(h.st.texts.at(-1)).toContain('暂不支持');
   });
 });
+
+describe('后端重启后的旧卡片', () => {
+  /** 模拟重启:进程内的派发会话与卡片登记表全没了,库(meta)还在 */
+  async function restart(storage: ReturnType<typeof fakeStorage>) {
+    h.st.observers = [];
+    h.st.sessions.clear();
+    const b2 = new LarkBridge(storage as never);
+    b2.start();
+    await flush();
+    return b2;
+  }
+
+  it('旧会话列表上的「续接」照常可用;引用回复旧的完成卡续到原会话', async () => {
+    const { storage } = await boundBridge();
+    h.st.board.idle = [{ sessionId: 'sid-9', cwd: '/p/xuanji', name: '旧会话', readonly: false }];
+    const s1 = h.make('sid-9', '/p/xuanji', '旧会话');
+    s1.emit({ ev: 'result', costUsd: 0, contextTokens: 0, contextPct: 0, durationMs: 1 });
+    await flush();
+    const doneMid = h.st.sent.at(-1)!.mid;
+    msg('/ls');
+    await flush();
+    const listMid = h.st.sent.at(-1)!.mid;
+
+    await restart(storage);
+    click(listMid, { a: 'focus', s: 'sid-9' });
+    await flush();
+    expect(title(h.st.sent.at(-1)!.card)).toBe('已切换会话');
+    expect(h.st.patched.some((p) => title(p.card) === '已失效')).toBe(false);
+
+    msg('接着改', { reply_to: doneMid });
+    await flush();
+    const resumed = [...h.st.sessions.values()].find((s) => s.sessionId === 'sid-9');
+    expect(resumed?.sent).toEqual(['接着改']);
+  });
+
+  it('当前会话跨重启保留:重启后直接发消息仍发给它', async () => {
+    const { storage } = await boundBridge();
+    h.st.board.idle = [{ sessionId: 'sid-9', cwd: '/p/xuanji', name: '旧会话', readonly: false }];
+    const s1 = h.make('sid-9', '/p/xuanji', '旧会话');
+    s1.emit({ ev: 'result', costUsd: 0, contextTokens: 0, contextPct: 0, durationMs: 1 });
+    await flush();
+    msg('第一句', { reply_to: h.st.sent.at(-1)!.mid });
+    await flush();
+    await restart(storage);
+    msg('第二句');
+    await flush();
+    expect([...h.st.sessions.values()].find((s) => s.sessionId === 'sid-9')?.sent).toEqual(['第二句']);
+  });
+
+  it('选择卡、出错卡的按钮自带要发的话;审批卡随重启失效且不会误批', async () => {
+    const { storage } = await boundBridge();
+    h.st.board.idle = [{ sessionId: 'sid-9', cwd: '/p/xuanji', name: '旧会话', readonly: false }];
+    msg('看一下这个');
+    await flush();
+    const routeMid = h.st.sent.at(-1)!.mid;
+    const s1 = h.make('sid-1', '/p/xuanji', '飞书中控');
+    s1.emit({ ev: 'permission-request', requestId: 'r1', toolName: 'Bash', title: 't', input: 'ls', hasSuggestions: false });
+    await flush();
+    const permMid = h.st.sent.at(-1)!.mid;
+
+    await restart(storage);
+    click(routeMid, { a: 'route', s: 'sid-9', t: '看一下这个' });
+    await flush();
+    expect([...h.st.sessions.values()].find((s) => s.sessionId === 'sid-9')?.sent).toEqual(['看一下这个']);
+
+    click(permMid, { a: 'perm', d: 'allow' });
+    await flush();
+    expect(s1.resolved).toEqual([]);
+    expect(title(h.st.patched.at(-1)!.card)).toBe('已失效');
+  });
+});
