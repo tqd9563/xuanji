@@ -553,3 +553,25 @@ describe('后端重启后的旧卡片', () => {
     expect(title(h.st.patched.at(-1)!.card)).toBe('已失效');
   });
 });
+
+describe('验收环境不连飞书', () => {
+  it('XUANJI_LARK=off 时即使偏好启用也不连接,状态说明原因;收不到任何消息', async () => {
+    process.env.XUANJI_LARK = 'off';
+    try {
+      h.st.onMsg = null;
+      const storage = fakeStorage();
+      storage.setMeta('lark.owner', JSON.stringify({ openId: OWNER, chatId: CHAT, boundAt: 1 }));
+      const b = new LarkBridge(storage as never);
+      b.start();
+      b.applyPrefs();
+      await b.reconnect();
+      await flush();
+      expect(h.st.onMsg).toBeNull(); // 从没起过消费进程
+      const st = await b.status();
+      expect(st.state).toBe('off');
+      expect(st.error).toContain('XUANJI_PREVIEW_LARK=1');
+    } finally {
+      delete process.env.XUANJI_LARK;
+    }
+  });
+});
