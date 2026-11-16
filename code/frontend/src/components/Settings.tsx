@@ -311,6 +311,7 @@ function LarkFields({
   }, [visible, refresh, lark.enabled]);
 
   const off = !lark.enabled;
+  // 验收环境里后端被环境变量关掉飞书时,偏好仍可能是开着的:以后端回报为准
   const state: LarkStatus['state'] = off ? 'off' : (st?.state ?? 'connecting');
   const connText = state === 'ok' && st?.bot ? `${LARK_CONN.ok} · ${st.bot.name}` : LARK_CONN[state];
   const connDesc =
@@ -325,7 +326,8 @@ function LarkFields({
     ) : state === 'fail' ? (
       (st?.error ?? '连接失败') + '。一个飞书应用只能有一个接收方,确认没有别的服务占着同一个机器人'
     ) : (
-      '飞书中控已关闭,长连接已断开'
+      // 环境级关闭(验收环境)时后端会给出原因,优先展示
+      (st?.error ?? '飞书中控已关闭,长连接已断开')
     );
   const pushDesc =
     lark.push === 'off'

@@ -71,6 +71,13 @@ import { INLINE_IMAGE_MAX_BYTES, INLINE_IMAGE_MAX_COUNT, type InlineImage } from
 
 const OWNER_KEY = 'lark.owner';
 /**
+ * 环境级总闸:XUANJI_LARK=off 时无论偏好如何都不连飞书。验收环境(preview.sh)默认带上它——
+ * 快照里有生产的启用状态与绑定人,连上后会和生产同时收到每条消息、各回一遍
+ * (飞书消息事件允许多个本地接收方同时订阅,不像卡片回调那样互斥)。
+ */
+export const LARK_ENV_OFF = () => process.env.XUANJI_LARK === 'off';
+const ENV_OFF_HINT = '验收环境默认不连飞书(否则会和生产同时收到每条消息);要验飞书功能用 XUANJI_PREVIEW_LARK=1 ./preview.sh 启动';
+/**
  * 卡片消息 → 会话 id 的映射与「当前会话」落库:后端重启后,引用回复旧卡片仍能续到原会话,
  * 当前会话也不丢(内存里的卡片登记表只管卡片状态,重启即清空)。映射封顶 MSG_SESSION_CAP 条。
  */
@@ -212,19 +219,19 @@ export class LarkBridge {
 
   start() {
     this.unhook = onDispatchCreated((s) => this.watch(s));
-    if (readPrefs(this.storage).lark.enabled) void this.connect();
+    if (readPrefs(this.storage).lark.enabled && !LARK_ENV_OFF()) void this.connect();
   }
 
   /** 偏好改动后调用:按 enabled 连 / 断 */
   applyPrefs() {
-    const on = readPrefs(this.storage).lark.enabled;
+    const on = readPrefs(this.storage).lark.enabled && !LARK_ENV_OFF();
     if (on && !this.consumers.length) void this.connect();
     if (!on && this.consumers.length) this.disconnect();
   }
 
   async reconnect() {
     this.disconnect();
-    if (readPrefs(this.storage).lark.enabled) await this.connect();
+    if (readPrefs(this.storage).lark.enabled && !LARK_ENV_OFF()) await this.connect();
   }
 
   stop() {
@@ -263,7 +270,10 @@ export class LarkBridge {
     const st = [this.states.msg, this.states.card].filter((x): x is ConsumerState => !!x);
     let state: LarkStatus['state'];
     let error: string | undefined;
-    if (!prefs.enabled) state = 'off';
+    if (LARK_ENV_OFF()) {
+      state = 'off';
+      error = ENV_OFF_HINT;
+    } else if (!prefs.enabled) state = 'off';
     else if (this.configError) {
       state = /config|profile|credential|not found|未配置|app_id/i.test(this.configError) ? 'unset' : 'fail';
       error = this.configError;
