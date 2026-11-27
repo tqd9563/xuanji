@@ -2,6 +2,7 @@
  * ClaudeDirAdapter —— 全仓唯一允许解析 ~/.claude 非公开格式的文件(架构铁律 1)。
  * 解析失败一律降级(跳过计数 / raw 透传),绝不 throw 到上层。全部只读。
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
@@ -677,34 +678,78 @@ export async function scanMemories(
   for (const [encodedDir, realPath] of projectMap) {
     const memDir = path.join(root, encodedDir, 'memory');
     const files = await fsp.readdir(memDir).catch(() => [] as string[]);
+    const hooks = parseMemoryIndex(await fsp.readFile(path.join(memDir, 'MEMORY.md'), 'utf8').catch(() => ''));
     for (const f of files) {
       if (!f.endsWith('.md') || f === 'MEMORY.md') continue;
       const m = await parseMemoryMd(path.join(memDir, f), realPath);
-      if (m) out.push(m);
+      if (m) out.push({ ...m, indexHook: hooks.get(f) ?? null });
     }
+  }
+  // 共享经验:同一真身被哪些项目挂载(只统计本次扫描范围内的项目)
+  const byReal = new Map<string, Memory[]>();
+  for (const m of out) if (m.sharedWith) byReal.set(m.realFile, [...(byReal.get(m.realFile) ?? []), m]);
+  for (const group of byReal.values()) {
+    for (const m of group) m.sharedWith = group.filter((x) => x !== m).map((x) => x.project).sort();
   }
   return out;
 }
 
 const VALID_TYPES = new Set(['user', 'feedback', 'project', 'reference', 'cross-project']);
+/** 列表里 body 的截断上限;完整正文走 parseMemoryMd(file, path, { full: true }) */
+const MEMORY_BODY_CAP = 8000;
 
-async function parseMemoryMd(file: string, projectPath: string): Promise<Memory | null> {
+export const memoryRev = (raw: string) => crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16);
+
+/** MEMORY.md 索引:文件名 → 该行「](file.md)」之后的摘要(去掉前导的破折号分隔) */
+export function parseMemoryIndex(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split('\n')) {
+    const m = line.match(/\]\(([^)\s]+\.md)\)(.*)$/);
+    if (m && !out.has(m[1]!)) out.set(m[1]!, m[2]!.replace(/^\s*[—–-]+\s*/, '').trim());
+  }
+  return out;
+}
+
+/** 把 memory md 拆成 frontmatter 对象与正文(编辑保存时要原样保留未知键) */
+export function splitMemoryMd(raw: string): { meta: Record<string, unknown>; body: string } {
+  const fm = splitFrontmatter(raw);
+  let meta: Record<string, unknown> = {};
+  if (fm) {
+    try {
+      const parsed: unknown = YAML.parse(fm.frontmatter);
+      if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>;
+    } catch {
+      /* frontmatter 写坏了:当作没有,正文照旧 */
+    }
+  }
+  return { meta, body: (fm ? fm.body : raw).trim() };
+}
+
+export async function parseMemoryMd(
+  file: string,
+  projectPath: string,
+  opts: { full?: boolean } = {},
+): Promise<Memory | null> {
   try {
     const raw = await fsp.readFile(file, 'utf8');
-    const fm = splitFrontmatter(raw);
-    const meta = fm ? (YAML.parse(fm.frontmatter) ?? {}) : {};
-    const body = (fm ? fm.body : raw).trim();
-    const rawType = meta.metadata?.type ?? meta.type;
+    const { meta, body } = splitMemoryMd(raw);
+    const rawType = (meta.metadata as { type?: string } | undefined)?.type ?? (meta.type as string | undefined);
     const links = [...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]!).filter(Boolean);
+    const isLink = (await fsp.lstat(file)).isSymbolicLink();
     return {
       name: String(meta.name ?? path.basename(file, '.md')),
       description: String(meta.description ?? '').slice(0, 500),
-      type: VALID_TYPES.has(rawType) ? rawType : 'unknown',
+      type: (rawType && VALID_TYPES.has(rawType) ? rawType : 'unknown') as Memory['type'],
       project: path.basename(projectPath),
       projectPath,
       file,
-      body: body.slice(0, 8000),
+      body: opts.full ? body : body.slice(0, MEMORY_BODY_CAP),
       links,
+      rev: memoryRev(raw),
+      truncated: !opts.full && body.length > MEMORY_BODY_CAP,
+      sharedWith: isLink ? [] : null,
+      realFile: isLink ? await fsp.realpath(file) : file,
+      indexHook: null,
     };
   } catch {
     return null;

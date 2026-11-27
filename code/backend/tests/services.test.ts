@@ -155,6 +155,11 @@ describe('Storage FTS5', () => {
       file: `/p/demo/${name}.md`,
       body,
       links: [],
+      rev: '',
+      truncated: false,
+      sharedWith: null,
+      realFile: `/x/${name}.md`,
+      indexHook: null,
     });
     storage.rebuildMemoryIndex([
       mem('a', '上游 SLA 回调在网络抖动时会重复推送同一事件'),

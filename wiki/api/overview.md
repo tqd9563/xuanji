@@ -16,6 +16,11 @@
 | GET | /api/skills | 技能列表(user / plugin / disabled),含 SKILL.md 正文 |
 | GET | /api/memories | 全部项目 memory 聚合(frontmatter + 正文 + [[链接]]) |
 | GET | /api/memories/search?q= | FTS5 全文搜索(trigram,支持中文) |
+| GET | /api/memories/detail?file= | 单条完整详情(正文不截断 + 最新 rev + 索引摘要);进入编辑前取 |
+| PUT | /api/memories | 编辑经验:`{file, description, type, body, indexHook, rev, force?}`;rev 与磁盘不符返回 409 并带 `latest`,`force` 才覆盖。共享经验写到软链的真身 |
+| POST | /api/memories/delete | 删除 = 移入回收目录:`{file, mode?, confirm: true}`;共享经验 `mode` 取 `unmount`(默认,只卸载本项目)或 `all`(连真身) |
+| GET | /api/memories/trash | 回收站列表(`~/.xuanji/trash/memory/`) |
+| POST | /api/memories/trash/:id/restore | 恢复:文件 / 软链与 MEMORY.md 索引行放回原位;原位置已有同名文件返回 409 |
 | GET | /api/usage/today | 今日 Token 用量/成本,项目 → 会话两级(含口径说明) |
 | GET | /api/crons | 定时任务:M1 仅只读列出系统 crontab |
 | GET | /api/sessions/:sessionId/can-resume | resume 所有权预检(终端存活 interactive → 拒绝) |

@@ -17,6 +17,11 @@ export const config = {
    * 看板娘模型库。用户自己下载/购买的资产,放用户目录而非 dataDir:
    * dataDir 的契约是「可重建」,且仓库内路径在各 worktree 之间不共享。
    */
+  /**
+   * 经验回收目录(铁律 2 例外④):删除 = 把 memory md 移到这里,可恢复。
+   * 与 live2dDir 同理放用户目录:dataDir 的契约是「可重建」,回收文件不可重建。
+   */
+  trashDir: process.env.XUANJI_TRASH_DIR ?? path.join(os.homedir(), '.xuanji', 'trash'),
   live2dDir: process.env.XUANJI_LIVE2D_DIR ?? path.join(os.homedir(), '.xuanji', 'live2d'),
   /**
    * 噪音(非开发)目录分类。同时匹配编码目录名与解码路径,'-'/'/' 等价。

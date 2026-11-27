@@ -17,6 +17,7 @@ import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from 
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
 import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
+import { MemoryEditError, deleteMemory, listTrash, memoryDetail, restoreMemory, updateMemory } from '../services/memory-edit.js';
 import { queryWorklog } from '../services/worklog.js';
 import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
 import { cachedModelCatalog } from '../services/models.js';
@@ -244,6 +245,48 @@ export function createApi(
     });
     storage.markSideQuestionMemory(id, file);
     return c.json({ ok: true, file });
+  });
+
+  // ---------- 经验的编辑 / 删除 / 恢复(铁律 2 例外④:用户在经验页显式触发) ----------
+  const memErr = (e: unknown) => {
+    if (e instanceof MemoryEditError) return { body: { error: e.message, ...e.extra }, status: e.status };
+    throw e;
+  };
+  api.get('/memories/detail', async (c) => {
+    try {
+      return c.json({ memory: await memoryDetail(c.req.query('file')) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.put('/memories', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    try {
+      return c.json({ memory: await updateMemory({ file: body.file, ...body }) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.post('/memories/delete', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { file?: unknown; mode?: unknown; confirm?: boolean };
+    if (!body.confirm) return c.json({ error: '删除经验需要二次确认(confirm: true)' }, 400);
+    try {
+      return c.json({ trashed: await deleteMemory({ file: body.file, mode: body.mode }) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.get('/memories/trash', async (c) => c.json({ trash: await listTrash() }));
+  api.post('/memories/trash/:id/restore', async (c) => {
+    try {
+      return c.json({ ok: true, ...(await restoreMemory(c.req.param('id'))) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
   });
 
   api.get('/memories/search', async (c) => {

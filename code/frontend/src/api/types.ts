@@ -107,6 +107,21 @@ export interface Memory {
   file: string;
   body: string;
   links: string[];
+  /** 原文指纹:编辑保存时带回,后端据此发现「打开之后被别处改过」 */
+  rev: string;
+  /** 列表里的 body 只取前 8000 字;编辑前取详情拿完整正文 */
+  truncated: boolean;
+  /** 共享经验(软链到 memory-shared)挂载到的其它项目;非共享为 null */
+  sharedWith: string[] | null;
+  /** MEMORY.md 里这条经验的摘要:会话启动时注入的是它,不是 description */
+  indexHook: string | null;
+}
+
+export interface TrashedMemory {
+  id: string;
+  deletedAt: number;
+  mode: 'file' | 'unmount' | 'all';
+  memory: Memory;
 }
 
 /** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */

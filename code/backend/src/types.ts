@@ -186,6 +186,25 @@ export interface Memory {
   body: string;
   /** [[wikilink]] 引用 */
   links: string[];
+  /** 原文内容指纹:编辑保存时带回,用来发现「打开之后被别处改过」 */
+  rev: string;
+  /** 列表里的 body 只取前 8000 字;被截断时编辑前须取详情 */
+  truncated: boolean;
+  /** 共享经验 = 指向 memory-shared 的软链;值为同一真身挂载到的其它项目名(只挂在本项目时为空数组),非共享为 null */
+  sharedWith: string[] | null;
+  /** 软链解析后的真实路径(非共享时等于 file) */
+  realFile: string;
+  /** MEMORY.md 里指向本文件那一行「 — 」之后的摘要:会话启动时注入的是它,不是 description;没有索引行为 null */
+  indexHook: string | null;
+}
+
+/** 回收站里的一条经验(文件在 ~/.xuanji/trash/memory/<id>/) */
+export interface TrashedMemory {
+  id: string;
+  deletedAt: number;
+  /** file=普通文件;unmount=只卸载本项目的软链;all=连共享库真身一起 */
+  mode: 'file' | 'unmount' | 'all';
+  memory: Memory;
 }
 
 /** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
