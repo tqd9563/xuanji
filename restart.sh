@@ -10,6 +10,21 @@ if [ "${XUANJI_DISPATCH:-}" = "1" ]; then
   exit 1
 fi
 
+# 与常驻后端用同一个 Node:launchd plist 里写死了安装时的 node 路径,
+# 而用户终端的 nvm 默认版本可能不同(可能连 pnpm 都没有,且 native 模块 ABI 对不上)
+PLIST="$HOME/Library/LaunchAgents/com.xuanji.backend.plist"
+NODE_BIN=$(/usr/libexec/PlistBuddy -c 'Print :ProgramArguments:0' "$PLIST" 2>/dev/null || true)
+if [ -z "$NODE_BIN" ] || [ ! -x "$NODE_BIN" ]; then
+  echo "✗ 读不到后端 Node 路径($PLIST),先执行 pnpm --dir code/backend launchd:install" >&2
+  exit 1
+fi
+export PATH="$(dirname "$NODE_BIN"):$PATH"
+if ! command -v pnpm >/dev/null; then
+  echo "✗ $(dirname "$NODE_BIN") 下没有 pnpm,执行:$(dirname "$NODE_BIN")/npm i -g pnpm" >&2
+  exit 1
+fi
+echo "» Node $(node -v) / pnpm $(pnpm -v)(与后端一致)"
+
 echo "» 同步依赖…"
 pnpm --dir code/backend  install --frozen-lockfile --prefer-offline
 pnpm --dir code/frontend install --frozen-lockfile --prefer-offline
