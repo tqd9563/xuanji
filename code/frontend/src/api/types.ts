@@ -91,6 +91,8 @@ export interface Skill {
   allowedTools?: string;
   source: 'user' | 'plugin';
   enabled: boolean;
+  /** 插件技能所属插件;此时 name 为 `插件名:技能名` */
+  plugin?: { id: string; name: string; version?: string; description?: string; enabled: boolean };
   body?: string;
   /** 索引尚未建好时缺省 */
   usage?: SkillUsage;

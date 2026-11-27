@@ -148,6 +148,17 @@ export interface SkillUsage {
   lastUsedAt?: number;
 }
 
+/** 已安装插件(来自 plugins/installed_plugins.json,启用态来自 settings.json enabledPlugins) */
+export interface SkillPlugin {
+  /** `name@marketplace`,即 claude plugin enable/disable 的参数 */
+  id: string;
+  name: string;
+  version?: string;
+  /** plugin.json 的 description */
+  description?: string;
+  enabled: boolean;
+}
+
 export interface Skill {
   name: string;
   description: string;
@@ -156,6 +167,8 @@ export interface Skill {
   allowedTools?: string;
   source: 'user' | 'plugin';
   enabled: boolean;
+  /** 插件技能所属插件;name 此时为 `插件名:技能名`(与 jsonl 里的调用名一致) */
+  plugin?: SkillPlugin;
   /** SKILL.md 正文(frontmatter 之后) */
   body?: string;
   /** 触发统计;索引尚未建好时缺省 */

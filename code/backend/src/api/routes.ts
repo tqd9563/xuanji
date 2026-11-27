@@ -5,7 +5,8 @@ import { promisify } from 'node:util';
 import { config } from '../config.js';
 import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
-import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
+import { moveSkill, readHistory, scanInstalledPlugins, scanProjectDirs } from '../adapters/claude-dir.js';
+import { setPluginEnabled } from '../adapters/plugins-cli.js';
 import { dashboard } from '../services/dashboard.js';
 import { canResume, endDispatchBySessionId, findDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
@@ -409,6 +410,21 @@ export function createApi(
     if (body.confirm !== true) return c.json({ error: '需要 confirm: true(二次确认)' }, 400);
     if (typeof body.enable !== 'boolean') return c.json({ error: '需要 enable: boolean' }, 400);
     const r = await moveSkill(config.claudeDir, c.req.param('name'), body.enable);
+    if (!r.ok) return c.json({ error: r.error }, 409);
+    invalidateSkillsCache();
+    return c.json({ ok: true });
+  });
+
+  /** 插件启停:铁律例外②(2026-11-27 批准)——显式触发 + confirm,走 claude plugin enable/disable,可逆 */
+  api.post('/plugins/:id/toggle', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (body.confirm !== true) return c.json({ error: '需要 confirm: true(二次确认)' }, 400);
+    if (typeof body.enable !== 'boolean') return c.json({ error: '需要 enable: boolean' }, 400);
+    const id = c.req.param('id');
+    // 只允许操作已安装的 user 级插件,不把任意字符串交给 CLI
+    const installed = await scanInstalledPlugins(config.claudeDir);
+    if (!installed.some((p) => p.info.id === id)) return c.json({ error: `未安装的插件:${id}` }, 404);
+    const r = await setPluginEnabled(config.claudeDir, id, body.enable);
     if (!r.ok) return c.json({ error: r.error }, 409);
     invalidateSkillsCache();
     return c.json({ ok: true });

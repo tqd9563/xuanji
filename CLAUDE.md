@@ -16,7 +16,7 @@
 
 ### 架构铁律(详见 product-plan.md §3)
 1. 所有非公开格式(session jsonl、jobs/state.json、history.jsonl)的解析只允许存在于 Adapter 层
-2. 只读优先:能只读实现的功能绝不写 `~/.claude`;例外仅二(2026-07-08 用户批准):① 经验沉淀模块写 memory md;② 用户在界面显式触发、带二次确认的管理操作(如技能启停 = 在 `skills/` 与 `skills-disabled/` 间移动技能目录,可逆且不改文件内容)
+2. 只读优先:能只读实现的功能绝不写 `~/.claude`;例外仅二(2026-07-08 用户批准):① 经验沉淀模块写 memory md;② 用户在界面显式触发、带二次确认的管理操作(如技能启停 = 在 `skills/` 与 `skills-disabled/` 间移动技能目录,可逆且不改文件内容);插件启停(2026-11-27 用户批准)= 调用 `claude plugin enable/disable` 改 `settings.json` 的 `enabledPlugins`,可逆
 3. 会话所有权:终端存活的 interactive 会话只读不接管;web 只 resume 自己派发的/已退出的/blocked 的会话
 
 ### 流程

@@ -7,7 +7,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
 import YAML from 'yaml';
-import type { HistoryEntry, Memory, Replay, ReplayEvent, Skill } from '../types.js';
+import type { HistoryEntry, Memory, Replay, ReplayEvent, Skill, SkillPlugin } from '../types.js';
 
 // ---------- 项目目录 ----------
 
@@ -560,7 +560,9 @@ export async function extractCommandInvocations(jsonlPath: string): Promise<{ na
 
 export async function scanSkills(claudeDir: string): Promise<Skill[]> {
   const out: Skill[] = [];
-  const scanDir = async (root: string, source: 'user' | 'plugin', enabled: boolean, depth: number) => {
+  /** root 下每个含 SKILL.md 的子目录(跟随 symlink)算一个技能;root 自身含 SKILL.md 也算 */
+  const scanDir = async (root: string, onSkill: (file: string) => Promise<void>) => {
+    if (fs.existsSync(path.join(root, 'SKILL.md'))) return onSkill(path.join(root, 'SKILL.md'));
     const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
     for (const e of entries) {
       const dir = path.join(root, e.name);
@@ -572,20 +574,70 @@ export async function scanSkills(claudeDir: string): Promise<Skill[]> {
       }
       if (!isDir) continue;
       const skillMd = path.join(dir, 'SKILL.md');
-      if (fs.existsSync(skillMd)) {
-        const skill = await parseSkillMd(skillMd, source, enabled);
-        if (skill) out.push(skill);
-      } else if (depth > 0) {
-        await scanDir(dir, source, enabled, depth - 1);
-      }
+      if (fs.existsSync(skillMd)) await onSkill(skillMd);
     }
   };
-  await scanDir(path.join(claudeDir, 'skills'), 'user', true, 0);
-  await scanDir(path.join(claudeDir, 'skills-disabled'), 'user', false, 0);
-  await scanDir(path.join(claudeDir, 'plugins'), 'plugin', true, 4);
-  // 插件目录可能同名多版本,按 name 去重(保留先扫到的)
+  const push = (s: Skill | null) => {
+    if (s) out.push(s);
+  };
+  await scanDir(path.join(claudeDir, 'skills'), async (f) => push(await parseSkillMd(f, 'user', true)));
+  await scanDir(path.join(claudeDir, 'skills-disabled'), async (f) => push(await parseSkillMd(f, 'user', false)));
+
+  // 插件技能:只认真正安装的插件。plugins/marketplaces/ 是市场目录的整仓克隆(含大量未安装插件),
+  // 递归扫整个 plugins/ 曾把 31 个已装技能虚报成 166 个。
+  for (const plugin of await scanInstalledPlugins(claudeDir)) {
+    for (const rel of plugin.skillDirs) {
+      await scanDir(path.join(plugin.installPath, rel), async (f) => {
+        const s = await parseSkillMd(f, 'plugin', plugin.info.enabled);
+        // 加命名空间前缀:与 jsonl 里的调用名一致,也不会与同名用户技能互相吞掉
+        if (s) push({ ...s, name: `${plugin.info.name}:${s.name}`, plugin: plugin.info });
+      });
+    }
+  }
   const seen = new Set<string>();
   return out.filter((s) => (seen.has(s.name) ? false : (seen.add(s.name), true)));
+}
+
+interface InstalledPlugin {
+  info: SkillPlugin;
+  installPath: string;
+  /** 相对 installPath 的技能目录:默认 skills/,plugin.json 的 skills 字段追加自定义路径 */
+  skillDirs: string[];
+}
+
+/**
+ * 已安装插件 = plugins/installed_plugins.json 里 user 级的安装记录;
+ * 启用态 = settings.json 的 enabledPlugins[id] === true(与 claude plugin enable/disable 同一个开关)。
+ * project/local 级安装只在对应项目内生效,不属于「全局技能」视图,不列出。
+ */
+export async function scanInstalledPlugins(claudeDir: string): Promise<InstalledPlugin[]> {
+  const readJson = async (f: string): Promise<any> =>
+    JSON.parse(await fsp.readFile(f, 'utf8').catch(() => 'null')) ?? null;
+  const installed = await readJson(path.join(claudeDir, 'plugins', 'installed_plugins.json')).catch(() => null);
+  const settings = await readJson(path.join(claudeDir, 'settings.json')).catch(() => null);
+  const enabledMap: Record<string, unknown> = settings?.enabledPlugins ?? {};
+  const out: InstalledPlugin[] = [];
+  for (const [id, records] of Object.entries<any>(installed?.plugins ?? {})) {
+    const rec = (Array.isArray(records) ? records : [records]).find((r: any) => r?.scope === 'user');
+    if (!rec || typeof rec.installPath !== 'string' || !fs.existsSync(rec.installPath)) continue;
+    const manifest = await readJson(path.join(rec.installPath, '.claude-plugin', 'plugin.json')).catch(() => null);
+    const extra = manifest?.skills;
+    const skillDirs = ['skills', ...(Array.isArray(extra) ? extra : typeof extra === 'string' ? [extra] : [])]
+      .filter((d): d is string => typeof d === 'string')
+      .map((d) => path.normalize(d).replace(/\/+$/, ''));
+    out.push({
+      info: {
+        id,
+        name: typeof manifest?.name === 'string' ? manifest.name : id.split('@')[0]!,
+        version: manifest?.version ?? rec.version,
+        description: typeof manifest?.description === 'string' ? manifest.description : undefined,
+        enabled: enabledMap[id] === true,
+      },
+      installPath: rec.installPath,
+      skillDirs: [...new Set(skillDirs)],
+    });
+  }
+  return out;
 }
 
 async function parseSkillMd(file: string, source: 'user' | 'plugin', enabled: boolean): Promise<Skill | null> {
