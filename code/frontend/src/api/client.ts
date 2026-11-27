@@ -110,6 +110,9 @@ export const api = {
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------
   canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),
+  /** 插件启停:后端执行 claude plugin enable/disable(铁律例外②) */
+  togglePlugin: (id: string, enable: boolean) =>
+    mutate<{ ok: boolean }>(`/api/plugins/${encodeURIComponent(id)}/toggle`, 'POST', { enable, confirm: true }),
   toggleSkill: (name: string, enable: boolean) =>
     mutate<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}/toggle`, 'POST', { enable, confirm: true }),
   // ---------- 旁路提问 ----------

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
 import type { Skill, SkillUsage } from '@/api/types';
 import { usePoll, useIsMobile } from '@/lib/hooks';
@@ -16,6 +16,20 @@ const countOf = (s: Skill, w: Win): number => s.usage?.[`d${w}` as keyof SkillUs
 
 const fmtDay = (ms?: number) => (ms ? new Date(ms).toLocaleDateString('zh-CN') : '从未触发');
 
+type PluginInfo = NonNullable<Skill['plugin']>;
+/** 插件技能的短名:name 是 `插件:技能`,组内只显示后半(命名空间由组行提供) */
+const shortName = (s: Skill) => (s.plugin ? s.name.slice(s.plugin.name.length + 1) : s.name);
+/** 表格/卡片列表的一行:用户技能逐条,插件一组一条 */
+type Item =
+  | { kind: 'user'; s: Skill; en: boolean; name: string; n: number }
+  | { kind: 'group'; p: PluginInfo; skills: Skill[]; kids: Skill[]; en: boolean; name: string; n: number; open: boolean };
+
+const Chevron = () => (
+  <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M4.5 2.5 8 6l-3.5 3.5" />
+  </svg>
+);
+
 export function Skills() {
   const { data, refresh } = usePoll(api.skills, 60_000);
   const [filter, setFilter] = useState<Filter>('all');
@@ -24,6 +38,10 @@ export function Skills() {
   const [byUsage, setByUsage] = useState(false);
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<Skill | null>(null);
+  /** 「插件」筛选下的二级筛选:all 或插件 id */
+  const [plug, setPlug] = useState('all');
+  /** 手动展开的插件组 */
+  const [open, setOpen] = useState<Set<string>>(() => new Set());
   const [daily, setDaily] = useState<number[] | null>(null);
   const isMobile = useIsMobile();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -76,30 +94,212 @@ export function Skills() {
     }
   };
 
+  /** 插件启停:铁律例外②(2026-11-27 批准),后端执行 claude plugin enable/disable */
+  const togglePlugin = async (p: PluginInfo, n: number) => {
+    const action = p.enabled ? '停用' : '启用';
+    const cmd = p.enabled ? 'disable' : 'enable';
+    const msg =
+      `确认${action}插件「${p.id}」?\n将执行 claude plugin ${cmd} ${p.id},改写 ~/.claude/settings.json 的 enabledPlugins。\n` +
+      `其中 ${n} 个技能${p.enabled ? '从新会话起不再加载' : '从新会话起恢复加载'},运行中的会话不受影响。(操作可逆)`;
+    if (!(await confirmBox(msg))) return;
+    try {
+      await api.togglePlugin(p.id, !p.enabled);
+      toast(`已${action}插件 ${p.name} · ${n} 个技能,新会话生效`);
+      refresh();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e));
+    }
+  };
+  const toggleOpen = (id: string) =>
+    setOpen((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const skills = data?.skills ?? [];
-  const rows = skills.filter((s) => {
-    if (filter === 'on' && !s.enabled) return false;
-    if (filter === 'off' && s.enabled) return false;
-    if (filter === 'plugin' && s.source !== 'plugin') return false;
-    if (q && !(s.name + s.description).toLowerCase().includes(q.toLowerCase())) return false;
-    return true;
-  });
-  if (byUsage) {
-    rows.sort((a, b) => countOf(b, win) - countOf(a, win) || a.name.localeCompare(b.name));
+  const groups = new Map<string, { p: PluginInfo; skills: Skill[] }>();
+  for (const s of skills) {
+    if (!s.plugin) continue;
+    const g = groups.get(s.plugin.id) ?? { p: s.plugin, skills: [] };
+    g.skills.push(s);
+    groups.set(s.plugin.id, g);
   }
+  const ql = q.toLowerCase();
+  const hit = (txt: string) => !ql || txt.toLowerCase().includes(ql);
+  const rows: Item[] = [];
+  if (filter !== 'plugin') {
+    for (const s of skills) {
+      if (s.plugin) continue;
+      if (filter === 'on' && !s.enabled) continue;
+      if (filter === 'off' && s.enabled) continue;
+      if (!hit(s.name + s.description)) continue;
+      rows.push({ kind: 'user', s, en: s.enabled, name: s.name, n: countOf(s, win) });
+    }
+  }
+  for (const { p, skills: all } of groups.values()) {
+    if (filter === 'on' && !p.enabled) continue;
+    if (filter === 'off' && p.enabled) continue;
+    if (filter === 'plugin' && plug !== 'all' && plug !== p.id) continue;
+    const selfHit = hit(p.name + p.id + (p.description ?? ''));
+    const kids = all.filter((s) => selfHit || hit(s.name + s.description));
+    if (!kids.length) continue;
+    kids.sort(byUsage ? (a, b) => countOf(b, win) - countOf(a, win) || a.name.localeCompare(b.name) : (a, b) => a.name.localeCompare(b.name));
+    // 搜索只命中组内技能 / 二级筛选选中单个插件时自动展开
+    const forced = (!!ql && !selfHit) || (filter === 'plugin' && plug === p.id);
+    const n = all.reduce((a, s) => a + countOf(s, win), 0);
+    rows.push({ kind: 'group', p, skills: all, kids, en: p.enabled, name: p.name, n, open: forced || open.has(p.id) });
+  }
+  rows.sort(byUsage ? (a, b) => b.n - a.n || a.name.localeCompare(b.name) : (a, b) => Number(b.en) - Number(a.en) || a.name.localeCompare(b.name));
   /** 条宽按当前窗口内的最大值归一:换窗口后长短对比仍然成立 */
-  const max = Math.max(1, ...rows.map((s) => countOf(s, win)));
+  const max = Math.max(
+    1,
+    ...rows.flatMap((it) => (it.kind === 'group' ? [it.n, ...(it.open ? it.kids.map((k) => countOf(k, win)) : [])] : [it.n])),
+  );
 
   const caliber = (s: Skill) =>
     `近 ${win} 天触发 ${countOf(s, win)} 次\n最近触发:${fmtDay(s.usage?.lastUsedAt)}\n口径:${data?.usageCaliber ?? ''}`;
 
-  const usageCell = (s: Skill) => {
-    const n = countOf(s, win);
+  const usageCell = (s: Skill) => usageCellN(countOf(s, win), caliber(s));
+  const usageCellN = (n: number, title: string) => {
     return (
-      <span className="usage-cell" title={caliber(s)}>
+      <span className="usage-cell" title={title}>
         <span className={`usage-n${n === 0 ? ' zero' : ''}`}>{n}</span>
         {n > 0 && <span className="usage-bar" style={{ width: `${Math.max(2, Math.round((n / max) * 72))}px` }} />}
       </span>
+    );
+  };
+
+  /** 插件开关:真开关,确认后走 claude plugin enable/disable */
+  const pluginSwitch = (it: Extract<Item, { kind: 'group' }>, style?: React.CSSProperties) => (
+    <span
+      className={`switch psk-switch ${it.p.enabled ? 'on' : ''}`}
+      role="switch"
+      tabIndex={0}
+      aria-checked={it.p.enabled}
+      aria-label={`启用插件 ${it.p.id}`}
+      title={`${it.p.enabled ? '停用' : '启用'}整个插件(${it.skills.length} 个技能)`}
+      style={style}
+      onClick={(e) => {
+        e.stopPropagation();
+        void togglePlugin(it.p, it.skills.length);
+      }}
+      onKeyDown={(e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        e.stopPropagation();
+        void togglePlugin(it.p, it.skills.length);
+      }}
+    />
+  );
+  const offTag = (p: PluginInfo) => (p.enabled ? null : <span className="psk-off-tag">已停用</span>);
+  const market = (p: PluginInfo) => {
+    const m = p.id.split('@')[1] ?? '';
+    return m.length > 24 ? `${m.slice(0, 18)}…` : m;
+  };
+
+  const desktopGroup = (it: Extract<Item, { kind: 'group' }>) => {
+    const { p } = it;
+    const off = p.enabled ? '' : ' psk-off';
+    return (
+      <Fragment key={p.id}>
+        <tr className={`rowlink psk-group${off}`} aria-expanded={it.open} onClick={() => toggleOpen(p.id)}>
+          <td className="mono cell-name" style={{ fontSize: '0.8125rem', fontWeight: 600 }} title={p.id}>
+            <div className="psk-gname">
+              <button
+                className="psk-caret"
+                type="button"
+                aria-expanded={it.open}
+                aria-label={`${it.open ? '收起' : '展开'} ${p.name} 的技能`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleOpen(p.id);
+                }}
+              >
+                <Chevron />
+              </button>
+              <span>{p.name}</span>
+            </div>
+          </td>
+          <td>
+            <div className="skill-desc" title={p.description}>
+              <span className="psk-gmeta"><b>{it.skills.length}</b> 个技能 · @{market(p)}</span>
+              {offTag(p)}
+              {p.description}
+            </div>
+          </td>
+          <td>{usageCellN(it.n, `近 ${win} 天插件内技能合计触发 ${it.n} 次\n口径:${data?.usageCaliber ?? ''}`)}</td>
+          <td className="mono psk-ver" style={{ color: 'var(--muted)' }} title={p.version ? `v${p.version}` : undefined}>{p.version ?? '—'}</td>
+          <td><span className="uncheck">—</span></td>
+          <td><Tag>plugin</Tag></td>
+          <td>{pluginSwitch(it)}</td>
+        </tr>
+        {it.open &&
+          it.kids.map((k) => (
+            <tr key={k.name} className={`rowlink psk-child${off}`} onClick={() => setSel(k)}>
+              <td className="mono cell-name" style={{ fontSize: '0.8125rem', fontWeight: 600 }} title={k.name}>
+                <div className="psk-fq"><span className="psk-sn">{shortName(k)}</span></div>
+              </td>
+              <td><div className="skill-desc" title={k.description}>{k.description}</div></td>
+              <td>{usageCell(k)}</td>
+              <td className="mono" style={{ color: 'var(--muted)' }}>{k.version ?? '—'}</td>
+              <td>{k.userInvocable ? <span className="check">✓</span> : <span className="uncheck">—</span>}</td>
+              <td><Tag>plugin</Tag></td>
+              <td><span className="psk-follow" title={`插件技能不能单独启停,随所属插件 ${p.id} 一起启用/停用`}>随插件</span></td>
+            </tr>
+          ))}
+      </Fragment>
+    );
+  };
+
+  const mobileGroup = (it: Extract<Item, { kind: 'group' }>) => {
+    const { p } = it;
+    return (
+      <div
+        key={p.id}
+        className={`mcard psk-mgroup${p.enabled ? '' : ' psk-off'}`}
+        role="button"
+        tabIndex={0}
+        aria-expanded={it.open}
+        onClick={() => toggleOpen(p.id)}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+          <div className="psk-dim" style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span className="psk-caret" aria-hidden aria-expanded={it.open}><Chevron /></span>
+              <span className="mono" style={{ fontSize: '0.8125rem', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+              <span className="mono" style={{ color: 'var(--faint)', fontSize: '0.6875rem', flex: 'none' }}>v{p.version ?? '—'}</span>
+              <Tag>插件</Tag>
+            </div>
+            <div style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+              <span className="psk-gmeta"><b>{it.skills.length}</b> 个技能</span>
+              {offTag(p)}
+              {p.description}
+            </div>
+            <div style={{ marginTop: 6 }}>{usageCellN(it.n, `插件内技能合计 ${it.n} 次`)}</div>
+          </div>
+          {pluginSwitch(it, { marginTop: 2 })}
+        </div>
+        {it.open && (
+          <div className="psk-mlist">
+            {it.kids.map((k) => (
+              <button
+                key={k.name}
+                className="psk-mitem"
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSel(k);
+                }}
+              >
+                <span className="psk-fq mono"><span className="psk-sn">{shortName(k)}</span></span>
+                <span className={`usage-n${countOf(k, win) === 0 ? ' zero' : ''}`}>{countOf(k, win)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     );
   };
 
@@ -133,28 +333,45 @@ export function Skills() {
           {(
             [['all', '全部'], ['on', '已启用'], ['off', '已禁用'], ['plugin', '插件']] as [Filter, string][]
           ).map(([f, label]) => (
-            <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>
+            <button key={f} className={filter === f ? 'active' : ''} onClick={() => (setFilter(f), setPlug('all'))}>
               {label}
             </button>
           ))}
         </div>
         <Input ref={searchRef} type="search" placeholder="搜索技能…" style={{ width: 200 }} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
+      {filter === 'plugin' && (
+        <div className="psk-subbar" role="group" aria-label="按插件筛选">
+          <span className="sort-label">插件</span>
+          <div className="filter-tabs">
+            <button className={plug === 'all' ? 'active' : ''} onClick={() => setPlug('all')} title="全部插件">
+              全部<span className="n">{groups.size}</span>
+            </button>
+            {[...groups.values()].map(({ p, skills: ks }) => (
+              <button key={p.id} className={plug === p.id ? 'active' : ''} onClick={() => setPlug(p.id)} title={p.id}>
+                {p.name}<span className="n">{ks.length}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="notice">
         <span className="ok" />
         触发次数统计自全部项目的会话日志(只读扫描,不写 <span className="mono">~/.claude</span>);
-        关闭开关 = 把技能目录移入 <span className="mono">~/.claude/skills-disabled/</span>,新会话不再加载(可逆,二次确认后执行;插件技能不支持)
+        关闭开关 = 把技能目录移入 <span className="mono">~/.claude/skills-disabled/</span>,新会话不再加载(可逆,二次确认后执行)
       </div>
       {isMobile ? (
         <div className="mcard-list">
-          {rows.map((s) => (
+          {rows.map((it) => {
+            if (it.kind === 'group') return mobileGroup(it);
+            const s = it.s;
+            return (
             <div key={s.name} className="mcard" onClick={() => setSel(s)} role="button" tabIndex={0}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span className="mono" style={{ fontSize: '0.8125rem', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
                     <span className="mono" style={{ color: 'var(--faint)', fontSize: '0.6875rem', flex: 'none' }}>v{s.version ?? '—'}</span>
-                    {s.source === 'plugin' && <Tag>插件</Tag>}
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: '0.8125rem', marginTop: 4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {s.description}
@@ -165,19 +382,17 @@ export function Skills() {
                   className={`switch ${s.enabled ? 'on' : ''}`}
                   role="switch"
                   aria-checked={s.enabled}
-                  aria-disabled={s.source === 'plugin'}
                   aria-label={`启用 ${s.name}`}
-                  title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
-                  style={{ marginTop: 2, ...(s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined) }}
+                  style={{ marginTop: 2 }}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (s.source === 'plugin') return;
                     void toggle(s);
                   }}
                 />
               </div>
             </div>
-          ))}
+            );
+          })}
           {rows.length === 0 && <Empty><p>没有匹配的技能。</p></Empty>}
         </div>
       ) : (
@@ -202,7 +417,10 @@ export function Skills() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((s) => (
+              {rows.map((it) => {
+                if (it.kind === 'group') return desktopGroup(it);
+                const s = it.s;
+                return (
                 <tr key={s.name} className="rowlink" onClick={() => setSel(s)}>
                   <td className="mono cell-name" style={{ fontSize: '0.8125rem', fontWeight: 600 }} title={s.name}>{s.name}</td>
                   <td><div className="skill-desc" title={s.description}>{s.description}</div></td>
@@ -215,18 +433,15 @@ export function Skills() {
                       className={`switch ${s.enabled ? 'on' : ''}`}
                       role="switch"
                       aria-checked={s.enabled}
-                      aria-disabled={s.source === 'plugin'}
-                      title={s.source === 'plugin' ? '插件技能走 plugin 配置,不支持目录启停' : undefined}
-                      style={s.source === 'plugin' ? { opacity: 0.55, cursor: 'not-allowed' } : undefined}
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (s.source === 'plugin') return;
                         void toggle(s);
                       }}
                     />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           {rows.length === 0 && <Empty><p>没有匹配的技能。</p></Empty>}
@@ -238,13 +453,21 @@ export function Skills() {
         onClose={() => setSel(null)}
         title={sel?.name ?? ''}
         meta={
-          sel && (
+          sel &&
+          (sel.plugin ? (
+            <>
+              <Tag>plugin</Tag>
+              <span className="mono">{sel.plugin.id}</span>
+              {sel.plugin.version && <span className="mono">v{sel.plugin.version}</span>}
+              {sel.plugin.enabled ? <span>随插件启用</span> : <span className="psk-off-tag" style={{ margin: 0 }}>插件已停用</span>}
+            </>
+          ) : (
             <>
               <Tag>{sel.source}</Tag>
               {sel.version && <span className="mono">v{sel.version}</span>}
               {sel.allowedTools && <span className="mono">{sel.allowedTools}</span>}
             </>
-          )
+          ))
         }
       >
         {sel && (

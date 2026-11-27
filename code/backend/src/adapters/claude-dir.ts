@@ -630,6 +630,7 @@ export async function scanInstalledPlugins(claudeDir: string): Promise<Installed
         id,
         name: typeof manifest?.name === 'string' ? manifest.name : id.split('@')[0]!,
         version: manifest?.version ?? rec.version,
+        description: typeof manifest?.description === 'string' ? manifest.description : undefined,
         enabled: enabledMap[id] === true,
       },
       installPath: rec.installPath,

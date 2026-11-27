@@ -154,6 +154,8 @@ export interface SkillPlugin {
   id: string;
   name: string;
   version?: string;
+  /** plugin.json 的 description */
+  description?: string;
   enabled: boolean;
 }
 
