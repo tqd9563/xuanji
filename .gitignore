@@ -46,3 +46,6 @@ Thumbs.db
 # (frontend/public/live2d/ 下的 Cubism Core 是例外:产品运行必需,且官方
 #  RedistributableFiles.txt 明确允许随产品再分发。)
 wiki/design/live2d-assets/
+
+# 原型本地全量数据(含其它项目的真实经验,不进公开仓库)
+wiki/design/*.data.local.js
