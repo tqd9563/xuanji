@@ -3,6 +3,7 @@
   以线上 code/frontend/src/styles/index.css(v1.10.0)整份内联为底,侧栏 DOM 照抄获批原型 prototype-prompts.html,
   列表行 / 抽屉 / 筛选 tab 的 class 与 DOM 照抄 Memories.tsx、shared.tsx Drawer;
   新增样式全部前缀 xjm-,集中在 </style> 前一段(已 grep 线上表,无撞名)。
+  用户已倾向方案 B(2026-11-27):项目筛选条沿用会话页 .proj-filter / .pf-chip 彩色胶囊,正文按 markdown 渲染(.md)。
   方案 A「项目栏」:左侧项目栏 + 右侧列表,详情仍走抽屉。
   方案 B「阅读窗格」:顶部项目筛选条 + 列表 / 正文双栏,不开抽屉,搜索命中直接在正文里高亮。
   两案共有:⌘F 聚焦搜索框;搜索范围跟随所选项目;命中处高亮;↑↓ 选条。
@@ -3023,18 +3024,9 @@ kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
 .xjm-col .mem-group:last-child { margin-bottom: 0; }
 
 /* ---------- 方案 B:项目筛选条 + 双栏 ---------- */
-.xjm-chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: -6px 0 14px; position: relative; }
-.xjm-chip {
-  display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px;
-  border: 1px solid var(--line-soft); border-radius: var(--r-s);
-  font-size: 0.75rem; color: var(--muted); white-space: nowrap;
-  transition: background 150ms var(--ease), color 150ms var(--ease), border-color 150ms var(--ease);
-}
-.xjm-chip:hover { color: var(--ink); border-color: var(--line); }
-.xjm-chip.active { background: var(--hover); color: var(--ink); border-color: var(--line); font-weight: 600; }
-.xjm-chip:focus-visible { outline: 2px solid var(--jade); outline-offset: 1px; }
-.xjm-chip .xjm-n { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); font-weight: 400; }
-.xjm-chip.xjm-zero { opacity: 0.45; }
+/* 项目筛选条:直接用会话页的 .proj-filter / .pf-chip,这里只补「0 命中变暗」与下拉 */
+.pf-chip.xjm-zero { opacity: 0.45; }
+.xjm-menu .pf-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
 .xjm-more { position: relative; }
 .xjm-menu {
   position: absolute; top: calc(100% + 6px); left: 0; z-index: var(--z-dropdown);
@@ -3058,6 +3050,7 @@ kbd.tty-kbd-warn { border-color: var(--amber); color: var(--amber); }
   background: var(--surface-opaque); border-bottom: 1px solid var(--line-soft);
   display: flex; gap: 8px; align-items: baseline;
 }
+.xjm-bgroup .proj-chip { font-weight: 500; }
 .xjm-bgroup .xjm-n { font-family: var(--mono); font-weight: 400; color: var(--faint); }
 .xjm-brow { padding: 9px 16px 10px; border-bottom: 1px solid var(--line-soft); cursor: pointer; transition: background 120ms var(--ease); }
 .xjm-brow:hover { background: var(--hover); }
@@ -3112,6 +3105,12 @@ body.wall-glass .proto-hint { background: var(--surface-opaque); }
 .proto-hint.xjm-min b { margin-bottom: 0; }
 .proto-hint.xjm-min b::after { content: ' · 展开'; }
 .proto-hint.xjm-min > :not(b) { display: none; }
+
+/* 阅读窗格正文:走线上 .md 排版;描述作导语,与正文之间留一道细线 */
+.xjm-lede { color: var(--muted); font-size: 0.8125rem; max-width: 68ch; text-wrap: pretty; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line-soft); }
+.xjm-md { font-size: 0.8125rem; max-width: 68ch; text-wrap: pretty; }
+.xjm-md .wikilink { vertical-align: baseline; }
+.xjm-pane-head .meta { align-items: center; }
 
 </style>
 </head>
@@ -3197,7 +3196,7 @@ body.wall-glass .proto-hint { background: var(--surface-opaque); }
           <div class="filter-tabs" data-xjm-types></div>
           <span class="xjm-count" data-xjm-count></span>
         </div>
-        <div class="xjm-chips" data-xjm-chips role="group" aria-label="按项目筛选"></div>
+        <div class="proj-filter" data-xjm-chips role="group" aria-label="按项目筛选"></div>
         <div class="xjm-split xjm-fill">
           <div class="panel xjm-scroll xjm-blist" data-xjm-list="b" tabindex="-1"></div>
           <article class="panel xjm-pane" data-xjm-pane aria-live="polite"></article>
@@ -3212,7 +3211,7 @@ body.wall-glass .proto-hint { background: var(--surface-opaque); }
   <b>经验页布局 · 原型</b>
   <div><kbd>⌘F</kbd> 聚焦搜索 · <kbd>↑</kbd><kbd>↓</kbd> 选条 · <kbd>Enter</kbd> 打开 · <kbd>Esc</kbd> 清空 / 关闭</div>
   <div class="sw"><span class="sw-lab">方案</span>
-    <button id="xjm-v-now">现状</button><button id="xjm-v-a" class="on">A 项目栏</button><button id="xjm-v-b">B 阅读窗格</button>
+    <button id="xjm-v-now">现状</button><button id="xjm-v-a">A 项目栏</button><button id="xjm-v-b" class="on">B 阅读窗格</button>
   </div>
   <div class="sw"><span class="sw-lab">试搜</span>
     <button id="xjm-try-1">角标</button><button id="xjm-try-2">WKWebView</button><button id="xjm-try-3">zzz(无结果)</button>
@@ -3234,9 +3233,84 @@ const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const TYPES = ['all', 'user', 'feedback', 'project', 'reference', 'cross-project'];
 const TYPE_LABEL = { user: 'user', feedback: 'feedback', project: 'project', reference: 'reference', 'cross-project': 'cross-project', unknown: '?' };
-const CHIP_TOP = 6;
+const CHIP_TOP = 5;
 
-const st = { variant: 'a', project: null, type: 'all', q: '', sel: -1, list: [] };
+/* 项目分类色:照抄 lib/utils.ts —— 序号优先取后端调色板,未收录时退化为 FNV-1a 哈希 */
+const PROJ_HUES = [115, 265, 190, 340, 55, 215, 140, 290, 165, 315, 240];
+const PALETTE = window.__XJM_PALETTE || {"lilith_offline_etl": 2, "antifraud_skills": 3, "baize_web": 6, "deep_baize": 9, "jianghu-idle": 10, "xuanji": 16};
+function projHue(name) {
+  const idx = PALETTE[name];
+  if (idx !== undefined) return PROJ_HUES[idx % PROJ_HUES.length];
+  let h = 2166136261;
+  for (let i = 0; i < name.length; i++) { h ^= name.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return PROJ_HUES[(h >>> 0) % PROJ_HUES.length];
+}
+const projColor = n => `oklch(0.78 0.12 ${projHue(n)})`;
+const projBg = n => `oklch(0.78 0.12 ${projHue(n)} / 0.16)`;
+const projChip = (n, path) => `<span class="proj-chip" title="${esc(path ?? n)}" style="color:${projColor(n)};background:${projBg(n)}">${esc(n)}</span>`;
+
+/* 极简 markdown 渲染(原型用;线上走 shared.tsx 的 <Md>,即 react-markdown + gfm,输出同一套 .md 样式)。
+   与标准 gfm 的一处差异:单个换行保留为换行 —— 经验正文靠「**Why:** / **How to apply:**」逐行排版,合并成一段就糊了。 */
+function mdInline(s) {
+  const codes = [];
+  s = esc(s).replace(/`([^`\n]+)`/g, (_, c) => `\u0000${codes.push(c) - 1}\u0000`);
+  s = s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+       .replace(/\[\[([^\]\n]+)\]\]/g, (_, n) => `<button class="wikilink" data-link="${n}">[[${n}]]</button>`)
+       .replace(/\[([^\]\n]+)\]\(([^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+  return s.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[+i]}</code>`);
+}
+function md(src) {
+  const lines = src.replace(/\r/g, '').split('\n'), out = [];
+  let i = 0;
+  const isBlock = l => /^(#{1,6}\s|```|>\s?|\s*[-*]\s+|\s*\d+[.)]\s+|\|)/.test(l);
+  while (i < lines.length) {
+    const l = lines[i];
+    if (!l.trim()) { i++; continue; }
+    if (l.startsWith('```')) { const buf = []; i++; while (i < lines.length && !lines[i].startsWith('```')) buf.push(lines[i++]); i++; out.push(`<pre><code>${esc(buf.join('\n'))}</code></pre>`); continue; }
+    const h = l.match(/^(#{1,6})\s+(.*)$/);
+    if (h) { out.push(`<h${h[1].length}>${mdInline(h[2])}</h${h[1].length}>`); i++; continue; }
+    if (/^>\s?/.test(l)) { const buf = []; while (i < lines.length && /^>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^>\s?/, '')); out.push(`<blockquote>${buf.map(mdInline).join('<br>')}</blockquote>`); continue; }
+    if (l.startsWith('|') && /^\|[\s:|-]+\|?\s*$/.test(lines[i + 1] || '')) {
+      const cells = r => r.replace(/^\||\|\s*$/g, '').split('|').map(c => mdInline(c.trim()));
+      const head = cells(l); i += 2; const rows = [];
+      while (i < lines.length && lines[i].startsWith('|')) rows.push(cells(lines[i++]));
+      out.push(`<table><thead><tr>${head.map(c => `<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`); continue;
+    }
+    const li = /^\s*([-*]|\d+[.)])\s+(.*)$/;
+    if (li.test(l)) {
+      const ordered = /^\s*\d/.test(l), items = [];
+      while (i < lines.length && lines[i].trim() && (li.test(lines[i]) || /^\s{2,}\S/.test(lines[i]))) {
+        const m = lines[i].match(li);
+        if (m) items.push(m[2]); else items[items.length - 1] += '\n' + lines[i].trim();
+        i++;
+      }
+      out.push(`<${ordered ? 'ol' : 'ul'}>${items.map(t => `<li>${t.split('\n').map(mdInline).join('<br>')}</li>`).join('')}</${ordered ? 'ol' : 'ul'}>`); continue;
+    }
+    const buf = [];
+    while (i < lines.length && lines[i].trim() && !(buf.length && isBlock(lines[i]))) buf.push(lines[i++]);
+    out.push(`<p>${buf.map(mdInline).join('<br>')}</p>`);
+  }
+  return out.join('');
+}
+/** 在已渲染的 DOM 里给命中处包 <mark>:只动文本节点,不碰标签 */
+function markHits(root, q) {
+  if (!q) return;
+  const needle = q.toLowerCase(), w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT), nodes = [];
+  while (w.nextNode()) nodes.push(w.currentNode);
+  for (const n of nodes) {
+    const low = n.nodeValue.toLowerCase();
+    if (!low.includes(needle)) continue;
+    const frag = document.createDocumentFragment(); let k = 0, j;
+    while ((j = low.indexOf(needle, k)) !== -1) {
+      frag.append(n.nodeValue.slice(k, j));
+      const mk = document.createElement('mark'); mk.className = 'xjm-hit'; mk.textContent = n.nodeValue.slice(j, j + needle.length); frag.append(mk);
+      k = j + needle.length;
+    }
+    frag.append(n.nodeValue.slice(k)); n.replaceWith(frag);
+  }
+}
+
+const st = { variant: 'b', project: null, type: 'all', q: '', sel: -1, list: [] };
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 /** 转义后给命中处包 <mark>:先切分再转义,避免把实体切碎 */
@@ -3283,7 +3357,7 @@ function groupsHtml(list, q, row, withPanel) {
   list.forEach((m, i) => { (groups.get(m.project) || groups.set(m.project, []).get(m.project)).push([m, i]); });
   return [...groups.entries()].map(([p, rows]) => withPanel
     ? `<div class="mem-group"><h2>${esc(p)} <span class="path">${esc(pathOf(p))}</span></h2><div class="panel">${rows.map(([m, i]) => row(m, i, q)).join('')}</div></div>`
-    : `<div class="xjm-bgroup">${esc(p)}<span class="xjm-n">${rows.length}</span></div>${rows.map(([m, i]) => row(m, i, q)).join('')}`).join('');
+    : `<div class="xjm-bgroup">${projChip(p, pathOf(p))}<span class="xjm-n">${rows.length}</span></div>${rows.map(([m, i]) => row(m, i, q)).join('')}`).join('');
 }
 
 function render() {
@@ -3318,13 +3392,14 @@ function render() {
   }
 
   if (st.variant === 'b') {
-    const chip = (p, n, label) => `<button class="xjm-chip${(st.project ?? '') === (p ?? '') ? ' active' : ''}${n === 0 ? ' xjm-zero' : ''}" data-p="${esc(p ?? '')}" title="${esc(p ? pathOf(p) : '全部项目')}">${esc(label)}<span class="xjm-n">${n}</span></button>`;
+    const chip = (p, n) => `<button class="pf-chip${st.project === p ? ' on' : ''}${n === 0 ? ' xjm-zero' : ''}" style="--pc:${projColor(p)}" aria-pressed="${st.project === p}" data-p="${esc(p)}" title="${esc(pathOf(p))} · ${n} 条经验"><span class="pf-dot"></span>${esc(p)} <span class="pf-n">${n}</span></button>`;
     const top = ALL_PROJ.slice(0, CHIP_TOP), rest = ALL_PROJ.slice(CHIP_TOP);
     const inRest = st.project && rest.some(([p]) => p === st.project);
-    const menuOpen = !$('.xjm-menu')?.hidden && !!$('.xjm-menu');
-    $('[data-xjm-chips]').innerHTML = chip(null, all.length, '全部') + top.map(([p]) => chip(p, counts.get(p) || 0, p)).join('')
-      + (inRest ? chip(st.project, counts.get(st.project) || 0, st.project) : '')
-      + (rest.length ? `<span class="xjm-more"><button class="xjm-chip" data-act="more" aria-haspopup="menu" aria-expanded="${menuOpen}">其余 ${rest.length} 个项目 ▾</button><div class="xjm-menu" role="menu" ${menuOpen ? '' : 'hidden'}>${rest.map(([p]) => `<button role="menuitem" data-p="${esc(p)}" class="${st.project === p ? 'active' : ''}"><span class="xjm-pname">${esc(p)}</span><span class="xjm-n">${counts.get(p) || 0}</span></button>`).join('')}</div></span>` : '');
+    const menuOpen = !!$('.xjm-menu') && !$('.xjm-menu').hidden;
+    $('[data-xjm-chips]').innerHTML = `<span class="pf-label">项目</span><button class="pf-chip pf-all${st.project ? '' : ' on'}" aria-pressed="${!st.project}" data-p="">全部 <span class="pf-n">${all.length}</span></button>`
+      + top.map(([p]) => chip(p, counts.get(p) || 0)).join('')
+      + (inRest ? chip(st.project, counts.get(st.project) || 0) : '')
+      + (rest.length ? `<span class="xjm-more"><button class="pf-chip" data-act="more" aria-haspopup="menu" aria-expanded="${menuOpen}">其余 ${rest.length} 个 ▾</button><div class="xjm-menu" role="menu" ${menuOpen ? '' : 'hidden'}>${rest.map(([p]) => `<button role="menuitem" data-p="${esc(p)}" class="${st.project === p ? 'active' : ''}"><span class="pf-dot" style="background:${projColor(p)}"></span><span class="xjm-pname">${esc(p)}</span><span class="xjm-n">${counts.get(p) || 0}</span></button>`).join('')}</div></span>` : '');
     $('[data-xjm-list="b"]').innerHTML = list.length ? (st.project ? list.map((m, i) => rowB(m, i, q)).join('') : groupsHtml(list, q, rowB, false)) : emptyHtml(q, others);
     renderPane();
   }
@@ -3337,11 +3412,12 @@ function linksHtml(m) {
 function renderPane() {
   const pane = $('[data-xjm-pane]'), m = st.list[st.sel], q = st.q.trim();
   if (!m) { pane.innerHTML = `<div class="xjm-pane-empty">${st.list.length ? '选一条经验查看正文。' : '没有可显示的经验。'}</div>`; return; }
-  pane.innerHTML = `<div class="xjm-pane-head"><h2>${hl(m.name, q)}</h2><div class="meta">${tag(m)}<span>${esc(m.project)}</span><span class="mono" style="font-size:0.6875rem">${esc(m.file)}</span><span class="xjm-pos">${st.sel + 1} / ${st.list.length}</span></div></div>`
-    + `<div class="xjm-pane-body"><div class="mem-body" style="white-space:pre-wrap">${m.description ? `<p style="color:var(--muted);margin-bottom:14px">${hl(m.description, q)}</p>` : ''}${hl(m.body, q)}</div></div>`
-    + (m.links.length ? `<div class="xjm-pane-foot">${linksHtml(m)}</div>` : '');
-  const first = $('.xjm-pane-body .xjm-hit', pane);
-  if (first) { const b = $('.xjm-pane-body', pane); b.scrollTop = Math.max(0, first.offsetTop - b.offsetTop - 80); }
+  pane.innerHTML = `<div class="xjm-pane-head"><h2>${hl(m.name, q)}</h2><div class="meta">${tag(m)}${projChip(m.project, m.projectPath)}<span class="mono" style="font-size:0.6875rem">${esc(m.file)}</span><span class="xjm-pos">${st.sel + 1} / ${st.list.length}</span></div></div>`
+    + `<div class="xjm-pane-body">${m.description ? `<p class="xjm-lede">${hl(m.description, q)}</p>` : ''}<div class="md xjm-md">${md(m.body)}</div></div>`;
+  const b = $('.xjm-pane-body', pane);
+  markHits($('.xjm-md', pane), q);
+  const first = $('.xjm-hit', b);
+  if (first) b.scrollTop = Math.max(0, first.getBoundingClientRect().top - b.getBoundingClientRect().top - 80);
 }
 
 /* ---------- 抽屉(方案 A / 现状;DOM 照抄 shared.tsx Drawer) ---------- */
@@ -3391,7 +3467,7 @@ document.addEventListener('click', e => {
   else if (t.dataset.act === 'all-proj') { st.project = null; st.sel = -1; render(); }
   else if (t.dataset.act === 'close') closeDrawer();
   else if (t.dataset.link) openByName(t.dataset.link);
-  else if (t.dataset.p !== undefined && t.closest('[data-xjm-rail], [data-xjm-chips]')) { if (menu) menu.hidden = true; st.project = t.dataset.p || null; st.sel = -1; render(); $(`[data-xjm-variant="${st.variant}"] .xjm-scroll`).scrollTop = 0; }
+  else if (t.dataset.p !== undefined && t.closest('[data-xjm-rail], [data-xjm-chips]')) { if (menu) menu.hidden = true; { const p = t.dataset.p || null; st.project = st.variant === 'b' && p === st.project ? null : p; } st.sel = -1; render(); $(`[data-xjm-variant="${st.variant}"] .xjm-scroll`).scrollTop = 0; }
   else if (t.dataset.i !== undefined) { st.sel = +t.dataset.i; if (st.variant === 'b') move(0); else { move(0); openDrawer(st.list[st.sel]); } }
 });
 $('#xjm-bd').onclick = closeDrawer;
@@ -3431,6 +3507,7 @@ $('#xjm-data-note').textContent = FULL && FULL.length ? `数据:本机全量 ${D
 
 const v = new URLSearchParams(location.search).get('v');
 if (v && ['now', 'a', 'b'].includes(v)) { st.variant = v; $$('#xjm-v-now, #xjm-v-a, #xjm-v-b').forEach(b => b.classList.toggle('on', b.id === 'xjm-v-' + v)); }
+document.documentElement.dataset.mdHl = 'on'; // 线上默认值(prefs.ts DEFAULT_LOCAL.mdHighlight)
 render();
 $('.proto-hint b').onclick = () => $('.proto-hint').classList.toggle('xjm-min');
 
