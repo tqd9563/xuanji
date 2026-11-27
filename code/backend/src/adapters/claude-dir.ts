@@ -2,19 +2,22 @@
  * ClaudeDirAdapter —— 全仓唯一允许解析 ~/.claude 非公开格式的文件(架构铁律 1)。
  * 解析失败一律降级(跳过计数 / raw 透传),绝不 throw 到上层。全部只读。
  */
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 import readline from 'node:readline';
 import YAML from 'yaml';
-import type { HistoryEntry, Memory, Replay, ReplayEvent, Skill } from '../types.js';
+import type { HistoryEntry, Memory, Replay, ReplayEvent, Skill, SkillPlugin } from '../types.js';
 
 // ---------- 项目目录 ----------
 
 /**
- * 解码 projects/ 目录名 → 真实路径。编码规则是 '/'→'-',但路径本身可含 '-',
+ * 解码 projects/ 目录名 → 真实路径。编码规则是「非字母数字一律 → '-'」('/' '_' '.' '-' 都变 '-'),
  * 无法纯文本反解。策略:优先从该目录最新 session jsonl 里嗅探 "cwd" 字段;
- * 兜底用朴素替换。
+ * 没有 jsonl(会话被 Claude Code 按保留期清理、只剩 memory/)时沿文件系统逐级比对真实目录名;
+ * 都失败才用朴素替换。曾只有朴素替换:~/baize_web 被还原成 /Users/x/baize/web,
+ * 判为「目录已不存在」后整个项目从列表与 ⌘D 候选里消失。
  */
 export async function decodeProjectDir(projectsRoot: string, dirName: string): Promise<string> {
   const dir = path.join(projectsRoot, dirName);
@@ -33,7 +36,28 @@ export async function decodeProjectDir(projectsRoot: string, dirName: string): P
   } catch {
     /* fall through */
   }
-  return dirName.replace(/-/g, '/');
+  return (await probeFsPath(dirName)) ?? dirName.replace(/-/g, '/');
+}
+
+const encodeName = (name: string) => name.replace(/[^a-zA-Z0-9]/g, '-');
+
+/** 从根目录逐级 readdir,找「编码后能接上剩余串」的子目录;同前缀兄弟(baize 与 baize_web)长名优先,走不通再回溯 */
+async function probeFsPath(dirName: string): Promise<string | null> {
+  const walk = async (dir: string, rest: string): Promise<string | null> => {
+    if (!rest) return dir;
+    const entries = await fsp.readdir(dir, { withFileTypes: true }).catch(() => []);
+    const hits = entries
+      .filter((e) => e.isDirectory() || e.isSymbolicLink())
+      .map((e) => ({ name: e.name, enc: '-' + encodeName(e.name) }))
+      .filter(({ enc }) => rest === enc || rest.startsWith(enc + '-'))
+      .sort((a, b) => b.enc.length - a.enc.length);
+    for (const { name, enc } of hits) {
+      const found = await walk(path.join(dir, name), rest.slice(enc.length));
+      if (found) return found;
+    }
+    return null;
+  };
+  return dirName.startsWith('-') ? walk('/', dirName) : null;
 }
 
 async function sniffCwd(jsonlPath: string): Promise<string | null> {
@@ -298,6 +322,13 @@ export async function parseReplay(jsonlPath: string, sessionId: string): Promise
       case 'queue-operation':
       case 'cost-state': // CLI 成本记账快照
       case 'atis-latch': // CLI 内部状态,无对话内容
+      // CLI 2.1.32x 起的请求日志与账号元数据:对话内容已在 user/assistant 行里,这些只是重复的请求快照
+      // (近 40 个转录里 39 个带 api-request*,单个会话动辄上百行),不跳过回放就被原始 JSON 刷屏
+      case 'api-request':
+      case 'api-request-blob':
+      case 'api-request-shape':
+      case 'session-owner':
+      case 'tools-used':
         break;
       default:
         // 未知事件类型 → 降级原样透传(adapter 兜底,T1 风险缓解)
@@ -530,7 +561,9 @@ export async function extractCommandInvocations(jsonlPath: string): Promise<{ na
 
 export async function scanSkills(claudeDir: string): Promise<Skill[]> {
   const out: Skill[] = [];
-  const scanDir = async (root: string, source: 'user' | 'plugin', enabled: boolean, depth: number) => {
+  /** root 下每个含 SKILL.md 的子目录(跟随 symlink)算一个技能;root 自身含 SKILL.md 也算 */
+  const scanDir = async (root: string, onSkill: (file: string) => Promise<void>) => {
+    if (fs.existsSync(path.join(root, 'SKILL.md'))) return onSkill(path.join(root, 'SKILL.md'));
     const entries = await fsp.readdir(root, { withFileTypes: true }).catch(() => []);
     for (const e of entries) {
       const dir = path.join(root, e.name);
@@ -542,20 +575,70 @@ export async function scanSkills(claudeDir: string): Promise<Skill[]> {
       }
       if (!isDir) continue;
       const skillMd = path.join(dir, 'SKILL.md');
-      if (fs.existsSync(skillMd)) {
-        const skill = await parseSkillMd(skillMd, source, enabled);
-        if (skill) out.push(skill);
-      } else if (depth > 0) {
-        await scanDir(dir, source, enabled, depth - 1);
-      }
+      if (fs.existsSync(skillMd)) await onSkill(skillMd);
     }
   };
-  await scanDir(path.join(claudeDir, 'skills'), 'user', true, 0);
-  await scanDir(path.join(claudeDir, 'skills-disabled'), 'user', false, 0);
-  await scanDir(path.join(claudeDir, 'plugins'), 'plugin', true, 4);
-  // 插件目录可能同名多版本,按 name 去重(保留先扫到的)
+  const push = (s: Skill | null) => {
+    if (s) out.push(s);
+  };
+  await scanDir(path.join(claudeDir, 'skills'), async (f) => push(await parseSkillMd(f, 'user', true)));
+  await scanDir(path.join(claudeDir, 'skills-disabled'), async (f) => push(await parseSkillMd(f, 'user', false)));
+
+  // 插件技能:只认真正安装的插件。plugins/marketplaces/ 是市场目录的整仓克隆(含大量未安装插件),
+  // 递归扫整个 plugins/ 曾把 31 个已装技能虚报成 166 个。
+  for (const plugin of await scanInstalledPlugins(claudeDir)) {
+    for (const rel of plugin.skillDirs) {
+      await scanDir(path.join(plugin.installPath, rel), async (f) => {
+        const s = await parseSkillMd(f, 'plugin', plugin.info.enabled);
+        // 加命名空间前缀:与 jsonl 里的调用名一致,也不会与同名用户技能互相吞掉
+        if (s) push({ ...s, name: `${plugin.info.name}:${s.name}`, plugin: plugin.info });
+      });
+    }
+  }
   const seen = new Set<string>();
   return out.filter((s) => (seen.has(s.name) ? false : (seen.add(s.name), true)));
+}
+
+interface InstalledPlugin {
+  info: SkillPlugin;
+  installPath: string;
+  /** 相对 installPath 的技能目录:默认 skills/,plugin.json 的 skills 字段追加自定义路径 */
+  skillDirs: string[];
+}
+
+/**
+ * 已安装插件 = plugins/installed_plugins.json 里 user 级的安装记录;
+ * 启用态 = settings.json 的 enabledPlugins[id] === true(与 claude plugin enable/disable 同一个开关)。
+ * project/local 级安装只在对应项目内生效,不属于「全局技能」视图,不列出。
+ */
+export async function scanInstalledPlugins(claudeDir: string): Promise<InstalledPlugin[]> {
+  const readJson = async (f: string): Promise<any> =>
+    JSON.parse(await fsp.readFile(f, 'utf8').catch(() => 'null')) ?? null;
+  const installed = await readJson(path.join(claudeDir, 'plugins', 'installed_plugins.json')).catch(() => null);
+  const settings = await readJson(path.join(claudeDir, 'settings.json')).catch(() => null);
+  const enabledMap: Record<string, unknown> = settings?.enabledPlugins ?? {};
+  const out: InstalledPlugin[] = [];
+  for (const [id, records] of Object.entries<any>(installed?.plugins ?? {})) {
+    const rec = (Array.isArray(records) ? records : [records]).find((r: any) => r?.scope === 'user');
+    if (!rec || typeof rec.installPath !== 'string' || !fs.existsSync(rec.installPath)) continue;
+    const manifest = await readJson(path.join(rec.installPath, '.claude-plugin', 'plugin.json')).catch(() => null);
+    const extra = manifest?.skills;
+    const skillDirs = ['skills', ...(Array.isArray(extra) ? extra : typeof extra === 'string' ? [extra] : [])]
+      .filter((d): d is string => typeof d === 'string')
+      .map((d) => path.normalize(d).replace(/\/+$/, ''));
+    out.push({
+      info: {
+        id,
+        name: typeof manifest?.name === 'string' ? manifest.name : id.split('@')[0]!,
+        version: manifest?.version ?? rec.version,
+        description: typeof manifest?.description === 'string' ? manifest.description : undefined,
+        enabled: enabledMap[id] === true,
+      },
+      installPath: rec.installPath,
+      skillDirs: [...new Set(skillDirs)],
+    });
+  }
+  return out;
 }
 
 async function parseSkillMd(file: string, source: 'user' | 'plugin', enabled: boolean): Promise<Skill | null> {
@@ -595,34 +678,78 @@ export async function scanMemories(
   for (const [encodedDir, realPath] of projectMap) {
     const memDir = path.join(root, encodedDir, 'memory');
     const files = await fsp.readdir(memDir).catch(() => [] as string[]);
+    const hooks = parseMemoryIndex(await fsp.readFile(path.join(memDir, 'MEMORY.md'), 'utf8').catch(() => ''));
     for (const f of files) {
       if (!f.endsWith('.md') || f === 'MEMORY.md') continue;
       const m = await parseMemoryMd(path.join(memDir, f), realPath);
-      if (m) out.push(m);
+      if (m) out.push({ ...m, indexHook: hooks.get(f) ?? null });
     }
+  }
+  // 共享经验:同一真身被哪些项目挂载(只统计本次扫描范围内的项目)
+  const byReal = new Map<string, Memory[]>();
+  for (const m of out) if (m.sharedWith) byReal.set(m.realFile, [...(byReal.get(m.realFile) ?? []), m]);
+  for (const group of byReal.values()) {
+    for (const m of group) m.sharedWith = group.filter((x) => x !== m).map((x) => x.project).sort();
   }
   return out;
 }
 
 const VALID_TYPES = new Set(['user', 'feedback', 'project', 'reference', 'cross-project']);
+/** 列表里 body 的截断上限;完整正文走 parseMemoryMd(file, path, { full: true }) */
+const MEMORY_BODY_CAP = 8000;
 
-async function parseMemoryMd(file: string, projectPath: string): Promise<Memory | null> {
+export const memoryRev = (raw: string) => crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16);
+
+/** MEMORY.md 索引:文件名 → 该行「](file.md)」之后的摘要(去掉前导的破折号分隔) */
+export function parseMemoryIndex(text: string): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const line of text.split('\n')) {
+    const m = line.match(/\]\(([^)\s]+\.md)\)(.*)$/);
+    if (m && !out.has(m[1]!)) out.set(m[1]!, m[2]!.replace(/^\s*[—–-]+\s*/, '').trim());
+  }
+  return out;
+}
+
+/** 把 memory md 拆成 frontmatter 对象与正文(编辑保存时要原样保留未知键) */
+export function splitMemoryMd(raw: string): { meta: Record<string, unknown>; body: string } {
+  const fm = splitFrontmatter(raw);
+  let meta: Record<string, unknown> = {};
+  if (fm) {
+    try {
+      const parsed: unknown = YAML.parse(fm.frontmatter);
+      if (parsed && typeof parsed === 'object') meta = parsed as Record<string, unknown>;
+    } catch {
+      /* frontmatter 写坏了:当作没有,正文照旧 */
+    }
+  }
+  return { meta, body: (fm ? fm.body : raw).trim() };
+}
+
+export async function parseMemoryMd(
+  file: string,
+  projectPath: string,
+  opts: { full?: boolean } = {},
+): Promise<Memory | null> {
   try {
     const raw = await fsp.readFile(file, 'utf8');
-    const fm = splitFrontmatter(raw);
-    const meta = fm ? (YAML.parse(fm.frontmatter) ?? {}) : {};
-    const body = (fm ? fm.body : raw).trim();
-    const rawType = meta.metadata?.type ?? meta.type;
+    const { meta, body } = splitMemoryMd(raw);
+    const rawType = (meta.metadata as { type?: string } | undefined)?.type ?? (meta.type as string | undefined);
     const links = [...body.matchAll(/\[\[([^\]]+)\]\]/g)].map((m) => m[1]!).filter(Boolean);
+    const isLink = (await fsp.lstat(file)).isSymbolicLink();
     return {
       name: String(meta.name ?? path.basename(file, '.md')),
       description: String(meta.description ?? '').slice(0, 500),
-      type: VALID_TYPES.has(rawType) ? rawType : 'unknown',
+      type: (rawType && VALID_TYPES.has(rawType) ? rawType : 'unknown') as Memory['type'],
       project: path.basename(projectPath),
       projectPath,
       file,
-      body: body.slice(0, 8000),
+      body: opts.full ? body : body.slice(0, MEMORY_BODY_CAP),
       links,
+      rev: memoryRev(raw),
+      truncated: !opts.full && body.length > MEMORY_BODY_CAP,
+      sharedWith: isLink ? [] : null,
+      realFile: isLink ? await fsp.realpath(file) : file,
+      indexHook: null,
     };
   } catch {
     return null;

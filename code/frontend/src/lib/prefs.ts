@@ -23,6 +23,8 @@ export type FontScale = 'sm' | 'md' | 'lg';
 export type MotionPref = 'system' | 'on' | 'off';
 /** 会话卡片上的内存/CPU 数字:始终 / 偏高时 / 不显示 */
 export type CardMetric = 'always' | 'high' | 'off';
+/** Claude 回答高亮:标题紫(h3 粉)、加粗琥珀;off 回到全白靠字重 */
+export type MdHighlight = 'on' | 'off';
 
 export interface LocalPrefs {
   /** `mod` = ⌘⏎ 发送 / Enter 换行(现状);`enter` = Enter 发送 / ⇧⏎ 换行 */
@@ -40,6 +42,8 @@ export interface LocalPrefs {
   cardMem: CardMetric;
   /** 卡片显示 CPU 数字(默认只在偏高时,避免挤压标题) */
   cardCpu: CardMetric;
+  /** Claude 回答里的标题 / 加粗上色(本机) */
+  mdHighlight: MdHighlight;
   keymap: Keymap;
 }
 
@@ -52,6 +56,7 @@ export const DEFAULT_LOCAL: LocalPrefs = {
   stowDone: 5,
   cardMem: 'always',
   cardCpu: 'high',
+  mdHighlight: 'on',
   keymap: KEYMAP_DEFAULTS,
 };
 
@@ -72,6 +77,7 @@ function normalizeLocal(raw: unknown): LocalPrefs {
     stowDone: stowOf(o.stowDone, DEFAULT_LOCAL.stowDone),
     cardMem: oneOf(o.cardMem, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardMem),
     cardCpu: oneOf(o.cardCpu, ['always', 'high', 'off'] as const, DEFAULT_LOCAL.cardCpu),
+    mdHighlight: oneOf(o.mdHighlight, ['on', 'off'] as const, DEFAULT_LOCAL.mdHighlight),
     keymap: normalizeKeymap(o.keymap),
   };
 }
@@ -139,6 +145,7 @@ export function applyLocalToDom(p: LocalPrefs = local) {
   el.dataset.fontScale = p.fontScale;
   el.dataset.motion = p.reduceMotion;
   el.dataset.turnHead = String(p.turnHead);
+  el.dataset.mdHl = p.mdHighlight;
 }
 
 /* ---------- 账户偏好 ---------- */
@@ -166,6 +173,7 @@ export const DEFAULT_ACCOUNT: AccountPrefs = {
   },
   monitor: { mem: true, cpu: true, interval: 10, debounce: 2, pauseIdle: true, cpuWarn: 60, cpuCrit: 85, idleExit: 30 },
   terminal: { cwdMode: 'session', navMode: 'keep' },
+  lark: { enabled: false, push: 'locked' },
 };
 
 let account: AccountPrefs = DEFAULT_ACCOUNT;
@@ -180,7 +188,11 @@ export async function loadAccount(): Promise<AccountPrefs> {
   try {
     const r = await api.prefs();
     // 旧后端没有 terminal 组时补默认,免得读 prefs.terminal.x 直接抛
-    account = { ...r.prefs, terminal: r.prefs.terminal ?? DEFAULT_ACCOUNT.terminal };
+    account = {
+      ...r.prefs,
+      terminal: r.prefs.terminal ?? DEFAULT_ACCOUNT.terminal,
+      lark: r.prefs.lark ?? DEFAULT_ACCOUNT.lark,
+    };
     accountLoaded = true;
     accEmit();
   } catch {
@@ -197,6 +209,7 @@ export async function patchAccount(p: Partial<AccountPrefs>) {
     notify: { ...account.notify, ...(p.notify ?? {}) },
     monitor: { ...account.monitor, ...(p.monitor ?? {}) },
     terminal: { ...account.terminal, ...(p.terminal ?? {}) },
+    lark: { ...account.lark, ...(p.lark ?? {}) },
   };
   accEmit();
   try {

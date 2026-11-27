@@ -1,5 +1,7 @@
 /** Adapter 契约测试:fixture 即契约,CLI 升级破坏格式时这里先红(T1)。 */
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import {
   decodeProjectDir,
@@ -25,6 +27,23 @@ describe('decodeProjectDir', () => {
   it('无 jsonl 时退化为朴素替换', async () => {
     const p = await decodeProjectDir(path.join(FIX, 'projects'), '-Users-me-nothing');
     expect(p).toBe('/Users/me/nothing');
+  });
+  it('无 jsonl 时沿文件系统还原含 _ . - 的真实路径,同前缀兄弟目录不串', async () => {
+    // macOS 的 tmpdir 经 /var → /private/var 软链,取真实路径才与编码串逐级对得上
+    const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'xj-decode-')));
+    for (const d of ['baize', 'baize_web', 'baize-runs/.narrate-cwd', 'a.b/c-d']) {
+      fs.mkdirSync(path.join(base, d), { recursive: true });
+    }
+    const enc = (p: string) => p.replace(/[^a-zA-Z0-9]/g, '-');
+    const root = path.join(FIX, 'projects');
+    try {
+      for (const d of ['baize', 'baize_web', 'baize-runs/.narrate-cwd', 'a.b/c-d']) {
+        const real = path.join(base, d);
+        expect(await decodeProjectDir(root, enc(real))).toBe(real);
+      }
+    } finally {
+      fs.rmSync(base, { recursive: true, force: true });
+    }
   });
 });
 
@@ -132,6 +151,57 @@ describe('scanSkills', () => {
   it('跟随 symlink 安装的技能目录', async () => {
     const skills = await scanSkills(FIX);
     expect(skills.find((s) => s.name === 'linked-skill')).toMatchObject({ enabled: true, source: 'user' });
+  });
+});
+
+describe('scanSkills — 插件技能', () => {
+  const mk = async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'xuanji-plugins-'));
+    const w = (rel: string, body: string) => {
+      fs.mkdirSync(path.dirname(path.join(tmp, rel)), { recursive: true });
+      fs.writeFileSync(path.join(tmp, rel), body);
+    };
+    const skill = (n: string) => `---\nname: ${n}\ndescription: d\n---\nbody`;
+    const on = path.join(tmp, 'plugins/cache/mk/on-plugin/1.0.0');
+    const off = path.join(tmp, 'plugins/cache/mk/off-plugin/2.0.0');
+    w('plugins/cache/mk/on-plugin/1.0.0/.claude-plugin/plugin.json', JSON.stringify({ name: 'on-plugin', version: '1.0.0', skills: './extra/' }));
+    w('plugins/cache/mk/on-plugin/1.0.0/skills/alpha/SKILL.md', skill('alpha'));
+    w('plugins/cache/mk/on-plugin/1.0.0/extra/beta/SKILL.md', skill('beta'));
+    w('plugins/cache/mk/off-plugin/2.0.0/.claude-plugin/plugin.json', JSON.stringify({ name: 'off-plugin', version: '2.0.0' }));
+    w('plugins/cache/mk/off-plugin/2.0.0/skills/review/SKILL.md', skill('review'));
+    // 市场目录里的未安装插件:不得出现
+    w('plugins/marketplaces/mk/not-installed/skills/ghost/SKILL.md', skill('ghost'));
+    // 同名用户技能:不得被插件技能吞掉
+    w('skills/review/SKILL.md', skill('review'));
+    w('plugins/installed_plugins.json', JSON.stringify({ version: 2, plugins: {
+      'on-plugin@mk': [{ scope: 'user', installPath: on, version: '1.0.0' }],
+      'off-plugin@mk': [{ scope: 'user', installPath: off, version: '2.0.0' }],
+      'proj-plugin@mk': [{ scope: 'project', installPath: on, version: '1.0.0' }],
+    } }));
+    w('settings.json', JSON.stringify({ enabledPlugins: { 'on-plugin@mk': true, 'off-plugin@mk': false } }));
+    return tmp;
+  };
+
+  it('只列 installed_plugins.json 里 user 级安装的插件,市场目录不算', async () => {
+    const skills = await scanSkills(await mk());
+    const names = skills.filter((s) => s.source === 'plugin').map((s) => s.name).sort();
+    expect(names).toEqual(['off-plugin:review', 'on-plugin:alpha', 'on-plugin:beta']);
+  });
+
+  it('启用态取自 settings.json enabledPlugins,并带上所属插件信息', async () => {
+    const skills = await scanSkills(await mk());
+    expect(skills.find((s) => s.name === 'on-plugin:alpha')).toMatchObject({
+      enabled: true,
+      plugin: { id: 'on-plugin@mk', name: 'on-plugin', version: '1.0.0', enabled: true },
+    });
+    expect(skills.find((s) => s.name === 'off-plugin:review')).toMatchObject({ enabled: false, plugin: { enabled: false } });
+  });
+
+  it('同名用户技能与插件技能并存', async () => {
+    const skills = await scanSkills(await mk());
+    expect(skills.find((s) => s.name === 'review')).toMatchObject({ source: 'user', enabled: true });
   });
 });
 

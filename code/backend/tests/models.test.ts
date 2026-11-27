@@ -60,7 +60,7 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
 vi.mock('../src/adapters/notify.js', () => ({ notifyMac: vi.fn() }));
 vi.mock('../src/adapters/agents-cli.js', async (importOriginal) => {
   const orig = await importOriginal<typeof import('../src/adapters/agents-cli.js')>();
-  return { ...orig, cliVersion: vi.fn(async () => versionRef.v), listAgents: vi.fn(async () => []) };
+  return { ...orig, sdkCliVersion: vi.fn(() => versionRef.v), listAgents: vi.fn(async () => []) };
 });
 
 const models = await import('../src/services/models.js');

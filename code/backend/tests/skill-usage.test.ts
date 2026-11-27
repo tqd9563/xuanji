@@ -8,6 +8,7 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { extractSkillInvocations, localDay } from '../src/adapters/claude-dir.js';
 import { Storage } from '../src/storage/db.js';
+import { lookupUsage } from '../src/services/skill-usage.js';
 
 let tmp: string;
 
@@ -156,29 +157,10 @@ describe('窗口与最近触发', () => {
   });
 });
 
-describe('插件命名空间 — 裸名要能对上带前缀的记录', () => {
-  it('裸名解析到 plugin:skill 形式的键', () => {
-    const s = new Storage(tmp);
-    s.replaceSkillInvocations({ path: '/x/a.jsonl', mtime: 1, size: 1 }, [
-      { skill: 'claude-hud:setup', day: '2026-08-20', count: 2, lastAt: 1 },
-    ]);
-    expect(s.skillResolveKey('setup')).toBe('claude-hud:setup');
-    s.close();
-  });
-
-  it('精确命中优先于前缀匹配', () => {
-    const s = new Storage(tmp);
-    s.replaceSkillInvocations({ path: '/x/a.jsonl', mtime: 1, size: 1 }, [
-      { skill: 'setup', day: '2026-08-20', count: 1, lastAt: 1 },
-      { skill: 'claude-hud:setup', day: '2026-08-20', count: 9, lastAt: 1 },
-    ]);
-    expect(s.skillResolveKey('setup')).toBe('setup');
-    s.close();
-  });
-
-  it('从未触发的技能解析为 null', () => {
-    const s = new Storage(tmp);
-    expect(s.skillResolveKey('never-used')).toBeNull();
-    s.close();
+describe('插件命名空间 — 全名精确匹配', () => {
+  it('插件技能按 plugin:skill 全名取数,同名用户技能不会偷走插件的计数', () => {
+    const usage = new Map([['claude-hud:setup', { d7: 9, d30: 9, d90: 9 }]]);
+    expect(lookupUsage(usage, 'claude-hud:setup')?.d7).toBe(9);
+    expect(lookupUsage(usage, 'setup')).toBeUndefined();
   });
 });

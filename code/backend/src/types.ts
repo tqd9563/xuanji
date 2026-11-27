@@ -93,6 +93,8 @@ export interface AgentSession {
   suspended?: boolean;
   /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
   idleExited?: boolean;
+  /** 定时任务跑出来、用户尚未接着聊过的会话(仅「需审批」时才会出现在看板上) */
+  scheduled?: boolean;
 }
 
 /** 回放事件:session jsonl 归一化产物。未知类型降级为 raw,绝不丢弃。 */
@@ -146,6 +148,17 @@ export interface SkillUsage {
   lastUsedAt?: number;
 }
 
+/** 已安装插件(来自 plugins/installed_plugins.json,启用态来自 settings.json enabledPlugins) */
+export interface SkillPlugin {
+  /** `name@marketplace`,即 claude plugin enable/disable 的参数 */
+  id: string;
+  name: string;
+  version?: string;
+  /** plugin.json 的 description */
+  description?: string;
+  enabled: boolean;
+}
+
 export interface Skill {
   name: string;
   description: string;
@@ -154,6 +167,8 @@ export interface Skill {
   allowedTools?: string;
   source: 'user' | 'plugin';
   enabled: boolean;
+  /** 插件技能所属插件;name 此时为 `插件名:技能名`(与 jsonl 里的调用名一致) */
+  plugin?: SkillPlugin;
   /** SKILL.md 正文(frontmatter 之后) */
   body?: string;
   /** 触发统计;索引尚未建好时缺省 */
@@ -171,6 +186,25 @@ export interface Memory {
   body: string;
   /** [[wikilink]] 引用 */
   links: string[];
+  /** 原文内容指纹:编辑保存时带回,用来发现「打开之后被别处改过」 */
+  rev: string;
+  /** 列表里的 body 只取前 8000 字;被截断时编辑前须取详情 */
+  truncated: boolean;
+  /** 共享经验 = 指向 memory-shared 的软链;值为同一真身挂载到的其它项目名(只挂在本项目时为空数组),非共享为 null */
+  sharedWith: string[] | null;
+  /** 软链解析后的真实路径(非共享时等于 file) */
+  realFile: string;
+  /** MEMORY.md 里指向本文件那一行「 — 」之后的摘要:会话启动时注入的是它,不是 description;没有索引行为 null */
+  indexHook: string | null;
+}
+
+/** 回收站里的一条经验(文件在 ~/.xuanji/trash/memory/<id>/) */
+export interface TrashedMemory {
+  id: string;
+  deletedAt: number;
+  /** file=普通文件;unmount=只卸载本项目的软链;all=连共享库真身一起 */
+  mode: 'file' | 'unmount' | 'all';
+  memory: Memory;
 }
 
 /** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
@@ -307,6 +341,28 @@ export interface Todo {
   doneAt: number | null;
   /** 来源:web 界面 / Raycast 等外部脚本(仅作展示,不影响行为) */
   source: 'web' | 'external';
+}
+
+/**
+ * 提示词(自有数据):用户反复粘贴的开场白 / 排障模板 / 固定要求。
+ * 与 CLI 自定义斜杠命令的分工:命令是「选中即执行」,提示词是「填进输入框、改两句再发」。
+ * 存自有 SQLite,跨设备同步;~/.claude 不写(架构铁律 2)。
+ */
+export interface Prompt {
+  id: number;
+  /** 触发词:`/p <trig>` 插入;小写字母开头,字母/数字/短横线,库内唯一 */
+  trig: string;
+  name: string;
+  /** 正文,可含 {{cursor}} {{cwd}} {{branch}} {{date}} {{clipboard}} 变量,插入时由前端解析 */
+  body: string;
+  /** 作用域:null = 全局;否则为项目工作目录绝对路径,只在该目录的派发页出现 */
+  cwd: string | null;
+  /** 钉选:派发页空输入框时显示为快捷 chip(上限见 services/prompts.PIN_MAX) */
+  pinned: boolean;
+  uses: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ModelUsage {

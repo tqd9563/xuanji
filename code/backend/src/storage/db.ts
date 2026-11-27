@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { desc, eq } from 'drizzle-orm';
-import type { Memory, RunbookRun, RunbookTemplate, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
+import type { Memory, Prompt, RunbookRun, RunbookTemplate, ScheduledJob, ScheduledRun, Todo, WeeklyDraft } from '../types.js';
 
 export const metaTable = sqliteTable('meta', {
   key: text('key').primaryKey(),
@@ -178,6 +178,20 @@ export const todosTable = sqliteTable('todos', {
   source: text('source').notNull(), // web | external
 });
 
+/** 提示词库(自有数据):见 types.Prompt */
+export const promptsTable = sqliteTable('prompts', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  trig: text('trig').notNull().unique(),
+  name: text('name').notNull(),
+  body: text('body').notNull(),
+  cwd: text('cwd'),
+  pinned: integer('pinned', { mode: 'boolean' }).notNull(),
+  uses: integer('uses').notNull(),
+  lastUsedAt: integer('last_used_at'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 /**
  * 项目级验收模板(自有数据):验收骨架一次沉淀长期复用。
  * items 存 JSON 串——清单项是嵌套结构且只整体读写,拆表徒增 join 无收益。
@@ -332,6 +346,12 @@ export class Storage {
         source TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status, id DESC);
+      CREATE TABLE IF NOT EXISTS prompts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        trig TEXT NOT NULL UNIQUE, name TEXT NOT NULL, body TEXT NOT NULL,
+        cwd TEXT, pinned INTEGER NOT NULL DEFAULT 0, uses INTEGER NOT NULL DEFAULT 0,
+        last_used_at INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS runbook_templates (
         id TEXT PRIMARY KEY, project TEXT NOT NULL, name TEXT NOT NULL,
         version INTEGER NOT NULL, status TEXT NOT NULL, source TEXT NOT NULL,
@@ -709,6 +729,49 @@ export class Storage {
     this.orm.delete(todosTable).where(eq(todosTable.id, id)).run();
   }
 
+  // ---------- 提示词 ----------
+
+  /** 全部提示词;钉选优先、再按使用次数,与派发页面板 / 管理页列表同一顺序 */
+  listPrompts(): Prompt[] {
+    return this.orm
+      .select()
+      .from(promptsTable)
+      .orderBy(desc(promptsTable.pinned), desc(promptsTable.uses), promptsTable.trig)
+      .all() as Prompt[];
+  }
+
+  getPrompt(id: number): Prompt | null {
+    return (this.orm.select().from(promptsTable).where(eq(promptsTable.id, id)).get() as Prompt | undefined) ?? null;
+  }
+
+  getPromptByTrig(trig: string): Prompt | null {
+    return (this.orm.select().from(promptsTable).where(eq(promptsTable.trig, trig)).get() as Prompt | undefined) ?? null;
+  }
+
+  createPrompt(input: { trig: string; name: string; body: string; cwd: string | null; pinned: boolean }): Prompt {
+    const now = Date.now();
+    const r = this.orm
+      .insert(promptsTable)
+      .values({ ...input, uses: 0, lastUsedAt: null, createdAt: now, updatedAt: now })
+      .run();
+    return this.getPrompt(Number(r.lastInsertRowid))!;
+  }
+
+  updatePrompt(id: number, patch: Partial<Pick<Prompt, 'trig' | 'name' | 'body' | 'cwd' | 'pinned'>>) {
+    this.orm.update(promptsTable).set({ ...patch, updatedAt: Date.now() }).where(eq(promptsTable.id, id)).run();
+  }
+
+  /** 插入一次:次数 +1 并记时间(排序与「最近用过」展示用) */
+  bumpPromptUse(id: number) {
+    const p = this.getPrompt(id);
+    if (!p) return;
+    this.orm.update(promptsTable).set({ uses: p.uses + 1, lastUsedAt: Date.now() }).where(eq(promptsTable.id, id)).run();
+  }
+
+  deletePrompt(id: number) {
+    this.orm.delete(promptsTable).where(eq(promptsTable.id, id)).run();
+  }
+
   getMeta(key: string): string | null {
     const row = this.orm.select().from(metaTable).where(eq(metaTable.key, key)).get();
     return row?.value ?? null;
@@ -799,6 +862,23 @@ export class Storage {
          FROM scheduled_runs WHERE job_id = ? ORDER BY id DESC LIMIT ?`,
       )
       .all(jobId, limit) as ScheduledRun[];
+  }
+
+  /**
+   * 「纯定时」会话:定时任务跑出来、用户还没亲自接着聊过的会话 id。这些会话不进「会话」看板,
+   * 只在「定时」页按运行记录查看。用户续接后发过消息(dispatch_prompts 里有该 sessionId 的记录)
+   * 即视为认领,回到看板——此后它就是用户自己的对话。定时任务自身的那条 prompt 发在 init 之前,
+   * 落库时没有 sessionId,不会被误判为认领。
+   */
+  scheduledOnlySessionIds(): Set<string> {
+    const rows = this.sqlite
+      .prepare(
+        `SELECT DISTINCT r.session_id as sessionId FROM scheduled_runs r
+         WHERE r.session_id IS NOT NULL
+           AND NOT EXISTS (SELECT 1 FROM dispatch_prompts p WHERE p.session_id = r.session_id)`,
+      )
+      .all() as { sessionId: string }[];
+    return new Set(rows.map((r) => r.sessionId));
   }
 
   countScheduledRuns(jobId: string): number {
@@ -941,22 +1021,6 @@ export class Storage {
       .prepare('SELECT skill, MAX(last_at) as lastAt FROM skill_invocations GROUP BY skill')
       .all() as { skill: string; lastAt: number }[];
     return new Map(rows.map((r) => [r.skill, r.lastAt]));
-  }
-
-  /**
-   * 把 SKILL.md 里的裸名解析成索引里真实记录的键。
-   * 插件技能调用时写的是 `plugin:skill`,裸名直查会全 0——先精确后带前缀匹配。
-   */
-  skillResolveKey(name: string): string | null {
-    const row = this.sqlite
-      .prepare(
-        `SELECT skill FROM skill_invocations WHERE skill = ?
-         UNION ALL
-         SELECT skill FROM skill_invocations WHERE skill LIKE '%:' || ?
-         LIMIT 1`,
-      )
-      .get(name, name) as { skill: string } | undefined;
-    return row?.skill ?? null;
   }
 
   /** 单个技能的逐日次数(抽屉里的迷你柱) */

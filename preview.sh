@@ -4,7 +4,11 @@
 # 隔离三件套(任何一条被破坏都可能污染生产,勿改):
 #   1) 端口另起高位(默认 37777/35173),永不碰 7777 的常驻后端;
 #   2) 数据用宿主库的 sqlite 快照副本,验收里的归档/挂起/改名写不回生产库;
-#   3) 前端走 vite dev server,改代码热更新,不动 launchd 部署的静态产物。
+#   3) 前端走 vite dev server,改代码热更新,不动 launchd 部署的静态产物;
+#   4) 默认不连飞书(XUANJI_LARK=off):快照里带着生产的飞书启用状态与绑定人,照连就会和 7777 同时收到
+#      每一条飞书消息、各回一遍(2026-11-15 实际发生:一个验收环境挂了 4 天,用户每句话都同时收到
+#      生产的进度卡和验收环境的「发给哪个会话?」)。验收飞书功能时显式开:XUANJI_PREVIEW_LARK=1 ./preview.sh
+#      ——此时生产会同时收消息,验完立刻 --stop。
 #
 # 用法:
 #   ./preview.sh          启动(重复执行 = 先停后起)
@@ -77,7 +81,9 @@ pnpm --dir code/backend  install --prefer-offline --silent
 pnpm --dir code/frontend install --prefer-offline --silent
 
 echo "» 启动后端(:$API_PORT)…"
-XUANJI_PORT="$API_PORT" XUANJI_DATA_DIR="$RUN_DIR" \
+LARK_MODE=off
+[ "${XUANJI_PREVIEW_LARK:-}" = "1" ] && LARK_MODE=on
+XUANJI_PORT="$API_PORT" XUANJI_DATA_DIR="$RUN_DIR" XUANJI_LARK="$LARK_MODE" \
   pnpm --dir code/backend start > "$RUN_DIR/backend.log" 2>&1 &
 echo $! >> "$PID_FILE"
 

@@ -7,6 +7,8 @@ import {
   modelDetail,
   modelLabel,
   normalizeModelValue,
+  olderModels,
+  primaryModels,
   toSdkModel,
   type ModelOption,
 } from './models';
@@ -74,5 +76,44 @@ describe('展示与下发', () => {
     expect(defaultEffortOf(CAT, 'claude-opus-5')).toBe('low');
     expect(defaultEffortOf(CAT, 'sonnet')).toBeUndefined();
     expect(defaultEffortOf(CAT, 'claude-fable-5-1[1m]')).toBeUndefined();
+  });
+});
+
+describe('primaryModels / olderModels(旧版本收起)', () => {
+  const row = (value: string, resolvedModel: string): ModelOption => ({ value, resolvedModel, displayName: value, description: '' });
+  // CLI 2.1.321 supportedModels() 真实目录(2026-11-10 探测)
+  const NEW = [
+    row('default', 'claude-opus-5-5'),
+    row('opus', 'claude-opus-5-5'),
+    row('fable', 'claude-fable-5-2'),
+    row('sonnet', 'claude-sonnet-5-5'),
+    row('haiku', 'claude-haiku-5-5'),
+    row('claude-fable-5-1', 'claude-fable-5-1'),
+    row('claude-haiku-4-5-20251001', 'claude-haiku-4-5-20251001'),
+    row('claude-sonnet-5', 'claude-sonnet-5'),
+    row('claude-opus-5', 'claude-opus-5'),
+    row('claude-fable-5', 'claude-fable-5'),
+    row('claude-opus-4-8', 'claude-opus-4-8'),
+    row('claude-opus-4-7', 'claude-opus-4-7'),
+    row('claude-opus-4-6', 'claude-opus-4-6'),
+    row('claude-sonnet-4-6', 'claude-sonnet-4-6'),
+  ];
+  // CLI 2.1.280 目录:fable 家族没有别名行,只有完整 id 行
+  const OLD = [
+    row('default', 'claude-opus-5-5[1m]'),
+    row('opus[1m]', 'claude-opus-5-5[1m]'),
+    row('claude-fable-5-1[1m]', 'claude-fable-5-1'),
+    row('sonnet', 'claude-sonnet-5'),
+    row('haiku', 'claude-haiku-4-5-20251001'),
+  ];
+
+  it('同家族已有别名行时,完整 id 行收进旧版本', () => {
+    expect(primaryModels(NEW).map((m) => m.value)).toEqual(['default', 'opus', 'fable', 'sonnet', 'haiku']);
+    expect(olderModels(NEW).map((m) => m.value)).toEqual(NEW.slice(5).map((m) => m.value));
+  });
+
+  it('家族没有别名行时,完整 id 行是唯一入口,照常显示', () => {
+    expect(primaryModels(OLD).map((m) => m.value)).toEqual(OLD.map((m) => m.value));
+    expect(olderModels(OLD)).toEqual([]);
   });
 });

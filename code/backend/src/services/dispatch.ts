@@ -14,7 +14,7 @@ import {
   type Query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
-import { cliVersion, listAgents } from '../adapters/agents-cli.js';
+import { listAgents, sdkCliVersion } from '../adapters/agents-cli.js';
 import type { AgentSession, InlineImage } from '../types.js';
 import { notifyMac } from '../adapters/notify.js';
 import type { SideQuestion, Storage } from '../storage/db.js';
@@ -338,6 +338,15 @@ export class DispatchSession {
     return this.events.map((e, i) => ({ e, at: this.eventAt[i] ?? this.startedAt }));
   }
 
+  /** 回放缓冲里最后一条完整的 assistant 回复(飞书「续接」卡带回上一轮摘要用) */
+  get lastAssistantText(): string | undefined {
+    for (let i = this.events.length - 1; i >= 0; i--) {
+      const e = this.events[i]!;
+      if (e.ev === 'assistant' && e.text.trim()) return e.text;
+    }
+    return undefined;
+  }
+
   subscribe(l: (e: DispatchEvent) => void): () => void {
     this.listeners.add(l);
     return () => this.listeners.delete(l);
@@ -595,8 +604,9 @@ export class DispatchSession {
   private refreshModels() {
     const q = this.q;
     if (typeof q?.supportedModels !== 'function') return;
-    void Promise.all([q.supportedModels(), cliVersion()])
-      .then(([raw, version]) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), version))
+    void q
+      .supportedModels()
+      .then((raw) => rememberModelCatalog(this.storage, normalizeModelCatalog(raw), sdkCliVersion()))
       .catch(() => {});
   }
 
@@ -730,7 +740,9 @@ export class DispatchSession {
   send(text: string, images?: InlineImage[]) {
     if (this.hibernated) this.wake();
     // SDK 会话不写 ~/.claude/history.jsonl:prompt 流水记自有库,仪表盘时间线/统计据此补全
-    this.storage.recordPrompt(this.cwd, text, this.sessionId ?? undefined);
+    // 续接(非分叉)时首条消息发在 init 之前,sessionId 尚空,但会话 id 就是 resumeFrom——照实归属,
+    // 否则「用户接着聊过这个会话」的判定(定时会话认领回看板)会漏掉只发了一条的续接
+    this.storage.recordPrompt(this.cwd, text, this.sessionId ?? (this.fork ? null : this.resumeFrom) ?? undefined);
     this.turnEnded = false; // 新一轮开始:之前 result 后的后台任务压制状态作废,交回正常事件流
     // 图片跟着回显走:user-echo 是所有已连接客户端(含中途 attach 的)唯一的用户消息来源,
     // 发送端若自行本地渲染会与它重复,故图片同走这条链路。
@@ -785,11 +797,10 @@ export class DispatchSession {
       this.emit({ ev: 'btw-error', requestId, question, message: '会话尚未就绪,发出第一条消息后再问' });
       return;
     }
-    if (this.hibernated) {
-      // 旁路提问复用主会话的子进程;进程已空闲退出时不为一句旁路提问冷启动整个会话
-      this.emit({ ev: 'btw-error', requestId, question, message: '会话已空闲自动退出,先发一条消息接上再问' });
-      return;
-    }
+    // 进程已空闲退出:静默冷启动(--resume,不推任何用户消息)再问。实测(SDK 0.3.280)resume 时历史即已载入、
+    // 未收到消息的进程可直接应答 side_question,转录只多 mode/cost-state 两行元数据,主对话上下文零增长。
+    // 问完不额外处理,照常由空闲巡检再收掉。
+    if (this.hibernated) this.wake();
     const ac = new AbortController();
     this.sideQuestion = { requestId, ac };
     this.emit({ ev: 'btw-start', requestId, question });
@@ -859,11 +870,13 @@ export class DispatchSession {
     await this.end();
   }
 
-  /** 冷启动接回:新输入队列 + `--resume <sessionId>`(不分叉,沿用同一会话) */
+  /**
+   * 冷启动接回:新输入队列 + `--resume <sessionId>`(不分叉,沿用同一会话)。
+   * 不碰 turnEnded:旁路提问接回时并没有开新一轮,要开的话由 send() 自己置位。
+   */
   private wake() {
     this.hibernated = false;
     this.input = new AsyncQueue<SDKUserMessage>();
-    this.turnEnded = false;
     this.startQuery(this.sessionId ?? this.resumeFrom ?? undefined, false);
   }
 }
@@ -872,14 +885,37 @@ export class DispatchSession {
 
 const sessions = new Map<string, DispatchSession>();
 
+/**
+ * 会话创建观察者:飞书中控需要看见**所有**派发会话(网页、定时任务、飞书自己发起的)
+ * 才能在锁屏时推送,而事件订阅是逐会话的,故在创建处统一广播。观察者在会话发出第一条事件之前被调用。
+ */
+const createdObservers = new Set<(s: DispatchSession) => void>();
+export function onDispatchCreated(fn: (s: DispatchSession) => void): () => void {
+  createdObservers.add(fn);
+  return () => createdObservers.delete(fn);
+}
+
 export function createDispatch(storage: Storage, opts: DispatchOpts): DispatchSession {
   const s = new DispatchSession(storage, opts);
   sessions.set(s.id, s);
+  for (const fn of createdObservers) {
+    try {
+      fn(s);
+    } catch (e) {
+      console.error('[xuanji] dispatch observer failed:', e);
+    }
+  }
   return s;
 }
 
 export function getDispatch(id: string): DispatchSession | undefined {
   return sessions.get(id);
+}
+
+/** 按 Claude 会话 id 找本进程内存活的派发会话(含空闲退出、仍可冷启动接回的) */
+export function findDispatchBySessionId(sessionId: string): DispatchSession | undefined {
+  for (const s of sessions.values()) if (s.sessionId === sessionId) return s;
+  return undefined;
 }
 
 /** 结束并移除进程内存活的派发会话(看板「关闭」);返回是否命中 */

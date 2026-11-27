@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>璇玑 · 助手输出 markdown 高亮(方案 B 细化)</title>
+<style>
+  :root {
+    --bg: oklch(0.145 0.006 120);
+    --surface-opaque: oklch(0.185 0.008 120);
+    --surface: var(--surface-opaque);
+    --surface-2: oklch(0.165 0.007 120);
+    --hover: oklch(0.215 0.009 120);
+    --line: oklch(0.27 0.010 120);
+    --line-soft: oklch(0.225 0.009 120);
+    --ink: oklch(0.93 0.008 110);
+    --muted: oklch(0.71 0.015 110);
+    --faint: oklch(0.60 0.012 110);
+    --jade: oklch(0.80 0.13 115);
+    --jade-dim: oklch(0.68 0.10 115);
+    --on-jade: oklch(0.18 0.02 120);
+    --amber: oklch(0.78 0.14 80);
+    --blue: oklch(0.72 0.11 245);
+    --violet: oklch(0.73 0.11 300);
+    --red: oklch(0.68 0.19 25);
+    --green: oklch(0.74 0.12 155);
+    --tool-skill: oklch(0.78 0.12 345);
+    --tool-exec: oklch(0.78 0.13 180);
+    --tool-write: oklch(0.78 0.12 55);
+    --tint-jade: color-mix(in oklab, var(--jade) 13%, transparent);
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif;
+    --r-s: 6px; --r-m: 10px; --r-chip: 4px; --r-pill: 99px;
+    --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  button { font: inherit; background: none; border: 0; color: inherit; cursor: pointer; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 0.875rem; line-height: 1.6;
+    -webkit-font-smoothing: antialiased; padding: 40px 24px 120px; min-height: 100vh; position: relative; }
+  .wrap { max-width: 1080px; margin: 0 auto; position: relative; }
+
+  #wall { position: fixed; inset: 0; z-index: -1; opacity: 0; pointer-events: none;
+    background: radial-gradient(60% 50% at 20% 20%, oklch(0.42 0.09 260) 0%, transparent 60%),
+      radial-gradient(50% 60% at 85% 70%, oklch(0.45 0.10 20) 0%, transparent 60%),
+      radial-gradient(40% 40% at 60% 30%, oklch(0.5 0.08 140) 0%, transparent 60%), oklch(0.22 0.02 250);
+    transition: opacity 200ms var(--ease); }
+  body.wall-on #wall { opacity: 0.4; }
+  body.wall-glass { --surface: color-mix(in oklab, var(--surface-opaque) 30%, transparent);
+    --surface-2: color-mix(in oklab, oklch(0.165 0.007 120) 24%, transparent); }
+
+  header { border-bottom: 1px solid var(--line-soft); padding-bottom: 24px; margin-bottom: 20px; }
+  h1 { font-family: var(--mono); font-size: 1.0625rem; font-weight: 500; letter-spacing: 0.02em; margin-bottom: 8px; }
+  .sub { color: var(--muted); font-size: 0.8125rem; max-width: 76ch; }
+  .sub b { color: var(--ink); font-weight: 600; }
+  .sub code, .desc code { font-family: var(--mono); font-size: 0.75rem; }
+
+  /* ---------- 控制条 ---------- */
+  .ctl { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 10px 0; margin-bottom: 14px; background: var(--bg); border-bottom: 1px solid var(--line-soft); }
+  body.wall-on .ctl { background: color-mix(in oklab, var(--bg) 85%, transparent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .ctl .grp { display: flex; align-items: center; gap: 6px; }
+  .ctl .lbl { font-size: 0.6875rem; font-weight: 600; color: var(--faint); letter-spacing: 0.04em; }
+  .seg { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+  .seg button { font-size: 0.75rem; color: var(--muted); border-radius: 4px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 6px;
+    transition: color 120ms var(--ease), background 120ms var(--ease); }
+  .seg button:hover { color: var(--ink); background: var(--hover); }
+  .seg button[aria-pressed="true"] { color: var(--ink); background: var(--hover); font-weight: 600; }
+  .seg button i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .ctl .sp { flex: 1; }
+  .ctl .tgl { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--muted); cursor: pointer; user-select: none; }
+  .ctl .tgl input { accent-color: var(--jade); }
+  .ctl .cur { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); }
+
+  /* ---------- 说明区 ---------- */
+  .desc { border: 1px solid var(--line-soft); border-radius: var(--r-s); background: var(--surface); padding: 12px 16px; margin-bottom: 14px; font-size: 0.8125rem; color: var(--muted); }
+  .desc h3 { font-size: 0.875rem; font-weight: 600; color: var(--ink); margin-bottom: 6px; display: flex; gap: 10px; align-items: baseline; }
+  .desc .tag { font-size: 0.6875rem; font-weight: 600; padding: 1px 8px; border-radius: var(--r-chip); background: var(--tint-jade); color: var(--jade); border: 1px solid color-mix(in oklab, var(--jade) 35%, transparent); }
+  .desc table { border-collapse: collapse; width: 100%; font-size: 0.75rem; margin-top: 6px; }
+  .desc th, .desc td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  .desc th { color: var(--faint); font-weight: 600; font-size: 0.6875rem; }
+  .desc td:first-child { white-space: nowrap; }
+  .desc td i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; margin-right: 6px; vertical-align: -1px; }
+  .desc .ok { color: var(--jade-dim); } .desc .warn { color: var(--amber); } .desc .bad { color: var(--red); }
+  .desc p { margin-top: 6px; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 760px) { .two { grid-template-columns: 1fr; } }
+
+  /* ---------- 聊天容器(复刻线上 .chat / .chat-msg) ---------- */
+  .chat { border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 20px 28px; }
+  .chat-msg { margin-bottom: 20px; }
+  .chat-msg:last-child { margin-bottom: 0; }
+  .chat-msg .who { font-size: 0.6875rem; font-weight: 600; color: var(--muted); margin-bottom: 4px; }
+  .chat-msg.user { display: flex; flex-direction: column; align-items: flex-end; }
+  .chat-msg.user .who { color: var(--jade); }
+  .chat-msg .body { font-size: 0.875rem; max-width: 72%; text-wrap: pretty; overflow-wrap: anywhere; word-break: break-word; }
+  .chat-msg.user .body { background: var(--tint-jade); border-radius: var(--r-m); padding: 10px 14px; display: inline-block; white-space: pre-wrap; }
+  @media (max-width: 760px) { .chat { padding: 16px; } .chat-msg .body { max-width: 100%; } }
+
+  /* ---------- 线上 .md 规则原样(index.css:603-623) ---------- */
+  .md > *:first-child { margin-top: 0; }
+  .md > *:last-child { margin-bottom: 0; }
+  .md p, .md ul, .md ol, .md pre, .md table, .md blockquote { margin: 0 0 10px; }
+  .md h1, .md h2, .md h3, .md h4 { font-size: 0.9375rem; font-weight: 700; margin: 14px 0 8px; }
+  .md h1 { font-size: 1.0625rem; }
+  .md ul { padding-left: 1.25em; list-style: disc; }
+  .md ol { padding-left: 1.4em; list-style: decimal; }
+  .md li { margin: 3px 0; }
+  .md li > p { margin-bottom: 4px; }
+  .md strong { font-weight: 700; }
+  .md a { color: var(--jade); text-underline-offset: 2px; }
+  .md code { font-family: var(--mono); font-size: 0.8125em; background: var(--surface-2); border: 1px solid var(--line-soft); padding: 1px 5px; border-radius: 4px; }
+  .md pre { background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-m); padding: 10px 12px; overflow-x: auto; }
+  .md pre code { background: none; border: 0; padding: 0; font-size: 0.75rem; line-height: 1.6; }
+  .md table { border-collapse: collapse; font-size: 0.8125rem; max-width: 100%; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--line-soft); padding: 5px 10px; text-align: left; }
+  .md th { background: var(--surface-2); font-weight: 600; }
+  .md td { font-variant-numeric: tabular-nums; }
+  .md blockquote { border-left: 3px solid var(--line); padding-left: 10px; color: var(--muted); }
+  .md hr { border: 0; border-top: 1px solid var(--line-soft); margin: 12px 0; }
+
+  /* ================================================================
+     方案 B 的 token:两个色相输入(结构 --md-hs / 强调色 --md-strong)
+     + 一个标题分级策略(html[data-levels])。默认值 = 现状全白。
+     ================================================================ */
+  .md { --md-h1: var(--ink); --md-h2: var(--ink); --md-h3: var(--ink); --md-strong: var(--ink);
+        --md-th: var(--ink); --md-quote: var(--line); --md-ul: currentColor; --md-ol: currentColor; }
+  .md h1 { color: var(--md-h1); }
+  .md h2 { color: var(--md-h2); }
+  .md h3, .md h4 { color: var(--md-h3); }
+  .md strong { color: var(--md-strong); }
+  .md th { color: var(--md-th); }
+  .md blockquote { border-left-color: var(--md-quote); }
+  .md ul > li::marker { color: var(--md-ul); }
+  .md ol > li::marker { color: var(--md-ol); font-variant-numeric: tabular-nums; }
+
+  /* 方案 B 开启:结构色由 --md-hs(色相角)生成,三档明度 */
+  html[data-on="1"] .md {
+    --md-s-hi:  oklch(0.80 0.12 var(--md-hs));
+    --md-s-mid: oklch(0.73 0.11 var(--md-hs));
+    --md-s-lo:  oklch(0.64 0.085 var(--md-hs));
+    --md-s-alt: oklch(0.76 0.11 calc(var(--md-hs) + 45));
+    --md-h1: var(--md-s-mid); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-mid);
+    --md-th: var(--md-s-mid); --md-quote: var(--md-s-lo);
+    --md-ul: var(--faint); --md-ol: var(--faint);
+    --md-strong: var(--md-e);
+  }
+  /* 标题分级策略 */
+  html[data-on="1"][data-levels="light"] .md { --md-h1: var(--md-s-hi); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-lo); }
+  html[data-on="1"][data-levels="hue"]   .md { --md-h1: var(--md-s-mid); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-alt); }
+  html[data-on="1"][data-levels="top2"]  .md { --md-h3: var(--ink); }
+  /* 强调色选项 */
+  html[data-e="amber"] .md { --md-e: var(--amber); }
+  html[data-e="jade"]  .md { --md-e: var(--jade); }
+  html[data-e="warm"]  .md { --md-e: oklch(0.96 0.035 85); }
+  html[data-e="ink"]   .md { --md-e: var(--ink); }
+
+  /* ---------- 标题分级对照格 ---------- */
+  h2.sec { font-size: 1.25rem; font-weight: 600; margin: 40px 0 6px; }
+  .sec-desc { color: var(--muted); font-size: 0.8125rem; max-width: 76ch; margin-bottom: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr 1fr; } }
+  .cell { border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--surface-2); padding: 14px 16px 16px; }
+  .cell .cap { font-family: var(--mono); font-size: 0.6875rem; color: var(--faint); margin-bottom: 8px; }
+  .cell .cap b { color: var(--muted); font-weight: 600; display: block; font-family: var(--sans); font-size: 0.75rem; }
+  .cell .md { font-size: 0.8125rem; }
+  .cell .md h1, .cell .md h2, .cell .md h3 { margin: 10px 0 4px; }
+  .cell .md h1 { font-size: 1rem; } .cell .md h2, .cell .md h3 { font-size: 0.875rem; }
+
+  /* ---------- 设置对话框 mock(复刻 .modal.stg-modal,静态摆放) ---------- */
+  .stg-stage { border: 1px solid var(--line-soft); border-radius: var(--r-m); background: var(--bg); padding: 28px; display: flex; justify-content: center; }
+  .modal.stg-modal { --stg-nav-w: 148px; --stg-pane-pad: 24px; --stg-head-pad: 20px; --stg-head-gap: 12px;
+    width: min(900px, 100%); height: 520px; overflow: hidden; display: flex; flex-direction: column; padding: 0;
+    background: var(--surface-opaque); border: 1px solid var(--line); border-radius: var(--r-m); box-shadow: 0 8px 24px oklch(0.05 0 0 / 0.5); }
+  .stg-head { display: flex; align-items: center; gap: var(--stg-head-gap); padding: 14px var(--stg-head-pad); border-bottom: 1px solid var(--line-soft); flex: none; }
+  .stg-head h2 { font-size: 0.9375rem; flex: none; width: calc(var(--stg-nav-w) + var(--stg-pane-pad) - var(--stg-head-pad) - var(--stg-head-gap)); }
+  .stg-search { flex: 1; min-width: 0; position: relative; }
+  .stg-search .input { width: 100%; padding: 5px 10px 5px 28px; font-size: 0.75rem; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); color: var(--ink); font-family: inherit; }
+  .stg-search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 13px; height: 13px; color: var(--faint); pointer-events: none; }
+  .stg-search kbd { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 0 4px; }
+  .stg-head .x { margin-left: auto; color: var(--faint); font-size: 1rem; padding: 0 4px; }
+  .stg-body { flex: 1; min-height: 0; display: flex; position: relative; }
+  .stg-nav { flex: none; width: var(--stg-nav-w); padding: 12px 10px; border-right: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+  .stg-nav button { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-s); font-size: 0.8125rem; color: var(--muted); text-align: left; }
+  .stg-nav button:hover { background: var(--hover); color: var(--ink); }
+  .stg-nav button.active { background: var(--tint-jade); color: var(--jade); font-weight: 600; }
+  .stg-nav button svg { width: 14px; height: 14px; flex: none; }
+  .stg-nav .stg-nav-foot { margin-top: auto; padding: 8px 10px 0; display: flex; flex-direction: column; gap: 5px; }
+  .stg-legend { display: flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 0.6875rem; color: var(--faint); }
+  .stg-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px var(--stg-pane-pad) var(--stg-pane-pad); }
+  .stg-sec { padding-top: 18px; }
+  .stg-sec-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .stg-sec-head h3 { font-size: 0.875rem; color: var(--ink); }
+  .stg-sec-head p { font-size: 0.75rem; color: var(--faint); }
+  .stg-sec-head .btn-quiet { margin-left: auto; font-size: 0.6875rem; padding: 3px 8px; color: var(--faint); border: 1px solid var(--line-soft); border-radius: var(--r-s); }
+  .stg-group { font-size: 0.6875rem; font-weight: 600; color: var(--faint); text-transform: uppercase; letter-spacing: 0.04em; margin: 18px 0 2px; }
+  .stg-row { display: flex; align-items: center; gap: 16px; padding: 11px 0; border-bottom: 1px solid var(--line-soft); }
+  .stg-row:last-child { border-bottom: 0; }
+  .stg-lab { flex: 1; min-width: 0; }
+  .stg-lab span { display: block; font-size: 0.8125rem; color: var(--ink); }
+  .stg-lab small { display: block; font-size: 0.6875rem; color: var(--faint); margin-top: 2px; line-height: 1.45; }
+  .stg-ctl { flex: none; display: flex; align-items: center; gap: 8px; }
+  .stg-scope { flex: none; width: 34px; text-align: center; font-family: var(--mono); font-size: 0.625rem; color: var(--faint); border: 1px solid var(--line-soft); border-radius: 3px; padding: 1px 0; }
+  .stg-scope[data-scope="acct"] { color: var(--jade); border-color: color-mix(in oklab, var(--jade) 40%, transparent); }
+  .filter-tabs { display: inline-flex; gap: 2px; background: var(--surface-2); border: 1px solid var(--line-soft); border-radius: var(--r-s); padding: 2px; }
+  .filter-tabs button { padding: 4px 12px; border-radius: 4px; font-size: 0.75rem; color: var(--muted); transition: background 150ms var(--ease), color 150ms var(--ease); }
+  .filter-tabs button:hover { color: var(--ink); }
+  .filter-tabs button.active { background: var(--hover); color: var(--ink); font-weight: 600; }
+  .switch { position: relative; display: inline-block; width: 34px; height: 19px; border-radius: 99px; background: var(--line); flex: none; cursor: pointer; }
+  .switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: var(--ink); transition: transform 180ms var(--ease); }
+  .switch.on { background: var(--jade); }
+  .switch.on::after { transform: translateX(15px); background: var(--on-jade); }
+  .stg-row.is-off .stg-lab, .stg-row.is-off .stg-ctl { opacity: 0.45; pointer-events: none; }
+  /* 新增:设置行内的即时预览(一行小样,用真实 .md 变量渲染) */
+  .stg-peek { margin-top: 6px; display: flex; gap: 14px; align-items: baseline; font-size: 0.75rem; }
+  .stg-peek .md { font-size: 0.75rem; display: flex; gap: 12px; align-items: baseline; }
+  .stg-peek .md h2 { font-size: 0.75rem; margin: 0; }
+  .stg-peek .md p { margin: 0; }
+  .stg-peek .md code { font-size: 0.6875rem; }
+  .stg-note { margin-top: 10px; font-size: 0.75rem; color: var(--muted); max-width: 80ch; }
+</style>
+</head>
+<body>
+<div id="wall" aria-hidden="true"></div>
+<div class="wrap">
+
+<header>
+  <h1>璇玑 · 助手输出 markdown 高亮 —— 方案 B 细化</h1>
+  <p class="sub">
+    上一轮定了 <b>B 双色</b>:一个色相给「结构」(标题 / 表头 / 引用线),一个给「强调」(加粗),列表点退到 faint,正文保持白。
+    这一版回答三个问题:① 两个色相各有哪些<b>本系统里已有</b>的候选、各自会和什么撞;② 标题分级的四种策略;③ 设置项长什么样。
+    顶部控制条可以任意搭配实时看,右上角「壁纸 / 玻璃档」同上一版。
+  </p>
+</header>
+
+<div class="ctl" id="ctl">
+  <div class="grp"><span class="lbl">高亮</span>
+    <div class="seg" data-k="on"><button data-v="0">关</button><button data-v="1" aria-pressed="true">开</button></div></div>
+  <div class="grp"><span class="lbl">结构色</span>
+    <div class="seg" data-k="hs">
+      <button data-v="300" aria-pressed="true"><i style="background:oklch(0.73 0.11 300)"></i>紫</button>
+      <button data-v="245"><i style="background:oklch(0.73 0.11 245)"></i>蓝</button>
+      <button data-v="180"><i style="background:oklch(0.73 0.11 180)"></i>青</button>
+      <button data-v="115"><i style="background:oklch(0.73 0.11 115)"></i>玉</button>
+    </div></div>
+  <div class="grp"><span class="lbl">强调色</span>
+    <div class="seg" data-k="e">
+      <button data-v="amber" aria-pressed="true"><i style="background:var(--amber)"></i>琥珀</button>
+      <button data-v="jade"><i style="background:var(--jade)"></i>玉</button>
+      <button data-v="warm"><i style="background:oklch(0.96 0.035 85)"></i>暖白</button>
+      <button data-v="ink"><i style="background:var(--ink)"></i>白(不染)</button>
+    </div></div>
+  <div class="grp"><span class="lbl">标题分级</span>
+    <div class="seg" data-k="levels">
+      <button data-v="same" aria-pressed="true">同色</button>
+      <button data-v="light">明度递减</button>
+      <button data-v="hue">h3 换色相</button>
+      <button data-v="top2">仅 h1/h2</button>
+    </div></div>
+  <span class="sp"></span>
+  <label class="tgl"><input type="checkbox" id="wallOn"> 壁纸</label>
+  <label class="tgl"><input type="checkbox" id="wallGlass"> 玻璃档</label>
+</div>
+
+<div class="two">
+<div class="desc">
+  <h3>① 结构色候选 <span class="tag">推荐 紫</span></h3>
+  <table>
+    <tr><th>色相</th><th>本系统里已经代表什么</th><th>给标题用的冲突评估</th></tr>
+    <tr><td><i style="background:oklch(0.73 0.11 300)"></i>紫 300</td><td>模型身份(派发状态行的模型名、编排类工具 Task / Plan)</td><td class="ok">最顺:助手回答的骨架 = 模型给出的结构,语义同源;正文区没有别的紫</td></tr>
+    <tr><td><i style="background:oklch(0.73 0.11 245)"></i>蓝 245</td><td>读取 / 检索类工具(Read / Grep / Web)、设置里的工作目录</td><td class="warn">可用,但回答里穿插的 Read / Grep 工具卡函数名也是蓝,标题与工具卡同色会把两层叠在一起</td></tr>
+    <tr><td><i style="background:oklch(0.73 0.11 180)"></i>青 180</td><td>执行类工具(Bash)</td><td class="warn">同上,且 Bash 卡是回答里出现最多的卡,撞得最频繁</td></tr>
+    <tr><td><i style="background:oklch(0.73 0.11 115)"></i>玉 115</td><td>品牌 / 主操作 / 运行态 / 链接 / 用户气泡</td><td class="bad">玉已经是全站最忙的颜色,标题再用会与链接、用户气泡混在同一视野里;DESIGN.md 的策略是「玉色只给主操作与运行态」</td></tr>
+  </table>
+</div>
+<div class="desc">
+  <h3>② 强调色候选 <span class="tag">推荐 琥珀</span></h3>
+  <table>
+    <tr><th>颜色</th><th>本系统里已经代表什么</th><th>给加粗用的冲突评估</th></tr>
+    <tr><td><i style="background:var(--amber)"></i>琥珀</td><td>注意 / 等待输入 / 偏高</td><td class="ok">「加粗」本来就是作者要你注意的地方,语义贴合;唯一顾虑是加粗很密的段落会显得「满屏警告」,上一轮已标</td></tr>
+    <tr><td><i style="background:var(--jade)"></i>玉</td><td>品牌 / 链接</td><td class="warn">加粗与链接同色,只靠下划线区分;但「关键结论用品牌色」是很多产品的做法,看你更在意哪个</td></tr>
+    <tr><td><i style="background:oklch(0.96 0.035 85)"></i>暖白</td><td>(新值)比正文白更亮、带一点暖</td><td class="ok">最克制:不引入色相,只靠明度与色温区分,加粗密集时不吵;代价是区分力弱,壁纸档下几乎看不出</td></tr>
+    <tr><td><i style="background:var(--ink)"></i>白</td><td>现状</td><td class="warn">只给标题上色、加粗不动。「结论」仍靠粗细识别</td></tr>
+  </table>
+  <p>红 / 绿 / 粉 / 橙都没列:红绿是硬状态色(错误 / 成功),粉橙是技能 / 写入工具的专属色,正文里出现会被读成状态。</p>
+</div>
+</div>
+
+<div class="chat" id="chat">
+  <div class="chat-msg user">
+    <div class="who">你</div>
+    <div class="body">这 128 条里哪些明显违背天下刀宗的手法？分两档给我改写方向</div>
+  </div>
+
+  <div class="chat-msg">
+    <div class="who">Claude</div>
+    <div class="body md">
+<hr>
+<h2>三、改善方向（分两档）</h2>
+<h3>第一档：精准修已触发问题（A/B/D 类，4 条）</h3>
+<p>按天下刀宗手法逐条改写：</p>
+<table>
+<thead><tr><th>#</th><th>当前</th><th>改写</th><th>手法依据</th></tr></thead>
+<tbody>
+<tr><td>107</td><td>{招}使到一半，{敌}已抽身退开，{我}这一招扑了个空。</td><td>{我}一招{招}尚未施展尽，{敌}已抽身退开，这一招落了空。</td><td>手法 1：动词雅致（「尚未施展尽」替「使到一半」）+ 手法 4：招式名包裹（「一招{招}尚未…」）+ 对齐同组「落了空」用词</td></tr>
+<tr><td>122</td><td>{敌}门户已乱，之后更容易被打伤。</td><td>{敌}门户已乱，之后几招更难招架。</td><td>手法 2：后果具体化（「更难招架」是具体失能，替掉抽象的「更容易被打伤」）；对齐卸力/迷目「症状→具体后果」句式</td></tr>
+<tr><td>123</td><td>剑势层层相叠，后招更重。</td><td>招势层层相叠，后招更重。</td><td>去兵器绑定（「剑势」→「招势」通用）</td></tr>
+<tr><td>124</td><td>杵借身沉，连一身筋骨之力也压了上去。</td><td>身沉力稳，连一身筋骨之力也压了上去。</td><td>去兵器绑定（去掉「杵」）</td></tr>
+</tbody>
+</table>
+<h3>第二档：拉平通用句与式专属句的意象密度（C 类，结构性）</h3>
+<p>这是<strong>更大的工程</strong>——把 §5.3 的 16 条特效追加句整体抬升意象密度，让通用追加句读起来不像「从话本掉进 patch notes」。但：</p>
+<ul>
+<li>工作量大（16 条逐条重写，且要维持占位符合法、不丢机制信息）</li>
+<li>风险高（意象化容易挤掉机制清晰度，玩家需要看懂「我挂了什么 buff/debuff」）</li>
+<li>需要你先拍板<strong>要不要做</strong>这一档——做的话我逐条出改写草案给你审；不做的话第一档 4 条已能消掉你提报的两个 issue。</li>
+</ul>
+<hr>
+<p><strong>需要你定夺</strong>：</p>
+<ol>
+<li>第一档 4 条改写是否接受？措辞有没有要调的？</li>
+<li>第二档（16 条特效追加句整体意象化）要不要现在做，还是先只修第一档？</li>
+<li>我列的 128 条里，除了我标的 #107/#122/#123/#124，你圈出的问题还有哪些？你之前说要圈一把编号给我，我一并纳入改写批次。</li>
+</ol>
+    </div>
+  </div>
+
+  <div class="chat-msg user">
+    <div class="who">你</div>
+    <div class="body">那慢 run 到底慢在哪一行？给结论</div>
+  </div>
+
+  <div class="chat-msg">
+    <div class="who">Claude</div>
+    <div class="body md">
+<h3>3.3 任务内部：慢在哪一行</h3>
+<p><strong>(a) Kudu 表只能全表扫</strong><br>
+<code>kudu.10043_bi_ods.total_account_attr_all</code> 的 partition key 只有 <code>acc_id</code>（BBX meta 确认）。所有按 <code>acc_create_time</code> / <code>acc_type</code> / <code>fraud_last_profile_time</code> 过滤的查询都是全表扫：</p>
+<ul>
+<li><code>device_create_acc_1s</code>：要的是 <strong>5 分钟窗口</strong>，扫了 <strong>35.9 GB</strong></li>
+<li><code>ip_create_acc_1s</code> / <code>ip_create_role_1s</code> / <code>ipseg_create_acc_1s</code> / <code>ipseg_create_role_1s</code>：4 个任务要的是 <strong>1 秒窗口</strong>，各自重扫同一张表 <strong>31.6 GB</strong>，合计 <strong>126 GB 读同一份数据</strong></li>
+<li><code>fraud_account_only_one_role</code>：3 张 Kudu 表全扫 join → <strong>58.2 GB + 43.4 GB 峰值内存</strong>、121 节点</li>
+</ul>
+<p><strong>(b) Hive 分区粒度太粗，30 分钟窗口扫一整天的分区</strong><br>
+<code>ip_acc_login_aggregate_30min</code> 的 login CTE：</p>
+<pre><code>from hive."10043_raw_logs".role_login_raw
+where dt between '{{ ds }}' and '{{ next_ds }}'        -- 扫一整天分区
+  and cast(event_time as varchar) between ... -30min   -- 但只用 30 分钟</code></pre>
+<p><strong>34.7 GB</strong> 换 30 分钟数据，<code>ipseg_acc_login_aggregate</code> 同样问题（40 GB）。每 10 分钟跑一次 → 单这一条规则每小时重复扫 208 GB。</p>
+<h2>四、结论</h2>
+<blockquote><p>不是某个 SQL 写错了，是「<strong>36 个重查询 × 每轮 773 GB 全表扫 × 16 并发 × 3 波</strong>」这个结构，在 Trino 集群高峰时段必然打满。慢 run 里每个查询的并行度从 <strong>8.2 掉到 1.85</strong>，耗时 ×5；再叠加 ban 链路的串行 barrier，就突破了 10 分钟。</p></blockquote>
+<p>按贡献排序：</p>
+<ol>
+<li><strong>集群争抢（占大头）</strong>：36 个查询同时要资源，叠加兄弟 DAG 撞车 → 单查询 80s 变 400s</li>
+<li><strong>重复/浪费扫描（≈200 GB/轮 是纯浪费）</strong>：4 个任务重复扫同一张 31.6 GB 表；30 分钟窗口扫整天分区</li>
+<li><strong>16 并发 → 3 波</strong>：并发上限把单任务耗时放大 3 倍</li>
+<li><strong>barrier + 串行 ban 链</strong>：固定再吃掉 3 min（27%），且被集群拖累时涨到 6.9 min</li>
+<li><strong>max_active_runs 串行</strong>：超时直接丢调度周期（6h 丢 8 个），监控上看是「有时跑了有时没跑」</li>
+</ol>
+<p>细节见 <a href="https://gitlab.lilithgames.com/datascience/production/baize_web/-/merge_requests/102">MR !102</a> 的 §3.3 与 Trino 查询日志。</p>
+    </div>
+  </div>
+</div>
+
+
+<h2 class="sec">③ 标题分级四种策略(当前结构色 × 当前强调色)</h2>
+<p class="sec-desc">
+  Claude 的回答里 h2 / h3 最常见,h1 很少见,h4 以下几乎没有。四格用同一段带三级标题的内容,跟随顶部的结构色与强调色。
+  我的倾向是<b style="color:var(--ink);font-weight:600">「明度递减」</b>:同一色相三档明度,层级关系靠亮度读出来,不多占一个色相;
+  「仅 h1/h2」是最省的,h3 回白后与加粗段落标题(<code>**(a) …**</code> 这种写法)的观感一致,也说得通。
+</p>
+<div class="grid" id="grid"></div>
+
+<h2 class="sec">④ 设置项</h2>
+<p class="sec-desc">
+  放在「设置 → 外观 → 阅读」分组,紧挨「正文字号」。作用域<b style="color:var(--ink);font-weight:600">本机</b>(与正文字号一致,存 localStorage,走现有 <code>prefs.ts</code> 的 <code>data-*</code> 挂载链路)。
+  只暴露一个三档开关,不把色相 / 分级策略做成设置——那些是设计决策,在这个原型里定死就好,设置项越少越不用维护。下面的分段控件是活的,切了上面的聊天区会跟着变。
+</p>
+<div class="stg-stage">
+<div class="modal stg-modal" role="dialog" aria-label="设置">
+  <div class="stg-head">
+    <h2>设置</h2>
+    <div class="stg-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input class="input" placeholder="搜索设置…" readonly><kbd>⌘F</kbd>
+    </div>
+    <button class="x" aria-label="关闭">✕</button>
+  </div>
+  <div class="stg-body">
+    <nav class="stg-nav" aria-label="设置分区">
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 12l18-8-6 18-3-7z"/></svg>派发</button>
+      <button class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4h18v16H3zM7 10.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM4 17l4.5-4.5 3 3 4-5 4.5 5"/></svg>外观</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 6h20v12H2zM6 10h1M10 10h1M14 10h1M18 10h1M7 14h10"/></svg>快捷键</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg>通知</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 4h18v12H3zM7 12l3-3 2 2 5-4M8 20h8M12 16v4"/></svg>系统监控</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 5h18v14H3zM7 9l3 3-3 3M12 15h5"/></svg>终端</button>
+      <button><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16M8 4v4M14 10v4M10 16v4"/></svg>高级</button>
+      <div class="stg-nav-foot">
+        <span class="stg-legend"><span class="stg-scope" data-scope="local">本机</span>仅此浏览器</span>
+        <span class="stg-legend"><span class="stg-scope" data-scope="acct">账户</span>跨设备同步</span>
+      </div>
+    </nav>
+    <div class="stg-pane">
+      <section class="stg-sec">
+        <div class="stg-sec-head"><h3>外观</h3><p>壁纸、字号与看板密度</p><button class="btn-quiet">恢复默认</button></div>
+        <div class="stg-group">阅读</div>
+        <div class="stg-row">
+          <div class="stg-lab"><span>正文字号</span></div>
+          <div class="stg-ctl"><div class="filter-tabs"><button>小</button><button class="active">标准</button><button>大</button></div></div>
+          <span class="stg-scope" data-scope="local">本机</span>
+        </div>
+        <div class="stg-row" id="rowHl">
+          <div class="stg-lab">
+            <span>回答高亮</span>
+            <small>给 Claude 回答里的标题与加粗上色,正文与链接不变</small>
+            <div class="stg-peek"><div class="md" id="peek"><h2>标题</h2><p>正文里的<strong>加粗</strong>与 <code>行内码</code>,<a href="#">链接</a></p></div></div>
+          </div>
+          <div class="stg-ctl"><div class="filter-tabs" id="hlTabs">
+            <button data-v="off">关</button><button data-v="on" class="active">开</button>
+          </div></div>
+          <span class="stg-scope" data-scope="local">本机</span>
+        </div>
+        <div class="stg-row">
+          <div class="stg-lab"><span>吸顶轮次头</span><small>提问滚出视口后在顶部显示当前轮</small></div>
+          <div class="stg-ctl"><span class="switch on"></span></div>
+          <span class="stg-scope" data-scope="local">本机</span>
+        </div>
+        <div class="stg-row">
+          <div class="stg-lab"><span>减少动效</span><small>默认跟随系统 prefers-reduced-motion</small></div>
+          <div class="stg-ctl"><div class="filter-tabs"><button class="active">跟随系统</button><button>开</button><button>关</button></div></div>
+          <span class="stg-scope" data-scope="local">本机</span>
+        </div>
+        <div class="stg-group">会话看板</div>
+        <div class="stg-row">
+          <div class="stg-lab"><span>「空闲」默认展示</span><small>折叠态显示最近几张,更早的点列头展开</small></div>
+          <div class="stg-ctl"><div class="filter-tabs"><button>3</button><button class="active">6</button><button>全部</button></div></div>
+          <span class="stg-scope" data-scope="local">本机</span>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</div>
+<p class="stg-note">
+  备选:如果你希望用户能在「双色 / 记号染色」之间选(上一版的 C),这一行就从开关变成三档「关 / 双色 / 记号」,其它不变。
+  我不建议把色相暴露成设置:要维护的组合数会从 1 变成 16,壁纸档下每一组都得单独验。
+</p>
+
+</div>
+
+<template id="snippet">
+<h1>四、结论</h1>
+<p>不是某个 SQL 写错了,是<strong>结构性</strong>打满。</p>
+<h2>3.3 任务内部</h2>
+<p>慢 run 里并行度从 <strong>8.2 掉到 1.85</strong>。</p>
+<h3>(a) Kudu 只能全表扫</h3>
+<ul><li><code>device_create_acc_1s</code>:扫了 <strong>35.9 GB</strong></li></ul>
+</template>
+
+<script>
+  const root = document.documentElement;
+  const state = { on: '1', hs: '300', e: 'amber', levels: 'same' };
+  try { Object.assign(state, JSON.parse(localStorage.getItem('md-b2') || '{}')); } catch {}
+  function render() {
+    root.dataset.on = state.on; root.dataset.e = state.e; root.dataset.levels = state.levels;
+    root.style.setProperty('--md-hs', state.hs);
+    document.querySelectorAll('.seg[data-k]').forEach(seg => {
+      const k = seg.dataset.k;
+      seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === state[k])));
+    });
+    document.querySelectorAll('#hlTabs button').forEach(b => b.classList.toggle('active', (b.dataset.v === 'on') === (state.on === '1')));
+    // 分级对照格:四格各自固定策略,其它跟随当前
+    document.querySelectorAll('#grid .cell').forEach(c => { c.dataset.on = '1'; });
+    try { localStorage.setItem('md-b2', JSON.stringify(state)); } catch {}
+  }
+  document.querySelectorAll('.seg[data-k] button').forEach(b => b.addEventListener('click', () => { state[b.closest('.seg').dataset.k] = b.dataset.v; render(); }));
+  document.querySelectorAll('#hlTabs button').forEach(b => b.addEventListener('click', () => { state.on = b.dataset.v === 'on' ? '1' : '0'; render(); }));
+
+  // 分级对照格:每格用 <div data-levels> 覆盖策略。由于策略挂在 html 上,这里用内联 style 变量模拟
+  const LV = [['same','同色','h1 h2 h3 同一色'], ['light','明度递减','h1 亮 / h2 中 / h3 暗,一个色相'], ['hue','h3 换色相','h3 转 +45° 邻近色(紫→粉)'], ['top2','仅 h1/h2','h3 回白,只靠粗体']];
+  const tpl = document.getElementById('snippet').innerHTML, grid = document.getElementById('grid');
+  LV.forEach(([v, name, note]) => {
+    const cell = document.createElement('div'); cell.className = 'cell';
+    cell.innerHTML = `<div class="cap"><b>${name}</b>${note}</div><div class="md" data-lv="${v}">${tpl}</div>`;
+    grid.appendChild(cell);
+  });
+  // 对照格的策略覆盖(与上方 html[data-levels] 规则一一对应)
+  const st = document.createElement('style');
+  st.textContent = `
+    html[data-on="1"] .md[data-lv="same"]  { --md-h1: var(--md-s-mid); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-mid); }
+    html[data-on="1"] .md[data-lv="light"] { --md-h1: var(--md-s-hi); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-lo); }
+    html[data-on="1"] .md[data-lv="hue"]   { --md-h1: var(--md-s-mid); --md-h2: var(--md-s-mid); --md-h3: var(--md-s-alt); }
+    html[data-on="1"] .md[data-lv="top2"]  { --md-h1: var(--md-s-mid); --md-h2: var(--md-s-mid); --md-h3: var(--ink); }`;
+  document.head.appendChild(st);
+
+  const wallOn = document.getElementById('wallOn'), wallGlass = document.getElementById('wallGlass');
+  function wall() { document.body.classList.toggle('wall-on', wallOn.checked); document.body.classList.toggle('wall-glass', wallOn.checked && wallGlass.checked); }
+  wallOn.addEventListener('change', wall); wallGlass.addEventListener('change', wall);
+  render();
+</script>
+</body>
+</html>

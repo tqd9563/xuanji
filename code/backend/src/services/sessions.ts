@@ -18,6 +18,10 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
   const names = storage?.sessionNames();
   const webIds = storage?.webDispatchedIds();
   const hidden = storage?.hiddenSessionIds();
+  // 定时任务跑出来、用户还没接着聊过的会话:只在「定时」页查看,看板不展示。
+  // 唯一例外是卡在审批(blocked)——那是要人处理的事,会话页的角标与审批入口都在这边。
+  const scheduledOnly = storage?.scheduledOnlySessionIds();
+  const offBoard = (sessionId: string, state: SessionState) => state !== 'blocked' && !!scheduledOnly?.has(sessionId);
   const columns: Record<SessionState, AgentSession[]> = {
     idle: [],
     running: [],
@@ -56,12 +60,15 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
     const override = names?.get(s.sessionId);
     if (override) s.name = override;
     if (webIds?.has(s.sessionId)) s.source = 'web';
+    if (offBoard(s.sessionId, s.state)) continue;
+    if (scheduledOnly?.has(s.sessionId)) s.scheduled = true;
     columns[s.state].push(s);
   }
   const seen = new Set(agents.sessions.map((s) => s.sessionId));
   for (const d of live.values()) {
     if (hidden?.has(d.sessionId)) continue;
     seen.add(d.sessionId);
+    if (offBoard(d.sessionId, dispatchBoardState(d.state))) continue;
     columns[dispatchBoardState(d.state)].push({
       id: d.sessionId.slice(0, 8),
       sessionId: d.sessionId,
@@ -83,13 +90,14 @@ export async function sessionsBoard(storage?: Storage): Promise<SessionsBoard> {
       dispatchId: d.dispatchId,
       lastOutputAt: d.lastOutputAt,
       ...(d.idleExited ? { idleExited: true } : {}),
+      ...(scheduledOnly?.has(d.sessionId) ? { scheduled: true } : {}),
     });
   }
   // 历史 web 派发会话:进程已退出且 agents CLI 不再列出的,从自有 dispatches 表补回。
   // 死于后端重启的(快照非 ended)按「空闲」还原——上下文在转录里,点开发消息即原地续接;
   // 待验收标记与活动摘要一并从快照恢复。
   for (const row of storage?.allDispatches() ?? []) {
-    if (seen.has(row.sessionId) || hidden?.has(row.sessionId)) continue;
+    if (seen.has(row.sessionId) || hidden?.has(row.sessionId) || scheduledOnly?.has(row.sessionId)) continue;
     const wasAlive = !!row.lastState && row.lastState !== 'ended';
     columns[wasAlive ? 'idle' : 'done'].push({
       id: row.sessionId.slice(0, 8),

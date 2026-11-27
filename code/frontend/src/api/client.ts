@@ -4,6 +4,7 @@ import type {
   CronsResult,
   Dashboard,
   Memory,
+  TrashedMemory,
   ProjectsResult,
   Replay,
   ResolvedWorkdir,
@@ -12,6 +13,7 @@ import type {
   SessionsBoard,
   Skill,
   Todo,
+  Prompt,
   UsageRange,
   UsageReport,
   WeeklyDraft,
@@ -20,6 +22,7 @@ import type {
   SideQuestion,
   TermInfo,
   TermSessionInfo,
+  LarkStatus,
 } from './types';
 import type { SlashCmdInfo } from '@/lib/slash';
 import type { ModelOption } from '@/lib/models';
@@ -51,6 +54,12 @@ export const api = {
   prefs: () => get<{ prefs: AccountPrefs }>('/api/prefs'),
   putPrefs: (patch: Partial<AccountPrefs>) =>
     mutate<{ prefs: AccountPrefs }>('/api/prefs', 'PUT', patch),
+  /* 飞书中控(设置 › 飞书) */
+  larkStatus: () => get<LarkStatus>('/api/lark/status'),
+  larkReconnect: () => mutate<LarkStatus>('/api/lark/reconnect', 'POST', {}),
+  larkBindCode: () => mutate<{ code: string; expiresAt: number }>('/api/lark/bind-code', 'POST', {}),
+  larkUnbind: () => mutate<{ ok: boolean }>('/api/lark/owner', 'DELETE', {}),
+  larkTest: () => mutate<{ ok: boolean; error?: string }>('/api/lark/test', 'POST', {}),
   termInfo: () => get<TermInfo>('/api/terminal/info'),
   termCreate: (body: { cwd?: string; cols?: number; rows?: number }) =>
     mutate<{ session: TermSessionInfo }>('/api/terminal/sessions', 'POST', body),
@@ -67,6 +76,23 @@ export const api = {
   skillUsageDaily: (name: string) =>
     get<{ days: number[]; span: number }>(`/api/skills/${encodeURIComponent(name)}/usage-daily`),
   memories: () => get<{ memories: Memory[] }>('/api/memories'),
+  /** 完整详情(正文不截断 + 最新 rev):进入编辑前取 */
+  memoryDetail: (file: string) => get<{ memory: Memory }>(`/api/memories/detail?file=${encodeURIComponent(file)}`),
+  /** 保存经验。文件在打开后被别处改过时不抛错,返回 conflict 带最新内容,由界面让用户选 */
+  updateMemory: async (body: {
+    file: string; description: string; type: string; body: string; indexHook: string; rev: string; force?: boolean;
+  }): Promise<{ memory: Memory } | { conflict: Memory }> => {
+    const res = await fetch('/api/memories', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const json = (await res.json().catch(() => ({}))) as { memory?: Memory; latest?: Memory; error?: string };
+    if (res.status === 409 && json.latest) return { conflict: json.latest };
+    if (!res.ok || !json.memory) throw new Error(json.error ?? `/api/memories → ${res.status}`);
+    return { memory: json.memory };
+  },
+  /** 删除 = 移入回收目录(可恢复);共享经验 mode 默认 unmount(只卸载本项目) */
+  deleteMemory: (file: string, mode: 'file' | 'unmount' | 'all') =>
+    mutate<{ trashed: TrashedMemory }>('/api/memories/delete', 'POST', { file, mode, confirm: true }),
+  memoryTrash: () => get<{ trash: TrashedMemory[] }>('/api/memories/trash'),
+  restoreMemory: (id: string) => mutate<{ ok: boolean; file: string }>(`/api/memories/trash/${id}/restore`, 'POST', {}),
   searchMemories: (q: string) =>
     get<{ memories: Memory[] }>(`/api/memories/search?q=${encodeURIComponent(q)}`),
   /** 任务总结:窗口/项目/状态/关键词过滤全在后端做,前端只管展示 */
@@ -89,10 +115,22 @@ export const api = {
   updateTodo: (id: number, patch: Partial<{ title: string; status: Todo['status']; cwd: string | null; sessionId: string | null }>) =>
     mutate<{ todo: Todo }>(`/api/todos/${id}`, 'PATCH', patch),
   deleteTodo: (id: number) => mutate<{ ok: boolean }>(`/api/todos/${id}`, 'DELETE', {}),
+  // ---------- 提示词库 ----------
+  prompts: () => get<{ prompts: Prompt[]; pinMax: number }>('/api/prompts'),
+  createPrompt: (input: Pick<Prompt, 'trig' | 'name' | 'body' | 'cwd' | 'pinned'>) =>
+    mutate<{ prompt: Prompt }>('/api/prompts', 'POST', input),
+  updatePrompt: (id: number, patch: Partial<Pick<Prompt, 'trig' | 'name' | 'body' | 'cwd' | 'pinned'>>) =>
+    mutate<{ prompt: Prompt }>(`/api/prompts/${id}`, 'PATCH', patch),
+  deletePrompt: (id: number) => mutate<{ ok: boolean }>(`/api/prompts/${id}`, 'DELETE', {}),
+  /** 插入一次(计数用,失败不影响插入本身) */
+  usePrompt: (id: number) => mutate<{ prompt: Prompt }>(`/api/prompts/${id}/use`, 'POST', {}),
   palette: () => get<{ idx: Record<string, number> }>('/api/palette'),
   crons: () => get<CronsResult>('/api/crons'),
   // ---------- M2 ----------
   canResume: (sessionId: string) => get<{ ok: boolean; reason?: string }>(`/api/sessions/${sessionId}/can-resume`),
+  /** 插件启停:后端执行 claude plugin enable/disable(铁律例外②) */
+  togglePlugin: (id: string, enable: boolean) =>
+    mutate<{ ok: boolean }>(`/api/plugins/${encodeURIComponent(id)}/toggle`, 'POST', { enable, confirm: true }),
   toggleSkill: (name: string, enable: boolean) =>
     mutate<{ ok: boolean }>(`/api/skills/${encodeURIComponent(name)}/toggle`, 'POST', { enable, confirm: true }),
   // ---------- 旁路提问 ----------

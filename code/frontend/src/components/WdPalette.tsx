@@ -20,6 +20,7 @@ function looksLikePath(q: string) {
 export function WdPalette({
   value,
   options,
+  searchOnlyOptions,
   labelOf,
   detailOf,
   initialQuery = '',
@@ -32,6 +33,8 @@ export function WdPalette({
 }: {
   value: string;
   options: string[];
+  /** 只在输入了搜索词时才参与匹配的候选(/model 用它收起旧版本模型),排在 options 之后 */
+  searchOnlyOptions?: string[];
   labelOf?: (v: string) => string;
   /** 右列文案(默认为 option 本身;/model 用它显示别名解析到的真实 id) */
   detailOf?: (v: string) => string;
@@ -56,7 +59,10 @@ export function WdPalette({
   const inputRef = useRef<HTMLInputElement>(null);
 
   // 短名与路径分别打分取高层级(见 lib/fuzzy),待办速记浮层与后端共用同一口径
-  const matched = useMemo(() => fuzzyRank(options, query, labelOf), [options, query, labelOf]);
+  const matched = useMemo(() => {
+    const extra = query.trim() && searchOnlyOptions?.length ? searchOnlyOptions.filter((o) => !options.includes(o)) : [];
+    return [...fuzzyRank(options, query, labelOf), ...fuzzyRank(extra, query, labelOf)];
+  }, [options, searchOnlyOptions, query, labelOf]);
 
   // 手输路径的 `~` 展开与存在性校验都在后端(前端拿不到 home);200ms 防抖,
   // 并用 seq 计数丢弃过期回包 —— 逐字输入必然乱序返回。

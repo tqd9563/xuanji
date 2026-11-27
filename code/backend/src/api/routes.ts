@@ -5,9 +5,10 @@ import { promisify } from 'node:util';
 import { config } from '../config.js';
 import { listLive2dModels } from '../services/live2d.js';
 import { cliVersion, listAgents, readCrontab, summarizeForHandoff } from '../adapters/agents-cli.js';
-import { moveSkill, readHistory, scanProjectDirs } from '../adapters/claude-dir.js';
+import { moveSkill, readHistory, scanInstalledPlugins, scanProjectDirs } from '../adapters/claude-dir.js';
+import { setPluginEnabled } from '../adapters/plugins-cli.js';
 import { dashboard } from '../services/dashboard.js';
-import { canResume, endDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
+import { canResume, endDispatchBySessionId, findDispatchBySessionId, sweepIdleDispatches } from '../services/dispatch.js';
 import { resolveWorkdir } from '../services/paths.js';
 import { readPrefs, writePrefs } from '../services/prefs.js';
 import { appendJank, readJank, sanitizeJank } from '../services/client-jank.js';
@@ -16,10 +17,12 @@ import { closedSessions, sessionsBoard, sessionReplay, usageNameResolver } from 
 import { invalidateSkillsCache, listSkills } from '../services/skills.js';
 import { DAILY_SPAN, lastScanTime, skillDailySeries, USAGE_CALIBER } from '../services/skill-usage.js';
 import { listMemories, searchMemories, writeMemory } from '../services/memories.js';
+import { MemoryEditError, deleteMemory, listTrash, memoryDetail, restoreMemory, updateMemory } from '../services/memory-edit.js';
 import { queryWorklog } from '../services/worklog.js';
 import { cachedSlashCatalog, withUsage } from '../services/slash-commands.js';
 import { cachedModelCatalog } from '../services/models.js';
 import { isTodoStatus, resolveProject, statusPatch, validateTitle } from '../services/todos.js';
+import { normalizePrompt, pinOverLimit, PIN_MAX, trigTaken } from '../services/prompts.js';
 import { isUsageRange, usageReport, type UsageRange } from '../services/usage.js';
 import { weeklyReview } from '../services/weekly-review.js';
 import { startWeeklyDraft } from '../services/weekly-draft.js';
@@ -30,6 +33,7 @@ import type { Storage } from '../storage/db.js';
 import type { SysmonSampler } from '../services/sysmon/sampler.js';
 import { isLocalRequest, type TerminalManager } from '../services/terminal.js';
 import { readGhostty, readSystemHotkeys } from '../adapters/ghostty.js';
+import type { LarkBridge } from '../services/lark/bridge.js';
 
 const DAY = 86_400_000;
 const execFileP = promisify(execFile);
@@ -45,6 +49,7 @@ export function createApi(
   scheduler: SchedulerService,
   sysmon?: SysmonSampler,
   terminals?: TerminalManager,
+  lark?: LarkBridge,
 ) {
   const api = new Hono();
 
@@ -145,7 +150,36 @@ export function createApi(
       // 调短空闲退出阈值时立即生效,不等下一分钟的巡检
       void sweepIdleDispatches(prefs.monitor.idleExit).catch(() => {});
     }
+    // 飞书中控启停即时生效:连 / 断长连接
+    if (patch && typeof patch === 'object' && 'lark' in patch) lark?.applyPrefs();
     return c.json({ prefs });
+  });
+
+  /* ---------- 飞书中控(设置 › 飞书) ---------- */
+  api.get('/lark/status', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    return c.json(await lark.status());
+  });
+  api.post('/lark/reconnect', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    await lark.reconnect();
+    return c.json(await lark.status());
+  });
+  /** 绑定码与解绑决定「谁能远程操作这台 Mac」:只接受本机直连,经反向代理进来的请求一律拒绝 */
+  api.post('/lark/bind-code', (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    if (!localOnly(c)) return c.json({ error: '只能在本机操作' }, 403);
+    return c.json(lark.createBindCode());
+  });
+  api.delete('/lark/owner', (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    if (!localOnly(c)) return c.json({ error: '只能在本机操作' }, 403);
+    lark.unbind();
+    return c.json({ ok: true });
+  });
+  api.post('/lark/test', async (c) => {
+    if (!lark) return c.json({ error: 'lark bridge unavailable' }, 503);
+    return c.json(await lark.sendTest());
   });
 
   /** 系统监控最新快照(实时推送走 /ws/sysmon;这里给调试与首屏兜底,无缓存时现采一次) */
@@ -211,6 +245,48 @@ export function createApi(
     });
     storage.markSideQuestionMemory(id, file);
     return c.json({ ok: true, file });
+  });
+
+  // ---------- 经验的编辑 / 删除 / 恢复(铁律 2 例外④:用户在经验页显式触发) ----------
+  const memErr = (e: unknown) => {
+    if (e instanceof MemoryEditError) return { body: { error: e.message, ...e.extra }, status: e.status };
+    throw e;
+  };
+  api.get('/memories/detail', async (c) => {
+    try {
+      return c.json({ memory: await memoryDetail(c.req.query('file')) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.put('/memories', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    try {
+      return c.json({ memory: await updateMemory({ file: body.file, ...body }) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.post('/memories/delete', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as { file?: unknown; mode?: unknown; confirm?: boolean };
+    if (!body.confirm) return c.json({ error: '删除经验需要二次确认(confirm: true)' }, 400);
+    try {
+      return c.json({ trashed: await deleteMemory({ file: body.file, mode: body.mode }) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
+  });
+  api.get('/memories/trash', async (c) => c.json({ trash: await listTrash() }));
+  api.post('/memories/trash/:id/restore', async (c) => {
+    try {
+      return c.json({ ok: true, ...(await restoreMemory(c.req.param('id'))) });
+    } catch (e) {
+      const r = memErr(e);
+      return c.json(r.body, r.status);
+    }
   });
 
   api.get('/memories/search', async (c) => {
@@ -293,6 +369,50 @@ export function createApi(
     return c.json({ ok: true });
   });
 
+  /* ---------- 提示词库(自有 SQLite,跨设备) ---------- */
+  api.get('/prompts', async (c) => c.json({ prompts: storage.listPrompts(), pinMax: PIN_MAX }));
+
+  api.post('/prompts', async (c) => {
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const r = normalizePrompt(body);
+    if ('error' in r) return c.json({ error: r.error }, 400);
+    const all = storage.listPrompts();
+    const dup = trigTaken(all, r.ok.trig);
+    if (dup) return c.json({ error: `触发词 /p ${r.ok.trig} 已被「${dup.name}」占用` }, 409);
+    if (pinOverLimit(all, r.ok)) return c.json({ error: `最多钉选 ${PIN_MAX} 条,先取消一条` }, 400);
+    return c.json({ prompt: storage.createPrompt(r.ok) }, 201);
+  });
+
+  api.patch('/prompts/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    const cur = storage.getPrompt(id);
+    if (!cur) return c.json({ error: 'not found' }, 404);
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const r = normalizePrompt(body, cur);
+    if ('error' in r) return c.json({ error: r.error }, 400);
+    const all = storage.listPrompts();
+    const dup = trigTaken(all, r.ok.trig, id);
+    if (dup) return c.json({ error: `触发词 /p ${r.ok.trig} 已被「${dup.name}」占用` }, 409);
+    if (pinOverLimit(all, r.ok, id)) return c.json({ error: `最多钉选 ${PIN_MAX} 条,先取消一条` }, 400);
+    storage.updatePrompt(id, r.ok);
+    return c.json({ prompt: storage.getPrompt(id) });
+  });
+
+  /** 插入一次:前端解析完变量填进输入框后上报,只做计数 */
+  api.post('/prompts/:id/use', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getPrompt(id)) return c.json({ error: 'not found' }, 404);
+    storage.bumpPromptUse(id);
+    return c.json({ prompt: storage.getPrompt(id) });
+  });
+
+  api.delete('/prompts/:id', async (c) => {
+    const id = Number(c.req.param('id'));
+    if (!storage.getPrompt(id)) return c.json({ error: 'not found' }, 404);
+    storage.deletePrompt(id);
+    return c.json({ ok: true });
+  });
+
   /** ?range=today|7d(非法值退回 today)。/usage/today 是既有路径,固定 today 口径 */
   const usageHandler = (fixed?: UsageRange) => async (c: Context) => {
     const q = c.req.query('range');
@@ -333,6 +453,21 @@ export function createApi(
     if (body.confirm !== true) return c.json({ error: '需要 confirm: true(二次确认)' }, 400);
     if (typeof body.enable !== 'boolean') return c.json({ error: '需要 enable: boolean' }, 400);
     const r = await moveSkill(config.claudeDir, c.req.param('name'), body.enable);
+    if (!r.ok) return c.json({ error: r.error }, 409);
+    invalidateSkillsCache();
+    return c.json({ ok: true });
+  });
+
+  /** 插件启停:铁律例外②(2026-11-27 批准)——显式触发 + confirm,走 claude plugin enable/disable,可逆 */
+  api.post('/plugins/:id/toggle', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    if (body.confirm !== true) return c.json({ error: '需要 confirm: true(二次确认)' }, 400);
+    if (typeof body.enable !== 'boolean') return c.json({ error: '需要 enable: boolean' }, 400);
+    const id = c.req.param('id');
+    // 只允许操作已安装的 user 级插件,不把任意字符串交给 CLI
+    const installed = await scanInstalledPlugins(config.claudeDir);
+    if (!installed.some((p) => p.info.id === id)) return c.json({ error: `未安装的插件:${id}` }, 404);
+    const r = await setPluginEnabled(config.claudeDir, id, body.enable);
     if (!r.ok) return c.json({ error: r.error }, 409);
     invalidateSkillsCache();
     return c.json({ ok: true });
@@ -542,7 +677,16 @@ export function createApi(
     return null;
   }
 
-  api.get('/schedules', async (c) => c.json({ jobs: scheduler.list() }));
+  /**
+   * 定时会话不进看板,「定时」页是它们唯一的入口:附上本进程内仍在的派发会话 id,
+   * 前端据此 attach 接回原事件流(审批/续接),而不是对一个活着的会话再 --resume 起第二个 CLI 进程。
+   */
+  const liveDispatchIdOf = (sessionId: string | null) =>
+    (sessionId ? findDispatchBySessionId(sessionId)?.id : undefined) ?? null;
+
+  api.get('/schedules', async (c) =>
+    c.json({ jobs: scheduler.list().map((j) => ({ ...j, liveDispatchId: liveDispatchIdOf(j.resultSessionId) })) }),
+  );
 
   api.post('/schedules', async (c) => {
     const body = await c.req.json().catch(() => ({}));
@@ -606,7 +750,8 @@ export function createApi(
     if (!scheduler.get(c.req.param('id'))) return c.json({ error: 'not found' }, 404);
     const limitParam = c.req.query('limit');
     const limit = limitParam === 'all' ? 100_000 : (num(limitParam) ?? 7);
-    return c.json(scheduler.runs(c.req.param('id'), limit));
+    const { runs, total } = scheduler.runs(c.req.param('id'), limit);
+    return c.json({ runs: runs.map((r) => ({ ...r, liveDispatchId: liveDispatchIdOf(r.sessionId) })), total });
   });
 
   api.post('/schedules/:id/run-now', async (c) => {

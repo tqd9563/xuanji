@@ -1,5 +1,5 @@
 import { createContext, Fragment, memo, type ReactNode, type RefObject, useContext, useEffect, useRef, useState } from 'react';
-import Markdown, { type Components } from 'react-markdown';
+import Markdown, { type Components, type Options as MarkdownOptions } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { api } from '@/api/client';
 import { cn, fullTime, msgClock, prCardText, projBg, projColor } from '@/lib/utils';
@@ -346,9 +346,16 @@ export const LazyMd = memo(function LazyMd({ children }: { children: string }) {
 });
 
 /** Claude 输出的 markdown 统一渲染:gfm(裸 URL 自动成链)+ 尾巴修剪 + 外链新窗口打开 */
-export const Md = memo(function Md({ children }: { children: string }) {
+export const Md = memo(function Md({
+  children,
+  rehypePlugins,
+}: {
+  children: string;
+  /** 追加的 rehype 插件(经验页用它做命中高亮与 [[关联]] 链接);传稳定引用,否则 memo 失效 */
+  rehypePlugins?: MarkdownOptions['rehypePlugins'];
+}) {
   return (
-    <Markdown remarkPlugins={[remarkGfm, remarkTrimAutolink]} components={MD_COMPONENTS}>
+    <Markdown remarkPlugins={[remarkGfm, remarkTrimAutolink]} rehypePlugins={rehypePlugins} components={MD_COMPONENTS}>
       {children}
     </Markdown>
   );
@@ -438,7 +445,11 @@ export function Drawer({
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key !== 'Escape') return;
+      // 抽屉里的自绘下拉开着时,Esc 只收下拉(DropUp 自己监听),不连带关掉整个抽屉。
+      // 两个监听都挂在 document 上、谁先触发不确定;此刻 React 尚未提交下拉的关闭,DOM 上仍是 .open
+      if (document.querySelector('.drawer.show .dd.open')) return;
+      onClose();
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
@@ -521,21 +532,28 @@ export function ConfirmHost() {
 
 // ---------- Toast ----------
 
-let pushToast: ((msg: string) => void) | null = null;
-export function toast(msg: string) {
-  pushToast?.(msg);
+export interface ToastAction {
+  label: string;
+  run: () => void;
+}
+let pushToast: ((msg: string, action?: ToastAction) => void) | null = null;
+/** action:提示里附一个可点的动作(如「撤销」),此时停留更久 */
+export function toast(msg: string, action?: ToastAction) {
+  pushToast?.(msg, action);
 }
 
 export function ToastHost() {
   const [msg, setMsg] = useState<string | null>(null);
   const [show, setShow] = useState(false);
+  const [action, setAction] = useState<ToastAction | null>(null);
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout>;
-    pushToast = (m) => {
+    pushToast = (m, a) => {
       setMsg(m);
+      setAction(a ?? null);
       setShow(true);
       clearTimeout(timer);
-      timer = setTimeout(() => setShow(false), 2400);
+      timer = setTimeout(() => setShow(false), a ? 6000 : 2400);
     };
     return () => {
       pushToast = null;
@@ -544,6 +562,18 @@ export function ToastHost() {
   return (
     <div className={cn('toast', show && 'show')} role="status">
       {msg}
+      {action && (
+        <button
+          className="toast-act"
+          tabIndex={show ? 0 : -1}
+          onClick={() => {
+            setShow(false);
+            action.run();
+          }}
+        >
+          {action.label}
+        </button>
+      )}
     </div>
   );
 }

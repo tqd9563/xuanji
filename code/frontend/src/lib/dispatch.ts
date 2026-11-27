@@ -1,7 +1,7 @@
 /** 派发页状态机:/ws/dispatch 双向流 → 消息列表 + agent 状态 + 用量指示 */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
-import type { SideQuestion } from '@/api/types';
+import type { Prompt, SideQuestion } from '@/api/types';
 import type { SlashCmdInfo } from '@/lib/slash';
 
 export interface QuestionSpec {
@@ -50,7 +50,8 @@ export interface BtwState {
   inFlight: { requestId: string; question: string; startedAt: number } | null;
   records: SideQuestion[];
   /** 最近一次失败(含取消):面板据此显示重问/改到主对话问 */
-  error: { requestId: string; question: string; message: string } | null;
+  /** at = 这一问的发起时刻(被前置拦截、没走到 btw-start 的退化为报错时刻) */
+  error: { requestId: string; question: string; message: string; at: number } | null;
 }
 
 const BTW_EMPTY: BtwState = { sessionId: null, inFlight: null, records: [], error: null };
@@ -79,6 +80,8 @@ export interface DispatchIntent {
    *  sessionId 仅用于进入时标已读(会话标识里的 id 仍等 attach 重放 init 事件后补)。 */
   attach?: { dispatchId: string; sessionId: string; cwd: string; name: string; project: string };
   prefill?: string;
+  /** 提示词页「在派发页插入」带过来的提示词:派发页按自己的目录/分支解析变量后填进输入框 */
+  prompt?: Prompt;
   /** 全新派发的工作目录(待办「开工」带过来;attach/resume 自带 cwd,不走这里) */
   cwd?: string;
   /** 由哪条待办发起:会话拿到 sessionId 后回填给这条待办(状态转「进行中」并挂上锚点) */
@@ -456,7 +459,12 @@ export function useDispatch() {
         setBtw((b) => ({
           ...b,
           inFlight: null,
-          error: { requestId: String(e.requestId), question: String(e.question), message: String(e.message) },
+          error: {
+            requestId: String(e.requestId),
+            question: String(e.question),
+            message: String(e.message),
+            at: b.inFlight?.startedAt ?? Date.now(),
+          },
         }));
         break;
       case 'error':

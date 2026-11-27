@@ -45,6 +45,8 @@ export interface AgentSession {
   suspended?: boolean;
   /** 空闲自动退出的派发会话:进程已结束、卡片与记录保留,下条消息冷启动接上 */
   idleExited?: boolean;
+  /** 定时任务跑出来、用户尚未接着聊过的会话(仅「需审批」时才会出现在看板上) */
+  scheduled?: boolean;
 }
 
 export type ReplayEvent =
@@ -89,6 +91,8 @@ export interface Skill {
   allowedTools?: string;
   source: 'user' | 'plugin';
   enabled: boolean;
+  /** 插件技能所属插件;此时 name 为 `插件名:技能名` */
+  plugin?: { id: string; name: string; version?: string; description?: string; enabled: boolean };
   body?: string;
   /** 索引尚未建好时缺省 */
   usage?: SkillUsage;
@@ -103,6 +107,21 @@ export interface Memory {
   file: string;
   body: string;
   links: string[];
+  /** 原文指纹:编辑保存时带回,后端据此发现「打开之后被别处改过」 */
+  rev: string;
+  /** 列表里的 body 只取前 8000 字;编辑前取详情拿完整正文 */
+  truncated: boolean;
+  /** 共享经验(软链到 memory-shared)挂载到的其它项目;非共享为 null */
+  sharedWith: string[] | null;
+  /** MEMORY.md 里这条经验的摘要:会话启动时注入的是它,不是 description */
+  indexHook: string | null;
+}
+
+export interface TrashedMemory {
+  id: string;
+  deletedAt: number;
+  mode: 'file' | 'unmount' | 'all';
+  memory: Memory;
 }
 
 /** 任务总结(wrapup skill 落在 ~/.claude/worklog/ 的一张卡) */
@@ -218,6 +237,21 @@ export interface Todo {
   source: 'web' | 'external';
 }
 
+/** 提示词(自有数据,与后端 types.ts 镜像):反复粘贴的开场白,`/p <trig>` 或钉选 chip 填进输入框 */
+export interface Prompt {
+  id: number;
+  trig: string;
+  name: string;
+  body: string;
+  /** null = 全局;否则只在该工作目录的派发页出现 */
+  cwd: string | null;
+  pinned: boolean;
+  uses: number;
+  lastUsedAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface ProjectsResult {
   projects: Project[];
   filteredNoise: number;
@@ -284,6 +318,8 @@ export interface ScheduledJob {
   lastError: string | null;
   createdAt: number;
   updatedAt: number;
+  /** resultSessionId 对应的派发会话仍在后端进程内时的 dispatchId(可 attach 接回);否则 null */
+  liveDispatchId?: string | null;
   nextRunAt: number | null;
 }
 
@@ -298,6 +334,8 @@ export interface ScheduledRun {
   costUsd: number | null;
   durationMs: number | null;
   error: string | null;
+  /** 该期会话仍在后端进程内时的 dispatchId(可 attach 接回);否则 null */
+  liveDispatchId?: string | null;
 }
 
 export interface CronsResult {
@@ -375,6 +413,25 @@ export interface AccountPrefs {
   notify: NotifyPrefs;
   monitor: MonitorPrefs;
   terminal: TerminalPrefs;
+  lark: LarkPrefs;
+}
+
+/** 飞书中控(账户):与后端 services/prefs.ts 的 LarkPrefs 对应。白名单不在偏好里,经绑定码写入 */
+export interface LarkPrefs {
+  enabled: boolean;
+  push: 'locked' | 'off';
+}
+
+/** GET /api/lark/status:与后端 services/lark/bridge.ts 的 LarkStatus 对应 */
+export interface LarkStatus {
+  enabled: boolean;
+  state: 'ok' | 'connecting' | 'unset' | 'fail' | 'off';
+  error?: string;
+  bot?: { name: string };
+  owner?: { openId: string; boundAt: number };
+  bindCode?: { code: string; expiresAt: number };
+  push: 'locked' | 'off';
+  locked: boolean;
 }
 
 /** 全局终端行为(账户):与后端 services/prefs.ts 的 TerminalPrefs 对应;外观属本机,见 lib/terminal.ts */
