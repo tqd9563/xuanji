@@ -1023,22 +1023,6 @@ export class Storage {
     return new Map(rows.map((r) => [r.skill, r.lastAt]));
   }
 
-  /**
-   * 把 SKILL.md 里的裸名解析成索引里真实记录的键。
-   * 插件技能调用时写的是 `plugin:skill`,裸名直查会全 0——先精确后带前缀匹配。
-   */
-  skillResolveKey(name: string): string | null {
-    const row = this.sqlite
-      .prepare(
-        `SELECT skill FROM skill_invocations WHERE skill = ?
-         UNION ALL
-         SELECT skill FROM skill_invocations WHERE skill LIKE '%:' || ?
-         LIMIT 1`,
-      )
-      .get(name, name) as { skill: string } | undefined;
-    return row?.skill ?? null;
-  }
-
   /** 单个技能的逐日次数(抽屉里的迷你柱) */
   skillDailyCounts(skill: string, sinceDay: string): Map<string, number> {
     const rows = this.sqlite
